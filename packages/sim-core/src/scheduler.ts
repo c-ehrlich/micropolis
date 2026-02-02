@@ -14,6 +14,8 @@ export interface SimFrameState {
   spdCycle: number;
 }
 
+export type RealtimeRunner = (tick: number, clocks: SimClocks) => void;
+
 /**
  * Create the mutable SimFrame state used for speed gating and cycle tracking.
  */
@@ -48,12 +50,22 @@ export function stepTick(clocks: SimClocks, runPhase?: PhaseRunner): void {
 /**
  * Advance the realtime clock for object/animation updates; viewRect is unimplemented.
  */
-export function stepRealtimeTicks(clocks: SimClocks, ticks: number, viewRect?: ViewRect): void {
+export function stepRealtimeTicks(
+  clocks: SimClocks,
+  ticks: number,
+  viewRect?: ViewRect,
+  runRealtime?: RealtimeRunner,
+): void {
   if (viewRect !== undefined) {
     throw new Error('stepRealtimeTicks viewRect not implemented');
   }
   if (ticks < 0) {
     throw new Error('stepRealtimeTicks ticks must be non-negative');
+  }
+  if (runRealtime) {
+    for (let i = 0; i < ticks; i += 1) {
+      runRealtime(clocks.realtimeTick + i, clocks);
+    }
   }
   advanceRealtimeTicks(clocks, ticks);
 }
@@ -64,11 +76,7 @@ export function stepRealtimeTicks(clocks: SimClocks, ticks: number, viewRect?: V
  * speed 2 runs every 3rd cycle, speed 3+ runs every call) while wrapping spdCycle
  * at 1023 and returning whether a phase actually ran.
  */
-export function simFrame(
-  state: SimFrameState,
-  clocks: SimClocks,
-  runPhase?: PhaseRunner,
-): boolean {
+export function simFrame(state: SimFrameState, clocks: SimClocks, runPhase?: PhaseRunner): boolean {
   if (state.simSpeed === 0) {
     return false;
   }

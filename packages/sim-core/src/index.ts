@@ -7,6 +7,7 @@ export * from './hash.ts';
 export * from './map-scan.ts';
 export * from './map-store.ts';
 export * from './persistence.ts';
+export * from './realtime.ts';
 export * from './replay.ts';
 export * from './rng.ts';
 export * from './rules.ts';
