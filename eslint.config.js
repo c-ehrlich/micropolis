@@ -1,20 +1,15 @@
 import tanstackRouter from '@tanstack/eslint-plugin-router';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
-import globals from 'globals';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import globals from 'globals';
 
 export default [
   {
-    ignores: [
-      '**/dist/**',
-      '**/build/**',
-      '**/node_modules/**',
-      '**/routeTree.gen.ts',
-    ],
+    ignores: ['**/dist/**', '**/build/**', '**/node_modules/**', '**/routeTree.gen.ts'],
   },
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
@@ -49,10 +44,18 @@ export default [
       ...reactHooks.configs.recommended.rules,
       '@tanstack/router/create-route-property-order': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'simple-import-sort/imports': 'error',
       'simple-import-sort/exports': 'error',
-      'react/prop-types': 'off'
+      'react/prop-types': 'off',
     },
   },
 ];
