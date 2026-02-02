@@ -5,6 +5,26 @@
 - Primary stack: TypeScript (ESM), React 19, Vite, Vitest/Playwright, pnpm. Node >= 23 is required by `package.json`.
 - The open-source core is organized as libraries (Athena, Apollo, Hera, etc.) that can be reused outside the full game app.
 
+## Subfolder OVERVIEWs
+- [ares/OVERVIEW.md](ares/OVERVIEW.md)
+- [apollo/OVERVIEW.md](apollo/OVERVIEW.md)
+- [art/OVERVIEW.md](art/OVERVIEW.md)
+- [artemis/OVERVIEW.md](artemis/OVERVIEW.md)
+- [athena/OVERVIEW.md](athena/OVERVIEW.md)
+- [codegen/OVERVIEW.md](codegen/OVERVIEW.md)
+- [deimos/OVERVIEW.md](deimos/OVERVIEW.md)
+- [dionysus/OVERVIEW.md](dionysus/OVERVIEW.md)
+- [docs/OVERVIEW.md](docs/OVERVIEW.md)
+- [eslint-plugin/OVERVIEW.md](eslint-plugin/OVERVIEW.md)
+- [fixtures/OVERVIEW.md](fixtures/OVERVIEW.md)
+- [hera/OVERVIEW.md](hera/OVERVIEW.md)
+- [hermes/OVERVIEW.md](hermes/OVERVIEW.md)
+- [i18n/OVERVIEW.md](i18n/OVERVIEW.md)
+- [infra/OVERVIEW.md](infra/OVERVIEW.md)
+- [offline/OVERVIEW.md](offline/OVERVIEW.md)
+- [scripts/OVERVIEW.md](scripts/OVERVIEW.md)
+- [tests/OVERVIEW.md](tests/OVERVIEW.md)
+
 ## Architecture at a glance
 
 Core data flow (simplified):
