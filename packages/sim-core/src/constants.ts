@@ -1,35 +1,73 @@
 // Classic map dimensions (tiles).
-export const WORLD_X = 120;
-export const WORLD_Y = 100;
+const WORLD_X = 120;
+const WORLD_Y = 100;
 
 // Half-resolution grids (2x2 tiles).
-export const HWLDX = WORLD_X >> 1;
-export const HWLDY = WORLD_Y >> 1;
+const HWLDX = WORLD_X >> 1;
+const HWLDY = WORLD_Y >> 1;
 // Quarter-resolution grids (4x4 tiles).
-export const QWX = WORLD_X >> 2;
-export const QWY = WORLD_Y >> 2;
+const QWX = WORLD_X >> 2;
+const QWY = WORLD_Y >> 2;
 // Eighth-resolution grids (8x8 tiles, Y rounds up).
-export const SmX = WORLD_X >> 3;
-export const SmY = (WORLD_Y + 7) >> 3;
+const SmX = WORLD_X >> 3;
+const SmY = (WORLD_Y + 7) >> 3;
+
+export const World = {
+  WORLD_X,
+  WORLD_Y,
+  HWLDX,
+  HWLDY,
+  QWX,
+  QWY,
+  SmX,
+  SmY,
+} as const;
 
 // Power map bitset layout (16 tiles per word).
-export const POWERMAPROW = (WORLD_X + 15) >> 4;
-export const PWRMAPSIZE = POWERMAPROW * WORLD_Y;
+const POWERMAPROW = (WORLD_X + 15) >> 4;
+const PWRMAPSIZE = POWERMAPROW * WORLD_Y;
 // Allocated size in the original; only first PWRMAPSIZE words are used.
-export const POWERMAPLEN = 1700;
+const POWERMAPLEN = 1700;
+
+export const PowerMap = {
+  POWERMAPROW,
+  PWRMAPSIZE,
+  POWERMAPLEN,
+} as const;
 
 // Tile ID mask (low 10 bits) and flag mask (high 6 bits).
-export const CHAR_MASK = 0x03ff;
-export const LOMASK = CHAR_MASK;
-export const ALLBITS = 0xfc00;
+const CHAR_MASK = 0x03ff;
+const LOMASK = CHAR_MASK;
+const ALLBITS = 0xfc00;
+
+export const TileMask = {
+  CHAR_MASK,
+  LOMASK,
+  ALLBITS,
+} as const;
 
 // Tile status bit flags (stored in high 6 bits).
-export const PWRBIT = 0x8000;
-export const CONDBIT = 0x4000;
-export const BURNBIT = 0x2000;
-export const BULLBIT = 0x1000;
-export const ANIMBIT = 0x0800;
-export const ZONEBIT = 0x0400;
+const PWRBIT = 0x8000;
+const CONDBIT = 0x4000;
+const BURNBIT = 0x2000;
+const BULLBIT = 0x1000;
+const ANIMBIT = 0x0800;
+const ZONEBIT = 0x0400;
+const BLBNBIT = BULLBIT + BURNBIT;
+const BLBNCNBIT = BULLBIT + BURNBIT + CONDBIT;
+const BNCNBIT = BURNBIT + CONDBIT;
+
+export const TileFlag = {
+  PWRBIT,
+  CONDBIT,
+  BURNBIT,
+  BULLBIT,
+  ANIMBIT,
+  ZONEBIT,
+  BLBNBIT,
+  BLBNCNBIT,
+  BNCNBIT,
+} as const;
 
 // Tile ID constants (low 10 bits).
 const DIRT = 0;

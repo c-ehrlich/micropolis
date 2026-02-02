@@ -40,7 +40,7 @@ It intentionally avoids UI layout details; see `spec/ui/SPEC.md` for widget layo
 - `MicropolisTimerProc()` decrements `NeedRest` (if > 0), calls `sim_loop(1)` when `SimSpeed != 0`, then restarts or stops the timer.
 
 ## Coordinate Systems and Units
-- Tile coordinates: integer tiles, 0 <= x < WORLD_X, 0 <= y < WORLD_Y.
+- Tile coordinates: integer tiles, 0 <= x < World.WORLD_X, 0 <= y < World.WORLD_Y.
 - Pixel coordinates: 1 tile = 16 units. The center of a tile is `(tile << 4) + 8`.
 - View-local coordinates: x/y from Tk events relative to the view window (pixels). These are converted to tile or pixel coordinates via `ViewToTileCoords`/`ViewToPixelCoords`.
 
@@ -64,7 +64,7 @@ No range checking is performed.
 
 #### Read-only getters
 - `Displays`: returns the global `Displays` string (a Tcl list string such as `{display1} {display2}`).
-- `WorldX`, `WorldY`: return `WORLD_X` and `WORLD_Y`.
+- `WorldX`, `WorldY`: return `World.WORLD_X` and `World.WORLD_Y`.
 - `LandValue`: returns `LVAverage`.
 - `Traffic`: returns `AverageTrf()`.
 - `Crime`: returns `CrimeAverage`.
@@ -145,7 +145,7 @@ No range checking is performed.
 - `StartBulldozer`, `StopBulldozer`: call sound control helpers.
 - `MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`, `MakeMeltdown`: call disaster creators.
 - `FireBomb`: calls `FireBomb()`.
-- `MakeExplosion <tileX> <tileY>`: tile coords (0..WORLD_X-1, 0..WORLD_Y-1). Calls `MakeExplosion(x,y)`.
+- `MakeExplosion <tileX> <tileY>`: tile coords (0..World.WORLD_X-1, 0..World.WORLD_Y-1). Calls `MakeExplosion(x,y)`.
 - `MonsterGoal <x> <y>`: pixel coords in sprite space. Ensures GOD sprite exists, sets dest_x/dest_y, control = -2, count = -1.
 - `MonsterDirection <dir>`: dir must be -1..7. Ensures GOD sprite exists; sets `sprite->control = dir`.
 - `HelicopterGoal <x> <y>`: pixel coords. Ensures COP sprite exists (spawns with `GenerateCopter(x,y)` if missing); sets dest_x/dest_y.
@@ -293,7 +293,7 @@ Sprite types (`sim.h`):
 Sprite subcommands (`<spriteName> <Subcommand> ?value?`):
 - Read/write integer fields: `type`, `frame`, `x`, `y`, `width`, `height`, `x_offset`, `y_offset`, `x_hot`, `y_hot`, `orig_x`, `orig_y`, `dest_x`, `dest_y`, `count`, `sound_count`, `dir`, `new_dir`, `step`, `flag`, `control`, `turn`, `accel`, `speed`.
 - Read-only string: `name`.
-- `Init <x> <y>`: x/y in pixel coords (0 <= x < WORLD_X<<4, 0 <= y < WORLD_Y<<4). Calls `InitSprite` to reset sprite fields for its type.
+- `Init <x> <y>`: x/y in pixel coords (0 <= x < World.WORLD_X<<4, 0 <= y < World.WORLD_Y<<4). Calls `InitSprite` to reset sprite fields for its type.
 - `Explode`: calls `ExplodeSprite(sprite)`.
 
 ### `piemenu` widget

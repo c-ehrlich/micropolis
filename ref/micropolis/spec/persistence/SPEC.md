@@ -4,7 +4,7 @@
 This spec covers the binary city file format, save/load flows, and scenario loading. UI/script wiring is only described insofar as C calls into Tcl via Eval().
 
 ## Data Model (Persistence-Relevant)
-- Map storage is a contiguous array of `short` tile values, indexed as `Map[x][y]` with `x` in `[0, WORLD_X-1]` and `y` in `[0, WORLD_Y-1]`. The underlying memory layout is column-major: all `y` for `x=0`, then all `y` for `x=1`, etc.
+- Map storage is a contiguous array of `short` tile values, indexed as `Map[x][y]` with `x` in `[0, World.WORLD_X-1]` and `y` in `[0, World.WORLD_Y-1]`. The underlying memory layout is column-major: all `y` for `x=0`, then all `y` for `x=1`, etc.
 - History arrays are raw `short` buffers:
   - `ResHis`, `ComHis`, `IndHis`, `CrimeHis`, `PollutionHis`, `MoneyHis` are each `HISTLEN` bytes (480) allocated and treated as `HISTLEN / 2` shorts (240 entries).
   - `MiscHis` is `MISCHISTLEN` bytes (240) allocated and treated as `MISCHISTLEN / 2` shorts (120 entries).
@@ -25,7 +25,7 @@ All fields are written sequentially with no padding:
 5. `PollutionHis` : 240 shorts
 6. `MoneyHis` : 240 shorts
 7. `MiscHis` : 120 shorts (240 bytes)
-8. `Map` : `WORLD_X * WORLD_Y` shorts (column-major, `x` outer, `y` inner)
+8. `Map` : `World.WORLD_X * World.WORLD_Y` shorts (column-major, `x` outer, `y` inner)
 
 ### Byte offsets (derived from layout)
 Offsets are from file start; all values are big-endian shorts.
@@ -45,7 +45,7 @@ The loader accepts only the following total byte sizes and rejects all others:
 - 219,120 bytes: 3x3 city (360 x 300)
 
 Notes:
-- The loader always reads `WORLD_X * WORLD_Y` map shorts based on the current build. If the file is larger (e.g., 2x2 or 3x3 while running a normal build), the extra data is ignored; no resizing or additional reads occur.
+- The loader always reads `World.WORLD_X * World.WORLD_Y` map shorts based on the current build. If the file is larger (e.g., 2x2 or 3x3 while running a normal build), the extra data is ignored; no resizing or additional reads occur.
 
 ### `MiscHis` field map (short indices)
 `MiscHis` is used as a packed storage area for several runtime values. Indices are in shorts (16-bit).
@@ -163,7 +163,7 @@ Scenario files live under the resource directory (`ResourceDir`) and use the sam
 
 ## Edge Cases and Quirks
 - File size validation is strict to the three sizes listed; other sizes fail immediately.
-- When a file size is larger than the current build's `WORLD_X * WORLD_Y` map size (e.g., 2x2 or 3x3 in a normal build), only the first `WORLD_X * WORLD_Y` map shorts are read and the rest are ignored.
+- When a file size is larger than the current build's `World.WORLD_X * World.WORLD_Y` map size (e.g., 2x2 or 3x3 in a normal build), only the first `World.WORLD_X * World.WORLD_Y` map shorts are read and the rest are ignored.
 - Funding percentages loaded from `MiscHis` are immediately reset to 1.0 by `InitFundingLevel()` after load and scenario load; they are effectively not restored from the file.
 - `LoadCity` and `SaveCityAs` modify the passed-in filename string by truncating at the last '.' to derive the city name before stripping the path.
 

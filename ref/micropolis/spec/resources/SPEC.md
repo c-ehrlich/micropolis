@@ -210,7 +210,7 @@ Tool names (used by UI tool palette):
 
 ### Tile counts and sizes
 
-- `TILE_COUNT` = 960 (`sim.h`).
+- `Tile.TILE_COUNT` = 960 (`sim.h`).
 - Editor view tiles are 16x16 pixels.
 - Map view tiles are 3x3 pixels, expanded to 4x4 with padding for internal buffers.
 
@@ -219,7 +219,7 @@ Tool names (used by UI tool palette):
 Loaded by `GetViewTiles` in `g_setup.c`.
 
 - `images/tiles.xpm` (color):
-  - XPM image with width 16, height 16 * TILE_COUNT (15360), 14 colors, 1 char per pixel.
+  - XPM image with width 16, height 16 * Tile.TILE_COUNT (15360), 14 colors, 1 char per pixel.
   - Tile index `t` (0-based) occupies pixels:
     - x = 0..15
     - y = (t * 16) .. (t * 16 + 15)
@@ -232,16 +232,16 @@ Loaded by `GetViewTiles` in `g_setup.c`.
 Loaded by `GetViewTiles` in `g_setup.c`.
 
 - `images/tilessm.xpm` (color):
-  - XPM image with width 4, height 3 * TILE_COUNT (2880), 14 colors, 1 char per pixel.
+  - XPM image with width 4, height 3 * Tile.TILE_COUNT (2880), 14 colors, 1 char per pixel.
   - Tile index `t` occupies pixels:
     - x = 0..3
     - y = (t * 3) .. (t * 3 + 2)
   - The 4th column is padding; the logical tile is 3x3.
 - `res/hexa.388` (monochrome):
   - Loaded via `GetResource("hexa", 388)` and passed directly to `XCreateImage` with:
-    - depth 8, format ZPixmap, width 4, height 3 * TILE_COUNT, bytes_per_line 4.
+    - depth 8, format ZPixmap, width 4, height 3 * Tile.TILE_COUNT, bytes_per_line 4.
   - The image data is interpreted as 8-bit pixels (one byte per pixel) in the display’s colormap.
-  - Only the first `4 * 3 * TILE_COUNT` bytes are used; any extra bytes are ignored.
+  - Only the first `4 * 3 * Tile.TILE_COUNT` bytes are used; any extra bytes are ignored.
 
 ### Legacy/unused hexa resources
 

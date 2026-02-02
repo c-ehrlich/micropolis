@@ -55,7 +55,7 @@
 **Goal:** lock all foundational types before logic.
 
 **Tasks**
-- Tile encoding constants (`CHAR_MASK`, flag bits, tile ID ranges).
+- Tile encoding constants (`TileMask`, `TileFlag`, tile ID ranges in `Tile`).
 - Map dimensions (classic 120×100) and derived sizes.
 - `Ruleset` interface with quirk flags.
 - Deterministic PRNG (Micropolis LCG or equivalent).
@@ -107,11 +107,11 @@
   - zone placement checks:
     - `check3x3`/`check4x4`/`check6x6` enforce bounds + empty/autoBulldoze rules
     - autoBulldoze uses `tally(tile)` to decide if a non-empty tile can be cleared (and adds cost per tile)
-    - on success: spend cost, lay zone tiles, center `ZONEBIT`, then `check*border` (calls `ConnecTile` around perimeter)
+  - on success: spend cost, lay zone tiles, center `TileFlag.ZONEBIT`, then `check*border` (calls `ConnecTile` around perimeter)
   - park tool:
-    - only on empty tile; 1/4 fountain (`Tile.FOUNTAIN|BURNBIT|BULLBIT|ANIMBIT`), else `Tile.WOODS2..Tile.WOODS5`
+    - only on empty tile; 1/4 fountain (`Tile.FOUNTAIN|TileFlag.BURNBIT|TileFlag.BULLBIT|TileFlag.ANIMBIT`), else `Tile.WOODS2..Tile.WOODS5`
   - network tool:
-    - auto-bulldozes eligible tile if funds > 0; then places `Tile.TELEBASE|CONDBIT|BURNBIT|BULLBIT|ANIMBIT`
+    - auto-bulldozes eligible tile if funds > 0; then places `Tile.TELEBASE|TileFlag.CONDBIT|TileFlag.BURNBIT|TileFlag.BULLBIT|TileFlag.ANIMBIT`
   - bulldoze helper logic:
     - `checkSize` (3x3/4x4/6x6 zones) and `checkBigZone` (airport/large zones) determine rubble footprint
   - mirror canonical arrays (note: includes an extra slot for `specialState` in C):
@@ -198,7 +198,7 @@
 
 ### 6.3 Power Scan + Powered Bits
 - Power propagation.
-- `PWRBIT` update on zones/conductors.
+- `TileFlag.PWRBIT` update on zones/conductors.
 
 **Test gate**
 - Known map with plant + lines matches expected powered tiles.

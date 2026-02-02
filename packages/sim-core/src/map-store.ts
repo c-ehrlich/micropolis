@@ -1,4 +1,7 @@
-import { HWLDX, HWLDY, POWERMAPROW, PWRMAPSIZE, QWX, QWY, SmX, SmY, WORLD_X, WORLD_Y } from './constants.ts';
+import { PowerMap, World } from './constants.ts';
+
+const { WORLD_X, WORLD_Y, HWLDX, HWLDY, QWX, QWY, SmX, SmY } = World;
+const { POWERMAPROW, PWRMAPSIZE } = PowerMap;
 
 type LayerKind = 'u8' | 'u16' | 'i16';
 

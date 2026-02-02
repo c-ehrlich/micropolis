@@ -13,40 +13,40 @@ Scope
 - QUAD: signed 32-bit integer (defined as long on non-OSF1).
 
 ### World geometry
-- WORLD_X = 120, WORLD_Y = 100 (map is 120x100 tiles).
-- HWLDX = WORLD_X / 2 = 60, HWLDY = WORLD_Y / 2 = 50 (2x2 tiles per cell).
-- QWX = WORLD_X / 4 = 30, QWY = WORLD_Y / 4 = 25 (4x4 tiles per cell).
-- SmX = WORLD_X / 8 = 15, SmY = (WORLD_Y + 7) / 8 = 13 (8x8 tiles per cell).
-- Tile coordinates (x,y) are integer indices in [0..WORLD_X-1], [0..WORLD_Y-1].
+- World.WORLD_X = 120, World.WORLD_Y = 100 (map is 120x100 tiles).
+- World.HWLDX = World.WORLD_X / 2 = 60, World.HWLDY = World.WORLD_Y / 2 = 50 (2x2 tiles per cell).
+- World.QWX = World.WORLD_X / 4 = 30, World.QWY = World.WORLD_Y / 4 = 25 (4x4 tiles per cell).
+- World.SmX = World.WORLD_X / 8 = 15, World.SmY = (World.WORLD_Y + 7) / 8 = 13 (8x8 tiles per cell).
+- Tile coordinates (x,y) are integer indices in [0..World.WORLD_X-1], [0..World.WORLD_Y-1].
 
 ### Map storage
-- Map: short* Map[WORLD_X].
+- Map: short* Map[World.WORLD_X].
   - Map[x][y] is the 16-bit tile value for tile (x,y).
-  - Map is backed by a contiguous allocation of WORLD_X*WORLD_Y shorts.
+  - Map is backed by a contiguous allocation of World.WORLD_X*World.WORLD_Y shorts.
 - Derived grids (all index by [x][y]):
-  - PopDensity[HWLDX][HWLDY] (Byte)
-  - TrfDensity[HWLDX][HWLDY] (Byte)
-  - PollutionMem[HWLDX][HWLDY] (Byte)
-  - LandValueMem[HWLDX][HWLDY] (Byte)
-  - CrimeMem[HWLDX][HWLDY] (Byte)
-  - tem[HWLDX][HWLDY] (Byte scratch)
-  - tem2[HWLDX][HWLDY] (Byte scratch)
-  - TerrainMem[QWX][QWY] (Byte)
-  - Qtem[QWX][QWY] (Byte scratch)
-  - RateOGMem[SmX][SmY] (short) rate of growth
-  - FireStMap[SmX][SmY] (short) fire station coverage (smoothed)
-  - PoliceMap[SmX][SmY] (short) police coverage (smoothed)
-  - PoliceMapEffect[SmX][SmY] (short) snapshot for overlays
-  - FireRate[SmX][SmY] (short) fire risk map
-  - ComRate[SmX][SmY] (short) commercial desirability by distance
-  - STem[SmX][SmY] (short scratch)
+  - PopDensity[World.HWLDX][World.HWLDY] (Byte)
+  - TrfDensity[World.HWLDX][World.HWLDY] (Byte)
+  - PollutionMem[World.HWLDX][World.HWLDY] (Byte)
+  - LandValueMem[World.HWLDX][World.HWLDY] (Byte)
+  - CrimeMem[World.HWLDX][World.HWLDY] (Byte)
+  - tem[World.HWLDX][World.HWLDY] (Byte scratch)
+  - tem2[World.HWLDX][World.HWLDY] (Byte scratch)
+  - TerrainMem[World.QWX][World.QWY] (Byte)
+  - Qtem[World.QWX][World.QWY] (Byte scratch)
+  - RateOGMem[World.SmX][World.SmY] (short) rate of growth
+  - FireStMap[World.SmX][World.SmY] (short) fire station coverage (smoothed)
+  - PoliceMap[World.SmX][World.SmY] (short) police coverage (smoothed)
+  - PoliceMapEffect[World.SmX][World.SmY] (short) snapshot for overlays
+  - FireRate[World.SmX][World.SmY] (short) fire risk map
+  - ComRate[World.SmX][World.SmY] (short) commercial desirability by distance
+  - STem[World.SmX][World.SmY] (short scratch)
 
 ### Power map
 - PowerMap is a bitset array of shorts.
-- POWERMAPROW = (WORLD_X + 15) / 16 = 8.
-- POWERWORD(x,y) = (x >> 4) + (y * POWERMAPROW) for non-MEGA builds.
-- PWRMAPSIZE = POWERMAPROW * WORLD_Y = 800.
-- POWERMAPLEN = 1700 (allocated size; only first PWRMAPSIZE words are used).
+- PowerMap.POWERMAPROW = (World.WORLD_X + 15) / 16 = 8.
+- POWERWORD(x,y) = (x >> 4) + (y * PowerMap.POWERMAPROW) for non-MEGA builds.
+- PowerMap.PWRMAPSIZE = PowerMap.POWERMAPROW * World.WORLD_Y = 800.
+- PowerMap.POWERMAPLEN = 1700 (allocated size; only first PowerMap.PWRMAPSIZE words are used).
 - SETPOWERBIT(x,y): PowerMap[POWERWORD(x,y)] |= (1 << (x & 15)).
 
 ### History arrays
@@ -69,26 +69,26 @@ Scope
 
 ### Tile word layout
 - Map tile is a 16-bit short.
-- Low 10 bits (mask LOMASK = 1023) store tile ID.
-- High 6 bits store flags (mask ALLBITS = 64512).
+- Low 10 bits (mask TileMask.LOMASK = 1023) store tile ID.
+- High 6 bits store flags (mask TileMask.ALLBITS = 64512).
 
 ### Status bits
-- PWRBIT  = 0x8000 (bit 15): zone has power.
-- CONDBIT = 0x4000 (bit 14): conductive (used by power scan).
-- BURNBIT = 0x2000 (bit 13): burnable / floodable marker.
-- BULLBIT = 0x1000 (bit 12): bulldozable marker.
-- ANIMBIT = 0x0800 (bit 11): animated.
-- ZONEBIT = 0x0400 (bit 10): zone center.
+- TileFlag.PWRBIT  = 0x8000 (bit 15): zone has power.
+- TileFlag.CONDBIT = 0x4000 (bit 14): conductive (used by power scan).
+- TileFlag.BURNBIT = 0x2000 (bit 13): burnable / floodable marker.
+- TileFlag.BULLBIT = 0x1000 (bit 12): bulldozable marker.
+- TileFlag.ANIMBIT = 0x0800 (bit 11): animated.
+- TileFlag.ZONEBIT = 0x0400 (bit 10): zone center.
 
 ### Important tile ID constants
 (IDs are low 10 bits; see sim.h for full list.)
-- Terrain: DIRT=0, RIVER=2, REDGE=3, CHANNEL=4, FIRSTRIVEDGE=5..LASTRIVEDGE=20, TREEBASE=21..LASTTREE=36, WOODS=37, WOODS2=40..WOODS5=43.
-- Rubble/Flood/Fire: RUBBLE=44..LASTRUBBLE=47, FLOOD=48..LASTFLOOD=51, RADTILE=52, FIREBASE=56..LASTFIRE=63.
-- Roads: ROADBASE=64..LASTROAD=206, LTRFBASE=80, HTRFBASE=144, BRWH=79, BRWV=95, HBRDG0..3=828..831, VBRDG0..3=948..951.
-- Power lines: POWERBASE=208..LASTPOWER=222.
-- Rails: RAILBASE=224..LASTRAIL=238, RAILHPOWERV=221, RAILVPOWERH=222, ROADVPOWERH=239.
-- Zones: RESBASE=240, FREEZ=244, HOUSE=249, LHTHR=249..HHTHR=260, RZB=265, HOSPITAL=409, CHURCH=418, COMBASE=423, COMCLR=427, CZB=436, INDBASE=612, INDCLR=616, IZB=625, PORTBASE=693, PORT=698..LASTPORT=708, AIRPORTBASE=709, AIRPORT=716, COALBASE=745, POWERPLANT=750..LASTPOWERPLANT=760, FIRESTBASE=761, FIRESTATION=765, POLICESTBASE=770, POLICESTATION=774, STADIUMBASE=779, STADIUM=784, FULLSTADIUM=800, NUCLEARBASE=811, NUCLEAR=816, LASTZONE=826.
-- Smoke/animation: SMOKEBASE=852, COALSMOKE1..4=916..928, FOOTBALLGAME1..2=932..940, TINYEXP range SOMETINYEXP=864..LASTTINYEXP=867.
+- Terrain: Tile.DIRT=0, Tile.RIVER=2, Tile.REDGE=3, Tile.CHANNEL=4, Tile.FIRSTRIVEDGE=5..Tile.LASTRIVEDGE=20, Tile.TREEBASE=21..Tile.LASTTREE=36, Tile.WOODS=37, Tile.WOODS2=40..Tile.WOODS5=43.
+- Rubble/Flood/Fire: Tile.RUBBLE=44..Tile.LASTRUBBLE=47, Tile.FLOOD=48..Tile.LASTFLOOD=51, Tile.RADTILE=52, Tile.FIREBASE=56..Tile.LASTFIRE=63.
+- Roads: Tile.ROADBASE=64..Tile.LASTROAD=206, Tile.LTRFBASE=80, Tile.HTRFBASE=144, Tile.BRWH=79, Tile.BRWV=95, Tile.HBRDG0..3=828..831, Tile.VBRDG0..3=948..951.
+- Power lines: Tile.POWERBASE=208..Tile.LASTPOWER=222.
+- Rails: Tile.RAILBASE=224..Tile.LASTRAIL=238, Tile.RAILHPOWERV=221, Tile.RAILVPOWERH=222, Tile.ROADVPOWERH=239.
+- Zones: Tile.RESBASE=240, Tile.FREEZ=244, Tile.HOUSE=249, Tile.LHTHR=249..Tile.HHTHR=260, Tile.RZB=265, Tile.HOSPITAL=409, Tile.CHURCH=418, Tile.COMBASE=423, Tile.COMCLR=427, Tile.CZB=436, Tile.INDBASE=612, Tile.INDCLR=616, Tile.IZB=625, Tile.PORTBASE=693, Tile.PORT=698..Tile.LASTPORT=708, Tile.AIRPORTBASE=709, Tile.AIRPORT=716, Tile.COALBASE=745, Tile.POWERPLANT=750..Tile.LASTPOWERPLANT=760, Tile.FIRESTBASE=761, Tile.FIRESTATION=765, Tile.POLICESTBASE=770, Tile.POLICESTATION=774, Tile.STADIUMBASE=779, Tile.STADIUM=784, Tile.FULLSTADIUM=800, Tile.NUCLEARBASE=811, Tile.NUCLEAR=816, Tile.LASTZONE=826.
+- Smoke/animation: Tile.SMOKEBASE=852, Tile.COALSMOKE1..4=916..928, Tile.FOOTBALLGAME1..2=932..940, Tile.TINYEXP range Tile.SOMETINYEXP=864..Tile.LASTTINYEXP=867.
 
 ----------------------------------------------------------------
 ## Random Number Generation
@@ -132,7 +132,7 @@ Phase actions:
   - If (Scycle & 1) == 0: SetValves().
   - ClearCensus().
 - Cases 1..8: MapScan is spread across 8 vertical slices:
-  - MapScan(0, 1*WORLD_X/8), MapScan(1*WORLD_X/8, 2*WORLD_X/8), ..., MapScan(7*WORLD_X/8, WORLD_X).
+  - MapScan(0, 1*World.WORLD_X/8), MapScan(1*World.WORLD_X/8, 2*World.WORLD_X/8), ..., MapScan(7*World.WORLD_X/8, World.WORLD_X).
 - Case 9:
   - If CityTime % CENSUSRATE == 0 (CENSUSRATE=4): TakeCensus().
   - If CityTime % (CENSUSRATE*12) == 0 (48): Take2Census().
@@ -159,10 +159,10 @@ Phase actions:
 
 ### initMapArrays()
 - Allocates all map arrays and history buffers.
-- Map is a contiguous short array of WORLD_X*WORLD_Y; Map[x] pointers are set to column starts.
+- Map is a contiguous short array of World.WORLD_X*World.WORLD_Y; Map[x] pointers are set to column starts.
 - All 2x2, 4x4, 8x8 arrays are allocated and indexed by x-major order.
 - History arrays are allocated as byte counts: HISTLEN (480) -> 240 shorts; MISCHISTLEN (240) -> 120 shorts.
-- PowerMap allocated with POWERMAPLEN (1700) shorts.
+- PowerMap allocated with PowerMap.POWERMAPLEN (1700) shorts.
 
 ### InitWillStuff()
 - Seeds RNG, initializes graphs, sets defaults.
@@ -178,7 +178,7 @@ Phase actions:
 - Fcycle = 0; Scycle = 0.
 - If InitSimLoad == 2 (new city), InitSimMemory().
 - If InitSimLoad == 1 (loaded city), SimLoadInit().
-- SetValves(); ClearCensus(); MapScan(0, WORLD_X).
+- SetValves(); ClearCensus(); MapScan(0, World.WORLD_X).
 - DoPowerScan(); NewPower = 1.
 - PTLScan(); CrimeScan(); PopDenScan(); FireAnalysis().
 - NewMap = 1; doAllGraphs(); NewGraph = 1; TotalPop = 1; DoInitialEval = 1.
@@ -198,7 +198,7 @@ Phase actions:
 - Sets GameLevel with SetGameLevel().
 - ResCap/ComCap/IndCap set to 0.
 - AvCityTax = (CityTime % 48) * 7.
-- PowerMap set to all 1 bits (first PWRMAPSIZE entries); DoNilPower() to mark PWRBIT on zones.
+- PowerMap set to all 1 bits (first PowerMap.PWRMAPSIZE entries); DoNilPower() to mark TileFlag.PWRBIT on zones.
 - ScenarioID clamped to 0..8. If ScenarioID > 0:
   - DisasterEvent = ScenarioID; DisasterWait = DisTab[ScenarioID];
   - ScoreType = ScenarioID; ScoreWait = ScoreWaitTab[ScenarioID].
@@ -206,94 +206,94 @@ Phase actions:
 - InitSimLoad = 0.
 
 ### DoNilPower()
-- Scans entire map; for each tile with ZONEBIT set, sets SMapX/Y, CChr, then SetZPower() to apply PWRBIT.
+- Scans entire map; for each tile with TileFlag.ZONEBIT set, sets SMapX/Y, CChr, then SetZPower() to apply TileFlag.PWRBIT.
 
 ----------------------------------------------------------------
 ## Map Scan Pass
 
 ### MapScan(x1, x2)
-For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
+For each x in [x1..x2-1], y in [0..World.WORLD_Y-1]:
 - If Map[x][y] != 0:
-  - CChr = Map[x][y]; CChr9 = CChr & LOMASK; SMapX=x; SMapY=y.
-  - If CChr9 < FLOOD (48): skip (no processing).
-  - If CChr9 < ROADBASE (64):
-    - If CChr9 >= FIREBASE (56):
+  - CChr = Map[x][y]; CChr9 = CChr & TileMask.LOMASK; SMapX=x; SMapY=y.
+  - If CChr9 < Tile.FLOOD (48): skip (no processing).
+  - If CChr9 < Tile.ROADBASE (64):
+    - If CChr9 >= Tile.FIREBASE (56):
       - FirePop++.
       - 25% chance: DoFire().
-    - Else if CChr9 < RADTILE (52): DoFlood().
+    - Else if CChr9 < Tile.RADTILE (52): DoFlood().
     - Else: DoRadTile().
     - Continue to next tile.
-  - If NewPower && (CChr & CONDBIT): SetZPower().
-  - If ROADBASE <= CChr9 < POWERBASE: DoRoad(); continue.
-  - If (CChr & ZONEBIT): DoZone(); continue.
-  - If RAILBASE <= CChr9 < RESBASE: DoRail(); continue.
-  - If SOMETINYEXP <= CChr9 <= LASTTINYEXP: Map[x][y] = RUBBLE + (Rand16() & 3) + BULLBIT.
+  - If NewPower && (CChr & TileFlag.CONDBIT): SetZPower().
+  - If Tile.ROADBASE <= CChr9 < Tile.POWERBASE: DoRoad(); continue.
+  - If (CChr & TileFlag.ZONEBIT): DoZone(); continue.
+  - If Tile.RAILBASE <= CChr9 < Tile.RESBASE: DoRail(); continue.
+  - If Tile.SOMETINYEXP <= CChr9 <= Tile.LASTTINYEXP: Map[x][y] = Tile.RUBBLE + (Rand16() & 3) + TileFlag.BULLBIT.
 
 ### Road deterioration and traffic rendering (DoRoad)
 - RoadTotal++ each road tile.
 - Deterioration when RoadEffect < 30:
-  - If (Rand16() & 511) == 0 and (CChr & CONDBIT) == 0 and RoadEffect < (Rand16() & 31):
-    - If ((CChr9 & 15) < 2) or ((CChr9 & 15) == 15): set to RIVER.
-    - Else set to RUBBLE + (Rand16() & 3) + BULLBIT.
+  - If (Rand16() & 511) == 0 and (CChr & TileFlag.CONDBIT) == 0 and RoadEffect < (Rand16() & 31):
+    - If ((CChr9 & 15) < 2) or ((CChr9 & 15) == 15): set to Tile.RIVER.
+    - Else set to Tile.RUBBLE + (Rand16() & 3) + TileFlag.BULLBIT.
     - Return.
-- If (CChr & BURNBIT) == 0, treat as bridge:
+- If (CChr & TileFlag.BURNBIT) == 0, treat as bridge:
   - RoadTotal += 4.
   - If DoBridge() returns TRUE, return.
 - Traffic density visualization:
-  - tden from tile: 0 if CChr9 < LTRFBASE, 1 if < HTRFBASE, else 2 (and RoadTotal++ again for heavy).
+  - tden from tile: 0 if CChr9 < Tile.LTRFBASE, 1 if < Tile.HTRFBASE, else 2 (and RoadTotal++ again for heavy).
   - Density = (TrfDensity[SMapX>>1][SMapY>>1] >> 6); if >1 then Density--. (Density in 0..2)
   - If tden != Density: set tile to same road shape with DenTab[Density] base.
-    - DenTab = { ROADBASE, LTRFBASE, HTRFBASE }.
-    - z = ((CChr9 - ROADBASE) & 15) + DenTab[Density].
-    - Keep all status bits except ANIMBIT: z += CChr & (ALLBITS - ANIMBIT).
-    - If Density > 0, add ANIMBIT.
+    - DenTab = { Tile.ROADBASE, Tile.LTRFBASE, Tile.HTRFBASE }.
+    - z = ((CChr9 - Tile.ROADBASE) & 15) + DenTab[Density].
+    - Keep all status bits except TileFlag.ANIMBIT: z += CChr & (TileMask.ALLBITS - TileFlag.ANIMBIT).
+    - If Density > 0, add TileFlag.ANIMBIT.
     - Map[SMapX][SMapY] = z.
 
 ### Rail deterioration (DoRail)
 - RailTotal++ each rail tile.
 - GenerateTrain(SMapX,SMapY) (external hook).
 - Deterioration when RoadEffect < 30:
-  - If (Rand16() & 511) == 0 and (CChr & CONDBIT) == 0 and RoadEffect < (Rand16() & 31):
-    - If CChr9 < (RAILBASE + 2): set to RIVER.
-    - Else set to RUBBLE + (Rand16() & 3) + BULLBIT.
+  - If (Rand16() & 511) == 0 and (CChr & TileFlag.CONDBIT) == 0 and RoadEffect < (Rand16() & 31):
+    - If CChr9 < (Tile.RAILBASE + 2): set to Tile.RIVER.
+    - Else set to Tile.RUBBLE + (Rand16() & 3) + TileFlag.BULLBIT.
 
 ### Bridge open/close (DoBridge)
 - Uses boat sprite distance from GetBoatDis().
-- If tile is BRWV (vertical closed bridge) and (Rand16() & 3) == 0 and GetBoatDis() > 340:
+- If tile is Tile.BRWV (vertical closed bridge) and (Rand16() & 3) == 0 and GetBoatDis() > 340:
   - Replace a 7-tile pattern around (SMapX,SMapY) with open-bridge pattern VBRTAB2.
-- If tile is BRWH (horizontal closed bridge) and same random and distance condition:
+- If tile is Tile.BRWH (horizontal closed bridge) and same random and distance condition:
   - Replace 7-tile pattern with HBRTAB2.
 - If GetBoatDis() < 300 or (Rand16() & 7) == 0:
-  - If bridge is vertical (CChr9 & 1): check right neighbor == CHANNEL, then place VBRTAB open pattern over 7 tiles.
-  - Else (horizontal): check tile above == CHANNEL, then place HBRTAB open pattern.
+  - If bridge is vertical (CChr9 & 1): check right neighbor == Tile.CHANNEL, then place VBRTAB open pattern over 7 tiles.
+  - Else (horizontal): check tile above == Tile.CHANNEL, then place HBRTAB open pattern.
 - Returns TRUE if any bridge open/close operation performed.
 
 ### Fire behavior (DoFire)
 - Attempts to spread to 4 neighbors; each neighbor has 1/8 chance:
-  - If neighbor tile has BURNBIT set:
-    - If neighbor tile has ZONEBIT, call FireZone on that zone; if zone ID > IZB then MakeExplosionAt(center of tile).
-    - Set neighbor tile to FIRE + (Rand16() & 3) + ANIMBIT.
+  - If neighbor tile has TileFlag.BURNBIT set:
+    - If neighbor tile has TileFlag.ZONEBIT, call FireZone on that zone; if zone ID > Tile.IZB then MakeExplosionAt(center of tile).
+    - Set neighbor tile to Tile.FIRE + (Rand16() & 3) + TileFlag.ANIMBIT.
 - Fire burnout:
   - Rate = 10 by default; if FireRate[SMapX>>3][SMapY>>3] > 0 then Rate=3; >20 -> 2; >100 -> 1.
-  - If Rand(Rate) == 0: replace current fire tile with RUBBLE + (Rand16() & 3) + BULLBIT.
+  - If Rand(Rate) == 0: replace current fire tile with Tile.RUBBLE + (Rand16() & 3) + TileFlag.BULLBIT.
 
 ### FireZone(Xloc,Yloc,ch)
 - Decreases RateOGMem[Xloc>>3][Yloc>>3] by 20.
-- Determine XYmax based on zone type (ch & LOMASK):
-  - If ch < PORTBASE: XYmax = 2.
-  - Else if ch == AIRPORT: XYmax = 5.
+- Determine XYmax based on zone type (ch & TileMask.LOMASK):
+  - If ch < Tile.PORTBASE: XYmax = 2.
+  - Else if ch == Tile.AIRPORT: XYmax = 5.
   - Else XYmax = 4.
 - For x in [-1..XYmax-1], y in [-1..XYmax-1]:
-  - If in bounds and Map[x][y] has LOMASK >= ROADBASE, set BULLBIT on that tile.
+  - If in bounds and Map[x][y] has TileMask.LOMASK >= Tile.ROADBASE, set TileFlag.BULLBIT on that tile.
 
 ### Radiation decay (DoRadTile)
-- If (Rand16() & 4095) == 0: Map[SMapX][SMapY] = 0 (DIRT).
+- If (Rand16() & 4095) == 0: Map[SMapX][SMapY] = 0 (Tile.DIRT).
 
 ----------------------------------------------------------------
 ## Power System
 
 ### Power stack
-- PowerStackX/Y: arrays of length PWRSTKSIZE = (WORLD_X*WORLD_Y)/4.
+- PowerStackX/Y: arrays of length PWRSTKSIZE = (World.WORLD_X*World.WORLD_Y)/4.
 - PowerStackNum is stack pointer (1-based in code).
 
 ### PushPowerStack()
@@ -305,13 +305,13 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 ### TestForCond(TFDir)
 - Temporarily MoveMapSim(TFDir) (0=up,1=right,2=down,3=left).
 - Returns TRUE if neighbor is conductive and not already powered:
-  - Neighbor must have CONDBIT set.
+  - Neighbor must have TileFlag.CONDBIT set.
   - Neighbor must not be powered in PowerMap (bit 0 for that x in PowerWord).
-  - Additional check: CChr9 is not NUCLEAR or POWERPLANT. Note: CChr9 is not updated by DoPowerScan, so this compares against the last global CChr9 value.
+  - Additional check: CChr9 is not Tile.NUCLEAR or Tile.POWERPLANT. Note: CChr9 is not updated by DoPowerScan, so this compares against the last global CChr9 value.
 - Restores SMapX/Y to original before return.
 
 ### DoPowerScan()
-- Clears PowerMap[0..PWRMAPSIZE-1] to 0.
+- Clears PowerMap[0..PowerMap.PWRMAPSIZE-1] to 0.
 - MaxPower = CoalPop * 700 + NuclearPop * 2000.
 - NumPower = 0.
 - Capacity quirk: MaxPower uses total CoalPop/NuclearPop counts from MapScan, regardless of whether plants are connected to the powered network; disconnected plants still increase the global capacity limit.
@@ -328,8 +328,8 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 ### SetZPower()
 - Called on zone center (SMapX/SMapY, CChr/CChr9).
-- If CChr9 is NUCLEAR or POWERPLANT, or PowerMap bit at (SMapX,SMapY) is set, then set PWRBIT on Map tile and return 1.
-- Else clear PWRBIT and return 0.
+- If CChr9 is Tile.NUCLEAR or Tile.POWERPLANT, or PowerMap bit at (SMapX,SMapY) is set, then set TileFlag.PWRBIT on Map tile and return 1.
+- Else clear TileFlag.PWRBIT and return 0.
 
 ----------------------------------------------------------------
 ## Zoning and Growth
@@ -337,40 +337,40 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 ### DoZone()
 - ZonePwrFlg = SetZPower(); increment PwrdZCnt or unPwrdZCnt.
 - Dispatch based on CChr9:
-  - If CChr9 > PORTBASE: DoSPZone(ZonePwrFlg).
-  - Else if CChr9 < HOSPITAL: DoResidential(ZonePwrFlg).
-  - Else if CChr9 < COMBASE: DoHospChur().
-  - Else if CChr9 < INDBASE: DoCommercial(ZonePwrFlg).
+  - If CChr9 > Tile.PORTBASE: DoSPZone(ZonePwrFlg).
+  - Else if CChr9 < Tile.HOSPITAL: DoResidential(ZonePwrFlg).
+  - Else if CChr9 < Tile.COMBASE: DoHospChur().
+  - Else if CChr9 < Tile.INDBASE: DoCommercial(ZonePwrFlg).
   - Else DoIndustrial(ZonePwrFlg).
 
 ### Special zones (DoSPZone)
-- POWERPLANT:
-  - CoalPop++; every 8 CityTime ticks: RepairZone(POWERPLANT,4).
+- Tile.POWERPLANT:
+  - CoalPop++; every 8 CityTime ticks: RepairZone(Tile.POWERPLANT,4).
   - PushPowerStack(); CoalSmoke(SMapX,SMapY).
-- NUCLEAR:
+- Tile.NUCLEAR:
   - If !NoDisasters and Rand(MltdwnTab[GameLevel]) == 0: DoMeltdown(SMapX,SMapY) and return.
-  - NuclearPop++; every 8 ticks: RepairZone(NUCLEAR,4). PushPowerStack().
-- FIRESTATION:
-  - FireStPop++; every 8 ticks: RepairZone(FIRESTATION,3).
+  - NuclearPop++; every 8 ticks: RepairZone(Tile.NUCLEAR,4). PushPowerStack().
+- Tile.FIRESTATION:
+  - FireStPop++; every 8 ticks: RepairZone(Tile.FIRESTATION,3).
   - z = FireEffect (powered) or FireEffect/2 (unpowered).
   - If no perimeter road (FindPRoad() == FALSE), z /= 2.
   - FireStMap[SMapX>>3][SMapY>>3] += z.
-- POLICESTATION:
-  - PolicePop++; every 8 ticks: RepairZone(POLICESTATION,3).
+- Tile.POLICESTATION:
+  - PolicePop++; every 8 ticks: RepairZone(Tile.POLICESTATION,3).
   - z = PoliceEffect (powered) or PoliceEffect/2 (unpowered).
   - If no perimeter road, z /= 2.
   - PoliceMap[SMapX>>3][SMapY>>3] += z.
-- STADIUM:
-  - StadiumPop++; every 16 ticks: RepairZone(STADIUM,4).
-  - If powered and (CityTime + SMapX + SMapY) % 32 == 0: DrawStadium(FULLSTADIUM); set two football tiles animated.
-- FULLSTADIUM:
-  - StadiumPop++; if (CityTime + SMapX + SMapY) % 8 == 0: DrawStadium(STADIUM).
-- AIRPORT:
-  - APortPop++; every 8 ticks: RepairZone(AIRPORT,6).
-  - Radar tile at (SMapX+1, SMapY-1) gets ANIMBIT if powered, else not.
+- Tile.STADIUM:
+  - StadiumPop++; every 16 ticks: RepairZone(Tile.STADIUM,4).
+  - If powered and (CityTime + SMapX + SMapY) % 32 == 0: DrawStadium(Tile.FULLSTADIUM); set two football tiles animated.
+- Tile.FULLSTADIUM:
+  - StadiumPop++; if (CityTime + SMapX + SMapY) % 8 == 0: DrawStadium(Tile.STADIUM).
+- Tile.AIRPORT:
+  - APortPop++; every 8 ticks: RepairZone(Tile.AIRPORT,6).
+  - Radar tile at (SMapX+1, SMapY-1) gets TileFlag.ANIMBIT if powered, else not.
   - If powered: DoAirport() (random plane/copter).
-- PORT:
-  - PortPop++; every 16 ticks: RepairZone(PORT,4).
+- Tile.PORT:
+  - PortPop++; every 16 ticks: RepairZone(Tile.PORT,4).
   - If powered and no ship sprite exists: GenerateShip().
   - No simulation-side adjacency check to water.
 
@@ -378,18 +378,18 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - zsize is zone dimension (3 for 3x3, 4 for 4x4, 6 for 6x6). It decrements zsize then uses that as loop limit.
 - Loops over a square from (-1,-1) to (zsize-1, zsize-1) relative to SMapX/SMapY.
 - For each tile in bounds:
-  - Skip if tile has ZONEBIT or ANIMBIT.
-  - If low tile ID < RUBBLE or >= ROADBASE, set to ZCent - 3 - zsize + cnt + CONDBIT + BURNBIT.
+  - Skip if tile has TileFlag.ZONEBIT or TileFlag.ANIMBIT.
+  - If low tile ID < Tile.RUBBLE or >= Tile.ROADBASE, set to ZCent - 3 - zsize + cnt + TileFlag.CONDBIT + TileFlag.BURNBIT.
   - cnt increments each cell; this restores original zone pattern.
 
 ### Residential growth
-- RZPop(Ch9): returns (( (Ch9 - RZB) / 9 ) % 4) * 8 + 16.
-- FREEZ zones (low-density): population is DoFreePop() (houses around).
+- RZPop(Ch9): returns (( (Ch9 - Tile.RZB) / 9 ) % 4) * 8 + 16.
+- Tile.FREEZ zones (low-density): population is DoFreePop() (houses around).
 - DoResidential(ZonePwrFlg):
-  - ResZPop++; tpop = FREEZ ? DoFreePop() : RZPop(CChr9); ResPop += tpop.
+  - ResZPop++; tpop = Tile.FREEZ ? DoFreePop() : RZPop(CChr9); ResPop += tpop.
   - If tpop > Rand(35): TrfGood = MakeTraf(0); else TrfGood = TRUE.
   - If TrfGood == -1: value = GetCRVal(); DoResOut(tpop,value); return.
-  - If FREEZ or (Rand16() & 7) == 0:
+  - If Tile.FREEZ or (Rand16() & 7) == 0:
     - locvalve = EvalRes(TrfGood); zscore = RValve + locvalve; if not powered, zscore = -500.
     - If zscore > -350 and (short)(zscore - 26380) > (short)Rand16Signed():
       - If tpop == 0 and (Rand16() & 3) == 0: MakeHosp(); return.
@@ -399,25 +399,25 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 #### DoResIn(pop,value)
 - If PollutionMem[SMapX>>1][SMapY>>1] > 128: return.
-- If FREEZ:
+- If Tile.FREEZ:
   - If pop < 8: BuildHouse(value); IncROG(1); return.
   - If PopDensity[SMapX>>1][SMapY>>1] > 64: ResPlop(0,value); IncROG(8); return.
   - Otherwise return.
-- Else (non-FREEZ): if pop < 40, ResPlop((pop/8)-1, value) and IncROG(8).
+- Else (non-Tile.FREEZ): if pop < 40, ResPlop((pop/8)-1, value) and IncROG(8).
 
 #### DoResOut(pop,value)
 - If pop == 0: return.
 - If pop > 16: ResPlop(((pop - 24)/8), value); IncROG(-8); return.
 - If pop == 16:
   - IncROG(-8);
-  - Set center to FREEZ with BLBNCNBIT|ZONEBIT.
-  - For each tile in 3x3 around center (except center): if not FREEZ, set to LHTHR + value + Rand(2) + BLBNCNBIT.
+  - Set center to Tile.FREEZ with TileFlag.BLBNCNBIT|TileFlag.ZONEBIT.
+  - For each tile in 3x3 around center (except center): if not Tile.FREEZ, set to Tile.LHTHR + value + Rand(2) + TileFlag.BLBNCNBIT.
 - If pop < 16:
   - IncROG(-1);
-  - Scan 3x3 area in a fixed order; if a house tile (LHTHR..HHTHR) found, replace it with a border tile (FREEZ-4 + Brdr[z] + BLBNCNBIT) and return.
+  - Scan 3x3 area in a fixed order; if a house tile (Tile.LHTHR..Tile.HHTHR) found, replace it with a border tile (Tile.FREEZ-4 + Brdr[z] + TileFlag.BLBNCNBIT) and return.
 
 ### Commercial growth
-- CZPop(Ch9): if COMCLR -> 0; else (( (Ch9 - CZB)/9 ) % 5) + 1.
+- CZPop(Ch9): if Tile.COMCLR -> 0; else (( (Ch9 - Tile.CZB)/9 ) % 5) + 1.
 - DoCommercial(ZonePwrFlg):
   - ComZPop++; tpop = CZPop(CChr9); ComPop += tpop.
   - If tpop > Rand(5): TrfGood = MakeTraf(1); else TRUE.
@@ -435,10 +435,10 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 #### DoComOut(pop,value)
 - If pop > 1: ComPlop(pop-2,value); IncROG(-8); return.
-- If pop == 1: ZonePlop(COMBASE); IncROG(-8).
+- If pop == 1: ZonePlop(Tile.COMBASE); IncROG(-8).
 
 ### Industrial growth
-- IZPop(Ch9): if INDCLR -> 0; else (( (Ch9 - IZB)/9 ) % 4) + 1.
+- IZPop(Ch9): if Tile.INDCLR -> 0; else (( (Ch9 - Tile.IZB)/9 ) % 4) + 1.
 - DoIndustrial(ZonePwrFlg):
   - IndZPop++; SetSmoke(ZonePwrFlg); tpop = IZPop(CChr9); IndPop += tpop.
   - If tpop > Rand(5): TrfGood = MakeTraf(2); else TRUE.
@@ -453,24 +453,24 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 #### DoIndOut(pop,value)
 - If pop > 1: IndPlop(pop-2,value); IncROG(-8); return.
-- If pop == 1: ZonePlop(INDCLR - 4); IncROG(-8).
+- If pop == 1: ZonePlop(Tile.INDCLR - 4); IncROG(-8).
 
 ### Hospital and church
 - DoHospChur():
-  - If HOSPITAL: HospPop++; every 16 ticks RepairZone(HOSPITAL,3). If NeedHosp == -1 and Rand(20) == 0, ZonePlop(RESBASE).
-  - If CHURCH: ChurchPop++; every 16 ticks RepairZone(CHURCH,3). If NeedChurch == -1 and Rand(20) == 0, ZonePlop(RESBASE).
+  - If Tile.HOSPITAL: HospPop++; every 16 ticks RepairZone(Tile.HOSPITAL,3). If NeedHosp == -1 and Rand(20) == 0, ZonePlop(Tile.RESBASE).
+  - If Tile.CHURCH: ChurchPop++; every 16 ticks RepairZone(Tile.CHURCH,3). If NeedChurch == -1 and Rand(20) == 0, ZonePlop(Tile.RESBASE).
 - MakeHosp():
-  - If NeedHosp > 0: ZonePlop(HOSPITAL - 4); NeedHosp = FALSE; return.
-  - Else if NeedChurch > 0: ZonePlop(CHURCH - 4); NeedChurch = FALSE.
+  - If NeedHosp > 0: ZonePlop(Tile.HOSPITAL - 4); NeedHosp = FALSE; return.
+  - Else if NeedChurch > 0: ZonePlop(Tile.CHURCH - 4); NeedChurch = FALSE.
 
 ### Zone plopping
-- ResPlop(Den,Value): base = (((Value*4)+Den)*9) + RZB - 4; ZonePlop(base).
-- ComPlop(Den,Value): base = (((Value*5)+Den)*9) + CZB - 4; ZonePlop(base).
-- IndPlop(Den,Value): base = (((Value*4)+Den)*9) + IZB - 4; ZonePlop(base).
+- ResPlop(Den,Value): base = (((Value*4)+Den)*9) + Tile.RZB - 4; ZonePlop(base).
+- ComPlop(Den,Value): base = (((Value*5)+Den)*9) + Tile.CZB - 4; ZonePlop(base).
+- IndPlop(Den,Value): base = (((Value*4)+Den)*9) + Tile.IZB - 4; ZonePlop(base).
 - ZonePlop(base):
-  - First pass: if any tile in 3x3 around center has LOMASK in [FLOOD..ROADBASE-1], abort (returns FALSE).
-  - Second pass: set each 3x3 tile to base + BNCNBIT (BURNBIT|CONDBIT), incrementing base per tile.
-  - Update CChr = Map[SMapX][SMapY], SetZPower(), and set ZONEBIT|BULLBIT on center tile.
+  - First pass: if any tile in 3x3 around center has TileMask.LOMASK in [Tile.FLOOD..Tile.ROADBASE-1], abort (returns FALSE).
+  - Second pass: set each 3x3 tile to base + TileFlag.BNCNBIT (TileFlag.BURNBIT|TileFlag.CONDBIT), incrementing base per tile.
+  - Update CChr = Map[SMapX][SMapY], SetZPower(), and set TileFlag.ZONEBIT|TileFlag.BULLBIT on center tile.
 
 ### Land value and demand helpers
 - GetCRVal():
@@ -487,14 +487,14 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 ### House placement (BuildHouse)
 - Scans 8 neighboring tiles (ordered by ZeX/ZeY).
 - EvalLot(x,y):
-  - If tile is non-zero and not in [RESBASE..RESBASE+8], return -1.
-  - Score = 1 + number of adjacent (N,E,S,W) tiles that are non-zero and LOMASK <= LASTROAD.
+  - If tile is non-zero and not in [Tile.RESBASE..Tile.RESBASE+8], return -1.
+  - Score = 1 + number of adjacent (N,E,S,W) tiles that are non-zero and TileMask.LOMASK <= Tile.LASTROAD.
 - Pick highest score; ties broken with 1/8 chance to switch.
-- If a location selected, set tile to HOUSE + BLBNCNBIT + Rand(2) + (value * 3).
+- If a location selected, set tile to Tile.HOUSE + TileFlag.BLBNCNBIT + Rand(2) + (value * 3).
 
 ### Rate of growth
 - IncROG(amount): RateOGMem[SMapX>>3][SMapY>>3] += amount << 2.
-- DecROGMem(): each SmX/SmY cell moves 1 step toward 0; clamp to [-200,200].
+- DecROGMem(): each World.SmX/World.SmY cell moves 1 step toward 0; clamp to [-200,200].
 
 ----------------------------------------------------------------
 ## Traffic System
@@ -528,14 +528,14 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 ### DriveDone()
 - For Zsource (0/1/2), target ranges:
-  - TARGL = { COMBASE, LHTHR, LHTHR }
-  - TARGH = { NUCLEAR, PORT, COMBASE }
-- If any adjacent tile (N,E,S,W) has LOMASK in [TARGL[Zsource]..TARGH[Zsource]], return TRUE.
+  - TARGL = { Tile.COMBASE, Tile.LHTHR, Tile.LHTHR }
+  - TARGH = { Tile.NUCLEAR, Tile.PORT, Tile.COMBASE }
+- If any adjacent tile (N,E,S,W) has TileMask.LOMASK in [TARGL[Zsource]..TARGH[Zsource]], return TRUE.
 - Else FALSE.
 
 ### SetTrafMem()
 - For each saved position in stack:
-  - If Map tile is in road range (ROADBASE..POWERBASE-1):
+  - If Map tile is in road range (Tile.ROADBASE..Tile.POWERBASE-1):
     - z = TrfDensity[x>>1][y>>1] + 50.
     - If z > 240 and Rand(5) == 0:
       - z = 240; set TrafMaxX/Y = (x<<4, y<<4).
@@ -543,10 +543,10 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
     - Store TrfDensity[x>>1][y>>1] = z.
 
 ### RoadTest(tile)
-- x = tile & LOMASK.
+- x = tile & TileMask.LOMASK.
 - Returns TRUE if:
-  - x >= ROADBASE, x <= LASTRAIL, and
-  - NOT (POWERBASE <= x < RAILHPOWERV).
+  - x >= Tile.ROADBASE, x <= Tile.LASTRAIL, and
+  - NOT (Tile.POWERBASE <= x < Tile.RAILHPOWERV).
 
 ### Traffic decay
 - DecTrafficMem():
@@ -559,14 +559,14 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 ### PTLScan()
 - Clears Qtem (4x4 grid) to 0.
-- For each 2x2 cell (x,y in HWLDX/HWLDY):
+- For each 2x2 cell (x,y in World.HWLDX/World.HWLDY):
   - Plevel=0, LVflag=0.
   - For each of 4 tiles in that 2x2 cell:
-    - loc = Map[Mx][My] & LOMASK.
+    - loc = Map[Mx][My] & TileMask.LOMASK.
     - If loc == 0: continue.
-    - If loc < RUBBLE: Qtem[x>>1][y>>1] += 15 (terrain boost). Continue.
+    - If loc < Tile.RUBBLE: Qtem[x>>1][y>>1] += 15 (terrain boost). Continue.
     - Plevel += GetPValue(loc).
-    - If loc >= ROADBASE: LVflag++.
+    - If loc >= Tile.ROADBASE: LVflag++.
   - Clamp Plevel to 255; tem[x][y] = Plevel.
   - If LVflag > 0:
     - dis = 34 - GetDisCC(x,y); dis <<= 2;
@@ -582,15 +582,15 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - Mark NewMapFlags[DYMAP,PLMAP,LVMAP]=1.
 
 ### GetPValue(loc)
-- If loc < POWERBASE:
-  - If loc >= HTRFBASE: return 75.
-  - Else if loc >= LTRFBASE: return 50.
-  - Else if loc > FIREBASE: return 90.
-  - Else if loc >= RADTILE: return 255 (radioactivity).
+- If loc < Tile.POWERBASE:
+  - If loc >= Tile.HTRFBASE: return 75.
+  - Else if loc >= Tile.LTRFBASE: return 50.
+  - Else if loc > Tile.FIREBASE: return 90.
+  - Else if loc >= Tile.RADTILE: return 255 (radioactivity).
   - Else return 0.
 - If loc <= LASTIND: return 0.
-- If loc < PORTBASE: return 50 (industrial).
-- If loc <= LASTPOWERPLANT: return 100 (ports, airports, coal, nuclear).
+- If loc < Tile.PORTBASE: return 50 (industrial).
+- If loc <= Tile.LASTPOWERPLANT: return 100 (ports, airports, coal, nuclear).
 - Else return 0.
 
 ### GetDisCC(x,y)
@@ -618,7 +618,7 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - Mark NewMapFlags[DYMAP,CRMAP,POMAP]=1.
 
 ### SmoothPSMap()
-- For each SmX/SmY cell, averages 4-neighbor PoliceMap values, then halves:
+- For each World.SmX/World.SmY cell, averages 4-neighbor PoliceMap values, then halves:
   - edge = (neighbors sum >>2) + PoliceMap[x][y]; STem = edge >>1.
 - Copies STem back into PoliceMap.
 
@@ -627,8 +627,8 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 
 ### PopDenScan()
 - Clears tem (2x2 grid).
-- For each tile (x,y): if Map[x][y] has ZONEBIT:
-  - SMapX/SMapY = x/y; z = GetPDen(Map[x][y] & LOMASK) << 3; clamp to <=254.
+- For each tile (x,y): if Map[x][y] has TileFlag.ZONEBIT:
+  - SMapX/SMapY = x/y; z = GetPDen(Map[x][y] & TileMask.LOMASK) << 3; clamp to <=254.
   - tem[x>>1][y>>1] = z.
   - Accumulate Xtot, Ytot, Ztot for city center.
 - Smooth data: DoSmooth(), DoSmooth2(), DoSmooth().
@@ -636,19 +636,19 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - DistIntMarket(): sets ComRate based on distance to city center.
 - City center:
   - If Ztot > 0: CCx = Xtot / Ztot; CCy = Ytot / Ztot.
-  - Else: CCx = HWLDX; CCy = HWLDY.
+  - Else: CCx = World.HWLDX; CCy = World.HWLDY.
   - CCx2 = CCx >> 1; CCy2 = CCy >> 1.
 - Mark NewMapFlags[DYMAP,PDMAP,RGMAP]=1.
 
 ### GetPDen(Ch9)
-- FREEZ: returns DoFreePop().
+- Tile.FREEZ: returns DoFreePop().
 - Residential: returns RZPop(Ch9).
 - Commercial: returns CZPop(Ch9) << 3.
 - Industrial: returns IZPop(Ch9) << 3.
 - Else 0.
 
 ### DistIntMarket()
-- For each SmX/SmY cell:
+- For each World.SmX/World.SmY cell:
   - z = GetDisCC(x<<2, y<<2); z <<= 2; z = 64 - z; ComRate[x][y] = z.
 
 ### DoSmooth / DoSmooth2
@@ -878,13 +878,13 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - DisasterWait-- each call; when 0, DisasterEvent=0.
 
 ### MakeMeltdown()
-- Finds first NUCLEAR tile; calls DoMeltdown(x,y).
+- Finds first Tile.NUCLEAR tile; calls DoMeltdown(x,y).
 
 ### DoMeltdown(SX,SY)
 - Sets MeltX/Y to center.
 - MakeExplosion at four corners around plant.
-- Sets 4x4 area to FIRE + (Rand16() & 3) + ANIMBIT.
-- For 200 attempts: pick random point in box [SX-20..SX+19], [SY-15..SY+14]; if in bounds and tile not ZONEBIT and (tile has BURNBIT or tile==0), set to RADTILE.
+- Sets 4x4 area to Tile.FIRE + (Rand16() & 3) + TileFlag.ANIMBIT.
+- For 200 attempts: pick random point in box [SX-20..SX+19], [SY-15..SY+14]; if in bounds and tile not TileFlag.ZONEBIT and (tile has TileFlag.BURNBIT or tile==0), set to Tile.RADTILE.
 - SendMesAt(-43,SX,SY).
 
 ### MakeEarthquake()
@@ -892,25 +892,25 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - Sends message -23 at city center (CCx,CCy).
 - For random time 300..999 steps:
   - Pick random tile; if Vunerable(tile) is TRUE:
-    - 3/4 chance: set to RUBBLE + (Rand16() & 3) + BULLBIT.
-    - 1/4 chance: set to FIRE + (Rand16() & 7) + ANIMBIT.
+    - 3/4 chance: set to Tile.RUBBLE + (Rand16() & 3) + TileFlag.BULLBIT.
+    - 1/4 chance: set to Tile.FIRE + (Rand16() & 7) + TileFlag.ANIMBIT.
 
 ### SetFire()
-- Pick random tile; if not ZONEBIT and LOMASK in (LHTHR..LASTZONE), set to FIRE + (Rand16() & 7) + ANIMBIT; set CrashX/Y; SendMesAt(-20,x,y).
+- Pick random tile; if not TileFlag.ZONEBIT and TileMask.LOMASK in (Tile.LHTHR..Tile.LASTZONE), set to Tile.FIRE + (Rand16() & 7) + TileFlag.ANIMBIT; set CrashX/Y; SendMesAt(-20,x,y).
 
 ### MakeFire()
-- Try up to 40 times: pick random tile; if tile has BURNBIT and not ZONEBIT and LOMASK in (21..LASTZONE), set to FIRE + (Rand16() & 7) + ANIMBIT; SendMesAt(20,x,y).
+- Try up to 40 times: pick random tile; if tile has TileFlag.BURNBIT and not TileFlag.ZONEBIT and TileMask.LOMASK in (21..Tile.LASTZONE), set to Tile.FIRE + (Rand16() & 7) + TileFlag.ANIMBIT; SendMesAt(20,x,y).
 
 ### MakeFlood()
-- Try up to 300 times: pick random tile; if LOMASK in (4..20) (river edge), check 4 neighbors for floodable:
-  - Floodable if tile == 0 or (tile has BULLBIT and BURNBIT).
-  - On first floodable neighbor: set to FLOOD, FloodCnt=30, SendMesAt(-42,xx,yy), set FloodX/Y.
+- Try up to 300 times: pick random tile; if TileMask.LOMASK in (4..20) (river edge), check 4 neighbors for floodable:
+  - Floodable if tile == 0 or (tile has TileFlag.BULLBIT and TileFlag.BURNBIT).
+  - On first floodable neighbor: set to Tile.FLOOD, FloodCnt=30, SendMesAt(-42,xx,yy), set FloodX/Y.
 
-### DoFlood() (called from MapScan when encountering FLOOD tiles)
+### DoFlood() (called from MapScan when encountering Tile.FLOOD tiles)
 - If FloodCnt > 0: for each of 4 neighbors, with 1/8 probability:
-  - If neighbor is BURNBIT set, or 0, or LOMASK in [WOODS5..FLOOD-1]:
-    - If neighbor has ZONEBIT, FireZone() it.
-    - Set neighbor to FLOOD + Rand(2).
+  - If neighbor is TileFlag.BURNBIT set, or 0, or TileMask.LOMASK in [Tile.WOODS5..Tile.FLOOD-1]:
+    - If neighbor has TileFlag.ZONEBIT, FireZone() it.
+    - Set neighbor to Tile.FLOOD + Rand(2).
 - If FloodCnt == 0: with probability 1/16, clear flood tile to 0.
 
 ----------------------------------------------------------------
@@ -954,7 +954,7 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - If heat_steps > 0, sim_loop runs sim_heat() heat_steps times per loop instead of SimFrame().
 - sim_heat() treats Map as a cellular automaton using CLIPPER_LOOP_BODY.
 - There are two rulesets (heat_rule 0 or 1) and a wrap mode (heat_wrap 0..4) for boundary behavior.
-- Output tiles are written into Map with ANIMBIT|BURNBIT|BULLBIT and LOMASK from heat computations.
+- Output tiles are written into Map with TileFlag.ANIMBIT|TileFlag.BURNBIT|TileFlag.BULLBIT and TileMask.LOMASK from heat computations.
 
 ----------------------------------------------------------------
 ## External Hooks / Side Effects

@@ -94,9 +94,9 @@ Fields and meaning:
 - `step`, `flag`, `control`, `turn`, `accel`, `speed`: behavior controls.
 
 ## Coordinate Systems and Sizes
-- World map dimensions: `WORLD_X` x `WORLD_Y` tiles.
+- World map dimensions: `World.WORLD_X` x `World.WORLD_Y` tiles.
 - Editor view renders tiles at 16x16 pixels. One tile = 16 px.
-- Map/overview view renders tiles at 3x3 pixels (MAP_W = WORLD_X * 3, MAP_H = WORLD_Y * 3).
+- Map/overview view renders tiles at 3x3 pixels (MAP_W = World.WORLD_X * 3, MAP_H = World.WORLD_Y * 3).
 - Pixel coords in tools/sprites refer to editor view world pixel coords (tile * 16).
 - View pan (`pan_x`, `pan_y`) is in pixel coords; the visible tile rectangle is derived by `DoAdjustPan`.
 
@@ -178,15 +178,15 @@ Fields and meaning:
 - `drawInd`: hides tile ranges (industrial filter) as per `drawInd` conditions.
 - `drawLilTransMap`: shows basic transport (hides most tiles >= 240, 207..220, 223).
 - `drawPower`:
-  - Zones (tile > 63 and ZONEBIT) show powered/unpowered colors (red/light blue).
-  - Conductive non-zones (CONDBIT) show light gray.
+  - Zones (tile > 63 and TileFlag.ZONEBIT) show powered/unpowered colors (red/light blue).
+  - Conductive non-zones (TileFlag.CONDBIT) show light gray.
   - Otherwise uses base tiles.
 - `drawDynamic`: for tiles > 63, hides tiles that fail `dynamicFilter`.
 
 ### Density overlay rectangles
 - Density maps draw colored rectangles over a base map:
-  - PopDensity, Traffic, Pollution, Crime, LandValue use half-resolution arrays (`HWLDX`, `HWLDY`) and 6x6 pixel rectangles.
-  - Rate of Growth, FireRadius, PoliceRadius use quarter-resolution arrays (`SmX`, `SmY`) and 24x24 pixel rectangles.
+  - PopDensity, Traffic, Pollution, Crime, LandValue use half-resolution arrays (`World.HWLDX`, `World.HWLDY`) and 6x6 pixel rectangles.
+  - Rate of Growth, FireRadius, PoliceRadius use quarter-resolution arrays (`World.SmX`, `World.SmY`) and 24x24 pixel rectangles.
 - Value mapping uses `GetCI` thresholds:
   - < 50: none, <100: low, <150: medium, <200: high, else very high.
 - Color mapping in color mode uses `valMap[]` and in mono uses `valGrayMap[]`.
@@ -213,7 +213,7 @@ Fields and meaning:
 - `MemDrawBeegMapRect(view, x, y, w, h)`:
   - Draws only visible region; clamps to visible tile rectangle.
   - Uses per-tile cache (`view->tiles`) to avoid redrawing unchanged tiles.
-  - Blink: if `flagBlink <= 0` and tile has `ZONEBIT` but lacks `PWRBIT`, render as `LIGHTNINGBOLT` instead of the tile.
+  - Blink: if `flagBlink <= 0` and tile has `TileFlag.ZONEBIT` but lacks `TileFlag.PWRBIT`, render as `LIGHTNINGBOLT` instead of the tile.
   - Dynamic filter: if `tile > 63` and `view->dynamic_filter != 0` and `dynamicFilter` returns false, render as tile 0.
 - `WireDrawBeegMapRect` uses shared `big_tile_pixmap` and only redraws tiles whose cached value changed.
 
@@ -284,29 +284,29 @@ Overlay mode state machine in `DrawOverlay`:
   - Total cost = `CostOf[tool] + autoBulldozeCost`.
   - Reject if funds insufficient (return -2).
   - Multiplayer cost check: if `Players > 1`, `OverRide == 0`, `cost >= Expensive`, `view != NULL`, and `view->super_user == 0` => return -3.
-  - On success: `Spend(cost)`, `UpdateFunds`, then lay tiles with `BNCNBIT` and center `ZONEBIT`. 4x4 adds `ANIMBIT` at row 2/col 1 when `aniFlag` set.
+  - On success: `Spend(cost)`, `UpdateFunds`, then lay tiles with `TileFlag.BNCNBIT` and center `TileFlag.ZONEBIT`. 4x4 adds `TileFlag.ANIMBIT` at row 2/col 1 when `aniFlag` set.
   - Call `check*border` to reconnect adjacent transport tiles.
 - Seaport placement uses `check4x4` with no water-adjacency requirement (only empty tiles, bounds, and funds).
 
 ### Bulldozer tool
-- If `ZONEBIT` set: spend 1 and replace zone with rubble (3x3, 4x4, or 6x6) with explosions; special sounds for sizes.
+- If `TileFlag.ZONEBIT` set: spend 1 and replace zone with rubble (3x3, 4x4, or 6x6) with explosions; special sounds for sizes.
 - Else if `checkBigZone` identifies large zones/airports, clears rubble accordingly.
 - Else: bulldoze single tile via `ConnecTile(x,y, &Map[x][y], 1)`.
-  - For water (RIVER/REDGE/CHANNEL): requires >= 6 funds and spends 5 if tile changed.
+  - For water (Tile.RIVER/Tile.REDGE/Tile.CHANNEL): requires >= 6 funds and spends 5 if tile changed.
 - Calls `UpdateFunds` and `DidTool` on success.
 
 ### Park tool
 - If funds >= CostOf[parkState], places:
-  - `FOUNTAIN | BURNBIT | BULLBIT | ANIMBIT` with 1/4 chance, else `WOODS2..WOODS5` (random) with `BURNBIT|BULLBIT`.
+  - `Tile.FOUNTAIN | TileFlag.BURNBIT | TileFlag.BULLBIT | TileFlag.ANIMBIT` with 1/4 chance, else `Tile.WOODS2..Tile.WOODS5` (random) with `TileFlag.BURNBIT|TileFlag.BULLBIT`.
   - Only on empty tiles; else returns -1.
 
 ### Network tool
 - If tile is autobulldozable and funds > 0, clears tile and spends 1.
-- If tile becomes empty and funds allow, places `TELEBASE | CONDBIT | BURNBIT | BULLBIT | ANIMBIT` and spends CostOf[networkState].
+- If tile becomes empty and funds allow, places `Tile.TELEBASE | TileFlag.CONDBIT | TileFlag.BURNBIT | TileFlag.BULLBIT | TileFlag.ANIMBIT` and spends CostOf[networkState].
 
 ### Query tool
 - `doZoneStatus(x,y)`:
-  - Normalizes tile for special ranges (e.g., coal smoke -> COALBASE).
+  - Normalizes tile for special ranges (e.g., coal smoke -> Tile.COALBASE).
   - Finds base label via `idArray` and string table 219.
   - Computes 5 status strings (pop density, land value, crime, pollution, growth) via string table 202 using `getDensityStr`.
   - Calls `UIShowZoneStatus` with label and 5 status strings.
