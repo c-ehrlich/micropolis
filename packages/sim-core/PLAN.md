@@ -7,7 +7,7 @@
   - Verify: unit tests for RNG determinism, patch correctness/idempotence, MapStore swap
 - [x] Tool actions + connectivity (all tools; `w_tool.c`/`w_con.c` parity)  
   - Verify: tool ordering tests; road/rail/wire adjacency golden tests vs table outputs
-- [ ] Scheduler API (stepPhase/stepTick/stepRealtimeTicks)  
+- [x] Scheduler API (stepPhase/stepTick/stepRealtimeTicks)  
   - Verify: stepTick == 16×stepPhase; realtime counter; `viewRect` throws
 - [ ] Save/Load + replay infra  
   - Verify: `.cty` round‑trip; endianness test; replay hash determinism

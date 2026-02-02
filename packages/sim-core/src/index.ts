@@ -6,4 +6,5 @@ export * from './constants.ts';
 export * from './map-store.ts';
 export * from './rng.ts';
 export * from './rules.ts';
+export * from './scheduler.ts';
 export * from './tools.ts';
