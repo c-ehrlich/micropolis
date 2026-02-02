@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "pnpm -w eslint .",
-    "typecheck": "pnpm -w tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root apps/web",
     "test:watch": "pnpm -w vitest --root apps/web"
   },
