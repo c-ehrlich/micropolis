@@ -9,7 +9,7 @@
   - Verify: tool ordering tests; road/rail/wire adjacency golden tests vs table outputs
 - [x] Scheduler API (stepPhase/stepTick/stepRealtimeTicks)  
   - Verify: stepTick == 16×stepPhase; realtime counter; `viewRect` throws
-- [ ] Save/Load + replay infra  
+- [x] Save/Load + replay infra  
   - Verify: `.cty` round‑trip; endianness test; replay hash determinism
 - [ ] Simulation systems (phased, incremental)  
   - Verify: per‑system golden tests after each subsystem lands
