@@ -3,7 +3,7 @@
 ## Checklist (Tasks + Verification)
 - [x] Package skeleton + tooling  
   - Verify: `pnpm -C packages/sim-core test`
-- [ ] Core types + deterministic foundations (RNG, clocks, MapStore, patches)  
+- [x] Core types + deterministic foundations (RNG, clocks, MapStore, patches)  
   - Verify: unit tests for RNG determinism, patch correctness/idempotence, MapStore swap
 - [ ] Tool actions + connectivity (all tools; `w_tool.c`/`w_con.c` parity)  
   - Verify: tool ordering tests; road/rail/wire adjacency golden tests vs table outputs
