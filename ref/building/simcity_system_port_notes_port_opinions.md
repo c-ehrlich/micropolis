@@ -5,6 +5,7 @@ This document lists recommendations, architectural guidance, and port-specific a
 ## Architecture and determinism guidance (port design)
 - Separate engine from UI with a strict boundary; engine is a pure state machine emitting patches/events.
 - Represent maps as typed arrays (Uint16Array/Uint8Array) for data-oriented performance.
+- Keep `noUncheckedIndexedAccess` enabled; use explicit `assertDefined`/`getOrThrow` helpers for array reads to document invariants.
 - Introduce a `Ruleset` object to hold constants, tile classification tables, and quirk toggles.
 - Provide format adapters (`CityFormatAdapter`) to allow multiple save formats (cty/json/zip/extended).
 - Use a deterministic PRNG (xorshift/splitmix/pcg) and store seeds in saves/replays.

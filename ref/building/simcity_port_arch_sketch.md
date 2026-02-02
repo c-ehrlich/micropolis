@@ -121,6 +121,8 @@ If patches get large, you can fall back to sending a full snapshot for that laye
 
 Below is a minimal interface and implementation sketch. This keeps the sim logic independent of how storage is implemented.
 
+**Note**: keep `noUncheckedIndexedAccess` enabled; use explicit helpers (`assertDefined`/`getOrThrow`) when reading indexed values from typed arrays to make invariants explicit.
+
 ```ts
 // core layer IDs
 export type LayerId =
@@ -247,4 +249,3 @@ class DoubleBufferStore implements MapStore {
 - **Simulation model**: discrete sim ticks with real-time render loop
 - **State representation**: hybrid (packed map + derived layers + object tables)
 - **Mutation style**: double-buffer with patch log (mutable inside tick, immutable boundary)
-

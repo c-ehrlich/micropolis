@@ -5,7 +5,7 @@
   - Verify: `pnpm -C packages/sim-core test`
 - [x] Core types + deterministic foundations (RNG, clocks, MapStore, patches)  
   - Verify: unit tests for RNG determinism, patch correctness/idempotence, MapStore swap
-- [ ] Tool actions + connectivity (all tools; `w_tool.c`/`w_con.c` parity)  
+- [x] Tool actions + connectivity (all tools; `w_tool.c`/`w_con.c` parity)  
   - Verify: tool ordering tests; road/rail/wire adjacency golden tests vs table outputs
 - [ ] Scheduler API (stepPhase/stepTick/stepRealtimeTicks)  
   - Verify: stepTick == 16×stepPhase; realtime counter; `viewRect` throws

@@ -1,3 +1,4 @@
+import { getOrThrow } from './assert.ts';
 import { PowerMap, World } from './constants.ts';
 
 const { WORLD_X, WORLD_Y, HWLDX, HWLDY, QWX, QWY, SmX, SmY } = World;
@@ -237,7 +238,7 @@ class PatchWriter<T extends LayerArray> {
   write(index: number, value: number) {
     const existing = this.seen.get(index);
     if (existing == null) {
-      const current = this.arr[index];
+      const current = getOrThrow(this.arr[index]);
       if (current === value) {
         return;
       }
@@ -261,12 +262,14 @@ class PatchWriter<T extends LayerArray> {
     const filteredNext: number[] = [];
 
     for (let i = 0; i < this.idxs.length; i += 1) {
-      if (this.prev[i] === this.next[i]) {
+      const prev = getOrThrow(this.prev[i]);
+      const next = getOrThrow(this.next[i]);
+      if (prev === next) {
         continue;
       }
-      filteredIdxs.push(this.idxs[i]);
-      filteredPrev.push(this.prev[i]);
-      filteredNext.push(this.next[i]);
+      filteredIdxs.push(getOrThrow(this.idxs[i]));
+      filteredPrev.push(prev);
+      filteredNext.push(next);
     }
 
     if (filteredIdxs.length === 0) {
@@ -394,7 +397,8 @@ export function applyPatch<T extends LayerArray>(target: T, patch: Patch): T {
   const indexes = patch.index;
   const next = patch.next;
   for (let i = 0; i < indexes.length; i += 1) {
-    target[indexes[i]] = next[i];
+    const index = getOrThrow(indexes[i]);
+    target[index] = getOrThrow(next[i]);
   }
   return target;
 }

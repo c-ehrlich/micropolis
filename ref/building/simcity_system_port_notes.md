@@ -530,6 +530,7 @@ this section is “implementation method,” not historical description.
 - primary: `Uint16Array` length = w*h
 - derived: mostly `Uint8Array` (0–255) unless code needs signed
 - object lists in packed arrays where possible (struct-of-arrays for perf)
+- keep `noUncheckedIndexedAccess` enabled; use explicit helpers (`assertDefined`/`getOrThrow`) for indexed reads.
 
 ### 14.3 rulesets (your “future customization” hook)
 create a `Ruleset` object that holds:
