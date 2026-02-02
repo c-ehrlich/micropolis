@@ -1,5 +1,18 @@
+# app
+node_modules
+dist
+build
+coverage
+.turbo
+.env
+.env.*
+!.env.example
+**/routeTree.gen.ts
+
+# mac
 .DS_Store
 
+# ref
 ref/athena-crisis/**
 !ref/athena-crisis/**/
 !ref/athena-crisis/**/*.md
