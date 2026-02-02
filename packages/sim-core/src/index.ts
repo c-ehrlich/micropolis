@@ -4,6 +4,7 @@ export * from './assert.ts';
 export * from './clocks.ts';
 export * from './constants.ts';
 export * from './hash.ts';
+export * from './map-scan.ts';
 export * from './map-store.ts';
 export * from './persistence.ts';
 export * from './replay.ts';

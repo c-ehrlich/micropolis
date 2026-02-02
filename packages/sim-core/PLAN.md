@@ -11,7 +11,7 @@
   - Verify: stepTick == 16×stepPhase; realtime counter; `viewRect` throws
 - [x] Save/Load + replay infra  
   - Verify: `.cty` round‑trip; endianness test; replay hash determinism
-- [ ] Simulation systems (phased, incremental)  
+- [x] Simulation systems (phased, incremental)  
   - Verify: per‑system golden tests after each subsystem lands
 - [ ] Real‑time systems (objects + animations)  
   - Verify: deterministic object movement + map mutations under fixed seed
