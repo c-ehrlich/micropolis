@@ -1,0 +1,4 @@
+athena-crisis/*
+!athena-crisis/*.md
+# !athena-crisis/**/
+# !athena-crisis/**/*.md
