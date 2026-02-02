@@ -1,4 +1,8 @@
-athena-crisis/*
-!athena-crisis/*.md
-# !athena-crisis/**/
-# !athena-crisis/**/*.md
+.DS_Store
+
+athena-crisis/**
+!athena-crisis/**/
+!athena-crisis/**/*.md
+micropolis/**
+!micropolis/**/
+!micropolis/**/*.md
