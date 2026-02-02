@@ -109,9 +109,9 @@
     - autoBulldoze uses `tally(tile)` to decide if a non-empty tile can be cleared (and adds cost per tile)
     - on success: spend cost, lay zone tiles, center `ZONEBIT`, then `check*border` (calls `ConnecTile` around perimeter)
   - park tool:
-    - only on empty tile; 1/4 fountain (`FOUNTAIN|BURNBIT|BULLBIT|ANIMBIT`), else `WOODS2..WOODS5`
+    - only on empty tile; 1/4 fountain (`Tile.FOUNTAIN|BURNBIT|BULLBIT|ANIMBIT`), else `Tile.WOODS2..Tile.WOODS5`
   - network tool:
-    - auto-bulldozes eligible tile if funds > 0; then places `TELEBASE|CONDBIT|BURNBIT|BULLBIT|ANIMBIT`
+    - auto-bulldozes eligible tile if funds > 0; then places `Tile.TELEBASE|CONDBIT|BURNBIT|BULLBIT|ANIMBIT`
   - bulldoze helper logic:
     - `checkSize` (3x3/4x4/6x6 zones) and `checkBigZone` (airport/large zones) determine rubble footprint
   - mirror canonical arrays (note: includes an extra slot for `specialState` in C):
@@ -122,7 +122,7 @@
     - `toolOffset`:
       `[1,1,1,1,0,1,0,0,0,0,0,0,1,0,1,1,1,1,0,0]`
   - autoBulldoze eligibility (`tally`) from `w_tool.c`:
-    - rivedge..rubble, power lines (POWERBASE+2..POWERBASE+12), tiny explosions (TINYEXP..LASTTINYEXP+2)
+    - rivedge..rubble, power lines (`Tile.POWERBASE+2..Tile.POWERBASE+12`), tiny explosions (`Tile.TINYEXP..Tile.LASTTINYEXP+2`)
 
 **Tests that must pass**
 - Tool ordering: two actions with same simStep must apply in stable order.
