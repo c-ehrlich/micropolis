@@ -286,6 +286,7 @@ Overlay mode state machine in `DrawOverlay`:
   - Multiplayer cost check: if `Players > 1`, `OverRide == 0`, `cost >= Expensive`, `view != NULL`, and `view->super_user == 0` => return -3.
   - On success: `Spend(cost)`, `UpdateFunds`, then lay tiles with `BNCNBIT` and center `ZONEBIT`. 4x4 adds `ANIMBIT` at row 2/col 1 when `aniFlag` set.
   - Call `check*border` to reconnect adjacent transport tiles.
+- Seaport placement uses `check4x4` with no water-adjacency requirement (only empty tiles, bounds, and funds).
 
 ### Bulldozer tool
 - If `ZONEBIT` set: spend 1 and replace zone with rubble (3x3, 4x4, or 6x6) with explosions; special sounds for sizes.

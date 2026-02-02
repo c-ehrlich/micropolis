@@ -314,6 +314,7 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - Clears PowerMap[0..PWRMAPSIZE-1] to 0.
 - MaxPower = CoalPop * 700 + NuclearPop * 2000.
 - NumPower = 0.
+- Capacity quirk: MaxPower uses total CoalPop/NuclearPop counts from MapScan, regardless of whether plants are connected to the powered network; disconnected plants still increase the global capacity limit.
 - While PowerStackNum > 0:
   - PullPowerStack(); ADir = 4.
   - Do/while loop:
@@ -371,6 +372,7 @@ For each x in [x1..x2-1], y in [0..WORLD_Y-1]:
 - PORT:
   - PortPop++; every 16 ticks: RepairZone(PORT,4).
   - If powered and no ship sprite exists: GenerateShip().
+  - No simulation-side adjacency check to water.
 
 ### RepairZone(ZCent, zsize)
 - zsize is zone dimension (3 for 3x3, 4 for 4x4, 6 for 6x6). It decrements zsize then uses that as loop limit.

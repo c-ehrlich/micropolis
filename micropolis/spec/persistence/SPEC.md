@@ -27,6 +27,17 @@ All fields are written sequentially with no padding:
 7. `MiscHis` : 120 shorts (240 bytes)
 8. `Map` : `WORLD_X * WORLD_Y` shorts (column-major, `x` outer, `y` inner)
 
+### Byte offsets (derived from layout)
+Offsets are from file start; all values are big-endian shorts.
+- 0x0000: ResHis (480 bytes)
+- 0x01E0: ComHis
+- 0x03C0: IndHis
+- 0x05A0: CrimeHis
+- 0x0780: PollutionHis
+- 0x0960: MoneyHis
+- 0x0B40: MiscHis (240 bytes)
+- 0x0C30: Map data begins
+
 ### File sizes accepted by loader
 The loader accepts only the following total byte sizes and rejects all others:
 - 27,120 bytes: normal city (120 x 100)
