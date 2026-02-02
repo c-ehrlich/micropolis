@@ -1,8 +1,8 @@
 .DS_Store
 
-athena-crisis/**
-!athena-crisis/**/
-!athena-crisis/**/*.md
-micropolis/**
-!micropolis/**/
-!micropolis/**/*.md
+ref/athena-crisis/**
+!ref/athena-crisis/**/
+!ref/athena-crisis/**/*.md
+ref/micropolis/**
+!ref/micropolis/**/
+!ref/micropolis/**/*.md
