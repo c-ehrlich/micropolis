@@ -115,6 +115,7 @@ export interface SimState {
   CChr9: number;
 
   // Disasters + scenarios
+  NoDisasters: boolean;
   DisasterEvent: number;
   DisasterWait: number;
   FloodCnt: number;
@@ -263,6 +264,7 @@ export function createSimState(): SimState {
     CChr9: 0,
 
     // Disasters + scenarios
+    NoDisasters: false,
     DisasterEvent: 0,
     DisasterWait: 0,
     FloodCnt: 0,

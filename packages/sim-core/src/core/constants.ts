@@ -139,7 +139,17 @@ const COMCLR = 427;
 const CZB = 436;
 const INDBASE = 612;
 const INDCLR = 616;
+const LASTIND = 620;
+const IND1 = 621;
 const IZB = 625;
+const IND2 = 641;
+const IND3 = 644;
+const IND4 = 649;
+const IND5 = 650;
+const IND6 = 676;
+const IND7 = 677;
+const IND8 = 686;
+const IND9 = 689;
 const PORTBASE = 693;
 const PORT = 698;
 const LASTPORT = 708;
@@ -259,7 +269,17 @@ export const Tile = {
   CZB,
   INDBASE,
   INDCLR,
+  LASTIND,
+  IND1,
   IZB,
+  IND2,
+  IND3,
+  IND4,
+  IND5,
+  IND6,
+  IND7,
+  IND8,
+  IND9,
   PORTBASE,
   PORT,
   LASTPORT,
