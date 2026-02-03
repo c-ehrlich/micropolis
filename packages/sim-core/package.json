@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "pnpm -w tsc -p tsconfig.json --noEmit",
-    "lint": "pnpm -w eslint .",
+    "lint": "pnpm -w eslint packages/sim-core/src packages/sim-core/vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root packages/sim-core",
     "test:watch": "pnpm -w vitest --root packages/sim-core"
