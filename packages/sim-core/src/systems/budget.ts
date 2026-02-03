@@ -1,6 +1,7 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { sendMes } from './messages.ts';
 
 const R_LEVELS = [0.7, 0.9, 1.2] as const;
 const F_LEVELS = [1.4, 1.2, 0.8] as const;
@@ -111,7 +112,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
 
   state.autoBudget = false;
   state.MustUpdateOptions = 1;
-  context.hooks.sendMes(29);
+  sendMes(state, context, 29);
 
   context.hooks.showBudgetWindowAndStartWaiting();
   applyManualSpend();

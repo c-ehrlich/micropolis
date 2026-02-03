@@ -237,15 +237,15 @@ Legend
 
 ---
 
-- 18. Messages and Scenarios
+- [x] 18. Messages and Scenarios
   - References:
     - Plan: Messages and Scenarios
     - Spec: “Messages and Scenarios”
     - Micropolis: `s_msg.c`, `s_scen.c`
-  - [ ] Success criteria:
-    - [ ] SendMessages, CheckGrowth, DoScenarioScore, SendMes implemented.
-    - [ ] Scenario score countdown + thresholds match spec.
-    - [ ] Tests: message emission for boundary conditions.
+  - [x] Success criteria:
+    - [x] SendMessages, CheckGrowth, DoScenarioScore, SendMes implemented.
+    - [x] Scenario score countdown + thresholds match spec.
+    - [x] Tests: message emission for boundary conditions.
 
 ---
 

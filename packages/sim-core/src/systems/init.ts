@@ -100,6 +100,9 @@ export function initWillStuff(
   state.LastCityYear = -1;
   state.LastCityMonth = -1;
   state.LastFunds = -1;
+  state.MessagePort = 0;
+  state.MesX = 0;
+  state.MesY = 0;
   state.RoadFund = 0;
   state.PoliceFund = 0;
   state.FireFund = 0;
