@@ -52,15 +52,15 @@ Legend
 
 ---
 
-- 3. MapScan Core + Tile Dispatch
+- [x] 3. MapScan Core + Tile Dispatch
   - References:
     - Plan: PLAN-SYSTEMS (Map Scan Pass)
     - Spec: SPEC “Map Scan Pass”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] MapScan(x1,x2) iterates slice correctly and dispatches based on tile categories.
-    - [ ] NewPower + CONDBIT path calls SetZPower().
-    - [ ] Tests: slice boundaries, dispatch correctness, and no out-of-slice mutations.
+  - [x] Success criteria:
+    - [x] MapScan(x1,x2) iterates slice correctly and dispatches based on tile categories.
+    - [x] NewPower + CONDBIT path calls SetZPower().
+    - [x] Tests: slice boundaries, dispatch correctness, and no out-of-slice mutations.
 
 ---
 

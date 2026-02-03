@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tile, TileFlag, World } from '../core/constants.ts';
+import { PowerMap, Tile, TileFlag, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
+import { createRng } from '../core/rng.ts';
+import { createSimContext } from '../core/sim-context.ts';
+import { createSimState } from '../core/sim-state.ts';
 import { getMapScanSlice, mapScanSlice, runMapScanPhase } from './map-scan.ts';
 
 const { WORLD_X, WORLD_Y } = World;
+const { POWERMAPROW } = PowerMap;
 
 const indexFor = (x: number, y: number) => x * WORLD_Y + y;
+
+const createHarness = (seed = 1) => {
+  const store = createClassicMapStore();
+  const rng = createRng(seed);
+  const context = createSimContext({ store, rng });
+  const state = createSimState();
+  return { store, context, state, rng };
+};
 
 const fillMap = (store: ReturnType<typeof createClassicMapStore>, value: number) => {
   for (let x = 0; x < WORLD_X; x += 1) {
@@ -43,7 +55,7 @@ describe('MapScan slices', () => {
 
 describe('MapScan slice mutations', () => {
   it('only mutates tiles within the slice bounds', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     fillMap(store, Tile.ROADS);
@@ -53,7 +65,7 @@ describe('MapScan slice mutations', () => {
       throw new Error('missing slice for phase 3');
     }
 
-    mapScanSlice(store, slice.x1, slice.x2, {
+    mapScanSlice(state, context, slice.x1, slice.x2, {
       onRoad: (context) => context.writeTile(Tile.RIVER),
     });
 
@@ -72,12 +84,12 @@ describe('MapScan slice mutations', () => {
   });
 
   it('runMapScanPhase applies the phase slice and ignores other phases', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     fillMap(store, Tile.ROADS);
 
-    const ran = runMapScanPhase(store, 7, {
+    const ran = runMapScanPhase(state, context, 7, {
       onRoad: (context) => context.writeTile(Tile.RIVER),
     });
 
@@ -101,7 +113,7 @@ describe('MapScan slice mutations', () => {
       }
     }
 
-    const ranOutside = runMapScanPhase(store, 12, {
+    const ranOutside = runMapScanPhase(state, context, 12, {
       onRoad: (context) => context.writeTile(Tile.DIRT),
     });
     expect(ranOutside).toBe(false);
@@ -110,7 +122,7 @@ describe('MapScan slice mutations', () => {
 
 describe('MapScan dispatch ordering', () => {
   it('invokes conductive handler before road handler on conductive road tiles', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     const x = 10;
@@ -119,7 +131,8 @@ describe('MapScan dispatch ordering', () => {
 
     const calls: string[] = [];
     mapScanSlice(
-      store,
+      state,
+      context,
       x,
       x + 1,
       {
@@ -133,7 +146,7 @@ describe('MapScan dispatch ordering', () => {
   });
 
   it('gates conductive handler on newPower', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     const x = 12;
@@ -142,7 +155,8 @@ describe('MapScan dispatch ordering', () => {
 
     const calls: string[] = [];
     mapScanSlice(
-      store,
+      state,
+      context,
       x,
       x + 1,
       {
@@ -155,8 +169,105 @@ describe('MapScan dispatch ordering', () => {
     expect(calls).toEqual(['road']);
   });
 
-  it('routes fire, flood, and radiation tiles to their handlers', () => {
-    const store = createClassicMapStore();
+  it('defaults to state.NewPower when newPower option is omitted', () => {
+    const first = createHarness();
+    first.state.NewPower = 0;
+    first.store.beginTick();
+
+    const x = 13;
+    const y = 10;
+    first.store.write('map', indexFor(x, y), Tile.ROADS | TileFlag.CONDBIT);
+
+    const firstCalls: string[] = [];
+    mapScanSlice(first.state, first.context, x, x + 1, {
+      onConductive: () => firstCalls.push('conductive'),
+      onRoad: () => firstCalls.push('road'),
+    });
+
+    expect(firstCalls).toEqual(['road']);
+
+    const second = createHarness();
+    second.state.NewPower = 1;
+    second.store.beginTick();
+    second.store.write('map', indexFor(x, y), Tile.ROADS | TileFlag.CONDBIT);
+
+    const secondCalls: string[] = [];
+    mapScanSlice(second.state, second.context, x, x + 1, {
+      onConductive: () => secondCalls.push('conductive'),
+      onRoad: () => secondCalls.push('road'),
+    });
+
+    expect(secondCalls).toEqual(['conductive', 'road']);
+  });
+
+  it('updates PWRBIT on conductive tiles when NewPower is set', () => {
+    const { store, context, state } = createHarness();
+    state.NewPower = 1;
+    store.beginTick();
+
+    const powered = { x: 8, y: 12 };
+    const unpowered = { x: 9, y: 12 };
+    const baseTile = Tile.ROADS | TileFlag.CONDBIT;
+
+    store.write('map', indexFor(powered.x, powered.y), baseTile);
+    store.write('map', indexFor(unpowered.x, unpowered.y), baseTile | TileFlag.PWRBIT);
+
+    const powerLayer = store.getLayer('power') as Uint16Array;
+    const powerWord = (powered.x >> 4) + powered.y * POWERMAPROW;
+    powerLayer[powerWord] |= 1 << (powered.x & 15);
+
+    mapScanSlice(state, context, powered.x, powered.x + 2);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[indexFor(powered.x, powered.y)] & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    expect(map[indexFor(unpowered.x, unpowered.y)] & TileFlag.PWRBIT).toBe(0);
+  });
+
+  it('increments FirePop and gates fire handler by RNG', () => {
+    const x = 20;
+    const y = 10;
+    const index = indexFor(x, y);
+
+    const first = createHarness(1);
+    first.store.beginTick();
+    first.store.write('map', index, Tile.FIREBASE);
+    const firstCalls: string[] = [];
+    mapScanSlice(first.state, first.context, x, x + 1, {
+      onFire: () => firstCalls.push('fire'),
+    });
+    expect(first.state.FirePop).toBe(1);
+    expect(firstCalls).toEqual([]);
+
+    const second = createHarness(5);
+    second.store.beginTick();
+    second.store.write('map', index, Tile.FIREBASE);
+    const secondCalls: string[] = [];
+    mapScanSlice(second.state, second.context, x, x + 1, {
+      onFire: () => secondCalls.push('fire'),
+    });
+    expect(second.state.FirePop).toBe(1);
+    expect(secondCalls).toEqual(['fire']);
+  });
+
+  it('increments FirePop only for fire tiles within the slice', () => {
+    const { store, context, state } = createHarness(1);
+    store.beginTick();
+
+    const insideA = { x: 22, y: 10 };
+    const insideB = { x: 23, y: 10 };
+    const outside = { x: 24, y: 10 };
+
+    store.write('map', indexFor(insideA.x, insideA.y), Tile.FIREBASE);
+    store.write('map', indexFor(insideB.x, insideB.y), Tile.FIREBASE);
+    store.write('map', indexFor(outside.x, outside.y), Tile.FIREBASE);
+
+    mapScanSlice(state, context, insideA.x, insideB.x + 1);
+
+    expect(state.FirePop).toBe(2);
+  });
+
+  it('routes flood and radiation tiles to their handlers', () => {
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     const x = 20;
@@ -165,25 +276,21 @@ describe('MapScan dispatch ordering', () => {
 
     const calls: string[] = [];
     const handlers = {
-      onFire: () => calls.push('fire'),
       onFlood: () => calls.push('flood'),
       onRadTile: () => calls.push('rad'),
     };
 
-    store.write('map', index, Tile.FIREBASE);
-    mapScanSlice(store, x, x + 1, handlers);
-
     store.write('map', index, Tile.FLOOD);
-    mapScanSlice(store, x, x + 1, handlers);
+    mapScanSlice(state, context, x, x + 1, handlers);
 
     store.write('map', index, Tile.RADTILE);
-    mapScanSlice(store, x, x + 1, handlers);
+    mapScanSlice(state, context, x, x + 1, handlers);
 
-    expect(calls).toEqual(['fire', 'flood', 'rad']);
+    expect(calls).toEqual(['flood', 'rad']);
   });
 
   it('routes zone tiles before rail tiles when ZONEBIT is set', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     const x = 25;
@@ -191,7 +298,7 @@ describe('MapScan dispatch ordering', () => {
     store.write('map', indexFor(x, y), Tile.RAILBASE | TileFlag.ZONEBIT);
 
     const calls: string[] = [];
-    mapScanSlice(store, x, x + 1, {
+    mapScanSlice(state, context, x, x + 1, {
       onZone: () => calls.push('zone'),
       onRail: () => calls.push('rail'),
     });
@@ -199,33 +306,68 @@ describe('MapScan dispatch ordering', () => {
     expect(calls).toEqual(['zone']);
   });
 
-  it('routes only SOMETINYEXP..LASTTINYEXP to the tiny explosion handler', () => {
-    const store = createClassicMapStore();
+  it('rewrites SOMETINYEXP..LASTTINYEXP to rubble with BULLBIT', () => {
+    const { store, context, state } = createHarness(1);
     store.beginTick();
 
     const x = 30;
     const y = 10;
     const index = indexFor(x, y);
 
-    const calls: string[] = [];
-    const handlers = {
-      onTinyExplosion: () => calls.push('tiny'),
-    };
-
-    store.write('map', index, Tile.TINYEXP);
-    mapScanSlice(store, x, x + 1, handlers);
-
     store.write('map', index, Tile.SOMETINYEXP);
-    mapScanSlice(store, x, x + 1, handlers);
+    mapScanSlice(state, context, x, x + 1);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[index]).toBe(Tile.RUBBLE + 2 + TileFlag.BULLBIT);
+  });
+
+  it('rewrites LASTTINYEXP using the RNG rubble variant', () => {
+    const { store, context, state } = createHarness(10);
+    store.beginTick();
+
+    const x = 30;
+    const y = 11;
+    const index = indexFor(x, y);
 
     store.write('map', index, Tile.LASTTINYEXP);
-    mapScanSlice(store, x, x + 1, handlers);
+    mapScanSlice(state, context, x, x + 1);
 
-    expect(calls).toEqual(['tiny', 'tiny']);
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[index]).toBe(Tile.RUBBLE + 0 + TileFlag.BULLBIT);
+  });
+
+  it('does not rewrite tiny explosions outside the slice', () => {
+    const { store, context, state } = createHarness();
+    store.beginTick();
+
+    const x = 40;
+    const y = 10;
+    const index = indexFor(x, y);
+
+    store.write('map', index, Tile.SOMETINYEXP);
+    mapScanSlice(state, context, x + 1, x + 2);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[index]).toBe(Tile.SOMETINYEXP);
+  });
+
+  it('leaves TINYEXP tiles untouched', () => {
+    const { store, context, state } = createHarness();
+    store.beginTick();
+
+    const x = 31;
+    const y = 10;
+    const index = indexFor(x, y);
+
+    store.write('map', index, Tile.TINYEXP);
+    mapScanSlice(state, context, x, x + 1);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[index]).toBe(Tile.TINYEXP);
   });
 
   it('skips tiles below the FLOOD threshold', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
     const x = 35;
@@ -233,10 +375,27 @@ describe('MapScan dispatch ordering', () => {
     store.write('map', indexFor(x, y), Tile.RIVER);
 
     const calls: string[] = [];
-    mapScanSlice(store, x, x + 1, {
+    mapScanSlice(state, context, x, x + 1, {
       onFlood: () => calls.push('flood'),
       onFire: () => calls.push('fire'),
       onRoad: () => calls.push('road'),
+    });
+
+    expect(calls).toEqual([]);
+  });
+
+  it('does not dispatch conductive handling for tiles below FLOOD', () => {
+    const { store, context, state } = createHarness();
+    state.NewPower = 1;
+    store.beginTick();
+
+    const x = 36;
+    const y = 10;
+    store.write('map', indexFor(x, y), Tile.RIVER | TileFlag.CONDBIT);
+
+    const calls: string[] = [];
+    mapScanSlice(state, context, x, x + 1, {
+      onConductive: () => calls.push('conductive'),
     });
 
     expect(calls).toEqual([]);
@@ -245,11 +404,13 @@ describe('MapScan dispatch ordering', () => {
 
 describe('MapScan bounds validation', () => {
   it('throws when slice bounds are invalid', () => {
-    const store = createClassicMapStore();
+    const { store, context, state } = createHarness();
     store.beginTick();
 
-    expect(() => mapScanSlice(store, -1, 5)).toThrow('mapScanSlice bounds out of range');
-    expect(() => mapScanSlice(store, 0, WORLD_X + 1)).toThrow('mapScanSlice bounds out of range');
-    expect(() => mapScanSlice(store, 8, 4)).toThrow('mapScanSlice bounds out of range');
+    expect(() => mapScanSlice(state, context, -1, 5)).toThrow('mapScanSlice bounds out of range');
+    expect(() => mapScanSlice(state, context, 0, WORLD_X + 1)).toThrow(
+      'mapScanSlice bounds out of range',
+    );
+    expect(() => mapScanSlice(state, context, 8, 4)).toThrow('mapScanSlice bounds out of range');
   });
 });
