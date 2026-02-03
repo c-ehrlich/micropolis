@@ -15,7 +15,7 @@
   - Verify: per‑system golden tests after each subsystem lands
 - [x] Real‑time systems (objects + animations)  
   - Verify: deterministic object movement + map mutations under fixed seed
-- [ ] Test harness (golden replays + property‑based)  
+- [x] Test harness (golden replays + property‑based)  
   - Verify: golden replay hashes stable; property tests pass
 
 ## Source of Truth

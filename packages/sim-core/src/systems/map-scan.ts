@@ -1,5 +1,5 @@
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import type { MapStore } from './map-store.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import type { MapStore } from '../core/map-store.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 const { LOMASK, ALLBITS } = TileMask;

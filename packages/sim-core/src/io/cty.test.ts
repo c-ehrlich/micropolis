@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { getOrThrow } from './assert.ts';
-import { World } from './constants.ts';
+import { getOrThrow } from '../core/assert.ts';
+import { World } from '../core/constants.ts';
 import {
   applyLoadNormalization,
   CITY_FILE_HEADER_BYTES,
@@ -14,7 +14,7 @@ import {
   readCityMeta,
   sniffCityDimensions,
   writeCityMeta,
-} from './persistence.ts';
+} from './cty.ts';
 
 const CLASSIC_DIMENSIONS = { width: 120, height: 100 };
 

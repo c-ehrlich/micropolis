@@ -1,4 +1,4 @@
-import { getOrThrow } from './assert.ts';
+import { getOrThrow } from '../core/assert.ts';
 
 export const CITY_HISTORY_LENGTH = 240;
 export const CITY_MISC_LENGTH = 120;

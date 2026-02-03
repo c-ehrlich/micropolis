@@ -1,10 +1,10 @@
 import fc from 'fast-check';
 import { describe, it } from 'vitest';
 
-import { World } from './constants.ts';
-import { applyPatch, createClassicMapStore } from './map-store.ts';
-import { createCityFile, decodeCityFile, encodeCityFile } from './persistence.ts';
-import { MicropolisRng } from './rng.ts';
+import { World } from '../core/constants.ts';
+import { applyPatch, createClassicMapStore } from '../core/map-store.ts';
+import { MicropolisRng } from '../core/rng.ts';
+import { createCityFile, decodeCityFile, encodeCityFile } from '../io/cty.ts';
 
 const CLASSIC_DIMENSIONS = { width: World.WORLD_X, height: World.WORLD_Y };
 const MAP_LENGTH = World.WORLD_X * World.WORLD_Y;

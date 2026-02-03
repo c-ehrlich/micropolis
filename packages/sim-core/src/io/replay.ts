@@ -1,14 +1,14 @@
-import { World } from './constants.ts';
-import { hashMap, hashScalars, mixHashes } from './hash.ts';
-import { createClassicMapStore } from './map-store.ts';
-import { MicropolisRng } from './rng.ts';
 import {
   applyToolAction,
   createToolContext,
   sortToolActions,
   type ToolAction,
   type ToolName,
-} from './tools.ts';
+} from '../actions/tool-actions.ts';
+import { World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
+import { MicropolisRng } from '../core/rng.ts';
+import { hashMap, hashScalars, mixHashes } from './hash.ts';
 
 export const REPLAY_VERSION = 1;
 

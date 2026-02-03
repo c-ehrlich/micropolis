@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { getOrThrow } from './assert.ts';
-import { Tile, TileMask, World } from './constants.ts';
+import { getOrThrow } from '../core/assert.ts';
+import { Tile, TileMask, World } from '../core/constants.ts';
 import { REPLAY_VERSION, replayToolLog } from './replay.ts';
 
 const CLASSIC_MAP = { width: World.WORLD_X, height: World.WORLD_Y };

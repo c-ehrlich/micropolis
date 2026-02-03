@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { createClocks } from './clocks.ts';
-import { createSimFrameState, simFrame, stepPhase, stepRealtimeTicks, stepTick } from './scheduler.ts';
+import { createClocks } from '../core/clocks.ts';
+import {
+  createSimFrameState,
+  simFrame,
+  stepPhase,
+  stepRealtimeTicks,
+  stepTick,
+} from './scheduler.ts';
 
 describe('Scheduler phase stepping', () => {
   it('runs the current phase before advancing', () => {
@@ -93,7 +99,9 @@ describe('Realtime tick stepping', () => {
   it('throws on negative ticks', () => {
     const clocks = createClocks();
 
-    expect(() => stepRealtimeTicks(clocks, -1)).toThrow('stepRealtimeTicks ticks must be non-negative');
+    expect(() => stepRealtimeTicks(clocks, -1)).toThrow(
+      'stepRealtimeTicks ticks must be non-negative',
+    );
   });
 
   it('throws when viewRect is provided', () => {

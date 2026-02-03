@@ -1,4 +1,4 @@
-import { advanceRealtimeTicks, advanceSimStep, type SimClocks } from './clocks.ts';
+import { advanceRealtimeTicks, advanceSimStep, type SimClocks } from '../core/clocks.ts';
 
 export interface ViewRect {
   x: number;

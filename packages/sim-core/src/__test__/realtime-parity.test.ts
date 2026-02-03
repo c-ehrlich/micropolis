@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertDefined } from './assert.ts';
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import { createClassicMapStore } from './map-store.ts';
-import type { RealtimeContextOptions, SimSprite } from './realtime.ts';
+import { createToolContext } from '../actions/tool-actions.ts';
+import { assertDefined } from '../core/assert.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
+import { MicropolisRng } from '../core/rng.ts';
+import type { RealtimeContextOptions, SimSprite } from '../sim/realtime.ts';
 import {
   ANI_TILE,
   animateTiles,
@@ -17,9 +19,7 @@ import {
   runRealtimeTick,
   runRealtimeTicks,
   SPRITE_TYPE,
-} from './realtime.ts';
-import { MicropolisRng } from './rng.ts';
-import { createToolContext } from './tools.ts';
+} from '../sim/realtime.ts';
 
 const { WORLD_X, WORLD_Y, HWLDY, SmY } = World;
 const { ANIMBIT, BULLBIT, BURNBIT, ZONEBIT } = TileFlag;

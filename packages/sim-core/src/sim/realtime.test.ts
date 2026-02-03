@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertDefined } from './assert.ts';
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import { createClassicMapStore } from './map-store.ts';
+import { createToolContext } from '../actions/tool-actions.ts';
+import { assertDefined } from '../core/assert.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
+import { MicropolisRng } from '../core/rng.ts';
 import {
   ANI_TILE,
   animateTiles,
@@ -13,8 +15,6 @@ import {
   runRealtimeTicks,
   SPRITE_TYPE,
 } from './realtime.ts';
-import { MicropolisRng } from './rng.ts';
-import { createToolContext } from './tools.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 const indexFor = (x: number, y: number) => x * WORLD_Y + y;

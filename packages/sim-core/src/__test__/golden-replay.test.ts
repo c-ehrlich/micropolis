@@ -4,15 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { createClocks } from './clocks.ts';
-import { World } from './constants.ts';
-import { hashInt16, hashMap, hashScalars, mixHashes } from './hash.ts';
-import { createClassicMapStore } from './map-store.ts';
-import { decodeCityFileForMap } from './persistence.ts';
-import { stepTick } from './scheduler.ts';
+import { createClocks } from '../core/clocks.ts';
+import { World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
+import { decodeCityFileForMap } from '../io/cty.ts';
+import { hashInt16, hashMap, hashScalars, mixHashes } from '../io/hash.ts';
+import { stepTick } from '../sim/scheduler.ts';
 
 const CLASSIC_MAP = { width: World.WORLD_X, height: World.WORLD_Y };
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CITY_DIR = path.join(ROOT, 'fixtures', 'cities');
 
 const FIXTURES = [

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { getOrThrow } from './assert.ts';
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import { createClassicMapStore } from './map-store.ts';
-import { MicropolisRng } from './rng.ts';
+import { getOrThrow } from '../core/assert.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
+import { MicropolisRng } from '../core/rng.ts';
 import {
   applyToolAction,
   applyToolQueue,
@@ -15,7 +15,7 @@ import {
   TOOL_STATE,
   ToolQueue,
   WIRE_TABLE,
-} from './tools.ts';
+} from './tool-actions.ts';
 
 const {
   AIRPORTBASE,
@@ -68,8 +68,12 @@ const setTile = (
 
 const getTile = (map: Uint16Array, x: number, y: number) => getOrThrow(map[indexFor(x, y)]);
 
-const runTool = (context: ReturnType<typeof createToolContext>, tool: ToolName, x: number, y: number) =>
-  applyToolAction(context, { tool, x, y, simStep: 0, order: 0, tickId: 0, seq: 0 }).code;
+const runTool = (
+  context: ReturnType<typeof createToolContext>,
+  tool: ToolName,
+  x: number,
+  y: number,
+) => applyToolAction(context, { tool, x, y, simStep: 0, order: 0, tickId: 0, seq: 0 }).code;
 
 describe('ToolQueue ordering', () => {
   it('orders by simStep then order', () => {
@@ -475,7 +479,7 @@ describe('Road, rail, and wire tools', () => {
 
     makeCase(LHPOWER | CONDBIT, RAILVPOWERH);
     makeCase(ROADS | BULLBIT | BURNBIT, VRAILROAD);
-    makeCase(ROADS + 1 | BULLBIT | BURNBIT, HRAILROAD);
+    makeCase((ROADS + 1) | BULLBIT | BURNBIT, HRAILROAD);
   });
 
   it('builds rail tunnels on water when connected', () => {
@@ -517,7 +521,7 @@ describe('Road, rail, and wire tools', () => {
 
     makeCase(null, LHPOWER);
     makeCase(ROADS | BULLBIT | BURNBIT, HROADPOWER);
-    makeCase(ROADS + 1 | BULLBIT | BURNBIT, VROADPOWER);
+    makeCase((ROADS + 1) | BULLBIT | BURNBIT, VROADPOWER);
     makeCase(LHRAIL | BULLBIT | BURNBIT, RAILHPOWERV);
     makeCase(LVRAIL | BULLBIT | BURNBIT, RAILVPOWERH);
   });
@@ -572,12 +576,14 @@ describe('Network tool', () => {
     const map = store.getLayer('map') as Uint16Array;
     const tile = getTile(map, 18, 18);
     expect(tile & LOMASK).toBe(TELEBASE);
-    expect(tile & (CONDBIT | BURNBIT | BULLBIT | ANIMBIT)).toBe(CONDBIT | BURNBIT | BULLBIT | ANIMBIT);
+    expect(tile & (CONDBIT | BURNBIT | BULLBIT | ANIMBIT)).toBe(
+      CONDBIT | BURNBIT | BULLBIT | ANIMBIT,
+    );
   });
 });
 
 describe('Park tool', () => {
-  const fixedRng = (value: number) => ({ rand: () => value } as unknown as MicropolisRng);
+  const fixedRng = (value: number) => ({ rand: () => value }) as unknown as MicropolisRng;
 
   it('places fountains when RNG returns 4', () => {
     const store = createStore();

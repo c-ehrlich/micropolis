@@ -1,7 +1,7 @@
-import { getOrThrow } from './assert.ts';
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import type { MapStore } from './map-store.ts';
-import type { MicropolisRng } from './rng.ts';
+import { getOrThrow } from '../core/assert.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import type { MapStore } from '../core/map-store.ts';
+import type { MicropolisRng } from '../core/rng.ts';
 
 const {
   AIRPORT,

@@ -1,9 +1,9 @@
-import { assertDefined } from './assert.ts';
-import { Tile, TileFlag, TileMask, World } from './constants.ts';
-import type { MapStore } from './map-store.ts';
-import type { MicropolisRng } from './rng.ts';
-import type { ToolContext } from './tools.ts';
-import { applyToolAction } from './tools.ts';
+import type { ToolContext } from '../actions/tool-actions.ts';
+import { applyToolAction } from '../actions/tool-actions.ts';
+import { assertDefined } from '../core/assert.ts';
+import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import type { MapStore } from '../core/map-store.ts';
+import type { MicropolisRng } from '../core/rng.ts';
 
 const { WORLD_X, WORLD_Y, HWLDX, HWLDY, SmX, SmY } = World;
 const { ALLBITS, LOMASK } = TileMask;

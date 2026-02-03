@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tile, TileFlag, World } from './constants.ts';
+import { Tile, TileFlag, World } from '../core/constants.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
 import { getMapScanSlice, mapScanSlice, runMapScanPhase } from './map-scan.ts';
-import { createClassicMapStore } from './map-store.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 
