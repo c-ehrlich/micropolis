@@ -146,11 +146,11 @@ Legend
     - Plan: Traffic System
     - Spec: “Traffic System”
     - Micropolis: `s_traf.c`
-  - [ ] Success criteria:
-    - [ ] MakeTraf / FindPRoad / TryDrive / TryGo / DriveDone implemented.
-    - [ ] SetTrafMem updates TrfDensity and traffic maxima.
-    - [ ] DecTrafficMem decay matches spec.
-    - [ ] Tests: pathfinding determinism and density updates.
+  - [x] Success criteria:
+    - [x] MakeTraf / FindPRoad / TryDrive / TryGo / DriveDone implemented.
+    - [x] SetTrafMem updates TrfDensity and traffic maxima.
+    - [x] DecTrafficMem decay matches spec.
+    - [x] Tests: pathfinding determinism and density updates.
 
 ---
 

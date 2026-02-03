@@ -19,3 +19,4 @@ export * from './systems/init.ts';
 export * from './systems/map-scan.ts';
 export * from './systems/rail.ts';
 export * from './systems/roads.ts';
+export * from './systems/traffic.ts';
