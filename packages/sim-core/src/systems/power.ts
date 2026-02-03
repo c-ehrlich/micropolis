@@ -3,6 +3,7 @@ import { PowerMap, Tile, TileFlag, TileMask, World } from '../core/constants.ts'
 import type { MapStore } from '../core/map-store.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { sendMes } from './messages.ts';
 
 const { POWERMAPROW, PWRMAPSIZE, PWRSTKSIZE } = PowerMap;
 const { WORLD_X, WORLD_Y } = World;
@@ -154,7 +155,7 @@ export function doPowerScan(
     do {
       numPower += 1;
       if (numPower > maxPower) {
-        context.hooks.sendMes(40);
+        sendMes(state, context, 40);
         return;
       }
 

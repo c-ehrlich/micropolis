@@ -11,6 +11,10 @@ export interface SimState {
   StartingYear: number;
   SimSpeed: number;
   SimMetaSpeed: number;
+  HeatSteps: number;
+  HeatFlow: number;
+  HeatRule: number;
+  HeatWrap: number;
   Fcycle: number;
   Scycle: number;
   Spdcycle: number;
@@ -133,6 +137,14 @@ export interface SimState {
   ScoreType: number;
   ScoreWait: number;
 
+  // Messages
+  MessagePort: number;
+  MesX: number;
+  MesY: number;
+  LastPicNum: number;
+  LastCityPop: number;
+  LastCategory: number;
+
   // City center
   CCx: number;
   CCy: number;
@@ -174,6 +186,10 @@ export function createSimState(): SimState {
     StartingYear: 1900,
     SimSpeed: 3,
     SimMetaSpeed: 0,
+    HeatSteps: 0,
+    HeatFlow: -7,
+    HeatRule: 0,
+    HeatWrap: 3,
     Fcycle: 0,
     Scycle: 0,
     Spdcycle: 0,
@@ -294,6 +310,14 @@ export function createSimState(): SimState {
     ScenarioID: 0,
     ScoreType: 0,
     ScoreWait: 0,
+
+    // Messages
+    MessagePort: 0,
+    MesX: 0,
+    MesY: 0,
+    LastPicNum: 0,
+    LastCityPop: 0,
+    LastCategory: 0,
 
     // City center
     CCx: 0,

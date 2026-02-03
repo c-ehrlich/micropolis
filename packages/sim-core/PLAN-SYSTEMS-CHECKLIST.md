@@ -237,27 +237,27 @@ Legend
 
 ---
 
-- 18. Messages and Scenarios
+- [x] 18. Messages and Scenarios
   - References:
     - Plan: Messages and Scenarios
     - Spec: “Messages and Scenarios”
     - Micropolis: `s_msg.c`, `s_scen.c`
-  - [ ] Success criteria:
-    - [ ] SendMessages, CheckGrowth, DoScenarioScore, SendMes implemented.
-    - [ ] Scenario score countdown + thresholds match spec.
-    - [ ] Tests: message emission for boundary conditions.
+  - [x] Success criteria:
+    - [x] SendMessages, CheckGrowth, DoScenarioScore, SendMes implemented.
+    - [x] Scenario score countdown + thresholds match spec.
+    - [x] Tests: message emission for boundary conditions.
 
 ---
 
-- 19. Disasters
+- [x] 19. Disasters
   - References:
     - Plan: Disasters
     - Spec: “Disasters”
     - Micropolis: `s_disast.c`
-  - [ ] Success criteria:
-    - [ ] DoDisasters + ScenarioDisaster implemented.
-    - [ ] MakeMeltdown/DoMeltdown/MakeEarthquake/SetFire/MakeFire/MakeFlood/DoFlood implemented.
-    - [ ] Tests: deterministic outcomes with fixed seed and stubs.
+  - [x] Success criteria:
+    - [x] DoDisasters + ScenarioDisaster implemented.
+    - [x] MakeMeltdown/DoMeltdown/MakeEarthquake/SetFire/MakeFire/MakeFlood/DoFlood implemented.
+    - [x] Tests: deterministic outcomes with fixed seed and stubs.
 
 ---
 
@@ -266,9 +266,9 @@ Legend
     - Plan: City Demand Valves
     - Spec: “City Demand Valves”
     - Micropolis: `s_valve.c`
-  - [ ] Success criteria:
-    - [ ] SetValves fully implemented (ratios, tax table, caps).
-    - [ ] Tests: valve outputs for known pop/tax conditions.
+  - [x] Success criteria:
+    - [x] SetValves fully implemented (ratios, tax table, caps).
+    - [x] Tests: valve outputs for known pop/tax conditions.
 
 ---
 
@@ -289,9 +289,9 @@ Legend
     - Plan: Heat Simulation
     - Spec: “Heat Simulation (Optional Debug Mode)”
     - Micropolis: `sim.c`, `s_heat.c`
-  - [ ] Success criteria:
-    - [ ] Feature-flagged heat sim loop.
-    - [ ] Tests: heat rules produce deterministic tile patterns for a small grid.
+  - [x] Success criteria:
+    - [x] Feature-flagged heat sim loop.
+    - [x] Tests: heat rules produce deterministic tile patterns for a small grid.
 
 ---
 

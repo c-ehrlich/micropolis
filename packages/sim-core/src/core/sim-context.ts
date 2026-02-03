@@ -18,6 +18,8 @@ export interface SimHooks {
   makeExplosion: (x: number, y: number) => void;
   makeExplosionAt: (px: number, py: number) => void;
   makeSound: (channel: number, sound: number) => void;
+  makeMonster: () => void;
+  makeTornado: () => void;
   doEarthQuake: () => void;
   stopEarthquake: () => void;
 
@@ -36,6 +38,7 @@ export interface SimHooks {
   // Messages + scenarios
   sendMes: (id: number) => void;
   sendMesAt: (id: number, x: number, y: number) => void;
+  dropFireBombs: () => void;
   doLoseGame: () => void;
   doWinGame: () => void;
   uiSet: (key: string, value: number | boolean | string) => void;
@@ -58,6 +61,8 @@ export function createSimHooks(overrides: Partial<SimHooks> = {}): SimHooks {
     makeExplosion: overrides.makeExplosion ?? noop,
     makeExplosionAt: overrides.makeExplosionAt ?? noop,
     makeSound: overrides.makeSound ?? noop,
+    makeMonster: overrides.makeMonster ?? noop,
+    makeTornado: overrides.makeTornado ?? noop,
     doEarthQuake: overrides.doEarthQuake ?? noop,
     stopEarthquake: overrides.stopEarthquake ?? noop,
 
@@ -76,6 +81,7 @@ export function createSimHooks(overrides: Partial<SimHooks> = {}): SimHooks {
     // Messages + scenarios
     sendMes: overrides.sendMes ?? noop,
     sendMesAt: overrides.sendMesAt ?? noop,
+    dropFireBombs: overrides.dropFireBombs ?? noop,
     doLoseGame: overrides.doLoseGame ?? noop,
     doWinGame: overrides.doWinGame ?? noop,
     uiSet: overrides.uiSet ?? noop,
