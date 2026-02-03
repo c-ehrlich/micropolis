@@ -51,6 +51,8 @@ describe('SimContext hooks', () => {
     expect(() => context.hooks.makeExplosion(1, 2)).not.toThrow();
     expect(() => context.hooks.makeExplosionAt(3, 4)).not.toThrow();
     expect(() => context.hooks.makeSound(0, 0)).not.toThrow();
+    expect(() => context.hooks.makeMonster()).not.toThrow();
+    expect(() => context.hooks.makeTornado()).not.toThrow();
     expect(() => context.hooks.doEarthQuake()).not.toThrow();
     expect(() => context.hooks.stopEarthquake()).not.toThrow();
 
@@ -65,6 +67,7 @@ describe('SimContext hooks', () => {
 
     expect(() => context.hooks.sendMes(1)).not.toThrow();
     expect(() => context.hooks.sendMesAt(2, 3, 4)).not.toThrow();
+    expect(() => context.hooks.dropFireBombs()).not.toThrow();
     expect(() => context.hooks.doLoseGame()).not.toThrow();
     expect(() => context.hooks.doWinGame()).not.toThrow();
     expect(() => context.hooks.uiSet('taxRate', 7)).not.toThrow();
