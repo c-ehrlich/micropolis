@@ -19,6 +19,7 @@ export * from './sim/simulate.ts';
 export * from './systems/bridges.ts';
 export * from './systems/budget.ts';
 export * from './systems/census.ts';
+export * from './systems/crime.ts';
 export * from './systems/disasters.ts';
 export * from './systems/fire-coverage.ts';
 export * from './systems/init.ts';
