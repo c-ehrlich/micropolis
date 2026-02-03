@@ -110,6 +110,40 @@ describe('CrimeScan', () => {
     expect(policeMapEffect[smIndex(5, 5)]).toBe(10);
   });
 
+  it('accounts for police smoothing falloff at edges', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    const context = createSimContext({ store, rng: new StubRng([]) });
+
+    const landValue = store.getLayer('landValueMem') as Uint8Array;
+    const popDensity = store.getLayer('popDensity') as Uint8Array;
+    const policeMap = store.getLayer('policeMap') as Int16Array;
+
+    policeMap.fill(10);
+
+    const x = 2;
+    const y = 3;
+    const idx = hwIndex(x, y);
+    landValue[idx] = 100;
+    popDensity[idx] = 20;
+
+    crimeScan(state, context);
+
+    const policeMapEffect = store.getLayer('policeMapEffect') as Int16Array;
+    // Edge falloff after three passes (corner at (0,0)):
+    // pass1: 10 -> 7, pass2: 7 -> 5, pass3: 5 -> 4.
+    expect(policeMapEffect[smIndex(0, 0)]).toBe(4);
+
+    const crimeMem = store.getLayer('crimeMem') as Uint8Array;
+    // Crime formula using smoothed police (4): 128-100=28; +20=48; -4=44.
+    expect(crimeMem[idx]).toBe(44);
+    expect(state.CrimeAverage).toBe(44);
+    expect(state.CrimeMaxX).toBe(4);
+    expect(state.CrimeMaxY).toBe(6);
+  });
+
   it('clamps computed crime into [0, 250]', () => {
     const store = createClassicMapStore();
     store.beginTick();
