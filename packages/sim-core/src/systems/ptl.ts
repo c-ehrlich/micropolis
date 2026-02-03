@@ -1,6 +1,7 @@
 import { Tile, TileMask, World } from '../core/constants.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { doSmooth, doSmooth2, getDisCC } from './pop-density.ts';
 
 const { WORLD_Y, HWLDX, HWLDY, QWX, QWY } = World;
 const { LOMASK } = TileMask;
@@ -21,7 +22,6 @@ const mapIndex = (x: number, y: number): number => x * WORLD_Y + y;
 const halfIndex = (x: number, y: number): number => x * HWLDY + y;
 const quarterIndex = (x: number, y: number): number => x * QWY + y;
 
-const clampByte = (value: number): number => (value > 255 ? 255 : value < 0 ? 0 : value);
 const toByte = (value: number): number => value & 0xff;
 
 export function getPValue(loc: number): number {
@@ -52,115 +52,6 @@ export function getPValue(loc: number): number {
     return 100;
   }
   return 0;
-}
-
-export function getDisCC(state: SimState, x: number, y: number): number {
-  const xdis = x > state.CCx2 ? x - state.CCx2 : state.CCx2 - x;
-  const ydis = y > state.CCy2 ? y - state.CCy2 : state.CCy2 - y;
-  const dist = xdis + ydis;
-  return dist > 32 ? 32 : dist;
-}
-
-export function doSmooth(state: SimState, tem: Uint8Array, tem2: Uint8Array): void {
-  if ((state.DonDither & 2) !== 0) {
-    let y = 0;
-    let z = 0;
-    let dir = 1;
-
-    for (let x = 0; x < HWLDX; x += 1) {
-      for (; y !== HWLDY && y !== -1; y += dir) {
-        const xl = x === 0 ? x : x - 1;
-        const xr = x === HWLDX - 1 ? x : x + 1;
-        const yu = y === 0 ? 0 : y - 1;
-        const yd = y === HWLDY - 1 ? y : y + 1;
-        const idx = halfIndex(x, y);
-
-        z +=
-          (tem[halfIndex(xl, y)] ?? 0) +
-          (tem[halfIndex(xr, y)] ?? 0) +
-          (tem[halfIndex(x, yu)] ?? 0) +
-          (tem[halfIndex(x, yd)] ?? 0) +
-          (tem[idx] ?? 0);
-
-        tem2[idx] = toByte(z >>> 2);
-        z &= 3;
-      }
-      dir = -dir;
-      y += dir;
-    }
-    return;
-  }
-
-  for (let x = 0; x < HWLDX; x += 1) {
-    for (let y = 0; y < HWLDY; y += 1) {
-      let z = 0;
-      if (x > 0) {
-        z += tem[halfIndex(x - 1, y)] ?? 0;
-      }
-      if (x < HWLDX - 1) {
-        z += tem[halfIndex(x + 1, y)] ?? 0;
-      }
-      if (y > 0) {
-        z += tem[halfIndex(x, y - 1)] ?? 0;
-      }
-      if (y < HWLDY - 1) {
-        z += tem[halfIndex(x, y + 1)] ?? 0;
-      }
-      z = (z + (tem[halfIndex(x, y)] ?? 0)) >> 2;
-      tem2[halfIndex(x, y)] = clampByte(z);
-    }
-  }
-}
-
-export function doSmooth2(state: SimState, tem: Uint8Array, tem2: Uint8Array): void {
-  if ((state.DonDither & 4) !== 0) {
-    let y = 0;
-    let z = 0;
-    let dir = 1;
-
-    for (let x = 0; x < HWLDX; x += 1) {
-      for (; y !== HWLDY && y !== -1; y += dir) {
-        const xl = x === 0 ? x : x - 1;
-        const xr = x === HWLDX - 1 ? x : x + 1;
-        const yu = y === 0 ? 0 : y - 1;
-        const yd = y === HWLDY - 1 ? y : y + 1;
-        const idx = halfIndex(x, y);
-
-        z +=
-          (tem2[halfIndex(xl, y)] ?? 0) +
-          (tem2[halfIndex(xr, y)] ?? 0) +
-          (tem2[halfIndex(x, yu)] ?? 0) +
-          (tem2[halfIndex(x, yd)] ?? 0) +
-          (tem2[idx] ?? 0);
-
-        tem[idx] = toByte((z & 0xff) >>> 2);
-        z &= 3;
-      }
-      dir = -dir;
-      y += dir;
-    }
-    return;
-  }
-
-  for (let x = 0; x < HWLDX; x += 1) {
-    for (let y = 0; y < HWLDY; y += 1) {
-      let z = 0;
-      if (x > 0) {
-        z += tem2[halfIndex(x - 1, y)] ?? 0;
-      }
-      if (x < HWLDX - 1) {
-        z += tem2[halfIndex(x + 1, y)] ?? 0;
-      }
-      if (y > 0) {
-        z += tem2[halfIndex(x, y - 1)] ?? 0;
-      }
-      if (y < HWLDY - 1) {
-        z += tem2[halfIndex(x, y + 1)] ?? 0;
-      }
-      z = (z + (tem2[halfIndex(x, y)] ?? 0)) >> 2;
-      tem[halfIndex(x, y)] = clampByte(z);
-    }
-  }
 }
 
 export function smoothTerrain(state: SimState, terrainMem: Uint8Array, qtem: Uint8Array): void {
@@ -284,8 +175,8 @@ export function ptlScan(state: SimState, context: SimContext): void {
 
   state.LVAverage = lvNum ? Math.floor(lvTot / lvNum) : 0;
 
-  doSmooth(state, tem, tem2);
-  doSmooth2(state, tem, tem2);
+  doSmooth(tem, tem2, state.DonDither);
+  doSmooth2(tem, tem2, state.DonDither);
 
   let pmax = 0;
   let pnum = 0;
