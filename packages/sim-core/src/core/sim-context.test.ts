@@ -46,6 +46,7 @@ describe('SimContext hooks', () => {
     expect(() => context.hooks.generatePlane()).not.toThrow();
     expect(() => context.hooks.generateCopter()).not.toThrow();
     expect(() => context.hooks.getSprite(1)).not.toThrow();
+    expect(() => context.hooks.getBoatDistance()).not.toThrow();
     expect(() => context.hooks.moveObjects()).not.toThrow();
     expect(() => context.hooks.makeExplosion(1, 2)).not.toThrow();
     expect(() => context.hooks.makeExplosionAt(3, 4)).not.toThrow();

@@ -13,6 +13,7 @@ export interface SimHooks {
   generatePlane: () => void;
   generateCopter: () => void;
   getSprite: (type: number) => unknown;
+  getBoatDistance: () => number;
   moveObjects: () => void;
   makeExplosion: (x: number, y: number) => void;
   makeExplosionAt: (px: number, py: number) => void;
@@ -52,6 +53,7 @@ export function createSimHooks(overrides: Partial<SimHooks> = {}): SimHooks {
     generatePlane: overrides.generatePlane ?? noop,
     generateCopter: overrides.generateCopter ?? noop,
     getSprite: overrides.getSprite ?? noopValue,
+    getBoatDistance: overrides.getBoatDistance ?? (() => 99999),
     moveObjects: overrides.moveObjects ?? noop,
     makeExplosion: overrides.makeExplosion ?? noop,
     makeExplosionAt: overrides.makeExplosionAt ?? noop,
