@@ -11,12 +11,3 @@ coverage
 
 # mac
 .DS_Store
-
-# ref
-ref/athena-crisis/**
-!ref/athena-crisis/**/
-!ref/athena-crisis/**/*.md
-ref/micropolis/**
-!ref/micropolis/**/
-!ref/micropolis/**/*.md
-!ref/micropolis/images_png/**

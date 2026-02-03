@@ -1,12 +1,12 @@
 ## Spec Coverage Checklist
 
 - [x] Core simulation (`spec/core/SPEC.md`)
-- [x] UI/rendering/tools/sprites (`spec/ui/SPEC.md`)
-- [x] Terrain generation (`spec/terrain/SPEC.md`)
-- [x] Persistence & scenarios (`spec/persistence/SPEC.md`)
-- [x] Resources/assets (`spec/resources/SPEC.md`)
-- [x] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`)
-- [x] Platform integration (Sugar, networking) (`spec/integration/SPEC.md`)
+- [ ] UI/rendering/tools/sprites (`spec/ui/SPEC.md`)
+- [ ] Terrain generation (`spec/terrain/SPEC.md`)
+- [ ] Persistence & scenarios (`spec/persistence/SPEC.md`)
+- [ ] Resources/assets (`spec/resources/SPEC.md`)
+- [ ] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`)
+- [ ] Platform integration (Sugar, networking) (`spec/integration/SPEC.md`)
 
 # Micropolis Specification Overview
 

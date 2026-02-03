@@ -1,0 +1,68 @@
+diff --git a/index.js b/index.js
+index d3d49f9fc650cebde88bbe690f824e59a41a922f..b8decec83c6877b2208df32a5ed288768f02db1f 100644
+--- a/index.js
++++ b/index.js
+@@ -3,7 +3,6 @@
+ const path = require('path')
+ const Module = require('module')
+ const debug = require('debug')('require-in-the-middle')
+-const moduleDetailsFromPath = require('module-details-from-path')
+ 
+ // Using the default export is discouraged, but kept for backward compatibility.
+ // Use this instead:
+@@ -95,6 +94,9 @@ class ExportsCache {
+ 
+ function Hook (modules, options, onrequire) {
+   if ((this instanceof Hook) === false) return new Hook(modules, options, onrequire)
++
++  return
++
+   if (typeof modules === 'function') {
+     onrequire = modules
+     modules = null
+@@ -230,7 +232,7 @@ function Hook (modules, options, onrequire) {
+       moduleName = parsedPath.name
+       basedir = parsedPath.dir
+     } else {
+-      const stat = moduleDetailsFromPath(filename)
++      const stat = undefined
+       if (stat === undefined) {
+         debug('could not parse filename: %s', filename)
+         return exports // abort if filename could not be parsed
+@@ -309,22 +311,6 @@ function Hook (modules, options, onrequire) {
+ 
+ Hook.prototype.unhook = function () {
+   this._unhooked = true
+-
+-  if (this._require === Module.prototype.require) {
+-    Module.prototype.require = this._origRequire
+-    debug('require unhook successful')
+-  } else {
+-    debug('require unhook unsuccessful')
+-  }
+-
+-  if (process.getBuiltinModule !== undefined) {
+-    if (this._getBuiltinModule === process.getBuiltinModule) {
+-      process.getBuiltinModule = this._origGetBuiltinModule
+-      debug('process.getBuiltinModule unhook successful')
+-    } else {
+-      debug('process.getBuiltinModule unhook unsuccessful')
+-    }
+-  }
+ }
+ 
+ function resolveModuleName (stat) {
+diff --git a/package.json b/package.json
+index fe7cf1468bd6827bc617d0a625f68bdd3336389f..fb8d28697e6c90048b63a88cd6d627c8f2967642 100644
+--- a/package.json
++++ b/package.json
+@@ -5,8 +5,7 @@
+   "main": "index.js",
+   "types": "types/index.d.ts",
+   "dependencies": {
+-    "debug": "^4.3.5",
+-    "module-details-from-path": "^1.0.3"
++    "debug": "^4.3.5"
+   },
+   "devDependencies": {
+     "@babel/core": "^7.9.0",

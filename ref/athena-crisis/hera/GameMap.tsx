@@ -1,0 +1,2307 @@
+import { Action, execute } from '@deities/apollo/Action.tsx';
+import { ActionResponse } from '@deities/apollo/ActionResponse.tsx';
+import { Effects } from '@deities/apollo/Effects.tsx';
+import dateNow from '@deities/apollo/lib/dateNow.tsx';
+import getActionResponseVectors from '@deities/apollo/lib/getActionResponseVectors.tsx';
+import updateVisibleEntities from '@deities/apollo/lib/updateVisibleEntities.tsx';
+import {
+  GameActionResponse,
+  GameActionResponses,
+} from '@deities/apollo/Types.tsx';
+import dropLabels from '@deities/athena/lib/dropLabels.tsx';
+import getAverageVector from '@deities/athena/lib/getAverageVector.tsx';
+import getDecoratorsAtField from '@deities/athena/lib/getDecoratorsAtField.tsx';
+import updatePlayers from '@deities/athena/lib/updatePlayers.tsx';
+import {
+  AnimationConfig,
+  DoubleSize,
+  FastAnimationConfig,
+  MaxHealth,
+  MaxSize,
+  TileSize,
+} from '@deities/athena/map/Configuration.tsx';
+import {
+  PlayerID,
+  resolveDynamicPlayerID,
+} from '@deities/athena/map/Player.tsx';
+import Unit from '@deities/athena/map/Unit.tsx';
+import vec from '@deities/athena/map/vec.tsx';
+import Vector, { VectorLike } from '@deities/athena/map/Vector.tsx';
+import type MapData from '@deities/athena/MapData.tsx';
+import { objectiveHasVectors } from '@deities/athena/Objectives.tsx';
+import { RadiusItem } from '@deities/athena/Radius.tsx';
+import AudioPlayer from '@deities/ui/AudioPlayer.tsx';
+import { isIOS } from '@deities/ui/Browser.tsx';
+import Input, { NavigationDirection } from '@deities/ui/controls/Input.tsx';
+import { rumbleEffect } from '@deities/ui/controls/setupGamePad.tsx';
+import throttle, { NativeTimeout } from '@deities/ui/controls/throttle.tsx';
+import cssVar, { applyVar, CSSVariables } from '@deities/ui/cssVar.tsx';
+import { ScrollRestore } from '@deities/ui/hooks/useScrollRestore.tsx';
+import captureException from '@deities/ui/lib/captureException.tsx';
+import scrollToCenter from '@deities/ui/lib/scrollToCenter.tsx';
+import Portal from '@deities/ui/Portal.tsx';
+import { ScrollContainerClassName } from '@deities/ui/ScrollContainer.tsx';
+import { css, cx, keyframes } from '@emotion/css';
+import parseInteger from '@nkzw/core/parseInteger.js';
+import ImmutableMap from '@nkzw/immutable-map';
+import { AnimatePresence } from 'framer-motion';
+import {
+  Component,
+  createRef,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from 'react';
+import processActionResponses from './action-response/processActionResponse.tsx';
+import BaseBehavior from './behavior/Base.tsx';
+import { resetBehavior, setBaseClass } from './behavior/Behavior.tsx';
+import MenuBehavior from './behavior/Menu.tsx';
+import { canPlaceMessage } from './behavior/Message.tsx';
+import NullBehavior from './behavior/NullBehavior.tsx';
+import Cursor from './Cursor.tsx';
+import MapEditorExtraCursors from './editor/MapEditorMirrorCursors.tsx';
+import { EditorState } from './editor/Types.tsx';
+import ActionError from './lib/ActionError.tsx';
+import addEndTurnAnimations from './lib/addEndTurnAnimations.tsx';
+import getClientViewer from './lib/getClientViewer.tsx';
+import getCurrentAnimationConfig from './lib/getCurrentAnimationConfig.tsx';
+import isInView from './lib/isInView.tsx';
+import maskClassName, { MaskPointerClassName } from './lib/maskClassName.tsx';
+import sleep from './lib/sleep.tsx';
+import MapComponent from './Map.tsx';
+import {
+  Animation,
+  Animations,
+  hasCharacterMessage,
+  MapAnimations,
+} from './MapAnimations.tsx';
+import Mask, { parseVector } from './Mask.tsx';
+import MaskWithSubtiles from './MaskWithSubtiles.tsx';
+import CreateMapMessage from './message/CreateMapMessage.tsx';
+import MapMessage from './message/MapMessage.tsx';
+import Radius, { RadiusInfo, RadiusType } from './Radius.tsx';
+import {
+  Actions,
+  ActionsProcessedEventDetail,
+  GameInfoState,
+  GetLayerFunction,
+  MapBehavior,
+  MapEnterType,
+  Props,
+  State,
+  StateLike,
+  TimerID,
+  TimerState,
+} from './Types.tsx';
+import GameDialog from './ui/GameDialog.tsx';
+import MapPerformanceMetrics from './ui/MapPerformanceMetrics.tsx';
+import NamedPosition from './ui/NamedPosition.tsx';
+import PositionHint from './ui/PositionHint.tsx';
+import SkipMessages, { MessageSkipDuration } from './ui/SkipMessages.tsx';
+
+setBaseClass(BaseBehavior);
+
+const baseZIndex = 20;
+const liveInterval = 15_000;
+const waitingInterval = 60_000;
+
+const layerOffset = 6;
+const layerOffsets = {
+  /* eslint-disable perfectionist/sort-objects */
+  building: 0,
+  radius: 1,
+  decorator: 2,
+  message: 3,
+  unit: 4,
+  animation: 5,
+  top: 10,
+  /* eslint-enable perfectionist/sort-objects */
+} as const;
+
+const getLayer: GetLayerFunction = (y, type) =>
+  baseZIndex + y * layerOffset + layerOffsets[type];
+
+const hasShake = (animations: Animations) =>
+  animations.some(({ type }) => type === 'shake');
+
+const getVision = (
+  map: MapData,
+  currentViewer: PlayerID | null,
+  spectatorCodes: ReadonlyArray<string> | undefined,
+) =>
+  map.createVisionObject(getClientViewer(map, currentViewer, spectatorCodes));
+
+const behaviorWithHighlightedFields = new Set([
+  'base',
+  'design',
+  'entity',
+  'move',
+  'null',
+  'vector',
+]);
+
+const effectTypes = [
+  RadiusType.Effect1,
+  RadiusType.Effect2,
+  RadiusType.Effect3,
+];
+const escortTypes = [
+  RadiusType.Escort1,
+  RadiusType.Escort2,
+  RadiusType.Escort3,
+];
+const toRadiusInfo = (vectors: ReadonlyArray<Vector>, type: RadiusType) => ({
+  fields: new Map(vectors.map((vector) => [vector, RadiusItem(vector)])),
+  path: [],
+  type,
+});
+
+const getEffectState = (map: MapData, effects: Effects | undefined) => {
+  if (!effects) {
+    return null;
+  }
+
+  let extraUnits = ImmutableMap<Vector, Unit>();
+  const radius: Array<RadiusInfo> = [];
+  let id = 0;
+  for (const [, effectList] of effects) {
+    for (const effect of effectList) {
+      for (const action of effect.actions) {
+        if (action.type === 'SpawnEffect') {
+          const { player: dynamicPlayer, units } = action;
+          const player =
+            dynamicPlayer != null
+              ? resolveDynamicPlayerID(map, dynamicPlayer)
+              : null;
+          extraUnits = extraUnits.merge(
+            units.map((unit) =>
+              player != null ? unit.setPlayer(player) : unit,
+            ),
+          );
+          radius.push(toRadiusInfo([...units.keys()], effectTypes[id]));
+          id = (id + 1) % 3;
+        }
+      }
+    }
+  }
+  return radius.length ? { extraUnits, radius } : null;
+};
+const getObjectiveRadius = (
+  { config: { objectives } }: MapData,
+  currentViewer: PlayerID | null,
+  isEditor: boolean,
+) => {
+  const radiusItems: Array<RadiusInfo> = [];
+  let id = 0;
+  for (const [, ojective] of objectives) {
+    if ((!isEditor && ojective.hidden) || !objectiveHasVectors(ojective)) {
+      continue;
+    }
+
+    if (currentViewer == null || !ojective.completed?.has(currentViewer)) {
+      radiusItems.push(toRadiusInfo([...ojective.vectors], escortTypes[id]));
+    }
+
+    id = (id + 1) % 3;
+  }
+  return radiusItems;
+};
+
+const getInlineUIState = (map: MapData, tileSize: number, scale: number) =>
+  !isIOS &&
+  window.innerWidth > scale * (map.size.width + 2) * tileSize &&
+  window.innerHeight > scale * (map.size.height + 4) * tileSize;
+
+const getInitialState = (props: Props) => {
+  const {
+    behavior: baseBehavior,
+    buildingSize,
+    currentUser,
+    currentUserId,
+    editor,
+    effects,
+    lastActionResponse,
+    lastActionTime,
+    map,
+    mapName,
+    messages,
+    paused,
+    playerDetails,
+    scale,
+    spectatorCodes,
+    tileSize,
+    timeout,
+    timer,
+    unitSize,
+  } = props;
+  const isEditor = !!editor;
+  const currentViewer = map.getPlayerByUserId(currentUserId)?.id || null;
+  const behavior: MapBehavior | null =
+    lastActionResponse?.type === 'GameEnd'
+      ? new NullBehavior()
+      : baseBehavior === null
+        ? null
+        : baseBehavior
+          ? new baseBehavior()
+          : new BaseBehavior();
+
+  const vision = getVision(map, currentViewer, spectatorCodes);
+  const newState = {
+    additionalRadius: null,
+    animationConfig: getCurrentAnimationConfig(
+      map.getCurrentPlayer(),
+      props.animationSpeed,
+    ),
+    animations: ImmutableMap() as Animations,
+    attackable: null,
+    behavior,
+    buildingSize,
+    confirmAction: null,
+    currentUser: currentUser || null,
+    currentUserId,
+    currentViewer,
+    effectState: getEffectState(map, effects),
+    gameInfoState: null,
+    highlightedPositions: null,
+    initialBehaviorClass: baseBehavior,
+    inlineUI: getInlineUIState(map, tileSize, scale),
+    lastActionResponse: lastActionResponse || null,
+    lastActionTime: lastActionTime || undefined,
+    map: isEditor ? map : vision.apply(dropLabels(map)),
+    mapName,
+    messages: messages || new Map(),
+    navigationDirection: null,
+    objectiveRadius: getObjectiveRadius(map, currentViewer, isEditor),
+    paused: paused || false,
+    playerDetails,
+    position: null,
+    preventRemoteActions: false,
+    previousPosition: null,
+    radius: null,
+    replayState: {
+      isLive: false,
+      isPaused: false,
+      isReplaying: false,
+      isWaiting: false,
+      pauseStart: null,
+    },
+    selectedAttackable: null,
+    selectedBuilding: null,
+    selectedMessagePosition: null,
+    selectedPosition: null,
+    selectedUnit: null,
+    showCursor: props.showCursor,
+    showSkipDialogue: false,
+    skipDialogue: false,
+    tileSize,
+    timeout: timeout || null,
+    timer: timer || null,
+    unitSize,
+    vision,
+    zIndex: getLayer(map.size.height + 1, 'top') + 10,
+  };
+  return {
+    ...newState,
+    ...behavior?.activate?.(newState),
+  };
+};
+
+const getScale = (scale: number | undefined, element: HTMLElement) =>
+  scale ||
+  parseInteger(getComputedStyle(element).getPropertyValue(cssVar('scale'))) ||
+  2;
+
+export default class GameMap extends Component<Props, State> {
+  static defaultProps = {
+    animationSpeed: {
+      human: AnimationConfig,
+      regular: AnimationConfig,
+    },
+    buildingSize: TileSize,
+    confirmActionStyle: 'touch',
+    playerAchievement: null,
+    scroll: true,
+    showCursor: true,
+    tileSize: TileSize,
+    unitSize: TileSize,
+  };
+
+  private _actionQueue: Promise<void> | null = null;
+  private _actions: Actions;
+  private _controlListeners: Array<() => void> = [];
+  private _isTouch = { current: false };
+  private _lastEnteredPosition: Vector | null = null;
+  private _liveTimer: NativeTimeout = null;
+  private _skipDialogueTimer: NativeTimeout = null;
+  private _maskRef = createRef<HTMLDivElement>();
+  private _pointerEnabled = true;
+  private _pointerLock = { current: false };
+  private _pointerPosition: {
+    clientX: number;
+    clientY: number;
+    distance: number;
+    initial: boolean;
+  } | null = null;
+  private _releasePointerLock: NativeTimeout = null;
+  private _resolvers: Array<() => void>;
+  private _timers: Set<TimerState>;
+  private _waitingTimer: NativeTimeout = null;
+  private _wrapperRef = createRef<HTMLDivElement>();
+
+  constructor(props: Props) {
+    super(props);
+
+    this.state = getInitialState(props);
+    this._timers = new Set();
+    this._resolvers = [];
+    this._actions = {
+      action: this._action,
+      clearTimer: this._clearTimer,
+      optimisticAction: this._optimisticAction,
+      pauseReplay: this._pauseReplay,
+      processGameActionResponse: this.processGameActionResponse,
+      requestFrame: this._requestFrame,
+      resetPosition: this._resetPosition,
+      resumeReplay: this._resumeReplay,
+      scheduleTimer: this._scheduleTimer,
+      scrollIntoView: this._scrollIntoView,
+      setEditorState: this._updateEditorState,
+      showGameInfo: this._showGameInfo,
+      throwError: this._throwError,
+      update: this._update,
+    };
+  }
+
+  static getDerivedStateFromProps(props: Props, state: State) {
+    let newState: State | null = null;
+    if ('behavior' in props && props.behavior !== state.initialBehaviorClass) {
+      const BehaviorClass = props.behavior;
+      const behavior = BehaviorClass ? new BehaviorClass() : null;
+      newState = {
+        ...(newState || state),
+        behavior,
+        initialBehaviorClass: BehaviorClass,
+        ...state.behavior?.deactivate?.(null),
+      };
+      newState = {
+        ...newState,
+        ...behavior?.activate?.(newState as State),
+      };
+    }
+
+    if ('scale' in props) {
+      newState = {
+        ...(newState || state),
+        inlineUI: getInlineUIState(state.map, state.tileSize, props.scale),
+      };
+    }
+
+    if ('paused' in props && props.paused !== state.paused) {
+      newState = {
+        ...(newState || state),
+        paused: !!props.paused,
+      };
+    }
+
+    if (
+      'playerDetails' in props &&
+      props.playerDetails !== state.playerDetails
+    ) {
+      newState = {
+        ...(newState || state),
+        playerDetails: props.playerDetails,
+      };
+    }
+
+    if ('effects' in props) {
+      newState = {
+        ...(newState || state),
+        effectState: getEffectState((newState || state).map, props.effects),
+      };
+    }
+
+    if ('currentUser' in props && props.currentUser !== state.currentUser) {
+      newState = {
+        ...(newState || state),
+        currentUser: props.currentUser || null,
+      };
+    }
+
+    if (props.dangerouslyApplyExternalState) {
+      newState = {
+        ...(newState || state),
+        ...('lastActionResponse' in props &&
+        props.lastActionResponse !== undefined
+          ? { lastActionResponse: props.lastActionResponse }
+          : null),
+        map: props.editor ? props.map : dropLabels(props.map),
+        vision: getVision(
+          props.map,
+          (newState || state).currentViewer,
+          props.spectatorCodes,
+        ),
+      };
+    }
+
+    return newState;
+  }
+
+  override componentDidMount() {
+    const {
+      props: { editor, events, inset, onAction, scroll },
+      state: { animationConfig, behavior, lastActionResponse, map, paused },
+    } = this;
+
+    if (scroll) {
+      const container =
+        (inset &&
+          this._maskRef.current?.closest(`.${ScrollContainerClassName}`)) ||
+        window;
+      if (container === window) {
+        (this.context as RefObject<boolean>).current = true;
+      }
+      scrollToCenter(container);
+    }
+
+    this._actionQueue = Promise.resolve().then(async () => {
+      if (!paused && !editor && onAction && behavior?.type === 'base') {
+        if (!lastActionResponse) {
+          await this._update(resetBehavior(NullBehavior));
+          await this.processGameActionResponse(
+            await onAction({ type: 'Start' }),
+          );
+        } else if (lastActionResponse.type === 'EndTurn') {
+          await sleep(this._scheduleTimer, animationConfig, 'long');
+          const { funds, id: player } = map.getCurrentPlayer();
+          await new Promise<void>((resolve) =>
+            this._update({
+              ...addEndTurnAnimations(
+                this._actions,
+                {
+                  current: { funds, player },
+                  next: { funds, player },
+                  round: map.round,
+                  type: 'EndTurn',
+                },
+                this.state,
+                null,
+                (state) => {
+                  resolve();
+                  return {
+                    ...state,
+                    ...resetBehavior(this.props.behavior),
+                  };
+                },
+              ),
+            }),
+          );
+        }
+      }
+    });
+
+    this._controlListeners = [
+      Input.register('navigate', this._disablePointer, 'menu'),
+      Input.register('navigate', this._navigate),
+      Input.register('point', this._enablePointer),
+      Input.register('accept', async () => {
+        this.maybeSkipDialogue();
+
+        const { editor } = this.props;
+        const { position, selectedPosition } = this.state;
+        const vector = position || selectedPosition;
+        if (!vector) {
+          return;
+        }
+
+        if (editor) {
+          this._updateEditorState({ isDrawing: true });
+          await this._update((actualState) => {
+            const { behavior, position } = actualState;
+            return position && behavior?.enter
+              ? behavior.enter(position, actualState, this._actions, {
+                  ...editor,
+                  isDrawing: true,
+                })
+              : null;
+          });
+          this._updateEditorState({ isDrawing: false });
+        } else {
+          this._select(vector);
+        }
+      }),
+      Input.register('accept:released', this.resetDialogueSkip),
+      Input.register(
+        'cancel',
+        (event) =>
+          this._cancel(
+            this.state.position,
+            undefined,
+            event,
+            event.detail?.isEscape || false,
+          ),
+        'dialog',
+      ),
+      Input.register(
+        'field-info',
+        () => this._cancel(this.state.position, undefined, null, false),
+        'dialog',
+      ),
+    ];
+
+    document.addEventListener('pointermove', this._pointerMove);
+    document.addEventListener('mousedown', this._mouseDown);
+    document.addEventListener('mouseup', this._mouseUp);
+    document.addEventListener('touchmove', this._touchMove, { passive: false });
+    window.addEventListener('resize', this._resize);
+    events?.addEventListener('action', this._processRemoteActionResponse);
+  }
+
+  override componentDidUpdate(previousProps: Props) {
+    const {
+      props: { events },
+    } = this;
+
+    if (previousProps.events !== events) {
+      if (previousProps.events) {
+        previousProps.events.removeEventListener(
+          'action',
+          this._processRemoteActionResponse,
+        );
+      }
+      events?.addEventListener('action', this._processRemoteActionResponse);
+    }
+  }
+
+  override componentWillUnmount() {
+    const {
+      props: { events },
+      state: { behavior },
+    } = this;
+
+    for (const remove of this._controlListeners) {
+      remove();
+    }
+
+    document.removeEventListener('pointermove', this._pointerMove);
+    document.removeEventListener('mousedown', this._mouseDown);
+    document.removeEventListener('mouseup', this._mouseUp);
+    document.removeEventListener('touchmove', this._touchMove);
+    window.removeEventListener('resize', this._resize);
+    events?.removeEventListener('action', this._processRemoteActionResponse);
+
+    behavior?.deactivate?.(this._actions);
+  }
+
+  private maybeSkipDialogue = () => {
+    const {
+      animations,
+      behavior,
+      lastActionResponse,
+      preventRemoteActions,
+      skipDialogue,
+    } = this.state;
+    if (
+      behavior?.type === 'null' &&
+      this._skipDialogueTimer == null &&
+      !skipDialogue &&
+      ((!lastActionResponse && preventRemoteActions) ||
+        lastActionResponse?.type === 'Start' ||
+        lastActionResponse?.type === 'CharacterMessage' ||
+        lastActionResponse?.type === 'SetPlayer' ||
+        hasCharacterMessage(animations))
+    ) {
+      this.setState({ showSkipDialogue: true });
+
+      this._skipDialogueTimer = setTimeout(() => {
+        this._skipDialogueTimer = null;
+        if (!this.state.skipDialogue) {
+          let hasMessage = false;
+          for (const [vector, animation] of this.state.animations) {
+            if (animation.type === 'characterMessage' && !animation.completed) {
+              hasMessage = true;
+              this._requestFrame(() =>
+                this._animationComplete(vector, animation),
+              );
+            }
+          }
+          if (hasMessage) {
+            rumbleEffect('accept');
+            AudioPlayer.playSound('UI/Skip');
+          }
+
+          this.setState({ showSkipDialogue: false, skipDialogue: true });
+        }
+      }, MessageSkipDuration);
+    }
+  };
+
+  private resetDialogueSkip = () => {
+    if (this._skipDialogueTimer != null) {
+      clearTimeout(this._skipDialogueTimer);
+      this._skipDialogueTimer = null;
+    }
+    if (this.state.showSkipDialogue) {
+      this.setState({ showSkipDialogue: false });
+    }
+  };
+
+  // eslint-disable-next-line unicorn/consistent-function-scoping
+  private _resize = throttle(() => {
+    this.setState({
+      inlineUI: getInlineUIState(this.state.map, this.state.tileSize, 0),
+    });
+  }, 100);
+
+  private _reset = () => {
+    const { behavior, position, radius } = this.state;
+    if (position && behavior?.type !== 'attackRadius' && !radius?.locked) {
+      behavior?.clearTimers?.(this._actions.clearTimer);
+      this.setState({
+        position: null,
+        radius: !radius || radius.type === RadiusType.Attack ? null : radius,
+      });
+    }
+  };
+
+  private _endGame = async () => {
+    const { endGame } = this.props;
+    if (endGame) {
+      endGame('Lose');
+      this._update(resetBehavior(NullBehavior));
+    }
+  };
+
+  private _disablePointer = () => {
+    if (this._pointerEnabled) {
+      this._pointerEnabled = false;
+      this._maskRef.current?.classList.remove(MaskPointerClassName);
+    }
+  };
+
+  private _enablePointer = () => {
+    if (!this._pointerEnabled) {
+      this._pointerEnabled = true;
+      this._maskRef.current?.classList.add(MaskPointerClassName);
+    }
+  };
+
+  private _navigate = ({
+    detail: direction,
+  }: CustomEvent<NavigationDirection>) => {
+    const {
+      behavior,
+      confirmAction,
+      lastActionResponse,
+      map,
+      navigationDirection,
+      position,
+      previousPosition,
+      selectedPosition,
+    } = this.state;
+
+    if (confirmAction || behavior?.navigate) {
+      this.setState({
+        navigationDirection: {
+          ...direction,
+          previousX: navigationDirection?.x,
+          previousY: navigationDirection?.y,
+        },
+      });
+    } else if (direction) {
+      const origin =
+        position ||
+        selectedPosition ||
+        previousPosition ||
+        (lastActionResponse &&
+          lastActionResponse.type !== 'EndTurn' &&
+          getActionResponseVectors(map, lastActionResponse).at(-1)) ||
+        vec(Math.floor(map.size.width / 2), Math.floor(map.size.height / 2));
+      const vector = vec(origin.x + direction.x, origin.y + direction.y);
+      this._enter(vector);
+      this._scrollIntoView([vector], true, direction);
+    }
+  };
+
+  private _enter = (
+    vector: Vector,
+    subVector?: Vector,
+    type: MapEnterType = 'synthetic',
+  ) => {
+    if (
+      type === 'pointer' &&
+      (!this._pointerEnabled || this._pointerLock.current)
+    ) {
+      this._lastEnteredPosition = vector;
+      return;
+    }
+
+    const { map, position, radius } = this.state;
+    if (!map.contains(vector) || radius?.locked) {
+      return;
+    }
+
+    if (type === 'move' && vector.equals(position)) {
+      return;
+    }
+
+    if (!vector.equals(position)) {
+      this.setState({
+        position: vector,
+        previousPosition: position,
+      });
+    }
+
+    this._update((actualState) => {
+      const { behavior, replayState } = actualState;
+      if (!replayState.isReplaying) {
+        const newState = behavior?.enter
+          ? behavior.enter(
+              vector,
+              actualState,
+              this._actions,
+              this.props.editor,
+              subVector,
+            )
+          : null;
+        if (newState) {
+          return newState;
+        }
+      } else if (
+        actualState.messages.has(vector) &&
+        actualState.vision.isVisible(actualState.map, vector)
+      ) {
+        return {
+          highlightedPositions: [vector],
+        };
+      } else if (actualState.highlightedPositions?.length) {
+        return { highlightedPositions: null };
+      }
+      return null;
+    });
+  };
+
+  private _shouldConfirmAction() {
+    const { confirmActionStyle } = this.props;
+    return (
+      confirmActionStyle === 'always' ||
+      (confirmActionStyle === 'touch' && !!this._isTouch.current)
+    );
+  }
+
+  private _select = (vector: Vector, subVector?: Vector) => {
+    if (this._pointerLock.current) {
+      this._pointerLock.current = false;
+      this._isTouch.current = false;
+      return;
+    }
+
+    this._update((actualState) => {
+      const { behavior, replayState } = actualState;
+      if (!replayState.isReplaying || behavior?.type === 'message') {
+        const newState = behavior?.select
+          ? behavior.select(
+              vector,
+              actualState,
+              this._actions,
+              this.props.editor,
+              subVector,
+              this._shouldConfirmAction(),
+            )
+          : null;
+        if (newState) {
+          const { selectedPosition } = newState;
+          const hasBehaviorChange =
+            newState.behavior?.type !== actualState.behavior?.type;
+          if (
+            (newState.selectedUnit || newState.selectedBuilding) &&
+            (hasBehaviorChange ||
+              (selectedPosition &&
+                !actualState.selectedPosition?.equals(selectedPosition)))
+          ) {
+            AudioPlayer.playSound('UI/Accept');
+            rumbleEffect('accept');
+          } else if (
+            hasBehaviorChange &&
+            !selectedPosition &&
+            actualState.selectedPosition
+          ) {
+            AudioPlayer.playSound('UI/Cancel');
+          }
+
+          return newState;
+        }
+      }
+      this._isTouch.current = false;
+      return null;
+    });
+  };
+
+  private _cancel = (
+    vector: Vector | null,
+    transformOrigin: string | undefined,
+    event: CustomEvent | null,
+    isEscape: boolean,
+  ) => {
+    const maybePreventDefault =
+      isEscape && event ? () => event.preventDefault() : null;
+
+    const { behavior } = this.state;
+    if (behavior?.type === 'null') {
+      if (this.state.lastActionResponse?.type !== 'GameEnd') {
+        maybePreventDefault?.();
+      }
+      if (this.state.gameInfoState) {
+        this._update(this._resetGameInfoState());
+      }
+      return;
+    }
+
+    if (behavior?.onCancel) {
+      const maybeState = behavior.onCancel(this.state);
+      if (maybeState) {
+        maybePreventDefault?.();
+        return this._update(maybeState);
+      }
+    }
+
+    const state = this.state;
+    let newState = {
+      ...state.behavior?.deactivate?.(this._actions),
+      ...resetBehavior(
+        state.lastActionResponse?.type === 'GameEnd'
+          ? NullBehavior
+          : this.props.behavior,
+      ),
+    };
+
+    if (newState.behavior?.type !== this.state.behavior?.type) {
+      maybePreventDefault?.();
+    }
+
+    if (
+      state.gameInfoState ||
+      newState.behavior?.type !== state.behavior?.type
+    ) {
+      AudioPlayer.playSound('UI/Cancel');
+    }
+
+    if (state.gameInfoState) {
+      maybePreventDefault?.();
+      newState = { ...newState, ...this._resetGameInfoState() };
+    }
+
+    if (
+      !isEscape &&
+      !this.props.editor &&
+      newState.behavior?.type === state.behavior?.type &&
+      vector
+    ) {
+      maybePreventDefault?.();
+      this._showFieldInfo(vector, transformOrigin || 'center center');
+      return;
+    }
+
+    return this._update(newState);
+  };
+
+  private _update = (
+    newState: StateLike | null | ((state: State) => StateLike | null),
+  ): Promise<State> => {
+    return new Promise((resolve) => {
+      if (!newState) {
+        resolve(this.state);
+        return;
+      }
+      this.setState(
+        (actualState: State) => {
+          if (typeof newState === 'function') {
+            newState = newState(actualState);
+          }
+          if (!newState) {
+            return actualState;
+          }
+
+          const newBehavior = newState.behavior;
+          const oldBehavior = this.state.behavior;
+          if (newBehavior && newBehavior !== oldBehavior) {
+            newState = {
+              ...this.state,
+              ...oldBehavior?.deactivate?.(this._actions),
+              ...newState,
+            };
+            if (newBehavior.activate) {
+              Object.assign(
+                newState,
+                newBehavior.activate(
+                  newState as State,
+                  this._actions,
+                  this._shouldConfirmAction(),
+                ),
+              );
+            }
+          }
+          if (
+            newState.position &&
+            !(newState.map || actualState.map).contains(newState.position)
+          ) {
+            newState = {
+              ...newState,
+              position: null,
+            };
+          }
+          if (
+            (newState.currentViewer &&
+              newState.currentViewer !== this.state.currentViewer) ||
+            (newState.map &&
+              newState.map.config.fog !== this.state.map.config.fog)
+          ) {
+            newState = {
+              ...newState,
+              vision: getVision(
+                newState.map || this.state.map,
+                newState.currentViewer || this.state.currentViewer,
+                this.props.spectatorCodes,
+              ),
+            };
+          }
+          if (
+            (newState.map && newState.map !== this.state.map) ||
+            (newState.currentUserId &&
+              newState.currentUserId !== this.state.currentUserId)
+          ) {
+            newState = {
+              ...newState,
+              currentViewer: (newState.map || this.state.map).getPlayerByUserId(
+                newState.currentUserId || this.state.currentUserId,
+              )?.id,
+            };
+          }
+
+          if (
+            newState.map &&
+            newState.map !== this.state.map &&
+            newState.map.config.objectives !== this.state.map.config.objectives
+          ) {
+            newState = {
+              ...newState,
+              objectiveRadius: getObjectiveRadius(
+                newState.map,
+                newState.currentViewer ?? this.state.currentViewer,
+                !!this.props.editor,
+              ),
+            };
+          }
+
+          if (this.state.position && !newState.position) {
+            newState = {
+              ...newState,
+              previousPosition: this.state.position,
+            };
+          }
+
+          if (
+            newState.animations &&
+            this.state.animations !== newState.animations
+          ) {
+            newState = {
+              ...newState,
+              animations: newState.animations.filter(
+                ({ completed }) => !completed,
+              ),
+            };
+          }
+
+          return newState as State;
+        },
+        () => resolve(this.state),
+      );
+    });
+  };
+
+  private _action = (
+    state: State,
+    action: Action,
+  ): [Promise<GameActionResponse>, MapData, ActionResponse] => {
+    try {
+      const { onAction } = this.props;
+      const { lastActionResponse, map, preventRemoteActions, vision } = state;
+      if (lastActionResponse?.type === 'GameEnd') {
+        throw new Error(
+          `Action: Cannot issue actions for a game that has ended.\nAction: '${JSON.stringify(action)}'`,
+        );
+      }
+
+      if (preventRemoteActions) {
+        const { currentViewer } = state;
+        const player = map.getCurrentPlayer();
+        throw new Error(
+          `Action: Cannot issue actions while processing remote actions. Current Viewer: '${currentViewer}'\nCurrent Player: '${player.id} (${player.isHumanPlayer() ? 'human' : 'bot'})'\nAction: '${JSON.stringify(action)}'`,
+        );
+      }
+
+      const actionResult = execute(
+        map,
+        vision,
+        action,
+        this.props.mutateAction,
+      );
+      if (!actionResult) {
+        throw new ActionError(action, map);
+      }
+
+      const [actionResponse, newMap] = actionResult;
+      const remoteAction =
+        onAction?.(action).catch((error) => {
+          this._throwError(error);
+          return { self: null };
+        }) || Promise.resolve({ self: { actionResponse } });
+      return [remoteAction, newMap, actionResponse];
+    } catch (error) {
+      this._throwError(error as Error);
+    }
+
+    throw new Error(
+      `Action: Unhandled error when executing action '${action.type}'.`,
+    );
+  };
+
+  private _optimisticAction = (
+    state: State,
+    action: Action,
+  ): ActionResponse => {
+    const [remoteAction, , actionResponse] = this._action(state, action);
+    remoteAction.then(this.processGameActionResponse);
+    return actionResponse;
+  };
+
+  private processGameActionResponse = async (
+    gameActionResponse: GameActionResponse,
+  ): Promise<State> => {
+    let { state } = this;
+    const { message, others, self, timeout: newTimeout } = gameActionResponse;
+    const timeout = newTimeout !== undefined ? newTimeout : undefined;
+
+    if (message) {
+      const position = vec(message.position[0], message.position[1]);
+      if (state.messages.has(position)) {
+        const messages = new Map(state.messages);
+        messages.delete(position);
+        state = await this._update({
+          messages,
+        });
+      }
+
+      if (!message.deleted) {
+        state = await this._update({
+          animations: state.animations.has(position)
+            ? state.animations
+            : state.animations.set(position, {
+                position,
+                type: 'new-message',
+              }),
+          messages: new Map(state.messages).set(position, {
+            ...message,
+            position,
+          }),
+        });
+      }
+    }
+
+    if (!self && !others?.length && newTimeout === undefined) {
+      return state;
+    }
+
+    if (
+      newTimeout != null &&
+      (self?.actionResponse?.type === 'EndTurn' ||
+        others?.some(({ actionResponse }) => actionResponse.type === 'EndTurn'))
+    ) {
+      this.setState({
+        timeout: null,
+      });
+    }
+
+    if (self) {
+      const { actionResponse } = self;
+      if (actionResponse.type === 'Start') {
+        state = await this._processActionResponses([self]);
+        if (others?.length) {
+          // Keep the map disabled until other actions are executed.
+          state = await this._update(resetBehavior(NullBehavior));
+        }
+      } else if (actionResponse.type === 'Capture') {
+        const { map } = this.state;
+        const { building, from } = actionResponse;
+        if (building) {
+          // A remote capture action may reveal a hidden label.
+          await this._update({
+            map: map.copy({
+              buildings: map.buildings.set(
+                from,
+                building.setHealth(MaxHealth).complete(),
+              ),
+            }),
+          });
+        }
+      } else if (actionResponse.type === 'EndTurn') {
+        const { map } = this.state;
+        const { current, next } = actionResponse;
+
+        // The turn was likely ended through a turn timeout.
+        if (map.getCurrentPlayer().id !== next.player) {
+          state = await this._processActionResponses([self]);
+        } else {
+          const currentPlayer = map.getPlayer(current.player);
+          const nextPlayer = map.getPlayer(next.player);
+          if (
+            currentPlayer.funds !== current.funds ||
+            nextPlayer.funds !== next.funds ||
+            map.getCurrentPlayer().id !== next.player
+          ) {
+            state = await this._update({
+              lastActionResponse: actionResponse,
+              lastActionTime: dateNow(),
+              map: map.copy({
+                currentPlayer: next.player,
+                teams: updatePlayers(map.teams, [
+                  currentPlayer.setFunds(current.funds),
+                  nextPlayer.setFunds(next.funds),
+                ]),
+              }),
+            });
+          }
+        }
+      }
+
+      if (state.map.config.fog) {
+        state = await this._update((state) => ({
+          // Ensure that attack action buttons are shown if attackable units
+          // are now in range.
+          ...(state.behavior?.type === 'menu'
+            ? { behavior: new MenuBehavior() }
+            : null),
+          map: updateVisibleEntities(state.map, state.vision, self),
+        }));
+      }
+
+      // No need to keep processing if there are no other action responses.
+      if (!others) {
+        state = await this._updateTimeout(timeout);
+
+        return new Promise((resolve) => {
+          this.setState(
+            () => ({
+              lastActionResponse: actionResponse,
+              lastActionTime: dateNow(),
+            }),
+            () => resolve(this.state),
+          );
+        });
+      }
+    }
+
+    if (others?.length) {
+      // If there are self and other actions at the same time, wait before processing the other actions.
+      if (self) {
+        await sleep(this._scheduleTimer, this.state.animationConfig, 'long');
+      }
+
+      // Update the viewer id when a spectator invades to show the correct
+      // info during fog.
+      for (const { actionResponse } of others) {
+        if (actionResponse.type === 'Spawn' && actionResponse.teams) {
+          const currentViewer = actionResponse.teams
+            .flatMap(({ players }) => players)
+            .find(
+              (player) =>
+                player.isHumanPlayer() && player.userId === state.currentUserId,
+            )?.id;
+
+          if (currentViewer) {
+            state = await this._update({
+              currentViewer,
+            });
+          }
+        }
+      }
+
+      state = await this._processActionResponses(others);
+    }
+
+    state = await this._updateTimeout(timeout);
+
+    return state;
+  };
+
+  private _updateTimeout = async (timeout: number | null | undefined) => {
+    if (timeout === undefined) {
+      return this.state;
+    }
+
+    const { map } = this.state;
+    return await this._update(
+      timeout === null
+        ? {
+            map: map.copy({
+              teams: updatePlayers(
+                map.teams,
+                map.getPlayers().map((player) => player.setTime(undefined)),
+              ),
+            }),
+            timeout: null,
+            timer: null,
+          }
+        : { timeout },
+    );
+  };
+
+  private _processActionResponses = async (
+    gameActionResponses: GameActionResponses,
+  ): Promise<State> => {
+    return new Promise((resolve) => {
+      this._clearReplayTimers();
+
+      this._resolvers = [];
+      this._timers = new Set();
+
+      const { currentViewer, lastActionResponse, map } = this.state;
+      const currentPlayer = map.getCurrentPlayer();
+      const isLive = currentViewer !== currentPlayer.id;
+      this.setState(
+        {
+          animationConfig: getCurrentAnimationConfig(
+            currentPlayer,
+            this.props.animationSpeed,
+          ),
+          preventRemoteActions: true,
+          replayState: {
+            isLive,
+            isPaused: false,
+            isReplaying: isLive,
+            isWaiting: false,
+            pauseStart: null,
+          },
+          skipDialogue:
+            !lastActionResponse || lastActionResponse?.type === 'Start'
+              ? this.state.skipDialogue
+              : false,
+        },
+        async () => {
+          const { currentViewer } = this.state;
+          const { animationSpeed, behavior, onError, playerHasReward } =
+            this.props;
+          try {
+            await processActionResponses(
+              this.state,
+              this._actions,
+              gameActionResponses,
+              animationSpeed,
+              playerHasReward || (() => false),
+              this.props.events,
+            );
+          } catch (error) {
+            if (onError) {
+              onError(error as Error);
+              resolve(this.state);
+
+              return;
+            } else {
+              throw error;
+            }
+          }
+          this._resolvers = [];
+          this._timers = new Set();
+
+          const lastActionResponse = gameActionResponses.at(-1)!.actionResponse;
+          const currentPlayer = this.state.map.getCurrentPlayer();
+          const isLive =
+            lastActionResponse.type !== 'GameEnd' &&
+            (lastActionResponse.type !== 'EndTurn' ||
+              lastActionResponse.next.player !== currentViewer) &&
+            currentViewer !== currentPlayer.id;
+
+          this.setState(
+            {
+              ...(lastActionResponse.type === 'EndTurn' &&
+              lastActionResponse.next.player === currentViewer
+                ? this._resetGameInfoState()
+                : null),
+              ...(resetBehavior(this.props.behavior) as State),
+              animationConfig: getCurrentAnimationConfig(
+                currentPlayer,
+                this.props.animationSpeed,
+              ),
+              behavior:
+                lastActionResponse.type === 'GameEnd'
+                  ? new NullBehavior()
+                  : behavior
+                    ? new behavior()
+                    : new BaseBehavior(),
+              lastActionResponse,
+              position: !this._pointerEnabled
+                ? this.state.previousPosition
+                : null,
+              preventRemoteActions: false,
+              replayState: {
+                isLive,
+                isPaused: false,
+                isReplaying: false,
+                isWaiting: false,
+                pauseStart: null,
+              },
+              showSkipDialogue: false,
+              skipDialogue:
+                lastActionResponse?.type === 'Start'
+                  ? this.state.skipDialogue
+                  : false,
+            },
+            () => {
+              if (isLive) {
+                this._liveTimer = setTimeout(this._liveTimerFn, liveInterval);
+              }
+
+              const detail: ActionsProcessedEventDetail = {
+                gameActionResponses,
+                map: this.state.map,
+              };
+              this.props.events?.dispatchEvent(
+                new CustomEvent('actionsProcessed', {
+                  detail,
+                }),
+              );
+              resolve(this.state);
+            },
+          );
+        },
+      );
+    });
+  };
+
+  private _liveTimerFn = () =>
+    this.setState((state) => {
+      const { currentViewer, map } = state;
+      const isWaitingOnHumanPlayer =
+        (!currentViewer || !map.isCurrentPlayer(currentViewer)) &&
+        map.getCurrentPlayer().isHumanPlayer();
+
+      if (isWaitingOnHumanPlayer) {
+        this._waitingTimer = setTimeout(
+          () =>
+            this.setState((state) => ({
+              replayState: {
+                ...state.replayState,
+                isWaiting: false,
+              },
+            })),
+          waitingInterval,
+        );
+      }
+
+      return {
+        replayState: {
+          ...state.replayState,
+          isLive: false,
+          isWaiting: true,
+        },
+      };
+    });
+
+  private _processRemoteActionResponse = async (
+    event: Event,
+  ): Promise<void> => {
+    if (this.state.replayState.isPaused) {
+      return new Promise((resolve) =>
+        this._resolvers.push(() =>
+          this._processRemoteActionResponse(event).then(resolve),
+        ),
+      );
+    }
+
+    const gameActionResponse = (event as CustomEvent<GameActionResponse>)
+      .detail;
+    const queue = (this._actionQueue = (
+      this._actionQueue || Promise.resolve()
+    ).then(async () => {
+      const { animationConfig, animations } =
+        await this.processGameActionResponse(gameActionResponse);
+
+      const { timeout } = gameActionResponse;
+      if (timeout !== undefined) {
+        await this._update({ timeout });
+      }
+
+      if (animations.size) {
+        // Some animations like HealthAnimation do not have an `onComplete` callback.
+        // This delay gives these animations a chance to finish before continuing to process the queue.
+        await new Promise((resolve) =>
+          setTimeout(resolve, animationConfig.AnimationDuration * 3),
+        );
+      }
+    }));
+    return queue;
+  };
+
+  private _animationComplete = (position: Vector, animation: Animation) => {
+    const currentAnimation = this.state.animations.get(position);
+    // When activating a power we explode a unit while the damage animation is still ongoing.
+    // Because animations cannot be canceled, we short-circuit here and ignore the `onComplete` callback of the `damage` animation.
+    if (
+      currentAnimation &&
+      animation.type === 'damage' &&
+      currentAnimation.type === 'unitExplosion'
+    ) {
+      return;
+    }
+
+    if (currentAnimation && currentAnimation !== animation) {
+      throw new Error(
+        `Animation '${animation.type}' at position '${position}' changed unexpectedly:\nExpected: ${JSON.stringify(
+          animation,
+          null,
+          2,
+        )}\nReceived: ${JSON.stringify(
+          this.state.animations.get(position),
+          null,
+          2,
+        )}`,
+      );
+    }
+
+    if ('onComplete' in animation && animation.onComplete) {
+      if (animation.completed) {
+        captureException(
+          new Error(
+            `Animation '${animation.type}' at position '${position}' was already completed.\nAnimation: ${JSON.stringify(
+              animation,
+              null,
+              2,
+            )}`,
+          ),
+        );
+      }
+
+      const onComplete = animation.onComplete;
+      this._update((state) => {
+        animation.completed = true;
+        const animations = state.animations.delete(position);
+        return {
+          animations,
+          ...onComplete({
+            ...state,
+            animations,
+          }),
+        };
+      });
+    } else {
+      this.setState((state) => ({
+        animations: state.animations.delete(position),
+      }));
+    }
+  };
+
+  private _clearReplayTimers = () => {
+    if (this._liveTimer != null) {
+      clearTimeout(this._liveTimer);
+      this._liveTimer = null;
+    }
+
+    if (this._waitingTimer != null) {
+      clearTimeout(this._waitingTimer);
+      this._waitingTimer = null;
+    }
+  };
+
+  private _pauseReplay = async () => {
+    if (this.state.replayState.isPaused) {
+      return;
+    }
+
+    this._clearReplayTimers();
+    const pauseStart = dateNow();
+    const timers = new Set<TimerState>();
+    for (const timer of this._timers) {
+      clearTimeout(timer.timer);
+      timers.add({
+        ...timer,
+        delay: pauseStart - timer.start,
+      });
+    }
+    this._timers = timers;
+
+    await this._update({
+      replayState: {
+        ...this.state.replayState,
+        isPaused: true,
+        isWaiting: false,
+        pauseStart,
+      },
+    });
+  };
+
+  private _resumeReplay = async () => {
+    if (!this.state.replayState.isPaused) {
+      return;
+    }
+
+    this._clearReplayTimers();
+
+    await this._update({
+      replayState: {
+        ...this.state.replayState,
+        isPaused: false,
+        isWaiting: false,
+        pauseStart: dateNow(),
+      },
+    });
+
+    this._resolvers.forEach((resolve) => resolve());
+    this._resolvers = [];
+    const timers = new Set<TimerState>();
+    for (const { delay, fn } of this._timers) {
+      const timerObject = {
+        delay,
+        fn,
+        start: dateNow(),
+        timer: window.setTimeout(() => {
+          this._timers.delete(timerObject);
+          fn();
+        }, delay),
+      };
+      timers.add(timerObject);
+    }
+    this._timers = timers;
+  };
+
+  private _clearTimer = (timer: number | TimerID) => {
+    Promise.resolve(timer).then((timer) => {
+      window.clearTimeout(timer);
+      for (const timerObject of this._timers) {
+        if (timerObject.timer === timer) {
+          this._timers.delete(timerObject);
+          break;
+        }
+      }
+    });
+  };
+
+  private _scheduleTimer = async (
+    fn: () => void,
+    delay: number,
+  ): Promise<number> => {
+    const { replayState } = this.state;
+    if (replayState.isPaused) {
+      let _resolve: () => void;
+      const promise = new Promise<void>((resolve) => {
+        _resolve = resolve;
+      }).then(() => this._scheduleTimer(fn, delay));
+      requestAnimationFrame(() => this._resolvers.push(_resolve));
+      return promise;
+    }
+
+    const timer = window.setTimeout(() => {
+      this._timers.delete(timerObject);
+      fn();
+    }, delay);
+    const timerObject = {
+      delay,
+      fn,
+      start: dateNow(),
+      timer,
+    };
+    this._timers = this._timers.add(timerObject);
+    return timer;
+  };
+
+  private _requestFrame = (fn: (timestamp: number) => void): number => {
+    const { replayState } = this.state;
+    if (replayState.isPaused) {
+      let _resolve: () => void;
+      new Promise<void>((resolve) => {
+        _resolve = () => resolve();
+      }).then(() => fn(dateNow() - replayState.pauseStart!));
+      requestAnimationFrame(() => this._resolvers.push(_resolve));
+      return 0;
+    }
+    return requestAnimationFrame(fn);
+  };
+
+  private _resetPosition = () => {
+    const { position, radius } = this.state;
+    if (position && !radius?.locked) {
+      this.setState({ position: null });
+    }
+  };
+
+  private _updateEditorState = (editor: Partial<EditorState>) =>
+    this.props.setEditorState?.(editor);
+
+  private _throwError = (error: Error) => this.props.onError?.(error);
+
+  private _showGameInfo = (gameInfoState: GameInfoState) =>
+    this.setState((state) => ({
+      gameInfoState: {
+        ...gameInfoState,
+        ...(gameInfoState.type === 'game-info'
+          ? { panels: this.props.gameInfoPanels }
+          : null),
+      },
+      highlightedPositions: null,
+      paused: true,
+      position: null,
+      previousPosition: state.position,
+      radius:
+        state.behavior?.type === 'base' &&
+        state.radius?.type === RadiusType.Attack
+          ? null
+          : state.radius,
+    }));
+
+  private _showFieldInfo = (vector: Vector, origin: string) => {
+    const { behavior, lastActionResponse, map, vision } = this.state;
+    if (behavior?.type === 'null' && lastActionResponse?.type !== 'GameEnd') {
+      return;
+    }
+
+    const unit = vector && map.units.get(vector);
+    const building = vector && map.buildings.get(vector);
+    const tile = vector && map.getTileInfo(vector);
+    if (unit || building || tile) {
+      if (behavior?.type === 'base') {
+        behavior.clearTimers?.(this._actions.clearTimer);
+      }
+      AudioPlayer.playSound('UI/LongPress');
+      this._showGameInfo({
+        building: vision.isVisible(map, vector)
+          ? building
+          : building?.hide(map.config.biome, true),
+        decorators: getDecoratorsAtField(map, vector),
+        modifierField: map.modifiers[map.getTileIndex(vector)],
+        origin,
+        tile,
+        type: 'map-info',
+        unit: vision.isVisible(map, vector) ? unit : null,
+        vector,
+      });
+    }
+  };
+
+  private _resetGameInfoState = () => ({
+    gameInfoState: null,
+    paused: this.props.paused || false,
+    position: !this._pointerEnabled ? this.state.previousPosition : null,
+  });
+
+  private _hideGameInfo = () =>
+    new Promise<void>((resolve) => {
+      AudioPlayer.playSound('UI/Cancel');
+      this.setState(this._resetGameInfoState(), resolve);
+    });
+
+  private _pointerDown = (event: ReactPointerEvent) => {
+    this.maybeSkipDialogue();
+
+    this._isTouch.current = event.pointerType === 'touch';
+  };
+
+  private _pointerUp = () => this.resetDialogueSkip();
+
+  private _pointerMove = (event: PointerEvent) => {
+    this._enablePointer();
+
+    if (!this.props.pan || !this._pointerPosition) {
+      return;
+    }
+
+    const element = this._maskRef.current;
+    if (
+      event.pointerType === 'touch' ||
+      !element ||
+      (event.target as HTMLElement)?.parentNode !== element
+    ) {
+      return;
+    }
+
+    const {
+      map: {
+        size: { height, width },
+      },
+      tileSize,
+    } = this.state;
+    const multiplier = (0.03 * (width + height)) / 2 + 0.85;
+    const { clientX, clientY } = event;
+    const distanceX = this._pointerPosition.clientX - clientX;
+    const distanceY = this._pointerPosition.clientY - clientY;
+    const distance = Math.abs(distanceX) + Math.abs(distanceY);
+    if (this._pointerPosition.initial && distance < tileSize) {
+      return;
+    }
+
+    this._pointerLock.current = true;
+    window.scrollBy(distanceX * multiplier, distanceY * multiplier);
+
+    this._pointerPosition = {
+      clientX,
+      clientY,
+      distance: this._pointerPosition.distance + distance,
+      initial: false,
+    };
+  };
+
+  private _touchMove = (event: TouchEvent) => {
+    const vector = parseVector(event.target);
+    const { behavior, radius, selectedPosition } = this.state;
+
+    if (
+      vector &&
+      behavior?.type === 'move' &&
+      radius &&
+      !radius.locked &&
+      (vector === selectedPosition || radius.fields.has(vector))
+    ) {
+      event.preventDefault();
+    }
+  };
+
+  private _clearPanState = () => {
+    this._lastEnteredPosition = null;
+    this._pointerPosition = null;
+    if (this._releasePointerLock) {
+      clearTimeout(this._releasePointerLock);
+    }
+    this._releasePointerLock = setTimeout(() => {
+      this._pointerLock.current = false;
+    }, 100);
+    document.removeEventListener('mouseleave', this._clearPanState);
+  };
+
+  private _mouseDown = (event: MouseEvent) => {
+    this._pointerPosition = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      distance: 0,
+      initial: true,
+    };
+    document.addEventListener('mouseleave', this._clearPanState);
+
+    const { editor } = this.props;
+    if (
+      editor &&
+      this.state.position &&
+      (event.target as HTMLElement)?.parentNode === this._maskRef.current
+    ) {
+      if (event.shiftKey || event.button === 2) {
+        this._update((actualState) => {
+          const { behavior, position } = actualState;
+          return position && behavior?.enterAlternative
+            ? behavior.enterAlternative(
+                position,
+                actualState,
+                this._actions,
+                editor!,
+              )
+            : null;
+        });
+      } else {
+        if (!editor.isDrawing) {
+          this._updateEditorState({ isDrawing: true });
+        }
+        this._update((actualState) => {
+          const { behavior, position } = actualState;
+          return position && behavior?.enter
+            ? behavior.enter(position, actualState, this._actions, {
+                ...editor,
+                isDrawing: true,
+              })
+            : null;
+        });
+      }
+    }
+  };
+
+  private _mouseUp = () => {
+    const { editor } = this.props;
+    if (!editor && this._lastEnteredPosition) {
+      this._enter(this._lastEnteredPosition);
+    }
+
+    this._clearPanState();
+
+    if (editor?.isDrawing) {
+      this._updateEditorState({
+        isDrawing: false,
+      });
+    }
+  };
+
+  private _getMaskElement = (vector: Vector) => {
+    return this._maskRef.current?.querySelector(`.${maskClassName(vector)}`);
+  };
+
+  private _scrollIntoView = async (
+    vectors: ReadonlyArray<Vector>,
+    force?: boolean,
+    direction?: VectorLike,
+  ) => {
+    if (!force && !this.props.autoPanning) {
+      return;
+    }
+
+    const mask = this._maskRef.current;
+    if (!vectors.length || !mask) {
+      return;
+    }
+
+    const element = this._getMaskElement(getAverageVector(vectors));
+    // Assume that the first and last vectors are the most distant.
+    const boundaries =
+      vectors.length === 1
+        ? [element]
+        : [vectors[0], vectors.at(-1)!].map(this._getMaskElement);
+
+    const scale = getScale(this.props.scale, mask);
+    if (
+      element &&
+      !boundaries.some(
+        (element) => element && isInView(element, scale, DoubleSize),
+      )
+    ) {
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: direction?.x && !direction.y ? 'nearest' : 'center',
+        inline: direction?.y && !direction.x ? 'nearest' : 'center',
+      });
+      return sleep(this._scheduleTimer, FastAnimationConfig, 'long');
+    }
+  };
+
+  override render() {
+    const {
+      props: {
+        animatedChildren,
+        children,
+        className,
+        createMessage,
+        currentUser,
+        deleteMessage,
+        disablePerformanceMetrics,
+        editor,
+        fogStyle,
+        gameId,
+        hasMessages,
+        mapName,
+        margin,
+        playerAchievement,
+        scale,
+        showCursor: propsShowCursor,
+        skipBanners,
+        tilted,
+        toggleLikeMessage,
+      },
+      state: {
+        additionalRadius,
+        animationConfig,
+        animations,
+        attackable,
+        behavior,
+        currentViewer,
+        effectState,
+        gameInfoState,
+        lastActionResponse,
+        map,
+        messages,
+        objectiveRadius,
+        paused,
+        playerDetails,
+        position,
+        radius,
+        replayState,
+        selectedBuilding,
+        selectedMessagePosition,
+        selectedPosition,
+        selectedUnit,
+        showCursor,
+        showSkipDialogue,
+        tileSize,
+        vision,
+        zIndex,
+      },
+    } = this;
+    const { height, width } = map.size;
+
+    const highlightedPositions =
+      !behavior || behaviorWithHighlightedFields.has(behavior.type)
+        ? this.state.highlightedPositions
+        : null;
+    const isFloating = this.props.style === 'floating';
+    const StateComponent = behavior?.component;
+    return (
+      <div
+        className={cx(className, style)}
+        style={scale ? { [cssVar('scale')]: scale } : undefined}
+      >
+        <div
+          style={{
+            margin: tilted
+              ? margin === 'minimal'
+                ? `${tileSize * 2}px auto ${tileSize * 4}px`
+                : `${tileSize * 12}px ${tileSize * 7 * Math.floor(map.size.height / 4)}px ${
+                    isFloating
+                      ? tileSize * 5 * Math.floor(map.size.height / 4)
+                      : 0
+                  }px`
+              : isFloating
+                ? `${tileSize * 10}px ${tileSize * 20}px`
+                : `${tileSize}px auto 0`,
+          }}
+        >
+          <div
+            className={cx(
+              mapStyle,
+              (replayState.isReplaying && replayState.isPaused) || paused
+                ? pausedStyle
+                : null,
+              tilted && tiltedStyle,
+              hasShake(animations) &&
+                !replayState.isPaused &&
+                !paused &&
+                explosionAnimation,
+            )}
+            onMouseLeave={this._reset}
+            onPointerDown={this._pointerDown}
+            onPointerUp={this._pointerUp}
+            style={{
+              [cssVar('animation-duration')]:
+                `${animationConfig.AnimationDuration}ms`,
+              [cssVar('perspective-height')]: Math.max(
+                0,
+                map.size.height - MaxSize / 2,
+              ),
+
+              height: tileSize * height,
+              width: tileSize * width,
+              zoom: applyVar('scale'),
+            }}
+          >
+            <MapComponent
+              animationConfig={animationConfig}
+              animations={animations}
+              attackable={attackable}
+              behavior={behavior}
+              extraUnits={effectState?.extraUnits}
+              fogStyle={fogStyle}
+              getLayer={getLayer}
+              map={map}
+              messages={hasMessages ? messages : undefined}
+              onAnimationComplete={this._animationComplete}
+              paused={paused}
+              playerDetails={playerDetails}
+              position={position}
+              radius={radius}
+              requestFrame={this._requestFrame}
+              scheduleTimer={this._scheduleTimer}
+              selectedBuilding={selectedBuilding}
+              selectedPosition={selectedPosition}
+              selectedUnit={selectedUnit}
+              style={isFloating ? 'floating' : 'none'}
+              tileSize={tileSize}
+              vision={vision}
+            />
+            {objectiveRadius?.map((radius, index) => (
+              <Radius
+                currentViewer={currentViewer}
+                getLayer={() => getLayer(0, 'building')}
+                key={index}
+                map={map}
+                radius={radius}
+                size={tileSize}
+                vision={vision}
+              />
+            ))}
+            {effectState?.radius.map((radius, index) => (
+              <Radius
+                currentViewer={currentViewer}
+                getLayer={() => getLayer(0, 'unit')}
+                key={index}
+                map={map}
+                radius={radius}
+                size={tileSize}
+                vision={vision}
+              />
+            ))}
+            {additionalRadius && (
+              <Radius
+                currentViewer={currentViewer}
+                getLayer={getLayer}
+                map={map}
+                opposite
+                radius={additionalRadius}
+                selectedPosition={selectedPosition}
+                selectedUnit={selectedUnit}
+                size={tileSize}
+                vision={vision}
+              />
+            )}
+            {radius && (
+              <Radius
+                currentViewer={currentViewer}
+                getLayer={getLayer}
+                key={behavior?.type}
+                map={map}
+                radius={radius}
+                selectedPosition={selectedPosition}
+                // Do not pass the selected unit if we are showing the radius for dropping a transported unit.
+                selectedUnit={
+                  behavior?.type === 'dropUnit' ? null : selectedUnit
+                }
+                size={tileSize}
+                vision={vision}
+              />
+            )}
+            {(propsShowCursor || propsShowCursor == null) &&
+              showCursor &&
+              !replayState.isReplaying && (
+                <>
+                  <Cursor
+                    color={
+                      behavior?.type === 'message' &&
+                      canPlaceMessage(this.state, position)
+                        ? 'red'
+                        : undefined
+                    }
+                    position={position}
+                    size={tileSize}
+                    zIndex={zIndex - 4}
+                  />
+                  {editor?.mode === 'design' && (
+                    <MapEditorExtraCursors
+                      color="red"
+                      drawingMode={editor?.drawingMode}
+                      mapSize={map.size}
+                      origin={position}
+                      size={tileSize}
+                      zIndex={zIndex}
+                    />
+                  )}
+                </>
+              )}
+            <MapAnimations
+              actions={this._actions}
+              animationComplete={this._animationComplete}
+              getLayer={getLayer}
+              scale={scale}
+              skipBanners={skipBanners}
+              state={this.state}
+            />
+            {editor?.selected?.decorator ||
+            editor?.selected?.eraseDecorators ? (
+              <MaskWithSubtiles
+                enter={this._enter}
+                map={map}
+                ref={this._maskRef}
+                select={this._select}
+                tileSize={tileSize}
+                zIndex={zIndex - 2}
+              />
+            ) : (
+              <Mask
+                attackable={attackable}
+                cancel={this._cancel}
+                currentViewer={currentViewer}
+                enter={this._enter}
+                expand={!editor}
+                map={map}
+                messages={messages}
+                pointerLock={this._pointerLock}
+                radius={radius}
+                ref={this._maskRef}
+                select={this._select}
+                selectedPosition={selectedPosition}
+                showFieldInfo={editor ? () => void 0 : this._showFieldInfo}
+                tileSize={tileSize}
+                zIndex={zIndex - 2}
+              />
+            )}
+            <div ref={this._wrapperRef}>
+              <AnimatePresence>
+                {highlightedPositions?.map((vector) => {
+                  const unit = map.units.get(vector);
+                  return (
+                    unit && (
+                      <NamedPosition
+                        animationConfig={animationConfig}
+                        currentViewer={currentViewer}
+                        key={`named-position-${vector}`}
+                        map={map}
+                        playerDetails={playerDetails}
+                        tileSize={tileSize}
+                        unit={unit}
+                        vector={vector}
+                        zIndex={zIndex}
+                      />
+                    )
+                  );
+                })}
+                {editor && position && (
+                  <PositionHint
+                    animationConfig={animationConfig}
+                    key={`position-hint-${position}`}
+                    map={map}
+                    tileSize={tileSize}
+                    vector={position}
+                    zIndex={zIndex}
+                  />
+                )}
+                {StateComponent && (
+                  <StateComponent
+                    actions={this._actions}
+                    editor={editor}
+                    key="state-component"
+                    state={this.state}
+                  />
+                )}
+                {animatedChildren?.(this.state)}
+              </AnimatePresence>
+              {children?.(this.state, this._actions)}
+            </div>
+          </div>
+          {!disablePerformanceMetrics &&
+            lastActionResponse?.type === 'GameEnd' &&
+            lastActionResponse.toPlayer &&
+            currentViewer != null &&
+            map.matchesTeam(lastActionResponse.toPlayer, currentViewer) && (
+              <MapPerformanceMetrics
+                key="performance-metrics"
+                map={map}
+                mapName={mapName}
+                player={currentViewer}
+                playerAchievement={playerAchievement}
+                scrollIntoView={this._scrollIntoView}
+              />
+            )}
+        </div>
+        {gameInfoState && (
+          <GameDialog
+            endGame={this.props.endGame ? this._endGame : undefined}
+            gameId={gameId}
+            onClose={this._hideGameInfo}
+            playerAchievement={playerAchievement}
+            spectatorCodes={this.props.spectatorCodes}
+            state={this.state}
+          />
+        )}
+        <Portal>
+          <AnimatePresence>
+            {showSkipDialogue && (
+              <SkipMessages
+                key={`messages-${String(this._skipDialogueTimer)}`}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {hasMessages &&
+              highlightedPositions?.map((vector) => {
+                const message = messages.get(vector);
+                return (
+                  message && (
+                    <MapMessage
+                      animationConfig={animationConfig}
+                      biome={map.config.biome}
+                      currentUser={currentUser}
+                      deleteMessage={deleteMessage}
+                      key={`message-${vector}`}
+                      maskRef={this._maskRef}
+                      message={message}
+                      playerDetails={playerDetails}
+                      scale={scale}
+                      shouldDelay={
+                        map.units.has(vector) || map.buildings.has(vector)
+                      }
+                      toggleLikeMessage={toggleLikeMessage}
+                      update={this._update}
+                      vector={vector}
+                      zIndex={zIndex}
+                    />
+                  )
+                );
+              })}
+            {hasMessages &&
+              behavior?.type === 'message' &&
+              selectedMessagePosition &&
+              currentUser &&
+              createMessage && (
+                <CreateMapMessage
+                  animationConfig={animationConfig}
+                  biome={map.config.biome}
+                  maskRef={this._maskRef}
+                  onCreate={createMessage}
+                  player={currentViewer}
+                  playerDetails={playerDetails}
+                  scale={scale}
+                  update={this._update}
+                  user={currentUser}
+                  vector={selectedMessagePosition}
+                  zIndex={zIndex}
+                />
+              )}
+          </AnimatePresence>
+        </Portal>
+      </div>
+    );
+  }
+}
+
+GameMap.contextType = ScrollRestore;
+
+const vars = new CSSVariables<'transform'>('m');
+const style = css`
+  position: relative;
+`;
+
+const mapStyle = css`
+  ${vars.set('transform', 'none')}
+
+  -webkit-user-drag: none;
+  image-rendering: pixelated;
+  position: relative;
+
+  transform: ${vars.apply('transform')};
+
+  * {
+    animation-play-state: running;
+  }
+`;
+
+const tiltedStyle = css`
+  ${vars.set('transform', applyVar('perspective-transform'))}
+
+  box-shadow: ${applyVar('border-color-light')} 0 8px 10px;
+`;
+
+const pausedStyle = css`
+  * {
+    animation-play-state: paused !important;
+  }
+`;
+
+const explosionAnimation = css`
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  animation-delay: calc(${applyVar('animation-duration')} / 4);
+  animation-duration: ${applyVar('animation-duration')};
+  animation-name: ${keyframes`
+    0% {
+      transform: ${vars.apply('transform')} translate3d(0, 0, 0);
+    }
+    25% {
+      transform: ${vars.apply('transform')} translate3d(0, 2.5px, 0);
+    }
+    50% {
+      transform: ${vars.apply('transform')} translate3d(0, -2.5px, 0);
+    }
+    75% {
+      transform: ${vars.apply('transform')} translate3d(-1.3px, 0, 0);
+    }
+    100% {
+      transform: ${vars.apply('transform')} translate3d(1.3px, 0, 0);
+    }
+  `};
+`;
