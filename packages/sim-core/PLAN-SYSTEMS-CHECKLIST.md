@@ -88,14 +88,14 @@ Legend
 
 ---
 
-- 6. Bridges (DoBridge)
+- [x] 6. Bridges (DoBridge)
   - References:
     - Plan: MapScan → Bridges
     - Spec: “Bridge open/close (DoBridge)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Open/close patterns and boat distance logic integrated.
-    - [ ] Tests: bridge tiles flip based on stubbed boat distance + RNG.
+  - [x] Success criteria:
+    - [x] Open/close patterns and boat distance logic integrated.
+    - [x] Tests: bridge tiles flip based on stubbed boat distance + RNG.
 
 ---
 
