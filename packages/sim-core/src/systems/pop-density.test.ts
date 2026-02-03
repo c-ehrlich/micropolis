@@ -30,11 +30,16 @@ describe('PopDenScan', () => {
     popDenScan(state, context);
 
     const popDensity = store.getLayer('popDensity') as Uint8Array;
+    // These values follow the C `PopDenScan` smoothing chain:
+    // RZB => RZPop = 16, shifted << 3 = 128 at tem[5,5], then DoSmooth -> DoSmooth2 -> DoSmooth.
+    // The final PopDensity is tem2 << 1, yielding 52/48/24 at these neighbors.
     expect(popDensity[halfIndex(5, 5)]).toBe(52);
     expect(popDensity[halfIndex(6, 5)]).toBe(48);
     expect(popDensity[halfIndex(6, 6)]).toBe(24);
 
     const comRate = store.getLayer('comRate') as Int16Array;
+    // `DistIntMarket` uses z = 64 - (GetDisCC(x<<2, y<<2) << 2).
+    // With CCx2/CCy2 = 0,0: (0,0) => 64; (1,0) => 64 - 16 = 48.
     expect(comRate[smallIndex(0, 0)]).toBe(64);
     expect(comRate[smallIndex(1, 0)]).toBe(48);
 

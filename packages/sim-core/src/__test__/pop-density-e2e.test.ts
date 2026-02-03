@@ -31,6 +31,7 @@ describe('PopDensity E2E', () => {
     dispatchSimPhase(14, state, context, { popDenScan });
 
     const popDensity = store.getLayer('popDensity') as Uint8Array;
+    // From `PopDenScan` smoothing with RZB (RZPop=16, <<3 => 128), then tem2 << 1 = 52.
     expect(popDensity[halfIndex(5, 5)]).toBe(52);
 
     store.commitTick();
