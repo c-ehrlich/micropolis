@@ -183,33 +183,33 @@ Legend
     - Plan: PopDen
     - Spec: “Population Density and Commercial Rate”
     - Micropolis: `s_pop.c`
-  - [ ] Success criteria:
-    - [ ] PopDenScan, GetPDen, DistIntMarket implemented.
-    - [ ] City center derived from population weights.
-    - [ ] Tests: expected pop density and ComRate on tiny map.
+  - [x] Success criteria:
+    - [x] PopDenScan, GetPDen, DistIntMarket implemented.
+    - [x] City center derived from population weights.
+    - [x] Tests: expected pop density and ComRate on tiny map.
 
 ---
 
-- 14. Fire Coverage (FireAnalysis)
+- [x] 14. Fire Coverage (FireAnalysis)
   - References:
     - Plan: Fire Coverage
     - Spec: “Fire Coverage”
     - Micropolis: `s_fire.c`
-  - [ ] Success criteria:
-    - [ ] SmoothFSMap x3, FireRate copy, map flags set.
-    - [ ] Tests: FireStMap smoothing yields expected FireRate.
+  - [x] Success criteria:
+    - [x] SmoothFSMap x3, FireRate copy, map flags set.
+    - [x] Tests: FireStMap smoothing yields expected FireRate.
 
 ---
 
-- 15. Budget and Funding
+- [x] 15. Budget and Funding
   - References:
     - Plan: Budget and Funding
     - Spec: “Budget and Funding”
     - Micropolis: `s_budget.c`, `w_budget.c`
-  - [ ] Success criteria:
-    - [ ] CollectTax + DoBudgetNow + UpdateFundEffects implemented.
-    - [ ] Auto-budget logic + messages implemented.
-    - [ ] Tests: deterministic funds, effects scaling, and auto-budget behavior.
+  - [x] Success criteria:
+    - [x] CollectTax + DoBudgetNow + UpdateFundEffects implemented.
+    - [x] Auto-budget logic + messages implemented.
+    - [x] Tests: deterministic funds, effects scaling, and auto-budget behavior.
 
 ---
 
@@ -218,10 +218,10 @@ Legend
     - Plan: Census and Graphs
     - Spec: “Census and Graphs”
     - Micropolis: `s_census.c` / `s_hist.c`
-  - [ ] Success criteria:
-    - [ ] ClearCensus, TakeCensus, Take2Census implemented (history shifts + ramps).
-    - [ ] NeedHosp/NeedChurch set correctly.
-    - [ ] Tests: history shift correctness and ramp updates.
+  - [x] Success criteria:
+    - [x] ClearCensus, TakeCensus, Take2Census implemented (history shifts + ramps).
+    - [x] NeedHosp/NeedChurch set correctly.
+    - [x] Tests: history shift correctness and ramp updates.
 
 ---
 
