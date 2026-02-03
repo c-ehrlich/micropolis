@@ -132,12 +132,12 @@ Legend
     - Plan: Zoning and Growth
     - Spec: “Zoning and Growth” (DoZone/DoResidential/DoCommercial/DoIndustrial etc.)
     - Micropolis: `s_zone.c`
-  - [ ] Success criteria:
-    - [ ] Zone dispatch works with powered/unpowered logic.
-    - [ ] Special zones (plant, nuclear, police, fire, stadium, airport, port) implemented.
-    - [ ] Growth/decay + plop logic matches spec.
-    - [ ] ROG updates (IncROG/DecROGMem) match limits.
-    - [ ] Tests: deterministic zone transitions under fixed seed.
+  - [x] Success criteria:
+    - [x] Zone dispatch works with powered/unpowered logic.
+    - [x] Special zones (plant, nuclear, police, fire, stadium, airport, port) implemented.
+    - [x] Growth/decay + plop logic matches spec.
+    - [x] ROG updates (IncROG/DecROGMem) match limits.
+    - [x] Tests: deterministic zone transitions under fixed seed.
 
 ---
 
