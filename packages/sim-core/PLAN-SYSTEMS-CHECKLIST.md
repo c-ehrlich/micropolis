@@ -101,16 +101,16 @@ Legend
 
 ## 7) Fire + Flood + Radiation (MapScan)
 
-- [ ] References:
-  - [ ] Plan: MapScan → Fire/Flood/Rad
-  - [ ] Spec: “DoFire”, “FireZone”, “DoRadTile”, “DoFlood”
-  - [ ] Micropolis: `s_scan.c`, `s_disast.c`
-- [ ] Success criteria:
-  - [ ] Fire spread/burnout matches rate rules and zone explosions.
-  - [ ] FireZone decreases ROG and sets BULLBIT in zone footprint.
-  - [ ] Radiation decays to dirt.
-  - [ ] Flood spread/decay matches FloodCnt behavior.
-  - [ ] Tests: controlled RNG yields expected tile transitions.
+- [x] References:
+  - [x] Plan: MapScan → Fire/Flood/Rad
+  - [x] Spec: “DoFire”, “FireZone”, “DoRadTile”, “DoFlood”
+  - [x] Micropolis: `s_scan.c`, `s_disast.c`
+- [x] Success criteria:
+  - [x] Fire spread/burnout matches rate rules and zone explosions.
+  - [x] FireZone decreases ROG and sets BULLBIT in zone footprint.
+  - [x] Radiation decays to dirt.
+  - [x] Flood spread/decay matches FloodCnt behavior.
+  - [x] Tests: controlled RNG yields expected tile transitions.
 
 ---
 

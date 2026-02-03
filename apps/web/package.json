@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "pnpm -w eslint src vite.config.ts",
+    "lint": "pnpm -w eslint apps/web/src apps/web/vite.config.ts",
     "generate-routes": "tsr generate",
     "typecheck": "pnpm run generate-routes && tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root apps/web",
