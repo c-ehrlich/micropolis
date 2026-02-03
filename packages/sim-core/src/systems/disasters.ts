@@ -1,3 +1,4 @@
+import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
@@ -89,8 +90,12 @@ export function doFire(
     if ((rng.next16() & 7) !== 0) {
       continue;
     }
-    const xt = scan.x + FIRE_DX[z];
-    const yt = scan.y + FIRE_DY[z];
+    const dx = FIRE_DX[z];
+    const dy = FIRE_DY[z];
+    assertDefined(dx);
+    assertDefined(dy);
+    const xt = scan.x + dx;
+    const yt = scan.y + dy;
     if (!inBounds(xt, yt)) {
       continue;
     }
@@ -151,8 +156,12 @@ export function doFlood(
       if ((rng.next16() & 7) !== 0) {
         continue;
       }
-      const xt = scan.x + FLOOD_DX[z];
-      const yt = scan.y + FLOOD_DY[z];
+      const dx = FLOOD_DX[z];
+      const dy = FLOOD_DY[z];
+      assertDefined(dx);
+      assertDefined(dy);
+      const xt = scan.x + dx;
+      const yt = scan.y + dy;
       if (!inBounds(xt, yt)) {
         continue;
       }

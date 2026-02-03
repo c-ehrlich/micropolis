@@ -1,3 +1,4 @@
+import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
@@ -101,14 +102,22 @@ export function doBridge(
   if (scan.tileId === BRWV) {
     if ((context.rng.next16() & 3) === 0 && getBoatDistance() > 340) {
       for (let z = 0; z < 7; z += 1) {
-        const x = baseX + VDX[z];
-        const y = baseY + VDY[z];
+        const vdx = VDX[z];
+        const vdy = VDY[z];
+        assertDefined(vdx);
+        assertDefined(vdy);
+        const x = baseX + vdx;
+        const y = baseY + vdy;
         if (!inBounds(x, y)) {
           continue;
         }
         const index = indexFor(x, y);
-        if (((map[index] ?? 0) & LOMASK) === (VBRTAB[z] & LOMASK)) {
-          store.write('map', index, VBRTAB2[z]);
+        const vt1 = VBRTAB[z];
+        const vt2 = VBRTAB2[z];
+        assertDefined(vt1);
+        assertDefined(vt2);
+        if (((map[index] ?? 0) & LOMASK) === (vt1 & LOMASK)) {
+          store.write('map', index, vt2);
         }
       }
     }
@@ -118,14 +127,22 @@ export function doBridge(
   if (scan.tileId === BRWH) {
     if ((context.rng.next16() & 3) === 0 && getBoatDistance() > 340) {
       for (let z = 0; z < 7; z += 1) {
-        const x = baseX + HDX[z];
-        const y = baseY + HDY[z];
+        const hdx = HDX[z];
+        const hdy = HDY[z];
+        assertDefined(hdx);
+        assertDefined(hdy);
+        const x = baseX + hdx;
+        const y = baseY + hdy;
         if (!inBounds(x, y)) {
           continue;
         }
         const index = indexFor(x, y);
-        if (((map[index] ?? 0) & LOMASK) === (HBRTAB[z] & LOMASK)) {
-          store.write('map', index, HBRTAB2[z]);
+        const ht1 = HBRTAB[z];
+        const ht2 = HBRTAB2[z];
+        assertDefined(ht1);
+        assertDefined(ht2);
+        if (((map[index] ?? 0) & LOMASK) === (ht1 & LOMASK)) {
+          store.write('map', index, ht2);
         }
       }
     }
@@ -139,15 +156,23 @@ export function doBridge(
         const channelIndex = indexFor(baseX + 1, baseY);
         if ((map[channelIndex] ?? 0) === CHANNEL) {
           for (let z = 0; z < 7; z += 1) {
-            const x = baseX + VDX[z];
-            const y = baseY + VDY[z];
+            const vdx = VDX[z];
+            const vdy = VDY[z];
+            assertDefined(vdx);
+            assertDefined(vdy);
+            const x = baseX + vdx;
+            const y = baseY + vdy;
             if (!inBounds(x, y)) {
               continue;
             }
             const index = indexFor(x, y);
             const value = map[index] ?? 0;
-            if (value === CHANNEL || (value & SHAPE_MASK) === (VBRTAB2[z] & SHAPE_MASK)) {
-              store.write('map', index, VBRTAB[z]);
+            const vt1 = VBRTAB[z];
+            const vt2 = VBRTAB2[z];
+            assertDefined(vt1);
+            assertDefined(vt2);
+            if (value === CHANNEL || (value & SHAPE_MASK) === (vt2 & SHAPE_MASK)) {
+              store.write('map', index, vt1);
             }
           }
           return true;
@@ -160,15 +185,23 @@ export function doBridge(
       const channelIndex = indexFor(baseX, baseY - 1);
       if ((map[channelIndex] ?? 0) === CHANNEL) {
         for (let z = 0; z < 7; z += 1) {
-          const x = baseX + HDX[z];
-          const y = baseY + HDY[z];
+          const hdx = HDX[z];
+          const hdy = HDY[z];
+          assertDefined(hdx);
+          assertDefined(hdy);
+          const x = baseX + hdx;
+          const y = baseY + hdy;
           if (!inBounds(x, y)) {
             continue;
           }
           const index = indexFor(x, y);
           const value = map[index] ?? 0;
-          if (value === CHANNEL || (value & SHAPE_MASK) === (HBRTAB2[z] & SHAPE_MASK)) {
-            store.write('map', index, HBRTAB[z]);
+          const ht1 = HBRTAB[z];
+          const ht2 = HBRTAB2[z];
+          assertDefined(ht1);
+          assertDefined(ht2);
+          if (value === CHANNEL || (value & SHAPE_MASK) === (ht2 & SHAPE_MASK)) {
+            store.write('map', index, ht1);
           }
         }
         return true;

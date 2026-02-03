@@ -336,8 +336,10 @@ export function doSpecialZone(
       }
       if (isInBounds(x + 1, y - 1)) {
         const radarIndex = indexFor(x + 1, y - 1);
+        const radarTile = map[radarIndex];
+        assertDefined(radarTile);
         if (powered) {
-          if ((map[radarIndex] & LOMASK) === RADAR) {
+          if ((radarTile & LOMASK) === RADAR) {
             store.write('map', radarIndex, RADAR + ANIMBIT + CONDBIT + BURNBIT);
           }
         } else {
@@ -895,22 +897,36 @@ export function setSmoke(
   if (!ANI_THIS[z]) {
     return;
   }
-  const xx = x + DX1[z]!;
-  const yy = y + DY1[z]!;
+  const dx = DX1[z];
+  const dy = DY1[z];
+  assertDefined(dx);
+  assertDefined(dy);
+  const xx = x + dx;
+  const yy = y + dy;
   if (!isInBounds(xx, yy)) {
     return;
   }
   const index = indexFor(xx, yy);
   const currentId = (system.map[index] ?? 0) & LOMASK;
   if (powered) {
-    if (currentId === ANI_TAB_C[z]) {
-      system.store.write('map', index, (SMOKEBASE + ANI_TAB_A[z]!) | ANIMBIT | CONDBIT | BURNBIT);
-      system.store.write('map', index, (SMOKEBASE + ANI_TAB_B[z]!) | ANIMBIT | CONDBIT | BURNBIT);
+    const animC = ANI_TAB_C[z];
+    assertDefined(animC);
+    const animA = ANI_TAB_A[z];
+    const animB = ANI_TAB_B[z];
+    assertDefined(animA);
+    assertDefined(animB);
+    if (currentId === animC) {
+      system.store.write('map', index, (SMOKEBASE + animA) | ANIMBIT | CONDBIT | BURNBIT);
+      system.store.write('map', index, (SMOKEBASE + animB) | ANIMBIT | CONDBIT | BURNBIT);
     }
   } else {
-    if (currentId > ANI_TAB_C[z]) {
-      system.store.write('map', index, ANI_TAB_C[z]! | CONDBIT | BURNBIT);
-      system.store.write('map', index, ANI_TAB_D[z]! | CONDBIT | BURNBIT);
+    const animC = ANI_TAB_C[z];
+    const animD = ANI_TAB_D[z];
+    assertDefined(animC);
+    assertDefined(animD);
+    if (currentId > animC) {
+      system.store.write('map', index, animC | CONDBIT | BURNBIT);
+      system.store.write('map', index, animD | CONDBIT | BURNBIT);
     }
   }
 }

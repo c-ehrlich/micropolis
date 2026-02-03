@@ -1,3 +1,4 @@
+import { assertDefined } from '../core/assert.ts';
 import { PowerMap, Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { MapStore } from '../core/map-store.ts';
 import type { SimContext } from '../core/sim-context.ts';
@@ -87,7 +88,9 @@ function setPowerBit(power: Uint16Array, x: number, y: number): void {
   if (powerWord >= PWRMAPSIZE) {
     return;
   }
-  power[powerWord] |= 1 << (x & 15);
+  const current = power[powerWord];
+  assertDefined(current);
+  power[powerWord] = current | (1 << (x & 15));
 }
 
 function testForCond(

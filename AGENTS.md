@@ -4,3 +4,12 @@
 - if your environment doesn't have the network access for `pnpm install`, run `pnpm install --offline` and tell me if that fails also, in that case i'll install it manually. give me the commands. it's usually something like:
   - `cd /Users/cje/dev/city/.worktrees/mapscan`
   - `CI=true pnpm install --store-dir /Users/cje/dev/city/.pnpm-store/v10`
+- when creating new functionality, make sure every function, class, etc. has jsdoc explaining which part of the c codebase in `ref/micropolis` it relates to. say if it's a 1:1 port or what is different.
+  - if you read an existing function that doesn't have this, and are confused by what it does, use a subagent to research this, and add/update the jsdoc string
+  - example docstring:
+  ```ts
+  /**
+  * Road eligibility check for the full traffic simulation.
+  * Mirrors `RoadTest` in `ref/micropolis/src/sim/s_traf.c`.
+  */
+  ```

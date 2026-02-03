@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { MicropolisRng } from '../core/rng.ts';
@@ -128,9 +129,16 @@ const setPattern = (
   pattern: readonly number[],
 ) => {
   for (let z = 0; z < 7; z += 1) {
-    const x = baseX + dx[z];
-    const y = baseY + dy[z];
-    store.write('map', indexFor(x, y), pattern[z]);
+    const dxz = dx[z];
+    const dyz = dy[z];
+    assertDefined(dxz);
+    assertDefined(dyz);
+    const x = baseX + dxz;
+    const y = baseY + dyz;
+
+    const pz = pattern[z];
+    assertDefined(pz);
+    store.write('map', indexFor(x, y), pz);
   }
 };
 
@@ -156,9 +164,17 @@ describe('DoBridge', () => {
 
     const map = store.getLayer('map') as Uint16Array;
     for (let z = 0; z < 7; z += 1) {
-      const x = baseX + VDX[z];
-      const y = baseY + VDY[z];
-      expect(map[indexFor(x, y)]).toBe(VBRTAB2[z]);
+      const dxz = VDX[z];
+      const dyz = VDY[z];
+      assertDefined(dxz);
+      assertDefined(dyz);
+      const x = baseX + dxz;
+      const y = baseY + dyz;
+      const tile = map[indexFor(x, y)];
+      assertDefined(tile);
+      const expected = VBRTAB2[z];
+      assertDefined(expected);
+      expect(tile).toBe(expected);
     }
   });
 
@@ -184,9 +200,17 @@ describe('DoBridge', () => {
 
     const map = store.getLayer('map') as Uint16Array;
     for (let z = 0; z < 7; z += 1) {
-      const x = baseX + HDX[z];
-      const y = baseY + HDY[z];
-      expect(map[indexFor(x, y)]).toBe(HBRTAB[z]);
+      const dxz = HDX[z];
+      const dyz = HDY[z];
+      assertDefined(dxz);
+      assertDefined(dyz);
+      const x = baseX + dxz;
+      const y = baseY + dyz;
+      const tile = map[indexFor(x, y)];
+      assertDefined(tile);
+      const expected = HBRTAB[z];
+      assertDefined(expected);
+      expect(tile).toBe(expected);
     }
   });
 
@@ -212,9 +236,17 @@ describe('DoBridge', () => {
 
     const map = store.getLayer('map') as Uint16Array;
     for (let z = 0; z < 7; z += 1) {
-      const x = baseX + HDX[z];
-      const y = baseY + HDY[z];
-      expect(map[indexFor(x, y)]).toBe(HBRTAB2[z]);
+      const dxz = HDX[z];
+      const dyz = HDY[z];
+      assertDefined(dxz);
+      assertDefined(dyz);
+      const x = baseX + dxz;
+      const y = baseY + dyz;
+      const tile = map[indexFor(x, y)];
+      assertDefined(tile);
+      const expected = HBRTAB2[z];
+      assertDefined(expected);
+      expect(tile).toBe(expected);
     }
   });
 });

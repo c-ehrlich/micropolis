@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { assertDefined } from '../core/assert.ts';
 import { PowerMap, Tile, TileFlag, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createSimContext } from '../core/sim-context.ts';
@@ -23,20 +24,28 @@ describe('setZPowerAt', () => {
 
     setZPowerAt(store, power, 5, 6, tileIndex, tile);
     const cleared = store.getLayer('map') as Uint16Array;
-    expect(cleared[tileIndex] & TileFlag.PWRBIT).toBe(0);
+    const clearedTile = cleared[tileIndex];
+    assertDefined(clearedTile);
+    expect(clearedTile & TileFlag.PWRBIT).toBe(0);
 
     const powerWord = (5 >> 4) + 6 * POWERMAPROW;
-    power[powerWord] |= 1 << (5 & 15);
+    const basePower = power[powerWord];
+    assertDefined(basePower);
+    power[powerWord] = basePower | (1 << (5 & 15));
     const unpoweredTile = cleared[tileIndex] ?? 0;
     setZPowerAt(store, power, 5, 6, tileIndex, unpoweredTile);
     const powered = store.getLayer('map') as Uint16Array;
-    expect(powered[tileIndex] & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    const poweredTile = powered[tileIndex];
+    assertDefined(poweredTile);
+    expect(poweredTile & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
 
     const plantIndex = indexFor(8, 9);
     store.write('map', plantIndex, Tile.POWERPLANT);
     setZPowerAt(store, power, 8, 9, plantIndex, Tile.POWERPLANT);
     const plant = store.getLayer('map') as Uint16Array;
-    expect(plant[plantIndex] & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    const plantTile = plant[plantIndex];
+    assertDefined(plantTile);
+    expect(plantTile & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
   });
 });
 
@@ -77,11 +86,15 @@ describe('doPowerScan', () => {
     const poweredCoords = [plant, ...wires];
     for (const coord of poweredCoords) {
       const word = (coord.x >> 4) + coord.y * POWERMAPROW;
-      expect(powered[word] & (1 << (coord.x & 15))).toBeTruthy();
+      const value = powered[word];
+      assertDefined(value);
+      expect(value & (1 << (coord.x & 15))).toBeTruthy();
     }
 
     const isolatedWord = (isolated.x >> 4) + isolated.y * POWERMAPROW;
-    expect(powered[isolatedWord] & (1 << (isolated.x & 15))).toBe(0);
+    const isolatedValue = powered[isolatedWord];
+    assertDefined(isolatedValue);
+    expect(isolatedValue & (1 << (isolated.x & 15))).toBe(0);
   });
 
   it('respects the CChr9 plant check when scanning neighbors', () => {
@@ -106,8 +119,12 @@ describe('doPowerScan', () => {
     const power = store.getLayer('power') as Uint16Array;
     const plantWord = (plant.x >> 4) + plant.y * POWERMAPROW;
     const wireWord = (wire.x >> 4) + wire.y * POWERMAPROW;
-    expect(power[plantWord] & (1 << (plant.x & 15))).toBeTruthy();
-    expect(power[wireWord] & (1 << (wire.x & 15))).toBe(0);
+    const plantPower = power[plantWord];
+    assertDefined(plantPower);
+    expect(plantPower & (1 << (plant.x & 15))).toBeTruthy();
+    const wirePower = power[wireWord];
+    assertDefined(wirePower);
+    expect(wirePower & (1 << (wire.x & 15))).toBe(0);
   });
 
   it('sends message 40 when capacity is exceeded', () => {
@@ -132,6 +149,8 @@ describe('doPowerScan', () => {
 
     const power = store.getLayer('power') as Uint16Array;
     const word = (plant.x >> 4) + plant.y * POWERMAPROW;
-    expect(power[word] & (1 << (plant.x & 15))).toBe(0);
+    const value = power[word];
+    assertDefined(value);
+    expect(value & (1 << (plant.x & 15))).toBe(0);
   });
 });
