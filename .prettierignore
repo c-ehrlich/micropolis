@@ -1,4 +1,4 @@
 **/*.md
 pnpm-lock.yaml
-ref/athena-crisis/**
-ref/micropolis/**
+ref/
+.worktrees/
