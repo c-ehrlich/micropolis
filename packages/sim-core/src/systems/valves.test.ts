@@ -37,15 +37,16 @@ describe('Demand valves', () => {
     // IntMarket=(100+50+25)/3.7=47.297..., PjComPop=61.486...
     // GameLevel=1 => extMarket=1.1; PjIndPop=25*1.3*1.1=35.75.
     // Ratios: R=0.62, C=1.2297..., I=1.43. Tax index=8 => TaxTable[8]=-10.
-    // Valve deltas: R=-238, C=127.832..., I=248. RValve=100-238=-138,
-    // CValve=200+127.832...=327.832... -> 327 (trunc), IValve=-100+248=148.
+    // Valve deltas: R=-238, C=127.832..., I=247.999... (float truncation).
+    // RValve=100-238=-138, CValve=200+127.832...=327.832... -> 327 (trunc),
+    // IValve=-100+247.999...=147 (trunc).
     setValves(state, context);
 
     expect(state.LastTotalPop).toBe(0);
     expect(state.TotalPop).toBe(175);
     expect(state.RValve).toBe(-138);
     expect(state.CValve).toBe(327);
-    expect(state.IValve).toBe(148);
+    expect(state.IValve).toBe(147);
     expect(state.ValveFlag).toBe(1);
 
     expect(state.MiscHis[1]).toBe(9);

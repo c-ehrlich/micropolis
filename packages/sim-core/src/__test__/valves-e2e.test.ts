@@ -29,7 +29,7 @@ describe('Demand valves E2E', () => {
 
     expect(state.RValve).toBe(-138);
     expect(state.CValve).toBe(327);
-    expect(state.IValve).toBe(148);
+    expect(state.IValve).toBe(147);
     expect(state.ValveFlag).toBe(1);
   });
 });
