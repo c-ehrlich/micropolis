@@ -11,5 +11,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root packages/sim-core",
     "test:watch": "pnpm -w vitest --root packages/sim-core"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.10",
+    "fast-check": "catalog:"
   }
 }
