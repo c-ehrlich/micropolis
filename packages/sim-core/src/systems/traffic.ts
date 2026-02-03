@@ -66,6 +66,10 @@ export const createTrafficCursor = (
   posStackY: new Array<number>(MAXDIS + 1).fill(0),
 });
 
+/**
+ * Road eligibility check for the full traffic simulation.
+ * Mirrors `RoadTest` in `ref/micropolis/src/sim/s_traf.c`.
+ */
 export const roadTest = (tile: number): boolean => {
   const id = tile & LOMASK;
   if (id < ROADBASE) {
@@ -295,6 +299,10 @@ export const setTrafMem = (
   }
 };
 
+/**
+ * Full traffic generation: finds a perimeter road, attempts a drive, and updates traffic density.
+ * Port of `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`.
+ */
 export const makeTraf = (
   state: SimState,
   context: SimContext,

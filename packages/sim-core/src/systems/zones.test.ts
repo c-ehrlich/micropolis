@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PowerMap, Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createRng } from '../core/rng.ts';
+import type { SimContextOptions } from '../core/sim-context.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
 import { comPlop, createZoneSystem, decROGMem, doResIn, doZone, zonePlop } from './zones.ts';
@@ -13,7 +14,7 @@ const { POWERMAPROW } = PowerMap;
 const indexFor = (x: number, y: number) => x * WORLD_Y + y;
 const smallIndex = (x: number, y: number) => (x >> 3) * SmY + (y >> 3);
 
-const createHarness = (seed = 1, hooks: Parameters<typeof createSimContext>[0]['hooks'] = {}) => {
+const createHarness = (seed = 1, hooks: SimContextOptions['hooks'] = {}) => {
   const store = createClassicMapStore();
   const rng = createRng(seed);
   const context = createSimContext({ store, rng, hooks });

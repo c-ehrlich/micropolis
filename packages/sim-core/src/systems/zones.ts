@@ -377,7 +377,7 @@ export function doIndustrial(
   setSmoke(system, x, y, tileId, powered);
   const tpop = izPop(tileId);
   state.IndPop += tpop;
-  const trfGood = tpop > rng.rand(5) ? makeTraf(system, x, y, 2, options) : 1;
+  const trfGood = tpop > rng.rand(5) ? makeTrafSimplified(system, x, y, 2, options) : 1;
 
   if (trfGood === -1) {
     doIndOut(system, x, y, tpop, rng.next16() & 1, options);
@@ -411,7 +411,7 @@ export function doCommercial(
   state.ComZPop += 1;
   const tpop = czPop(tileId);
   state.ComPop += tpop;
-  const trfGood = tpop > rng.rand(5) ? makeTraf(system, x, y, 1, options) : 1;
+  const trfGood = tpop > rng.rand(5) ? makeTrafSimplified(system, x, y, 1, options) : 1;
 
   if (trfGood === -1) {
     const value = getCRVal(system, x, y);
@@ -449,7 +449,7 @@ export function doResidential(
   state.ResZPop += 1;
   const tpop = tileId === FREEZ ? doFreePop(system, x, y) : rzPop(tileId);
   state.ResPop += tpop;
-  const trfGood = tpop > rng.rand(35) ? makeTraf(system, x, y, 0, options) : 1;
+  const trfGood = tpop > rng.rand(35) ? makeTrafSimplified(system, x, y, 0, options) : 1;
 
   if (trfGood === -1) {
     const value = getCRVal(system, x, y);
@@ -1009,7 +1009,11 @@ export function doMeltdown(system: ZoneSystemContext, x: number, y: number): voi
   system.context.hooks.sendMesAt(-43, x, y);
 }
 
-export function roadTest(tile: number): boolean {
+/**
+ * Simplified road check used by zoning heuristics (not the full traffic simulation).
+ * This exists to allow lightweight, hookable traffic gating for zones.
+ */
+function roadTestSimplified(tile: number): boolean {
   const tileId = tile & LOMASK;
   if (tileId < ROADBASE) {
     return false;
@@ -1031,14 +1035,18 @@ export function findPerimeterRoad(system: ZoneSystemContext, x: number, y: numbe
     if (!isInBounds(tx, ty)) {
       continue;
     }
-    if (roadTest(map[indexFor(tx, ty)] ?? 0)) {
+    if (roadTestSimplified(map[indexFor(tx, ty)] ?? 0)) {
       return true;
     }
   }
   return false;
 }
 
-export function makeTraf(
+/**
+ * Simplified traffic gate for zoning: returns 1 if a perimeter road exists, -1 otherwise.
+ * Not the same as `systems/traffic.makeTraf`, which performs the full traffic simulation.
+ */
+function makeTrafSimplified(
   system: ZoneSystemContext,
   x: number,
   y: number,
