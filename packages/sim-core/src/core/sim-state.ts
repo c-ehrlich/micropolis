@@ -100,6 +100,7 @@ export interface SimState {
   TrafficAverage: number;
   CrimeRamp: number;
   PolluteRamp: number;
+  DonDither: number;
 
   // Power + traffic maxima
   TrafMaxX: number;
@@ -263,6 +264,7 @@ export function createSimState(): SimState {
     TrafficAverage: 0,
     CrimeRamp: 0,
     PolluteRamp: 0,
+    DonDither: 0,
 
     // Power + traffic maxima
     TrafMaxX: 0,
