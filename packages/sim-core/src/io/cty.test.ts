@@ -172,7 +172,9 @@ describe('city file persistence', () => {
     expect(getOrThrow(decoded.map[0])).toBe(0);
     expect(getOrThrow(decoded.map[size.height - 1])).toBe(size.height - 1);
     expect(getOrThrow(decoded.map[size.height])).toBe(256);
-    expect(getOrThrow(decoded.map[classicLength - 1])).toBe((59 * 256 + (size.height - 1)) & 0xffff);
+    expect(getOrThrow(decoded.map[classicLength - 1])).toBe(
+      (59 * 256 + (size.height - 1)) & 0xffff,
+    );
   });
 
   it('rejects files smaller than the target build size', () => {
