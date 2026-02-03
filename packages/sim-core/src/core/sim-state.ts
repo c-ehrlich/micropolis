@@ -1,5 +1,6 @@
 import { CITY_HISTORY_LENGTH, CITY_MISC_LENGTH } from '../io/cty.ts';
 import { PowerMap } from './constants.ts';
+import { MAP_FLAG_COUNT } from './map-flags.ts';
 
 export const PROBLEM_COUNT = 10;
 export const PROBLEM_ORDER_COUNT = 4;
@@ -146,6 +147,7 @@ export interface SimState {
 
   // Flags / init state
   NewMap: number;
+  NewMapFlags: Uint8Array;
   NewGraph: number;
   NewPower: number;
   DoInitialEval: number;
@@ -296,6 +298,7 @@ export function createSimState(): SimState {
 
     // Flags / init state
     NewMap: 0,
+    NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
     NewGraph: 0,
     NewPower: 0,
     DoInitialEval: 0,

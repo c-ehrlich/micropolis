@@ -190,14 +190,14 @@ Legend
 
 ---
 
-- 14. Fire Coverage (FireAnalysis)
+- [x] 14. Fire Coverage (FireAnalysis)
   - References:
     - Plan: Fire Coverage
     - Spec: “Fire Coverage”
     - Micropolis: `s_fire.c`
-  - [ ] Success criteria:
-    - [ ] SmoothFSMap x3, FireRate copy, map flags set.
-    - [ ] Tests: FireStMap smoothing yields expected FireRate.
+  - [x] Success criteria:
+    - [x] SmoothFSMap x3, FireRate copy, map flags set.
+    - [x] Tests: FireStMap smoothing yields expected FireRate.
 
 ---
 
