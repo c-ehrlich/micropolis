@@ -154,15 +154,15 @@ Legend
 
 ---
 
-- 11. PTL (Pollution/Terrain/Land Value)
+- [x] 11. PTL (Pollution/Terrain/Land Value)
   - References:
     - Plan: PTLScan
     - Spec: “Pollution, Terrain, Land Value”
     - Micropolis: `s_poll.c` / `s_ptl.c` (or equivalent)
-  - [ ] Success criteria:
-    - [ ] PTLScan fills tem/Qtem, LandValueMem, PollutionMem, averages + maxima.
-    - [ ] SmoothTerrain and smoothing passes implemented (with optional dithering flag).
-    - [ ] Tests: small map expected LV/pollution outputs.
+  - [x] Success criteria:
+    - [x] PTLScan fills tem/Qtem, LandValueMem, PollutionMem, averages + maxima.
+    - [x] SmoothTerrain and smoothing passes implemented (with optional dithering flag).
+    - [x] Tests: small map expected LV/pollution outputs.
 
 ---
 
