@@ -43,6 +43,10 @@ describe('Budget system', () => {
     state.RailTotal = 3;
     state.AvCityTax = 96;
 
+    // Spec/C: RoadFund=(RoadTotal + RailTotal*2)*RLevels[GameLevel]
+    // RLevels[1]=0.9 -> (10 + 3*2) * 0.9 = 14.4 => 14 (trunc).
+    // Spec/C: TaxFund=((TotalPop*LVAverage)/120) * CityTax * FLevels[GameLevel]
+    // ((100*10)/120)=8.33.. => 8, *7=56, *1.2=67.2 => 67 (trunc).
     collectTax(state, context);
 
     expect(state.PoliceFund).toBe(500);
@@ -80,6 +84,8 @@ describe('Budget system', () => {
 
     doBudgetNow(state, context, false);
 
+    // Spec/C: allocate in order road -> fire -> police with remaining funds.
+    // 150 total => road=100 (100%), fire=50 (50%), police=0 (0%).
     expect(state.roadPercent).toBe(1);
     expect(state.firePercent).toBeCloseTo(0.5);
     expect(state.policePercent).toBe(0);

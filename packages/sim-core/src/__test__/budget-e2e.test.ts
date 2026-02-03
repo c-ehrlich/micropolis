@@ -26,6 +26,8 @@ describe('Budget E2E', () => {
     state.RoadTotal = 10;
     state.RailTotal = 3;
 
+    // Same spec/C arithmetic as budget unit test:
+    // RoadFund=14, TaxFund=67, spend totals=714 => TotalFunds 1000 + 67 - 714 = 353.
     dispatchSimPhase(9, state, context, { collectTax });
 
     expect(state.TotalFunds).toBe(353);
