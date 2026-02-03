@@ -214,13 +214,16 @@ describe('MapScan dispatch ordering', () => {
 
     const powerLayer = store.getLayer('power') as Uint16Array;
     const powerWord = (powered.x >> 4) + powered.y * POWERMAPROW;
-    powerLayer[powerWord] |= 1 << (powered.x & 15);
+    const powerMask = 1 << (powered.x & 15);
+    powerLayer[powerWord] = (powerLayer[powerWord] ?? 0) | powerMask;
 
     mapScanSlice(state, context, powered.x, powered.x + 2);
 
     const map = store.getLayer('map') as Uint16Array;
-    expect(map[indexFor(powered.x, powered.y)] & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
-    expect(map[indexFor(unpowered.x, unpowered.y)] & TileFlag.PWRBIT).toBe(0);
+    const poweredTile = map[indexFor(powered.x, powered.y)] ?? 0;
+    const unpoweredTile = map[indexFor(unpowered.x, unpowered.y)] ?? 0;
+    expect(poweredTile & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    expect(unpoweredTile & TileFlag.PWRBIT).toBe(0);
   });
 
   it('increments FirePop and gates fire handler by RNG', () => {

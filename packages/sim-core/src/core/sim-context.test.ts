@@ -41,7 +41,7 @@ describe('SimContext hooks', () => {
     const context = createSimContext();
 
     expect(() => context.hooks.destroyAllSprites()).not.toThrow();
-    expect(() => context.hooks.generateTrain()).not.toThrow();
+    expect(() => context.hooks.generateTrain(1, 2)).not.toThrow();
     expect(() => context.hooks.generateShip()).not.toThrow();
     expect(() => context.hooks.generatePlane()).not.toThrow();
     expect(() => context.hooks.generateCopter()).not.toThrow();

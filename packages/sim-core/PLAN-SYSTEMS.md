@@ -53,7 +53,7 @@ A single struct holding everything the SPEC names as global state. Suggested cat
 
 ### 3) External hooks interface (core expects these)
 
-- Sprite system: DestroyAllSprites, GenerateTrain/Ship/Plane/Copter, GetSprite, MoveObjects,
+- Sprite system: DestroyAllSprites, GenerateTrain(x,y)/Ship/Plane/Copter, GetSprite, MoveObjects,
   MakeExplosion/MakeExplosionAt, MakeSound, DoEarthQuake, StopEarthquake.
 - UI: DoUpdateHeads, doAllGraphs, ChangeCensus, ChangeEval, drawBudgetWindow, drawCurrPercents.
 - Messages/scenarios: SendMes, SendMesAt, DoLoseGame, DoWinGame, UISet\* (where applicable).
@@ -106,7 +106,7 @@ Simulate(mod16) phases:
 
 - MapScan(x1,x2): iterate tiles and dispatch.
 - DoRoad(): deterioration, bridge handling, traffic density rendering.
-- DoRail(): deterioration, GenerateTrain().
+- DoRail(): deterioration, GenerateTrain(x,y).
 - DoBridge(): open/close logic with boat distance hook.
 - DoFire(): spread + burnout logic.
 - FireZone(): burnable flag + ROG penalty.

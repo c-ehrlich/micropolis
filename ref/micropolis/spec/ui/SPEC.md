@@ -404,7 +404,7 @@ Overlay mode state machine in `DrawOverlay`:
 - Collides with buses or trains (except frame 5) to explode if disasters enabled.
 
 ### Sprite generation
-- `GenerateTrain` spawns train when `TotalPop > 20` and no train exists, 1/25 chance.
+- `GenerateTrain(x,y)` spawns train when `TotalPop > 20` and no train exists, 1/25 chance.
 - `GenerateBus` spawns bus if none exists, 1/25 chance.
 - `GenerateShip` spawns from world edges if channel tiles exist (probabilistic checks).
 - `GenerateCopter` / `GeneratePlane` spawn if none exists.
