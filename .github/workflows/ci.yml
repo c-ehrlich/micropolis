@@ -23,6 +23,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm lint
+      - name: Build Web (Generate Routes)
+        run: pnpm --filter @city/web build
       - name: Typecheck
         run: pnpm typecheck
       - name: Test
