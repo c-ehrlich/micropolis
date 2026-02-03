@@ -1,2 +1,5 @@
 - make sure to run `pnpm typecheck`, `pnpm lint`, and `pnpm format` when you're done. don't run them after every single step, just before you cede control back to me.
 - reminder that the code we're porting from is in C, so some aspects of math will be different (for example division of two integers), be sure to reference source files where necessary to check what the original behaviour is and implement something that will behave the same in typescript
+- if your environment doesn't have the network access for `pnpm install`, run `pnpm install --offline` and tell me if that fails also, in that case i'll install it manually. give me the commands. it's usually something like:
+  - `cd /Users/cje/dev/city/.worktrees/mapscan`
+  - `CI=true pnpm install --store-dir /Users/cje/dev/city/.pnpm-store/v10`

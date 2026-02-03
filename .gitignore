@@ -11,3 +11,4 @@ coverage
 
 # mac
 .DS_Store
+.pnpm-store
