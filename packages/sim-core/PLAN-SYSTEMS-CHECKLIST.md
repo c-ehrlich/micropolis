@@ -52,28 +52,28 @@ Legend
 
 ---
 
-- 3. MapScan Core + Tile Dispatch
+- [x] 3. MapScan Core + Tile Dispatch
   - References:
     - Plan: PLAN-SYSTEMS (Map Scan Pass)
     - Spec: SPEC “Map Scan Pass”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] MapScan(x1,x2) iterates slice correctly and dispatches based on tile categories.
-    - [ ] NewPower + CONDBIT path calls SetZPower().
-    - [ ] Tests: slice boundaries, dispatch correctness, and no out-of-slice mutations.
+  - [x] Success criteria:
+    - [x] MapScan(x1,x2) iterates slice correctly and dispatches based on tile categories.
+    - [x] NewPower + CONDBIT path calls SetZPower().
+    - [x] Tests: slice boundaries, dispatch correctness, and no out-of-slice mutations.
 
 ---
 
-- 4. Roads (DoRoad)
+- [x] 4. Roads (DoRoad)
   - References:
     - Plan: MapScan → Roads
     - Spec: “Road deterioration and traffic rendering (DoRoad)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Deterioration rules match spec (RoadEffect, Random gates, rubble vs river).
-    - [ ] Bridge handling callout (DoBridge) integrated.
-    - [ ] Traffic density rendering matches DenTab/ANIMBIT logic.
-    - [ ] Tests: known map -> expected rewrites; deterministic under seed.
+  - [x] Success criteria:
+    - [x] Deterioration rules match spec (RoadEffect, Random gates, rubble vs river).
+    - [x] Bridge handling callout (DoBridge) integrated.
+    - [x] Traffic density rendering matches DenTab/ANIMBIT logic.
+    - [x] Tests: known map -> expected rewrites; deterministic under seed.
 
 ---
 
