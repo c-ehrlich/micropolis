@@ -119,11 +119,11 @@ Legend
     - Plan: Power System
     - Spec: “Power System”
     - Micropolis: `s_power.c`
-  - [ ] Success criteria:
-    - [ ] Power stack + PowerMap implemented.
-    - [ ] DoPowerScan BFS and capacity quirk implemented.
-    - [ ] SetZPower sets/clears PWRBIT correctly.
-    - [ ] Tests: known plant + wire map powers expected tiles; capacity limit triggers SendMes(40).
+  - [x] Success criteria:
+    - [x] Power stack + PowerMap implemented.
+    - [x] DoPowerScan BFS and capacity quirk implemented.
+    - [x] SetZPower sets/clears PWRBIT correctly.
+    - [x] Tests: known plant + wire map powers expected tiles; capacity limit triggers SendMes(40).
 
 ---
 

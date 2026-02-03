@@ -1,4 +1,5 @@
 import { CITY_HISTORY_LENGTH, CITY_MISC_LENGTH } from '../io/cty.ts';
+import { PowerMap } from './constants.ts';
 
 export const PROBLEM_COUNT = 10;
 export const PROBLEM_ORDER_COUNT = 4;
@@ -106,6 +107,12 @@ export interface SimState {
   PolMaxY: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
+  PowerStackNum: number;
+  PowerStackX: Uint8Array;
+  PowerStackY: Uint8Array;
+
+  // Map scan scratch
+  CChr9: number;
 
   // Disasters + scenarios
   DisasterEvent: number;
@@ -249,6 +256,11 @@ export function createSimState(): SimState {
     PolMaxY: 0,
     PwrdZCnt: 0,
     unPwrdZCnt: 0,
+    PowerStackNum: 0,
+    PowerStackX: new Uint8Array(PowerMap.PWRSTKSIZE),
+    PowerStackY: new Uint8Array(PowerMap.PWRSTKSIZE),
+
+    CChr9: 0,
 
     // Disasters + scenarios
     DisasterEvent: 0,
