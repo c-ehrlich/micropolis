@@ -77,14 +77,14 @@ Legend
 
 ---
 
-- 5. Rails (DoRail)
+- [x] 5. Rails (DoRail)
   - References:
     - Plan: MapScan → Rails
     - Spec: “Rail deterioration (DoRail)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Deterioration rules + GenerateTrain hook (no-op acceptable with stub).
-    - [ ] Tests: deterministic decay + ensure rail count increments.
+  - [x] Success criteria:
+    - [x] Deterioration rules + GenerateTrain(x,y) hook (no-op acceptable with stub).
+    - [x] Tests: deterministic decay + ensure rail count increments.
 
 ---
 

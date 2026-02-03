@@ -8,7 +8,7 @@ import { CLASSIC_RULESET } from './ruleset.ts';
 export interface SimHooks {
   // Sprite system
   destroyAllSprites: () => void;
-  generateTrain: () => void;
+  generateTrain: (x: number, y: number) => void;
   generateShip: () => void;
   generatePlane: () => void;
   generateCopter: () => void;
@@ -40,7 +40,7 @@ export interface SimHooks {
   uiSet: (key: string, value: number | boolean | string) => void;
 }
 
-const noop = () => {};
+const noop = (..._args: unknown[]) => {};
 const noopValue = () => undefined;
 
 export function createSimHooks(overrides: Partial<SimHooks> = {}): SimHooks {

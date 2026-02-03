@@ -57,6 +57,10 @@ importers:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.0.10)(tsx@4.21.0)
 
+  apps/docs: {}
+
+  apps/editor: {}
+
   apps/web:
     dependencies:
       '@tanstack/react-router':
@@ -91,6 +95,10 @@ importers:
         specifier: 7.3.1
         version: 7.3.1(@types/node@25.0.10)(tsx@4.21.0)
 
+  packages/shared: {}
+
+  packages/sim-assets: {}
+
   packages/sim-core:
     devDependencies:
       '@types/node':
@@ -99,6 +107,16 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.5.3
+
+  packages/sim-integration: {}
+
+  packages/sim-io: {}
+
+  packages/sim-scripting: {}
+
+  packages/sim-terrain: {}
+
+  packages/sim-ui: {}
 
 packages:
 
