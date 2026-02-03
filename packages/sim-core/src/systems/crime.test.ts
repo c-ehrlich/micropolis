@@ -44,7 +44,9 @@ describe('SmoothPSMap', () => {
 
     smoothPSMap(policeMap, sTem);
 
+    // Center: edge=0 -> (0 >> 2) + 16 = 16; 16 >> 1 = 8 (per SmoothPSMap).
     expect(policeMap[smIndex(1, 1)]).toBe(8);
+    // Neighbor: edge=16 from center -> (16 >> 2)=4; (4 + 0) >> 1 = 2.
     expect(policeMap[smIndex(1, 0)]).toBe(2);
   });
 });
@@ -63,6 +65,7 @@ describe('CrimeScan', () => {
     crimeScan(state, context);
 
     const policeMapEffect = store.getLayer('policeMapEffect') as Int16Array;
+    // Three passes: 32 -> 16 -> 8 -> 5 (last step uses (8>>2)=2, (2+8)>>1=5).
     expect(policeMapEffect[smIndex(0, 0)]).toBe(5);
   });
 
@@ -89,9 +92,11 @@ describe('CrimeScan', () => {
     crimeScan(state, context);
 
     const crimeMem = store.getLayer('crimeMem') as Uint8Array;
+    // Crime formula: z = 128 - land(100)=28; + pop(20)=48; - police(10)=38.
     expect(crimeMem[a]).toBe(38);
     expect(crimeMem[b]).toBe(38);
     expect(state.CrimeAverage).toBe(38);
+    // First max at (4,5) in 2x2 grid => CrimeMaxX/Y = x<<1, y<<1.
     expect(state.CrimeMaxX).toBe(8);
     expect(state.CrimeMaxY).toBe(10);
 
@@ -120,8 +125,11 @@ describe('CrimeScan', () => {
     crimeScan(state, context);
 
     const crimeMem = store.getLayer('crimeMem') as Uint8Array;
+    // High: 128 - 1 + 250 = 377; clamp to 300; no police => 300; clamp to 250.
     expect(crimeMem[high]).toBe(250);
+    // Low: 128 - 255 = -127; clamp to 0.
     expect(crimeMem[low]).toBe(0);
+    // Average across two non-zero land cells: (250 + 0) / 2 = 125.
     expect(state.CrimeAverage).toBe(125);
   });
 });
