@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "pnpm -w tsc -p tsconfig.json --noEmit",
+    "build": "pnpm -w tsc -p packages/sim-core/tsconfig.json --noEmit",
     "lint": "pnpm -w eslint packages/sim-core/src packages/sim-core/vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root packages/sim-core",
