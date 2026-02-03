@@ -23,6 +23,10 @@ describe('SimState defaults', () => {
     expect(state.StartingYear).toBe(1900);
     expect(state.CityTime).toBe(50);
     expect(state.SimSpeed).toBe(3);
+    expect(state.HeatSteps).toBe(0);
+    expect(state.HeatFlow).toBe(-7);
+    expect(state.HeatRule).toBe(0);
+    expect(state.HeatWrap).toBe(3);
     expect(state.ValveFlag).toBe(1);
     expect(state.LastCityTime).toBe(-1);
     expect(state.LastCityYear).toBe(-1);

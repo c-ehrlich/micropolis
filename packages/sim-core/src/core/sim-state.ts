@@ -11,6 +11,10 @@ export interface SimState {
   StartingYear: number;
   SimSpeed: number;
   SimMetaSpeed: number;
+  HeatSteps: number;
+  HeatFlow: number;
+  HeatRule: number;
+  HeatWrap: number;
   Fcycle: number;
   Scycle: number;
   Spdcycle: number;
@@ -174,6 +178,10 @@ export function createSimState(): SimState {
     StartingYear: 1900,
     SimSpeed: 3,
     SimMetaSpeed: 0,
+    HeatSteps: 0,
+    HeatFlow: -7,
+    HeatRule: 0,
+    HeatWrap: 3,
     Fcycle: 0,
     Scycle: 0,
     Spdcycle: 0,
