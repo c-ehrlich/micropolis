@@ -105,6 +105,8 @@ export interface SimState {
   TrafMaxY: number;
   PolMaxX: number;
   PolMaxY: number;
+  CrimeMaxX: number;
+  CrimeMaxY: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
   PowerStackNum: number;
@@ -255,6 +257,8 @@ export function createSimState(): SimState {
     TrafMaxY: 0,
     PolMaxX: 0,
     PolMaxY: 0,
+    CrimeMaxX: 0,
+    CrimeMaxY: 0,
     PwrdZCnt: 0,
     unPwrdZCnt: 0,
     PowerStackNum: 0,

@@ -171,10 +171,10 @@ Legend
     - Plan: Crime
     - Spec: “Crime”
     - Micropolis: `s_crime.c`
-  - [ ] Success criteria:
-    - [ ] CrimeScan computes CrimeMem and averages; PoliceMapEffect snapshot.
-    - [ ] SmoothPSMap implemented.
-    - [ ] Tests: deterministic crime values with known inputs.
+  - [x] Success criteria:
+    - [x] CrimeScan computes CrimeMem and averages; PoliceMapEffect snapshot.
+    - [x] SmoothPSMap implemented.
+    - [x] Tests: deterministic crime values with known inputs.
 
 ---
 
