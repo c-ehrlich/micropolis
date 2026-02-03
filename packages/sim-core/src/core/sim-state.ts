@@ -113,6 +113,7 @@ export interface SimState {
 
   // Map scan scratch
   CChr9: number;
+  DonDither: number;
 
   // Disasters + scenarios
   NoDisasters: boolean;
@@ -262,6 +263,7 @@ export function createSimState(): SimState {
     PowerStackY: new Uint8Array(PowerMap.PWRSTKSIZE),
 
     CChr9: 0,
+    DonDither: 0,
 
     // Disasters + scenarios
     NoDisasters: false,

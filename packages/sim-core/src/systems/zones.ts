@@ -866,20 +866,28 @@ export function evalInd(traf: number): number {
   return 0;
 }
 
-export function doFreePop(system: ZoneSystemContext, x: number, y: number): number {
+/**
+ * Count high-density residential tiles around a free zone center.
+ * Mirrors `DoFreePop` in `ref/micropolis/src/sim/s_zone.c`.
+ */
+export function countFreeZoneHouses(map: Uint16Array, x: number, y: number): number {
   let count = 0;
   for (let xx = x - 1; xx <= x + 1; xx += 1) {
     for (let yy = y - 1; yy <= y + 1; yy += 1) {
       if (!isInBounds(xx, yy)) {
         continue;
       }
-      const tileId = (system.map[indexFor(xx, yy)] ?? 0) & LOMASK;
+      const tileId = (map[indexFor(xx, yy)] ?? 0) & LOMASK;
       if (tileId >= LHTHR && tileId <= HHTHR) {
         count += 1;
       }
     }
   }
   return count;
+}
+
+export function doFreePop(system: ZoneSystemContext, x: number, y: number): number {
+  return countFreeZoneHouses(system.map, x, y);
 }
 
 export function setSmoke(

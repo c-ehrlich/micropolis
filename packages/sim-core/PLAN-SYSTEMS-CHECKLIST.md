@@ -183,10 +183,10 @@ Legend
     - Plan: PopDen
     - Spec: “Population Density and Commercial Rate”
     - Micropolis: `s_pop.c`
-  - [ ] Success criteria:
-    - [ ] PopDenScan, GetPDen, DistIntMarket implemented.
-    - [ ] City center derived from population weights.
-    - [ ] Tests: expected pop density and ComRate on tiny map.
+  - [x] Success criteria:
+    - [x] PopDenScan, GetPDen, DistIntMarket implemented.
+    - [x] City center derived from population weights.
+    - [x] Tests: expected pop density and ComRate on tiny map.
 
 ---
 
