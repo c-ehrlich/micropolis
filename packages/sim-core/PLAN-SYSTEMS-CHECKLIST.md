@@ -249,15 +249,15 @@ Legend
 
 ---
 
-- 19. Disasters
+- [x] 19. Disasters
   - References:
     - Plan: Disasters
     - Spec: “Disasters”
     - Micropolis: `s_disast.c`
-  - [ ] Success criteria:
-    - [ ] DoDisasters + ScenarioDisaster implemented.
-    - [ ] MakeMeltdown/DoMeltdown/MakeEarthquake/SetFire/MakeFire/MakeFlood/DoFlood implemented.
-    - [ ] Tests: deterministic outcomes with fixed seed and stubs.
+  - [x] Success criteria:
+    - [x] DoDisasters + ScenarioDisaster implemented.
+    - [x] MakeMeltdown/DoMeltdown/MakeEarthquake/SetFire/MakeFire/MakeFlood/DoFlood implemented.
+    - [x] Tests: deterministic outcomes with fixed seed and stubs.
 
 ---
 
