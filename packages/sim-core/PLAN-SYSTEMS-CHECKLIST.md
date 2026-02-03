@@ -225,15 +225,15 @@ Legend
 
 ---
 
-- 17. Evaluation and Scoring
+- [x] 17. Evaluation and Scoring
   - References:
     - Plan: Evaluation and Scoring
     - Spec: “Evaluation and Scoring”
     - Micropolis: `s_eval.c`
-  - [ ] Success criteria:
-    - [ ] CityEvaluation path matches spec.
-    - [ ] All helper functions implemented (GetAssValue, DoPopNum, DoProblems, VoteProblems, GetScore, DoVotes, etc.).
-    - [ ] Tests: expected scores and problem ordering for fixed inputs.
+  - [x] Success criteria:
+    - [x] CityEvaluation path matches spec.
+    - [x] All helper functions implemented (GetAssValue, DoPopNum, DoProblems, VoteProblems, GetScore, DoVotes, etc.).
+    - [x] Tests: expected scores and problem ordering for fixed inputs.
 
 ---
 
