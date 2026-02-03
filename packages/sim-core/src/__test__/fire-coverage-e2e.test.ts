@@ -54,6 +54,11 @@ class StubRng extends MicropolisRng {
 describe('Fire Coverage E2E', () => {
   it('burns out a fire when coverage drives the rate to 1', () => {
     const store = createClassicMapStore();
+    // RNG sequence (see mapScanSlice + doFire):
+    // 0 -> mapScanSlice fire gate ((next16 & 3) === 0)
+    // 1,1,1,1 -> doFire spread checks (next16 & 7) !== 0 so no spread
+    // 2 -> doFire rand(rate): rate=1 so 2 % 2 = 0 => burn out
+    // 0 -> rubble variant (next16 & 3)
     const rng = new StubRng([0, 1, 1, 1, 1, 2, 0]);
     const context = createSimContext({ store, rng });
     const state = createSimState();
@@ -73,6 +78,7 @@ describe('Fire Coverage E2E', () => {
     fireAnalysis(state, context);
 
     const fireRate = store.getLayer('fireRate') as Int16Array;
+    // FireEffect defaults to 1000, so FireStMap >> smooth >> FireRate remains > 100.
     expect(fireRate[smallIndex(x, y)]).toBeGreaterThan(100);
 
     store.write('map', indexFor(x, y), Tile.FIREBASE);
