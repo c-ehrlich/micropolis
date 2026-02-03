@@ -960,7 +960,7 @@ For each x in [x1..x2-1], y in [0..World.WORLD_Y-1]:
 ## External Hooks / Side Effects
 
 The core invokes these external functions (UI/sprite/persistence) and expects them to exist:
-- Sprite system: DestroyAllSprites(), GenerateTrain(), GenerateShip(), GeneratePlane(), GenerateCopter(), GetSprite(type), MoveObjects(), MakeExplosion(x,y), MakeExplosionAt(px,py), MakeSound(...), DoEarthQuake(), StopEarthquake().
+- Sprite system: DestroyAllSprites(), GenerateTrain(x,y), GenerateShip(), GeneratePlane(), GenerateCopter(), GetSprite(type), MoveObjects(), MakeExplosion(x,y), MakeExplosionAt(px,py), MakeSound(...), DoEarthQuake(), StopEarthquake().
 - UI/graph updates: DoUpdateHeads(), doAllGraphs(), ChangeCensus(), ChangeEval(), drawBudgetWindow(), drawCurrPercents().
 - Budget UI flow: ShowBudgetWindowAndStartWaiting(), UpdateBudgetWindow().
 - Messages/UI glue: SendMesAt(), DoLoseGame(), DoWinGame(), UISet* commands.

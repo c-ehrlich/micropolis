@@ -77,25 +77,25 @@ Legend
 
 ---
 
-- 5. Rails (DoRail)
+- [x] 5. Rails (DoRail)
   - References:
     - Plan: MapScan → Rails
     - Spec: “Rail deterioration (DoRail)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Deterioration rules + GenerateTrain hook (no-op acceptable with stub).
-    - [ ] Tests: deterministic decay + ensure rail count increments.
+  - [x] Success criteria:
+    - [x] Deterioration rules + GenerateTrain(x,y) hook (no-op acceptable with stub).
+    - [x] Tests: deterministic decay + ensure rail count increments.
 
 ---
 
-- 6. Bridges (DoBridge)
+- [x] 6. Bridges (DoBridge)
   - References:
     - Plan: MapScan → Bridges
     - Spec: “Bridge open/close (DoBridge)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Open/close patterns and boat distance logic integrated.
-    - [ ] Tests: bridge tiles flip based on stubbed boat distance + RNG.
+  - [x] Success criteria:
+    - [x] Open/close patterns and boat distance logic integrated.
+    - [x] Tests: bridge tiles flip based on stubbed boat distance + RNG.
 
 ---
 
@@ -146,11 +146,11 @@ Legend
     - Plan: Traffic System
     - Spec: “Traffic System”
     - Micropolis: `s_traf.c`
-  - [ ] Success criteria:
-    - [ ] MakeTraf / FindPRoad / TryDrive / TryGo / DriveDone implemented.
-    - [ ] SetTrafMem updates TrfDensity and traffic maxima.
-    - [ ] DecTrafficMem decay matches spec.
-    - [ ] Tests: pathfinding determinism and density updates.
+  - [x] Success criteria:
+    - [x] MakeTraf / FindPRoad / TryDrive / TryGo / DriveDone implemented.
+    - [x] SetTrafMem updates TrfDensity and traffic maxima.
+    - [x] DecTrafficMem decay matches spec.
+    - [x] Tests: pathfinding determinism and density updates.
 
 ---
 
