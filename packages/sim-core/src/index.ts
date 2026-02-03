@@ -16,6 +16,7 @@ export * from './sim/realtime.ts';
 export * from './sim/scheduler.ts';
 export * from './sim/simulate.ts';
 export * from './systems/bridges.ts';
+export * from './systems/budget.ts';
 export * from './systems/disasters.ts';
 export * from './systems/init.ts';
 export * from './systems/map-scan.ts';

@@ -151,6 +151,7 @@ export interface SimState {
   DoInitialEval: number;
   InitSimLoad: number;
   TaxFlag: number;
+  MustUpdateOptions: number;
 }
 
 export function createSimState(): SimState {
@@ -300,5 +301,6 @@ export function createSimState(): SimState {
     DoInitialEval: 0,
     InitSimLoad: 2,
     TaxFlag: 0,
+    MustUpdateOptions: 0,
   };
 }

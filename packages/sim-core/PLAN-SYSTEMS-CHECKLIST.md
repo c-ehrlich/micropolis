@@ -201,15 +201,15 @@ Legend
 
 ---
 
-- 15. Budget and Funding
+- [x] 15. Budget and Funding
   - References:
     - Plan: Budget and Funding
     - Spec: “Budget and Funding”
     - Micropolis: `s_budget.c`, `w_budget.c`
-  - [ ] Success criteria:
-    - [ ] CollectTax + DoBudgetNow + UpdateFundEffects implemented.
-    - [ ] Auto-budget logic + messages implemented.
-    - [ ] Tests: deterministic funds, effects scaling, and auto-budget behavior.
+  - [x] Success criteria:
+    - [x] CollectTax + DoBudgetNow + UpdateFundEffects implemented.
+    - [x] Auto-budget logic + messages implemented.
+    - [x] Tests: deterministic funds, effects scaling, and auto-budget behavior.
 
 ---
 
