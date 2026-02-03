@@ -1,5 +1,6 @@
 import { CITY_HISTORY_LENGTH, CITY_MISC_LENGTH } from '../io/cty.ts';
 import { PowerMap } from './constants.ts';
+import { MAP_FLAG_COUNT } from './map-flags.ts';
 
 export const PROBLEM_COUNT = 10;
 export const PROBLEM_ORDER_COUNT = 4;
@@ -114,6 +115,7 @@ export interface SimState {
 
   // Map scan scratch
   CChr9: number;
+  DonDither: number;
 
   // Disasters + scenarios
   NoDisasters: boolean;
@@ -144,14 +146,24 @@ export interface SimState {
   PollutionHis: Int16Array;
   MoneyHis: Int16Array;
   MiscHis: Int16Array;
+  ResHisMax: number;
+  ComHisMax: number;
+  IndHisMax: number;
+  Res2HisMax: number;
+  Com2HisMax: number;
+  Ind2HisMax: number;
+  Graph10Max: number;
+  Graph120Max: number;
 
   // Flags / init state
   NewMap: number;
+  NewMapFlags: Uint8Array;
   NewGraph: number;
   NewPower: number;
   DoInitialEval: number;
   InitSimLoad: number;
   TaxFlag: number;
+  MustUpdateOptions: number;
 }
 
 export function createSimState(): SimState {
@@ -264,6 +276,7 @@ export function createSimState(): SimState {
     PowerStackY: new Uint8Array(PowerMap.PWRSTKSIZE),
 
     CChr9: 0,
+    DonDither: 0,
 
     // Disasters + scenarios
     NoDisasters: false,
@@ -294,13 +307,23 @@ export function createSimState(): SimState {
     PollutionHis: new Int16Array(CITY_HISTORY_LENGTH),
     MoneyHis: new Int16Array(CITY_HISTORY_LENGTH),
     MiscHis: new Int16Array(CITY_MISC_LENGTH),
+    ResHisMax: 0,
+    ComHisMax: 0,
+    IndHisMax: 0,
+    Res2HisMax: 0,
+    Com2HisMax: 0,
+    Ind2HisMax: 0,
+    Graph10Max: 0,
+    Graph120Max: 0,
 
     // Flags / init state
     NewMap: 0,
+    NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
     NewGraph: 0,
     NewPower: 0,
     DoInitialEval: 0,
     InitSimLoad: 2,
     TaxFlag: 0,
+    MustUpdateOptions: 0,
   };
 }
