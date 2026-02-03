@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "pnpm -w eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate-routes": "tsr generate",
+    "typecheck": "pnpm run generate-routes && tsc -p tsconfig.json --noEmit",
     "test": "pnpm -w vitest run --root apps/web",
     "test:watch": "pnpm -w vitest --root apps/web"
   },
@@ -18,6 +19,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@tanstack/router-cli": "1.157.15",
     "@tanstack/router-plugin": "1.157.15",
     "@types/node": "25.0.10",
     "@types/react": "19.2.10",
