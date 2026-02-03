@@ -266,9 +266,9 @@ Legend
     - Plan: City Demand Valves
     - Spec: “City Demand Valves”
     - Micropolis: `s_valve.c`
-  - [ ] Success criteria:
-    - [ ] SetValves fully implemented (ratios, tax table, caps).
-    - [ ] Tests: valve outputs for known pop/tax conditions.
+  - [x] Success criteria:
+    - [x] SetValves fully implemented (ratios, tax table, caps).
+    - [x] Tests: valve outputs for known pop/tax conditions.
 
 ---
 
