@@ -1,0 +1,5 @@
+{
+  "name": "@city/shared",
+  "private": true,
+  "type": "module"
+}

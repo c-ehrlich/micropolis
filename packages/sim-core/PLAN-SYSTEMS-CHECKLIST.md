@@ -26,29 +26,29 @@ Legend
 
 ---
 
-- [ ] 1. Initialization and Reset
+- [x] 1. Initialization and Reset
   - References:
     - Plan: PLAN-SYSTEMS (Init/Reset section)
     - Spec: SPEC “Initialization and Reset”
     - Micropolis: `s_init.c`, `s_alloc.c`, `sim.c`
-  - [ ] Success criteria:
-    - [ ] initMapArrays/InitWillStuff/DoSimInit/InitSimMemory/SimLoadInit/DoNilPower implemented.
-    - [ ] Loaded city path mirrors spec (ranges clamped, GameLevel set, AvCityTax derived).
-    - [ ] Tests: new city init, load init, and DoNilPower produce expected state hashes.
+  - [x] Success criteria:
+    - [x] initMapArrays/InitWillStuff/DoSimInit/InitSimMemory/SimLoadInit/DoNilPower implemented.
+    - [x] Loaded city path mirrors spec (ranges clamped, GameLevel set, AvCityTax derived).
+    - [x] Tests: new city init, load init, and DoNilPower produce expected state hashes.
 
 ---
 
 ## 2) Simulate(mod16) Dispatcher + Phase Gates
 
-- [ ] References:
-  - [ ] Plan: PLAN-SYSTEMS (Phase execution map)
-  - [ ] Spec: SPEC “Simulation Time and Scheduling”
-  - [ ] Micropolis: `s_sim.c`, `sim.c`
-- [ ] Success criteria:
-  - [ ] Fcycle/Scycle/Spdcycle implemented with correct modulo behavior.
-  - [ ] Speed tables (SpdPwr/Ptl/Cri/Pop/Fir) used.
-  - [ ] All 16 cases dispatch correctly.
-  - [ ] Tests: phase-order test validates only expected systems run in each phase.
+- [x] References:
+  - [x] Plan: PLAN-SYSTEMS (Phase execution map)
+  - [x] Spec: SPEC “Simulation Time and Scheduling”
+  - [x] Micropolis: `s_sim.c`, `sim.c`
+- [x] Success criteria:
+  - [x] Fcycle/Scycle/Spdcycle implemented with correct modulo behavior.
+  - [x] Speed tables (SpdPwr/Ptl/Cri/Pop/Fir) used.
+  - [x] All 16 cases dispatch correctly.
+  - [x] Tests: phase-order test validates only expected systems run in each phase.
 
 ---
 

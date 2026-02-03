@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "lint": "turbo lint",
+    "lint": "turbo lint -- --fix",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:watch": "pnpm --filter @city/web test:watch",

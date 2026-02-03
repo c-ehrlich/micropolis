@@ -9,7 +9,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/build/**', '**/node_modules/**', '**/routeTree.gen.ts'],
+    ignores: ['**/dist/**', '**/build/**', '**/node_modules/**', '**/routeTree.gen.ts', 'ref/**'],
   },
   {
     files: ['**/*.{ts,tsx,js,jsx}'],

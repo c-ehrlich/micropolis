@@ -1,1 +1,2 @@
-- make sure to run `pnpm format` when you're done
+- make sure to run `pnpm typecheck`, `pnpm lint`, and `pnpm format` when you're done. don't run them after every single step, just before you cede control back to me.
+- reminder that the code we're porting from is in C, so some aspects of math will be different (for example division of two integers), be sure to reference source files where necessary to check what the original behaviour is and implement something that will behave the same in typescript
