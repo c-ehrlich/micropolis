@@ -127,10 +127,11 @@ export function mapScanSlice(
     for (let y = 0; y < WORLD_Y; y += 1) {
       const index = baseIndex + y;
       const tile = map[index] ?? 0;
+      const tileId = tile & LOMASK;
+      state.CChr9 = tileId;
       if (tile === 0) {
         continue;
       }
-      const tileId = tile & LOMASK;
       if (tileId < FLOOD) {
         continue;
       }
