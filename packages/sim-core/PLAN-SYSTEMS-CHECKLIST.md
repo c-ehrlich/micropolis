@@ -64,16 +64,16 @@ Legend
 
 ---
 
-- 4. Roads (DoRoad)
+- [x] 4. Roads (DoRoad)
   - References:
     - Plan: MapScan → Roads
     - Spec: “Road deterioration and traffic rendering (DoRoad)”
     - Micropolis: `s_scan.c`
-  - [ ] Success criteria:
-    - [ ] Deterioration rules match spec (RoadEffect, Random gates, rubble vs river).
-    - [ ] Bridge handling callout (DoBridge) integrated.
-    - [ ] Traffic density rendering matches DenTab/ANIMBIT logic.
-    - [ ] Tests: known map -> expected rewrites; deterministic under seed.
+  - [x] Success criteria:
+    - [x] Deterioration rules match spec (RoadEffect, Random gates, rubble vs river).
+    - [x] Bridge handling callout (DoBridge) integrated.
+    - [x] Traffic density rendering matches DenTab/ANIMBIT logic.
+    - [x] Tests: known map -> expected rewrites; deterministic under seed.
 
 ---
 
