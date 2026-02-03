@@ -61,6 +61,7 @@ describe('simHeat', () => {
 
     // From sim_heat ECO rule in sim.c:
     // sum of low bits = 4 (brian's brain path), cell = ((c << 1) & 0x3fc) | 1.
-    expect(map[indexFor(5, 5)]).toBe(HEAT_FLAGS | 3);
+    // With c=1, ((c << 1) & 0x3fc) yields 0, so cell resolves to 1.
+    expect(map[indexFor(5, 5)]).toBe(HEAT_FLAGS | 1);
   });
 });
