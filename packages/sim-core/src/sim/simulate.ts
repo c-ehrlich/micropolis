@@ -1,6 +1,7 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { simHeat } from './heat.ts';
 
 export type SimMapFlag =
   | 'ALMAP'
@@ -50,6 +51,10 @@ export interface SimPhaseSystems {
   popDenScan?: (state: SimState, context: SimContext) => void;
   fireAnalysis?: (state: SimState, context: SimContext) => void;
   doDisasters?: (state: SimState, context: SimContext) => void;
+}
+
+export interface SimLoopOptions {
+  doSim?: boolean;
 }
 
 const clampSpeedIndex = (simSpeed: number) => {
@@ -176,4 +181,32 @@ export function runSimFrame(
   state.Fcycle = (state.Fcycle + 1) & 1023;
   dispatchSimPhase(state.Fcycle & 15, state, context, systems);
   return true;
+}
+
+/**
+ * Run one simulation loop, optionally swapping in heat simulation steps.
+ * Mirrors `sim_loop` in `ref/micropolis/src/sim/sim.c` (1:1 port), minus UI updates.
+ */
+export function runSimLoop(
+  state: SimState,
+  context: SimContext,
+  systems: SimPhaseSystems = {},
+  options: SimLoopOptions = {},
+): boolean {
+  if (state.SimSpeed === 0) {
+    return false;
+  }
+
+  if (state.HeatSteps > 0) {
+    for (let j = 0; j < state.HeatSteps; j += 1) {
+      simHeat(state, context);
+    }
+    context.hooks.moveObjects();
+    state.NewMap = 1;
+    return true;
+  }
+
+  const ran = options.doSim !== false ? runSimFrame(state, context, systems) : false;
+  context.hooks.moveObjects();
+  return ran;
 }

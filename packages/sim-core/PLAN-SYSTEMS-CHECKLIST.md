@@ -289,9 +289,9 @@ Legend
     - Plan: Heat Simulation
     - Spec: “Heat Simulation (Optional Debug Mode)”
     - Micropolis: `sim.c`, `s_heat.c`
-  - [ ] Success criteria:
-    - [ ] Feature-flagged heat sim loop.
-    - [ ] Tests: heat rules produce deterministic tile patterns for a small grid.
+  - [x] Success criteria:
+    - [x] Feature-flagged heat sim loop.
+    - [x] Tests: heat rules produce deterministic tile patterns for a small grid.
 
 ---
 

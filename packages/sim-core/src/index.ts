@@ -13,6 +13,7 @@ export * from './core/sim-state.ts';
 export * from './io/cty.ts';
 export * from './io/hash.ts';
 export * from './io/replay.ts';
+export * from './sim/heat.ts';
 export * from './sim/realtime.ts';
 export * from './sim/scheduler.ts';
 export * from './sim/simulate.ts';
