@@ -83,9 +83,11 @@ describe('initWillStuff', () => {
     expect(state.FireEffect).toBe(1000);
     expect(state.CityScore).toBe(500);
     expect(state.CityPop).toBe(-1);
-    expect(state.LastCityTime).toBe(-1);
-    expect(state.LastCityYear).toBe(-1);
-    expect(state.LastCityMonth).toBe(-1);
+    // InitWillStuff calls DoUpdateHeads in the C codebase; updateDate uses CityTime/48 and (CityTime % 48)/4.
+    // With default CityTime=50, LastCityTime=50/4=12, year=1901, month=0.
+    expect(state.LastCityTime).toBe(12);
+    expect(state.LastCityYear).toBe(1901);
+    expect(state.LastCityMonth).toBe(0);
     expect(state.LastFunds).toBe(-1);
     expect(state.RoadFund).toBe(0);
     expect(state.PoliceFund).toBe(0);
