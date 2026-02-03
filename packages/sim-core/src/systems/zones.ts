@@ -5,6 +5,7 @@ import type { MicropolisRng } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import type { MapScanContext } from './map-scan.ts';
+import { sendMesAt } from './messages.ts';
 import { setZPowerAt } from './power.ts';
 
 const { WORLD_X, WORLD_Y, HWLDY, SmX, SmY } = World;
@@ -1014,7 +1015,7 @@ export function doMeltdown(system: ZoneSystemContext, x: number, y: number): voi
     }
   }
 
-  system.context.hooks.sendMesAt(-43, x, y);
+  sendMesAt(system.state, system.context, -43, x, y);
 }
 
 /**
