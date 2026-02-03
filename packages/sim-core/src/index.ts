@@ -1,5 +1,6 @@
 export const SIM_CORE_VERSION = '0.0.0';
 
+export * from './actions/tool-actions.ts';
 export * from './core/assert.ts';
 export * from './core/clocks.ts';
 export * from './core/constants.ts';
@@ -8,10 +9,9 @@ export * from './core/rng.ts';
 export * from './core/ruleset.ts';
 export * from './core/sim-context.ts';
 export * from './core/sim-state.ts';
-export * from './systems/map-scan.ts';
-export * from './sim/realtime.ts';
-export * from './sim/scheduler.ts';
-export * from './actions/tool-actions.ts';
 export * from './io/cty.ts';
 export * from './io/hash.ts';
 export * from './io/replay.ts';
+export * from './sim/realtime.ts';
+export * from './sim/scheduler.ts';
+export * from './systems/map-scan.ts';
