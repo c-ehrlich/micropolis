@@ -1,16 +1,14 @@
-import { assertDefined } from '../core/assert.ts';
-import { PowerMap, Tile, TileFlag, TileMask, World } from '../core/constants.ts';
+import { TileFlag, World } from '../core/constants.ts';
 import type { LayerId, MapStore } from '../core/map-store.ts';
 import { CLASSIC_LAYER_DEFS } from '../core/map-store.ts';
 import { randomSeedFromTime } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import { mapScanSlice } from './map-scan.ts';
+import { setZPowerAt } from './power.ts';
 
 const { WORLD_X, WORLD_Y } = World;
-const { POWERMAPROW, PWRMAPSIZE } = PowerMap;
-const { LOMASK } = TileMask;
-const { PWRBIT, ZONEBIT } = TileFlag;
+const { ZONEBIT } = TileFlag;
 
 const ALL_LAYER_IDS = Object.keys(CLASSIC_LAYER_DEFS) as LayerId[];
 const WILL_STUFF_LAYERS: LayerId[] = [
@@ -136,7 +134,7 @@ export function doSimInit(
 
     const setValves = systems.setValves ?? noop;
     const clearCensus = systems.clearCensus ?? noop;
-    const mapScan = systems.mapScan ?? ((x1, x2) => mapScanSlice(context.store, x1, x2));
+    const mapScan = systems.mapScan ?? ((x1, x2) => mapScanSlice(state, context, x1, x2));
     const doPowerScan = systems.doPowerScan ?? noop;
     const ptlScan = systems.ptlScan ?? noop;
     const crimeScan = systems.crimeScan ?? noop;
@@ -296,26 +294,4 @@ function setCommonInits(state: SimState, systems: SimInitSystems): void {
   state.FireEffect = 1000;
   state.TaxFlag = 0;
   state.TaxFund = 0;
-}
-
-function setZPowerAt(
-  store: MapStore,
-  power: Uint16Array,
-  x: number,
-  y: number,
-  index: number,
-  tile: number,
-): boolean {
-  const tileId = tile & LOMASK;
-  const isPlant = tileId === Tile.NUCLEAR || tileId === Tile.POWERPLANT;
-  const powerWord = (x >> 4) + y * POWERMAPROW;
-  const layer = power[powerWord];
-  assertDefined(layer);
-  const powered = isPlant || (powerWord < PWRMAPSIZE && (layer & (1 << (x & 15))) !== 0);
-
-  const nextTile = powered ? tile | PWRBIT : tile & ~PWRBIT;
-  if (nextTile !== tile) {
-    store.write('map', index, nextTile);
-  }
-  return powered;
 }

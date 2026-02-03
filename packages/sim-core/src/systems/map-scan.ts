@@ -1,9 +1,13 @@
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { MapStore } from '../core/map-store.ts';
+import type { MicropolisRng } from '../core/rng.ts';
+import type { SimContext } from '../core/sim-context.ts';
+import type { SimState } from '../core/sim-state.ts';
+import { setZPowerAt } from './power.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 const { LOMASK, ALLBITS } = TileMask;
-const { CONDBIT, ZONEBIT } = TileFlag;
+const { BULLBIT, CONDBIT, ZONEBIT } = TileFlag;
 const {
   FIREBASE,
   FLOOD,
@@ -23,6 +27,8 @@ export interface MapScanSlice {
 
 export interface MapScanContext {
   store: MapStore;
+  state: SimState;
+  rng: MicropolisRng;
   map: Uint16Array;
   x: number;
   y: number;
@@ -60,7 +66,8 @@ export function getMapScanSlice(phase: number, worldX: number = WORLD_X): MapSca
 }
 
 export function runMapScanPhase(
-  store: MapStore,
+  state: SimState,
+  context: SimContext,
   phase: number,
   handlers?: MapScanHandlers,
   options: MapScanOptions = {},
@@ -69,12 +76,13 @@ export function runMapScanPhase(
   if (!slice) {
     return false;
   }
-  mapScanSlice(store, slice.x1, slice.x2, handlers, options);
+  mapScanSlice(state, context, slice.x1, slice.x2, handlers, options);
   return true;
 }
 
 export function mapScanSlice(
-  store: MapStore,
+  state: SimState,
+  context: SimContext,
   x1: number,
   x2: number,
   handlers?: MapScanHandlers,
@@ -84,8 +92,10 @@ export function mapScanSlice(
     throw new Error(`mapScanSlice bounds out of range: [${x1}, ${x2})`);
   }
 
-  const map = store.getLayer('map') as Uint16Array;
-  const newPower = options.newPower ?? false;
+  const map = context.store.getLayer('map') as Uint16Array;
+  const rng = context.rng;
+  const newPower = options.newPower ?? state.NewPower !== 0;
+  const power = newPower ? (context.store.getLayer('power') as Uint16Array) : null;
 
   const onFire = handlers?.onFire ?? noop;
   const onFlood = handlers?.onFlood ?? noop;
@@ -96,8 +106,10 @@ export function mapScanSlice(
   const onRail = handlers?.onRail ?? noop;
   const onTinyExplosion = handlers?.onTinyExplosion ?? noop;
 
-  const context: MapScanContext = {
-    store,
+  const scanContext: MapScanContext = {
+    store: context.store,
+    state,
+    rng,
     map,
     x: 0,
     y: 0,
@@ -108,7 +120,7 @@ export function mapScanSlice(
     writeTile: noop,
   };
 
-  context.writeTile = (value: number) => store.write('map', context.index, value);
+  scanContext.writeTile = (value: number) => context.store.write('map', scanContext.index, value);
 
   for (let x = x1; x < x2; x += 1) {
     const baseIndex = x * WORLD_Y;
@@ -124,47 +136,55 @@ export function mapScanSlice(
       }
 
       const flags = tile & ALLBITS;
-      context.x = x;
-      context.y = y;
-      context.index = index;
-      context.tile = tile;
-      context.tileId = tileId;
-      context.flags = flags;
+      scanContext.x = x;
+      scanContext.y = y;
+      scanContext.index = index;
+      scanContext.tile = tile;
+      scanContext.tileId = tileId;
+      scanContext.flags = flags;
 
       if (tileId < ROADBASE) {
         if (tileId >= FIREBASE) {
-          onFire(context);
+          state.FirePop += 1;
+          if ((rng.next16() & 3) === 0) {
+            onFire(scanContext);
+          }
           continue;
         }
         if (tileId < RADTILE) {
-          onFlood(context);
+          onFlood(scanContext);
           continue;
         }
-        onRadTile(context);
+        onRadTile(scanContext);
         continue;
       }
 
       if (newPower && (flags & CONDBIT) !== 0) {
-        onConductive(context);
+        if (power) {
+          setZPowerAt(context.store, power, x, y, index, tile);
+        }
+        onConductive(scanContext);
       }
 
       if (tileId >= ROADBASE && tileId < POWERBASE) {
-        onRoad(context);
+        onRoad(scanContext);
         continue;
       }
 
       if ((flags & ZONEBIT) !== 0) {
-        onZone(context);
+        onZone(scanContext);
         continue;
       }
 
       if (tileId >= RAILBASE && tileId < RESBASE) {
-        onRail(context);
+        onRail(scanContext);
         continue;
       }
 
       if (tileId >= SOMETINYEXP && tileId <= LASTTINYEXP) {
-        onTinyExplosion(context);
+        onTinyExplosion(scanContext);
+        const rubble = Tile.RUBBLE + (rng.next16() & 3) + BULLBIT;
+        context.store.write('map', index, rubble);
       }
     }
   }
