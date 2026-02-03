@@ -1,6 +1,7 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { runUiUpdate } from './date-time.ts';
 
 const R_LEVELS = [0.7, 0.9, 1.2] as const;
 const F_LEVELS = [1.4, 1.2, 0.8] as const;
@@ -93,7 +94,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
     }
     context.hooks.drawBudgetWindow();
     context.hooks.drawCurrPercents();
-    context.hooks.doUpdateHeads();
+    runUiUpdate(state, context);
     return;
   }
 
@@ -105,7 +106,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
     state.RoadSpend = state.RoadFund;
     context.hooks.drawBudgetWindow();
     context.hooks.drawCurrPercents();
-    context.hooks.doUpdateHeads();
+    runUiUpdate(state, context);
     return;
   }
 
@@ -117,7 +118,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
   applyManualSpend();
   context.hooks.drawBudgetWindow();
   context.hooks.drawCurrPercents();
-  context.hooks.doUpdateHeads();
+  runUiUpdate(state, context);
 }
 
 export function collectTax(state: SimState, context: SimContext): void {

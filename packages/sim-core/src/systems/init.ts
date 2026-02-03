@@ -4,6 +4,7 @@ import { CLASSIC_LAYER_DEFS } from '../core/map-store.ts';
 import { randomSeedFromTime } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { runUiUpdate } from './date-time.ts';
 import { mapScanSlice } from './map-scan.ts';
 import { setZPowerAt } from './power.ts';
 
@@ -114,7 +115,7 @@ export function initWillStuff(
   });
 
   context.hooks.destroyAllSprites();
-  context.hooks.doUpdateHeads();
+  runUiUpdate(state, context);
 }
 
 export function doSimInit(

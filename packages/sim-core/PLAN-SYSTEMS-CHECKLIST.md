@@ -225,15 +225,15 @@ Legend
 
 ---
 
-- 17. Evaluation and Scoring
+- [x] 17. Evaluation and Scoring
   - References:
     - Plan: Evaluation and Scoring
     - Spec: “Evaluation and Scoring”
     - Micropolis: `s_eval.c`
-  - [ ] Success criteria:
-    - [ ] CityEvaluation path matches spec.
-    - [ ] All helper functions implemented (GetAssValue, DoPopNum, DoProblems, VoteProblems, GetScore, DoVotes, etc.).
-    - [ ] Tests: expected scores and problem ordering for fixed inputs.
+  - [x] Success criteria:
+    - [x] CityEvaluation path matches spec.
+    - [x] All helper functions implemented (GetAssValue, DoPopNum, DoProblems, VoteProblems, GetScore, DoVotes, etc.).
+    - [x] Tests: expected scores and problem ordering for fixed inputs.
 
 ---
 
@@ -272,15 +272,15 @@ Legend
 
 ---
 
-- 21. Date/Time Mapping
+- [x] 21. Date/Time Mapping
   - References:
     - Plan: Date and Time
     - Spec: “Date and Time”
     - Micropolis: `s_sim.c` / `w_sim.c`
-  - [ ] Success criteria:
-    - [ ] Year/month conversion from CityTime.
-    - [ ] Year overflow behavior (reset + message).
-    - [ ] Tests: known CityTime -> year/month outputs.
+  - [x] Success criteria:
+    - [x] Year/month conversion from CityTime.
+    - [x] Year overflow behavior (reset + message).
+    - [x] Tests: known CityTime -> year/month outputs.
 
 ---
 
