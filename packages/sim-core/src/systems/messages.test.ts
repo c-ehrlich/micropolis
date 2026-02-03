@@ -173,6 +173,9 @@ describe('SendMessages', () => {
     expect(sent).toEqual([7]);
     expect(state.ResCap).toBe(1);
 
+    // Simulate the UI consuming the queued message like doMessage() in s_msg.c.
+    _consumeMessagePort(state);
+
     state.CityTime = 1;
     state.ResZPop = 2;
     state.ComZPop = 3;
