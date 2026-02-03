@@ -40,8 +40,11 @@ describe('Census E2E', () => {
       },
     });
     const state = createSimState();
+    // CityTime increments in phase 0; start at 47 so phase 0 lands on 48,
+    // triggering both 10-year (CityTime % 4) and 120-year (CityTime % 48) census.
     state.CityTime = 47;
 
+    // Any in-bounds zoned tile will do; we use (2,2) for a deterministic seed.
     const zoneX = 2;
     const zoneY = 2;
 
@@ -58,6 +61,7 @@ describe('Census E2E', () => {
       take2Census,
       mapScan: (phase: number, scanState: typeof state, scanContext: typeof context) => {
         if (phase === 1) {
+          // Phase 1 scans the first 1/8 of WORLD_X (120 / 8 = 15).
           mapScanSlice(scanState, scanContext, 0, 15, { onZone: zoneHandler });
         }
       },
@@ -68,11 +72,13 @@ describe('Census E2E', () => {
 
     expect(state.ResPop).toBeGreaterThan(0);
 
+    // Res history uses ResPop / 8 in `TakeCensus` and `Take2Census`.
     const expectedResHis = Math.trunc(state.ResPop / 8);
 
     dispatchSimPhase(9, state, context, systems);
 
     expect(state.ResHis[0]).toBe(expectedResHis);
+    // Long-term graph history starts at index 120 in Micropolis.
     expect(state.ResHis[120]).toBe(expectedResHis);
     expect(changeCensusCalls).toHaveLength(2);
 

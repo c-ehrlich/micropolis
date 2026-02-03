@@ -74,38 +74,48 @@ describe('Census system', () => {
     const context = createSimContext({ store, hooks: { changeCensus } });
     const state = createSimState();
 
+    // 10-year history range is 0..119 in Micropolis `TakeCensus`.
+    const SHORT_HISTORY_MAX = 119;
+    const SHORT_HISTORY_SHIFT_START = 118;
+
     state.ResHis[0] = 10;
-    state.ResHis[118] = 70;
-    state.ResHis[119] = 200;
+    state.ResHis[SHORT_HISTORY_SHIFT_START] = 70;
+    state.ResHis[SHORT_HISTORY_MAX] = 200;
     state.ComHis[0] = 20;
-    state.ComHis[118] = 90;
-    state.ComHis[119] = 150;
+    state.ComHis[SHORT_HISTORY_SHIFT_START] = 90;
+    state.ComHis[SHORT_HISTORY_MAX] = 150;
     state.IndHis[0] = 30;
-    state.IndHis[118] = 80;
-    state.IndHis[119] = 160;
+    state.IndHis[SHORT_HISTORY_SHIFT_START] = 80;
+    state.IndHis[SHORT_HISTORY_MAX] = 160;
+    // Non-zero sentinels to verify history shifts copy prior values.
     state.CrimeHis[0] = 33;
     state.PollutionHis[0] = 44;
     state.MoneyHis[0] = 77;
 
+    // ResPop/8 becomes 128 for history graph (1024 / 8).
     state.ResPop = 1024;
     state.ComPop = 12;
     state.IndPop = 7;
+    // Crime ramp uses (CrimeAverage - CrimeRamp) / 4; equal values keep 300.
     state.CrimeRamp = 300;
     state.CrimeAverage = 300;
+    // Pollute ramp uses (PolluteAverage - PolluteRamp) / 4: (18-10)/4 = 2.
     state.PolluteRamp = 10;
     state.PolluteAverage = 18;
+    // CashFlow scales as (CashFlow/20) + 128 and clamps to 255: 5000/20 = 250.
     state.CashFlow = 5000;
+    // ResPop >> 8 = 4, so HospPop 3 => NeedHosp=1, ChurchPop 5 => NeedChurch=-1.
     state.HospPop = 3;
     state.ChurchPop = 5;
 
     takeCensus(state, context);
 
     expect(state.ResHis[1]).toBe(10);
-    expect(state.ResHis[119]).toBe(70);
+    expect(state.ResHis[SHORT_HISTORY_MAX]).toBe(70);
     expect(state.ComHis[1]).toBe(20);
-    expect(state.ComHis[119]).toBe(90);
+    expect(state.ComHis[SHORT_HISTORY_MAX]).toBe(90);
     expect(state.IndHis[1]).toBe(30);
-    expect(state.IndHis[119]).toBe(80);
+    expect(state.IndHis[SHORT_HISTORY_MAX]).toBe(80);
     expect(state.CrimeHis[1]).toBe(33);
     expect(state.PollutionHis[1]).toBe(44);
     expect(state.MoneyHis[1]).toBe(77);
@@ -135,43 +145,50 @@ describe('Census system', () => {
     const context = createSimContext({ store, hooks: { changeCensus } });
     const state = createSimState();
 
-    state.ResHis[120] = 5;
-    state.ResHis[238] = 70;
-    state.ResHis[239] = 200;
-    state.ComHis[120] = 6;
-    state.ComHis[238] = 90;
-    state.ComHis[239] = 150;
-    state.IndHis[120] = 7;
-    state.IndHis[238] = 80;
-    state.IndHis[239] = 160;
+    // 120-year history range is 120..239 in Micropolis `Take2Census`.
+    const LONG_HISTORY_START = 120;
+    const LONG_HISTORY_SHIFT_START = 238;
+    const LONG_HISTORY_MAX = 239;
+
+    state.ResHis[LONG_HISTORY_START] = 5;
+    state.ResHis[LONG_HISTORY_SHIFT_START] = 70;
+    state.ResHis[LONG_HISTORY_MAX] = 200;
+    state.ComHis[LONG_HISTORY_START] = 6;
+    state.ComHis[LONG_HISTORY_SHIFT_START] = 90;
+    state.ComHis[LONG_HISTORY_MAX] = 150;
+    state.IndHis[LONG_HISTORY_START] = 7;
+    state.IndHis[LONG_HISTORY_SHIFT_START] = 80;
+    state.IndHis[LONG_HISTORY_MAX] = 160;
+    // Non-zero sentinels to verify index-0 values copy into index 120.
     state.CrimeHis[0] = 11;
     state.PollutionHis[0] = 22;
     state.MoneyHis[0] = 33;
 
+    // ResPop/8 becomes 10 for long-term graph (80 / 8).
     state.ResPop = 80;
     state.ComPop = 12;
     state.IndPop = 7;
 
     take2Census(state, context);
 
-    expect(state.ResHis[121]).toBe(5);
-    expect(state.ResHis[239]).toBe(70);
-    expect(state.ComHis[121]).toBe(6);
-    expect(state.ComHis[239]).toBe(90);
-    expect(state.IndHis[121]).toBe(7);
-    expect(state.IndHis[239]).toBe(80);
+    expect(state.ResHis[LONG_HISTORY_START + 1]).toBe(5);
+    expect(state.ResHis[LONG_HISTORY_MAX]).toBe(70);
+    expect(state.ComHis[LONG_HISTORY_START + 1]).toBe(6);
+    expect(state.ComHis[LONG_HISTORY_MAX]).toBe(90);
+    expect(state.IndHis[LONG_HISTORY_START + 1]).toBe(7);
+    expect(state.IndHis[LONG_HISTORY_MAX]).toBe(80);
 
     expect(state.Res2HisMax).toBe(70);
     expect(state.Com2HisMax).toBe(90);
     expect(state.Ind2HisMax).toBe(80);
     expect(state.Graph120Max).toBe(90);
 
-    expect(state.ResHis[120]).toBe(10);
-    expect(state.ComHis[120]).toBe(12);
-    expect(state.IndHis[120]).toBe(7);
-    expect(state.CrimeHis[120]).toBe(11);
-    expect(state.PollutionHis[120]).toBe(22);
-    expect(state.MoneyHis[120]).toBe(33);
+    expect(state.ResHis[LONG_HISTORY_START]).toBe(10);
+    expect(state.ComHis[LONG_HISTORY_START]).toBe(12);
+    expect(state.IndHis[LONG_HISTORY_START]).toBe(7);
+    expect(state.CrimeHis[LONG_HISTORY_START]).toBe(11);
+    expect(state.PollutionHis[LONG_HISTORY_START]).toBe(22);
+    expect(state.MoneyHis[LONG_HISTORY_START]).toBe(33);
 
     expect(changeCensus).toHaveBeenCalledTimes(1);
   });
@@ -182,9 +199,11 @@ describe('Census system', () => {
     const context = createSimContext({ store, hooks: { changeCensus } });
     const state = createSimState();
 
+    // ResPop >> 8 = 1, so matching HospPop/ChurchPop clears needs.
     state.ResPop = 256;
     state.HospPop = 1;
     state.ChurchPop = 1;
+    // CashFlow scales to negative -> clamp to 0.
     state.CashFlow = -10000;
 
     takeCensus(state, context);
