@@ -218,10 +218,10 @@ Legend
     - Plan: Census and Graphs
     - Spec: “Census and Graphs”
     - Micropolis: `s_census.c` / `s_hist.c`
-  - [ ] Success criteria:
-    - [ ] ClearCensus, TakeCensus, Take2Census implemented (history shifts + ramps).
-    - [ ] NeedHosp/NeedChurch set correctly.
-    - [ ] Tests: history shift correctness and ramp updates.
+  - [x] Success criteria:
+    - [x] ClearCensus, TakeCensus, Take2Census implemented (history shifts + ramps).
+    - [x] NeedHosp/NeedChurch set correctly.
+    - [x] Tests: history shift correctness and ramp updates.
 
 ---
 
