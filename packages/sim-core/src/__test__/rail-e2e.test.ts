@@ -42,7 +42,7 @@ describe('Rail E2E', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const train = getSprite(realtime, SPRITE_TYPE.TRA);
     expect(train).not.toBeNull();

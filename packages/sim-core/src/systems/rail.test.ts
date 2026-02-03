@@ -25,7 +25,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.RAILBASE);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -46,7 +46,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -71,7 +71,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.LHRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -91,7 +91,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -111,7 +111,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL | TileFlag.CONDBIT);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -131,7 +131,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.RailTotal).toBe(1);
@@ -152,7 +152,7 @@ describe('DoRail', () => {
     store.beginTick();
     store.write('map', indexFor(x, y), Tile.HRAIL);
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     expect(generateTrain).toHaveBeenCalledWith(x, y);
   });
@@ -171,7 +171,7 @@ describe('DoRail', () => {
       store.write('map', indexFor(x, y), Tile.HRAIL);
     }
 
-    mapScanSlice(store, x, x + 1, { onRail: createRailHandler(state, context) });
+    mapScanSlice(state, context, x, x + 1, { onRail: createRailHandler(state, context) });
 
     expect(state.RailTotal).toBe(ys.length);
   });
