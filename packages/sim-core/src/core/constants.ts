@@ -28,11 +28,13 @@ const POWERMAPROW = (WORLD_X + 15) >> 4;
 const PWRMAPSIZE = POWERMAPROW * WORLD_Y;
 // Allocated size in the original; only first PWRMAPSIZE words are used.
 const POWERMAPLEN = 1700;
+const PWRSTKSIZE = (WORLD_X * WORLD_Y) >> 2;
 
 export const PowerMap = {
   POWERMAPROW,
   PWRMAPSIZE,
   POWERMAPLEN,
+  PWRSTKSIZE,
 } as const;
 
 // Tile ID mask (low 10 bits) and flag mask (high 6 bits).
