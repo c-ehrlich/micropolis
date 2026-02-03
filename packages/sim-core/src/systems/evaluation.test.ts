@@ -83,6 +83,7 @@ describe('Evaluation system', () => {
     // (2*5 + 3*10 + 1*1000 + 2*1000 + 1*400 + 1*3000 + 1*5000 + 1*10000 + 1*3000 + 1*6000) * 1000
     getAssValue(state);
 
+    // s_eval.c GetAssValue: sum(weights) * 1000 => 30_440_000.
     expect(state.CityAssValue).toBe(30_440_000);
   });
 
@@ -96,6 +97,7 @@ describe('Evaluation system', () => {
     // s_eval.c DoPopNum: CityPop = (Res + Com*8 + Ind*8) * 20.
     doPopNum(state);
 
+    // s_eval.c DoPopNum: (Res + Com*8 + Ind*8) * 20 => (10 + 8 + 8) * 20 = 520.
     expect(state.CityPop).toBe(520);
     expect(state.deltaCityPop).toBe(0);
     expect(state.CityClass).toBe(0);
@@ -123,6 +125,7 @@ describe('Evaluation system', () => {
     }
 
     expect(state.ProblemTable[2]).toBe(7);
+    // s_eval.c DoProblems: top problems come from ProblemVotes; this RNG yields 0,1,2 then no max => 7.
     expect(Array.from(state.ProblemOrder)).toEqual([0, 1, 2, 7]);
   });
 
