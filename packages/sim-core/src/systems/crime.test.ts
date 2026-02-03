@@ -82,8 +82,14 @@ describe('CrimeScan', () => {
 
     policeMap.fill(10);
 
-    const a = hwIndex(2, 3);
-    const b = hwIndex(4, 5);
+    // Choose HWLD cells whose police-map indices are >3 away from edges so
+    // three smoothing passes keep the uniform 10 value intact.
+    const ax = 20;
+    const ay = 20;
+    const bx = 24;
+    const by = 24;
+    const a = hwIndex(ax, ay);
+    const b = hwIndex(bx, by);
     landValue[a] = 100;
     popDensity[a] = 20;
     landValue[b] = 100;
@@ -96,12 +102,12 @@ describe('CrimeScan', () => {
     expect(crimeMem[a]).toBe(38);
     expect(crimeMem[b]).toBe(38);
     expect(state.CrimeAverage).toBe(38);
-    // First max at (4,5) in 2x2 grid => CrimeMaxX/Y = x<<1, y<<1.
-    expect(state.CrimeMaxX).toBe(8);
-    expect(state.CrimeMaxY).toBe(10);
+    // First max at (24,24) in 2x2 grid => CrimeMaxX/Y = x<<1, y<<1.
+    expect(state.CrimeMaxX).toBe(48);
+    expect(state.CrimeMaxY).toBe(48);
 
     const policeMapEffect = store.getLayer('policeMapEffect') as Int16Array;
-    expect(policeMapEffect[smIndex(0, 0)]).toBe(10);
+    expect(policeMapEffect[smIndex(5, 5)]).toBe(10);
   });
 
   it('clamps computed crime into [0, 250]', () => {
