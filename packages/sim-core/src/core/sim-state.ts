@@ -145,6 +145,14 @@ export interface SimState {
   PollutionHis: Int16Array;
   MoneyHis: Int16Array;
   MiscHis: Int16Array;
+  ResHisMax: number;
+  ComHisMax: number;
+  IndHisMax: number;
+  Res2HisMax: number;
+  Com2HisMax: number;
+  Ind2HisMax: number;
+  Graph10Max: number;
+  Graph120Max: number;
 
   // Flags / init state
   NewMap: number;
@@ -297,6 +305,14 @@ export function createSimState(): SimState {
     PollutionHis: new Int16Array(CITY_HISTORY_LENGTH),
     MoneyHis: new Int16Array(CITY_HISTORY_LENGTH),
     MiscHis: new Int16Array(CITY_MISC_LENGTH),
+    ResHisMax: 0,
+    ComHisMax: 0,
+    IndHisMax: 0,
+    Res2HisMax: 0,
+    Com2HisMax: 0,
+    Ind2HisMax: 0,
+    Graph10Max: 0,
+    Graph120Max: 0,
 
     // Flags / init state
     NewMap: 0,
