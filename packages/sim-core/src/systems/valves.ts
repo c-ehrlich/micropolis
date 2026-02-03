@@ -99,6 +99,8 @@ export function setValves(state: SimState, _context: SimContext): void {
   cratio = (cratio - 1) * 600 + taxValue;
   iratio = (iratio - 1) * 600 + taxValue;
 
+  // C assigns float deltas into short valves, so we explicitly trunc toward zero.
+  // This avoids off-by-one mismatches caused by float precision (e.g. 247.999...).
   if (rratio > 0) {
     if (state.RValve < 2000) {
       state.RValve = Math.trunc(state.RValve + rratio);
