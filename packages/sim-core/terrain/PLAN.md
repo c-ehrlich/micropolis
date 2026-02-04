@@ -217,7 +217,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`ERand`)
 
-- [ ] Port `GetRandStart()` (seed-dependent start coordinates).
+- [x] Port `GetRandStart()` (seed-dependent start coordinates).
   - Requirements:
     - Code: `XStart = 40 + Rand(WORLD_X - 80)`; `YStart = 33 + Rand(WORLD_Y - 67)`; set `MapX/MapY`.
     - Tests: deterministic fake RNG verifies inclusive range and offsets; test comments cite C constants.
