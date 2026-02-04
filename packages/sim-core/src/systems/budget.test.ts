@@ -98,13 +98,20 @@ describe('Budget system', () => {
 
   it('turns off autobudget and sends a message when funds are insufficient', () => {
     const calls: string[] = [];
+    const state = createSimState();
     const context = createSimContext({
       hooks: {
-        sendMes: (id) => calls.push(`sendMes:${id}`),
+        sendMes: (id) => {
+          calls.push(`sendMes:${id}`);
+          // w_budget.c: ClearMes before SendMes(29) when autobudget runs out of funds.
+          // In sim-core, ClearMes is `clearMes` (messages.ts) and SendMes is `sendMes` (messages.ts).
+          // `sendMes` updates the message port *before* invoking the UI hook.
+          expect(state.LastPicNum).toBe(0);
+          expect(state.MessagePort).toBe(29);
+        },
         showBudgetWindowAndStartWaiting: () => calls.push('showBudgetWindowAndStartWaiting'),
       },
     });
-    const state = createSimState();
 
     state.autoBudget = true;
     state.MessagePort = 7;
@@ -125,8 +132,8 @@ describe('Budget system', () => {
     expect(state.MustUpdateOptions).toBe(0);
     expect(calls).toContain('sendMes:29');
     expect(calls).toContain('showBudgetWindowAndStartWaiting');
-    // w_budget.c: ClearMes before SendMes(29) when autobudget runs out of funds.
-    expect(state.MessagePort).toBe(29);
+    // w_update.c updateDate -> doMessage consumes MessagePort during the runUiUpdate/doUpdateHeads call.
+    expect(state.MessagePort).toBe(0);
     expect(state.LastPicNum).toBe(0);
     expect(state.RoadSpend).toBe(100);
     expect(state.FireSpend).toBe(50);

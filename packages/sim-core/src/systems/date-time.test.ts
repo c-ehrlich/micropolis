@@ -138,6 +138,30 @@ describe('Date/time mapping', () => {
     expect(uiSet).toHaveBeenCalledWith('optionDisasters', false);
   });
 
+  it('forces a funds refresh on the first heads run', () => {
+    const uiSet = vi.fn();
+    const context = createSimContext({ hooks: { uiSet } });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+    state.LastCityYear = 1900;
+    state.LastCityMonth = 0;
+
+    state.ValveFlag = 0;
+    state.MustUpdateOptions = 0;
+    state.TotalFunds = 1234;
+    state.LastFunds = -1;
+
+    doUpdateHeads(state, context);
+
+    // C: UpdateHeads() in w_update.c sets MustUpdateFunds=1 and LastFunds=-999999
+    // before calling DoUpdateHeads(), forcing ReallyUpdateFunds() to emit the funds head.
+    // This test asserts the sim-core equivalent: the first doUpdateHeads() run emits funds
+    // even if callers haven't yet called markFundsDirty()/UpdateFunds().
+    expect(uiSet).toHaveBeenCalledWith('funds', 'Funds: $1,234');
+  });
+
   it('invokes the UI heads hook after updating the date', () => {
     const hooks = { doUpdateHeads: vi.fn(), uiSet: vi.fn() };
     const context = createSimContext({ hooks });

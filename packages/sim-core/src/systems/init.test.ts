@@ -88,11 +88,14 @@ describe('initWillStuff', () => {
     expect(state.LastCityTime).toBe(12);
     expect(state.LastCityYear).toBe(1901);
     expect(state.LastCityMonth).toBe(0);
-    expect(state.LastFunds).toBe(-1);
+    // w_update.c: UpdateHeads() initializes MustUpdateFunds=1 and resets LastFunds; the subsequent
+    // DoUpdateHeads() call runs ReallyUpdateFunds(), which sets LastFunds to TotalFunds.
+    expect(state.LastFunds).toBe(state.TotalFunds);
     expect(state.RoadFund).toBe(0);
     expect(state.PoliceFund).toBe(0);
     expect(state.FireFund).toBe(0);
-    expect(state.ValveFlag).toBe(1);
+    // w_update.c: UpdateHeads() sets ValveFlag=1 before DoUpdateHeads(); showValves() clears it.
+    expect(state.ValveFlag).toBe(0);
     expect(state.DisasterEvent).toBe(0);
     expect(state.TaxFlag).toBe(0);
 

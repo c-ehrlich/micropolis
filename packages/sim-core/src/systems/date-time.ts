@@ -53,7 +53,11 @@ function getFundsCache(state: SimState): FundsCache {
   if (cached) {
     return cached;
   }
-  const next = { mustUpdate: false };
+  // C parity: UpdateHeads() in w_update.c forces an initial funds refresh by setting
+  // MustUpdateFunds=1 before the first DoUpdateHeads() call. Since sim-core doesn't
+  // have an explicit UpdateHeads() entry point, treat the first cache creation as
+  // "dirty" so the first doUpdateHeads() run emits the funds head by default.
+  const next = { mustUpdate: true };
   FUNDS_CACHE.set(state, next);
   return next;
 }

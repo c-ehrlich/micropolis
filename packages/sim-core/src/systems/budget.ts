@@ -1,19 +1,14 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
-import { markFundsDirty, runUiUpdate } from './date-time.ts';
+import { runUiUpdate } from './date-time.ts';
+import { spendFunds } from './funds.ts';
 import { clearMes, sendMes } from './messages.ts';
 
 const R_LEVELS = [0.7, 0.9, 1.2] as const;
 const F_LEVELS = [1.4, 1.2, 0.8] as const;
 
 const toInt = (value: number): number => Math.trunc(value);
-
-// Budget spends mutate TotalFunds; mark funds dirty for DoUpdateHeads parity.
-const spend = (state: SimState, dollars: number): void => {
-  state.TotalFunds = state.TotalFunds - dollars;
-  markFundsDirty(state);
-};
 
 export function doBudget(state: SimState, context: SimContext): void {
   doBudgetNow(state, context, false);
@@ -87,7 +82,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
 
     const totalSpend = state.FireSpend + state.PoliceSpend + state.RoadSpend;
     const moreDough = state.TaxFund - totalSpend;
-    spend(state, -moreDough);
+    spendFunds(state, -moreDough);
   };
 
   if (!state.autoBudget || fromMenu) {
@@ -103,7 +98,7 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
 
   if (yumDuckets > total) {
     const moreDough = state.TaxFund - total;
-    spend(state, -moreDough);
+    spendFunds(state, -moreDough);
     state.FireSpend = state.FireFund;
     state.PoliceSpend = state.PoliceFund;
     state.RoadSpend = state.RoadFund;
