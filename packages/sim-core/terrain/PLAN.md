@@ -210,7 +210,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`MoveMap`)
 
-- [ ] Port `ERand(limit)` helper.
+- [x] Port `ERand(limit)` helper.
   - Requirements:
     - Code: `ERand(limit) = min(Rand(limit), Rand(limit))`.
     - Tests: deterministic fake RNG verifies min-of-two.
