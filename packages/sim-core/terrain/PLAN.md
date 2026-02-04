@@ -280,7 +280,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`SmoothWater`)
 
-- [ ] Port `MakeLakes` (cluster loops + SRiv/BRiv selection).
+- [x] Port `MakeLakes` (cluster loops + SRiv/BRiv selection).
   - Requirements:
     - Code: `Lim1` selection (`LakeLevel < 0 ? Rand(10) : LakeLevel / 2`).
     - Code: coordinate selection offsets and `Lim2 = Rand(12) + 2`.
