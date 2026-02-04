@@ -289,7 +289,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`MakeLakes`)
 
-- [ ] Port `MakeNakedIsland` (base fill + border + perimeter plops).
+- [x] Port `MakeNakedIsland` (base fill + border + perimeter plops).
   - Requirements:
     - Code: fill all tiles to `RIVER`, then interior `[5..WORLD_X-6]×[5..WORLD_Y-6]` to `DIRT`.
     - Code: perimeter plop loops (x and y step 2) using `ERand(RADIUS)` and exact constants.
