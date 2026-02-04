@@ -203,7 +203,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`BRivPlop`, `SRivPlop`)
 
-- [ ] Port `MoveMap(dir)` (8-way direction table).
+- [x] Port `MoveMap(dir)` (8-way direction table).
   - Requirements:
     - Code: implement `MoveMap` with `dir & 7` masking and the exact `DirTab`.
     - Tests: for each dir 0..7, assert delta matches.
