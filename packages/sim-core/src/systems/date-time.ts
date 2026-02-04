@@ -23,7 +23,7 @@ const DATE_STRINGS = [
 ] as const;
 
 type HeadsCache = { lastR: number | null; lastC: number | null; lastI: number | null };
-type FundsCache = { mustUpdate: boolean };
+type FundsCache = { mustUpdate: boolean; forceNextEmit: boolean };
 
 const HEADS_CACHE = new WeakMap<SimState, HeadsCache>();
 // Tracks w_update.c `MustUpdateFunds` without adding new core state fields.
@@ -57,7 +57,11 @@ function getFundsCache(state: SimState): FundsCache {
   // MustUpdateFunds=1 before the first DoUpdateHeads() call. Since sim-core doesn't
   // have an explicit UpdateHeads() entry point, treat the first cache creation as
   // "dirty" so the first doUpdateHeads() run emits the funds head by default.
-  const next = { mustUpdate: true };
+  //
+  // Additionally, C UpdateHeads() resets `LastFunds` to `-999999`, ensuring the first
+  // `ReallyUpdateFunds()` call emits even if a loaded state had `LastFunds == TotalFunds`.
+  // sim-core models that behavior with `forceNextEmit` instead of mutating `LastFunds`.
+  const next = { mustUpdate: true, forceNextEmit: true };
   FUNDS_CACHE.set(state, next);
   return next;
 }
@@ -107,12 +111,14 @@ function updateFunds(state: SimState, context: SimContext): void {
     return;
   }
   fundsCache.mustUpdate = false;
+  const forceNextEmit = fundsCache.forceNextEmit;
+  fundsCache.forceNextEmit = false;
 
   if (state.TotalFunds < 0) {
     state.TotalFunds = 0;
   }
 
-  if (state.TotalFunds !== state.LastFunds) {
+  if (forceNextEmit || state.TotalFunds !== state.LastFunds) {
     state.LastFunds = state.TotalFunds;
     const label = `Funds: ${formatDollarDecimal(state.TotalFunds)}`;
     context.hooks.uiSet('funds', label);

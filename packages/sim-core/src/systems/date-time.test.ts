@@ -171,14 +171,15 @@ describe('Date/time mapping', () => {
     state.ValveFlag = 0;
     state.MustUpdateOptions = 0;
     state.TotalFunds = 1234;
-    state.LastFunds = -1;
+    state.LastFunds = 1234;
 
     doUpdateHeads(state, context);
 
     // C: UpdateHeads() in w_update.c sets MustUpdateFunds=1 and LastFunds=-999999
     // before calling DoUpdateHeads(), forcing ReallyUpdateFunds() to emit the funds head.
     // This test asserts the sim-core equivalent: the first doUpdateHeads() run emits funds
-    // even if callers haven't yet called markFundsDirty()/UpdateFunds().
+    // even if a loaded state happens to have `LastFunds == TotalFunds`, and even if callers
+    // haven't yet called markFundsDirty()/UpdateFunds().
     expect(uiSet).toHaveBeenCalledWith('funds', 'Funds: $1,234');
   });
 

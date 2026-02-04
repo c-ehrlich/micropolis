@@ -67,7 +67,7 @@ Also reconcile/adjust sim-core date handling so it matches the C call chain `upd
 
 Testing Plan
 - [x] Add targeted unit tests for map-flag updates, `VoteProblems` bug emulation, and the budget warning message path.
-- [ ] Add targeted unit tests for remaining heads/message parity.
+- [x] Add targeted unit tests for remaining heads/message parity.
 Cover at least:
 - `UpdateHeads`-style first-run funds update (w_update.c `UpdateHeads`/`ReallyUpdateFunds`).
 - Megalinium rollover message -40 honoring message-port gating (w_update.c `updateDate` + s_msg.c `SendMes`).
