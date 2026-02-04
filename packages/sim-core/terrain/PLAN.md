@@ -142,7 +142,7 @@ Options (`opts`) should include the generator knobs:
 
 ## Units of Work (agent-sized, testable)
 
-- [ ] Add terrain module skeleton + public exports.
+- [x] Add terrain module skeleton + public exports.
   - Requirements:
     - Code: add `packages/sim-core/src/terrain/generate.ts` and (if helpful) `packages/sim-core/src/terrain/index.ts`.
     - Code: define `TerrainGenOptions` and a minimal `generateMap(...)` stub (throws or no-op).

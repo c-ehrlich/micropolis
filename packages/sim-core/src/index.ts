@@ -36,3 +36,4 @@ export * from './systems/roads.ts';
 export * from './systems/traffic.ts';
 export * from './systems/valves.ts';
 export * from './systems/zones.ts';
+export * from './terrain/index.ts';
