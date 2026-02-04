@@ -266,7 +266,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`SmoothRiver`, `REdTab`)
 
-- [ ] Port `SmoothWater` (3 passes).
+- [x] Port `SmoothWater` (3 passes).
   - Requirements:
     - Code: implement all three loops with the same masked/unmasked comparisons:
       - Pass 1: set `REDGE` when any 4-neighbor is outside `[WATER_LOW..WATER_HIGH]`.
