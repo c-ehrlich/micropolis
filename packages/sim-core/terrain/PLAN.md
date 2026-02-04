@@ -319,7 +319,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`DoRivers`, `DoBRiv`, `DoSRiv`)
 
-- [ ] Implement `GenerateMap(seed)` pipeline (including early-return island branch).
+- [x] Implement `GenerateMap(seed)` pipeline (including early-return island branch).
   - Requirements:
     - Code: mirror step order and branch behavior:
       - `SeedRand(seed)`; random-island branch (`CreateIsland < 0 && Rand(100) < 10`) calls `MakeIsland()` then **returns** (skips `RandomlySeedRand()`).
