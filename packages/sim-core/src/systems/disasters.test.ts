@@ -5,6 +5,7 @@ import { createClassicMapStore } from '../core/map-store.ts';
 import { MicropolisRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
+import { updateDate } from './date-time.ts';
 import {
   createFireHandler,
   createFloodHandler,
@@ -221,12 +222,14 @@ describe('Disaster events', () => {
     state.FloodCnt = 2;
 
     const rng = new StubRng([0, 0, 0, 0, 3]);
-    const messages: Array<[number, number, number]> = [];
+    const messages: number[] = [];
+    const messagesAt: Array<[number, number, number]> = [];
     const context = createSimContext({
       store,
       rng,
       hooks: {
-        sendMesAt: (id, x, y) => messages.push([id, x, y]),
+        sendMes: (id) => messages.push(id),
+        sendMesAt: (id, x, y) => messagesAt.push([id, x, y]),
       },
     });
 
@@ -236,6 +239,7 @@ describe('Disaster events', () => {
     store.write('map', indexFor(x, y), Tile.LHTHR + 1);
 
     doDisasters(state, context);
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     // Fire variant comes from `Rand16() & 7` in `SetFire` (`s_disast.c`).
@@ -243,8 +247,10 @@ describe('Disaster events', () => {
     expect(state.FloodCnt).toBe(1);
     expect(state.CrashX).toBe(x);
     expect(state.CrashY).toBe(y);
-    // Message -20 is sent by `SetFire` in `s_disast.c`.
-    expect(messages).toEqual([[-20, x, y]]);
+    // Message -20 is sent by `SetFire` in `s_disast.c` via `SendMesAt(-20, x, y)`.
+    // s_msg.c doMessage checks `if (MesX || MesY)`; with x=y=0, this behaves like SendMes.
+    expect(messages).toEqual([-20]);
+    expect(messagesAt).toEqual([]);
   });
 
   it('ticks scenario timers and clears DisasterEvent after countdown', () => {
@@ -288,13 +294,15 @@ describe('Disaster events', () => {
         sendMesAt: (id, x, y) => messages.push([id, x, y]),
       },
     });
+    const state = createSimState();
 
     const x = 1;
     const y = 2;
     // `MakeFire` checks for BURNBIT and tileId > 21 (`s_disast.c`).
     store.write('map', indexFor(x, y), Tile.LHTHR + 1 + TileFlag.BURNBIT);
 
-    makeFire(context);
+    makeFire(state, context);
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     // Fire variant uses `Rand16() & 7` in `MakeFire` (`s_disast.c`).
@@ -323,6 +331,7 @@ describe('Disaster events', () => {
     store.write('map', indexFor(x, y - 1), Tile.DIRT);
 
     makeFlood(state, context);
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     // `MakeFlood` sets FloodCnt to 30 in `s_disast.c`.
@@ -355,6 +364,7 @@ describe('Disaster events', () => {
     store.write('map', indexFor(0, 0), Tile.RESBASE);
 
     makeEarthquake(state, context);
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     // Earthquake fire variant uses `Rand16() & 7` when `(z & 3) == 0` (`s_disast.c`).
@@ -388,6 +398,7 @@ describe('Disaster events', () => {
     store.write('map', indexFor(x, y), Tile.NUCLEAR);
 
     makeMeltdown(state, context);
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     expect(state.MeltX).toBe(x);

@@ -36,6 +36,18 @@ export interface SimHooks {
   updateBudgetWindow: () => void;
 
   // Messages + scenarios
+  /**
+   * Monotonic clock used for UI-timed behaviors.
+   *
+   * Mirrors `TickCount()` in `ref/micropolis/src/sim/w_stubs.c`, which is used by
+   * `doMessage()` (`ref/micropolis/src/sim/s_msg.c`) to expire non-picture messages
+   * after `(60 * 30)` ticks (~30 seconds at 60 Hz).
+   *
+   * sim-core expresses this as a hook so tests/integrations can provide a stable
+   * clock; the default implementation is derived from `Date.now()` and yields
+   * roughly 60 ticks per second.
+   */
+  tickCount: () => number;
   sendMes: (id: number) => void;
   sendMesAt: (id: number, x: number, y: number) => void;
   dropFireBombs: () => void;
@@ -79,6 +91,12 @@ export function createSimHooks(overrides: Partial<SimHooks> = {}): SimHooks {
     updateBudgetWindow: overrides.updateBudgetWindow ?? noop,
 
     // Messages + scenarios
+    tickCount:
+      overrides.tickCount ??
+      (() => {
+        // ~60 ticks/second to match the `doMessage()` timeout constant in s_msg.c.
+        return Math.trunc((Date.now() * 60) / 1000);
+      }),
     sendMes: overrides.sendMes ?? noop,
     sendMesAt: overrides.sendMesAt ?? noop,
     dropFireBombs: overrides.dropFireBombs ?? noop,

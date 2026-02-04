@@ -3,6 +3,7 @@ import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import type { MapScanContext } from './map-scan.ts';
+import { sendMesAt } from './messages.ts';
 import { createZoneSystem, doMeltdown } from './zones.ts';
 
 const { WORLD_X, WORLD_Y, SmX, SmY } = World;
@@ -327,7 +328,7 @@ export function makeEarthquake(state: SimState, context: SimContext): void {
   const map = store.getLayer('map') as Uint16Array;
 
   context.hooks.doEarthQuake();
-  context.hooks.sendMesAt(-23, state.CCx, state.CCy);
+  sendMesAt(state, context, -23, state.CCx, state.CCy);
 
   const time = rng.rand(700) + 300;
   for (let z = 0; z < time; z += 1) {
@@ -373,14 +374,14 @@ export function setFire(state: SimState, context: SimContext): void {
   store.write('map', index, FIRE + ANIMBIT + (rng.next16() & 7));
   state.CrashX = x;
   state.CrashY = y;
-  context.hooks.sendMesAt(-20, x, y);
+  sendMesAt(state, context, -20, x, y);
 }
 
 /**
  * Attempts to ignite a burnable, non-zone tile up to 40 times.
  * Mirrors `MakeFire` in `ref/micropolis/src/sim/s_disast.c` (1:1 port).
  */
-export function makeFire(context: SimContext): void {
+export function makeFire(state: SimState, context: SimContext): void {
   const rng = context.rng;
   const store = context.store;
   const map = store.getLayer('map') as Uint16Array;
@@ -399,7 +400,7 @@ export function makeFire(context: SimContext): void {
     }
 
     store.write('map', index, FIRE + ANIMBIT + (rng.next16() & 7));
-    context.hooks.sendMesAt(20, x, y);
+    sendMesAt(state, context, 20, x, y);
     return;
   }
 }
@@ -440,7 +441,7 @@ export function makeFlood(state: SimState, context: SimContext): void {
       state.FloodCnt = 30;
       state.FloodX = xx;
       state.FloodY = yy;
-      context.hooks.sendMesAt(-42, xx, yy);
+      sendMesAt(state, context, -42, xx, yy);
       return;
     }
   }

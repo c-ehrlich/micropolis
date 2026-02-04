@@ -85,6 +85,9 @@ describe('Date/time mapping', () => {
     expect(state.LastCityMonth).toBe(2);
     expect(state.LastCityTime).toBe(2);
     expect(sendMes).toHaveBeenCalledWith(-40);
+    // s_msg.c doMessage: picture messages requeue the positive id to show the text next.
+    expect(state.MessagePort).toBe(40);
+    expect(state.MesNum).toBe(-40);
     expect(uiSet).toHaveBeenCalledWith('date', 'Mar 1900');
   });
 
@@ -100,6 +103,10 @@ describe('Date/time mapping', () => {
 
     // w_update.c updateDate -> doMessage consumes MessagePort.
     expect(state.MessagePort).toBe(0);
+    expect(state.MesNum).toBe(12);
+    // s_msg.c doMessage: autoGo consumes MesX/MesY when it triggers the UI auto-goto.
+    expect(state.MesX).toBe(0);
+    expect(state.MesY).toBe(0);
   });
 
   it('updates demand, funds, and options during heads update', () => {

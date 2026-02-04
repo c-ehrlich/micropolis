@@ -1,6 +1,60 @@
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 
+type LastDispatched =
+  | { kind: 'none' }
+  | { kind: 'mes'; id: number }
+  | { kind: 'mesAt'; id: number; x: number; y: number };
+
+const LAST_DISPATCHED = new WeakMap<SimState, LastDispatched>();
+
+function getLastDispatched(state: SimState): LastDispatched {
+  return LAST_DISPATCHED.get(state) ?? { kind: 'none' };
+}
+
+function setLastDispatched(state: SimState, next: LastDispatched): void {
+  LAST_DISPATCHED.set(state, next);
+}
+
+function dispatchMes(state: SimState, context: SimContext, id: number): void {
+  const x = state.MesX;
+  const y = state.MesY;
+
+  // s_msg.c doMessage: both picture and text messages can carry MesX/MesY, but MesX/MesY
+  // are only consumed (cleared) when `autoGo` is enabled.
+  const wantsAt = x !== 0 || y !== 0;
+
+  // C parity: picture delivery (`UIShowPicture`) is not deduplicated by `SetMessageField`,
+  // so always forward negative ids through the hook layer.
+  if (id < 0) {
+    if (wantsAt) {
+      context.hooks.sendMesAt(id, x, y);
+    } else {
+      context.hooks.sendMes(id);
+    }
+    return;
+  }
+
+  // C parity: `doMessage()` runs every heads tick. Its `SetMessageField` helper suppresses
+  // redundant UI updates when the message hasn't changed. sim-core does the same suppression
+  // at the id/coordinate level, since message string lookup lives in the UI layer.
+  const prev = getLastDispatched(state);
+  if (!wantsAt) {
+    if (prev.kind === 'mes' && prev.id === id) {
+      return;
+    }
+    setLastDispatched(state, { kind: 'mes', id });
+    context.hooks.sendMes(id);
+    return;
+  }
+
+  if (prev.kind === 'mesAt' && prev.id === id && prev.x === x && prev.y === y) {
+    return;
+  }
+  setLastDispatched(state, { kind: 'mesAt', id, x, y });
+  context.hooks.sendMesAt(id, x, y);
+}
+
 /**
  * Core message port enqueue logic.
  * Mirrors `SendMes` in `ref/micropolis/src/sim/s_msg.c`.
@@ -55,34 +109,98 @@ export function _consumeMessagePort(state: SimState): { id: number; x: number; y
 
 /**
  * Sends a message through the port if permitted.
- * Mirrors `SendMes` in `ref/micropolis/src/sim/s_msg.c`.
+ * Mirrors `SendMes` in `ref/micropolis/src/sim/s_msg.c` (1:1).
+ *
+ * Note: In Micropolis C, `SendMes` only enqueues the message in `MessagePort`.
+ * Delivery/consumption happens later via `doMessage` (also in `s_msg.c`), which
+ * is called from `updateDate` (`ref/micropolis/src/sim/w_update.c`).
+ *
+ * sim-core follows the same split: callers enqueue via `sendMes`/`sendMesAt`,
+ * and the UI is driven by `doMessage()` during the heads update path.
  */
-export function sendMes(state: SimState, context: SimContext, id: number): boolean {
-  if (!queueMessage(state, id)) {
-    return false;
-  }
-  context.hooks.sendMes(id);
-  return true;
+export function sendMes(state: SimState, _context: SimContext, id: number): boolean {
+  return queueMessage(state, id);
 }
 
 /**
  * Sends a message tagged with a map coordinate if permitted.
- * Mirrors `SendMesAt` in `ref/micropolis/src/sim/s_msg.c`.
+ * Mirrors `SendMesAt` in `ref/micropolis/src/sim/s_msg.c` (1:1).
  */
 export function sendMesAt(
   state: SimState,
-  context: SimContext,
+  _context: SimContext,
   id: number,
   x: number,
   y: number,
 ): boolean {
-  if (!queueMessage(state, id)) {
-    return false;
-  }
+  if (!queueMessage(state, id)) return false;
   state.MesX = x;
   state.MesY = y;
-  context.hooks.sendMesAt(id, x, y);
   return true;
+}
+
+/**
+ * UI message loop (port consumption, picture requeue, and expiry).
+ *
+ * Mirrors `doMessage` in `ref/micropolis/src/sim/s_msg.c` (core behavior, 1:1):
+ * - Consumes `MessagePort` into `MesNum` and clears the port.
+ * - Requeues picture messages by setting `MessagePort = pictId` so the text message
+ *   is shown on the next tick.
+ * - Expires active non-picture messages after `(60 * 30)` ticks via `TickCount()`.
+ *
+ * sim-core routes UI delivery through `SimHooks.sendMes` / `SimHooks.sendMesAt`.
+ * (C uses `Eval("UISetMessage ...")` / `Eval("UIShowPicture ...")`.)
+ */
+export function doMessage(state: SimState, context: SimContext): void {
+  const tick = context.hooks.tickCount();
+
+  if (state.MessagePort) {
+    state.MesNum = state.MessagePort;
+    state.MessagePort = 0;
+    state.LastMesTime = tick;
+  } else {
+    if (state.MesNum === 0) return;
+
+    // s_msg.c: picture messages flip sign and reset the timer when there is no port input.
+    if (state.MesNum < 0) {
+      state.MesNum = -state.MesNum;
+      state.LastMesTime = tick;
+    } else if (tick - state.LastMesTime > 60 * 30) {
+      state.MesNum = 0;
+      return;
+    }
+  }
+
+  if (state.MesNum >= 0) {
+    if (state.MesNum === 0) return;
+    if (state.MesNum > 60) {
+      state.MesNum = 0;
+      return;
+    }
+
+    dispatchMes(state, context, state.MesNum);
+
+    // s_msg.c: `autoGo` consumes MesX/MesY after it triggers the UI auto-goto.
+    if (state.autoGo && (state.MesX || state.MesY)) {
+      state.MesX = 0;
+      state.MesY = 0;
+    }
+
+    return;
+  }
+
+  // Picture message.
+  const pictId = -state.MesNum;
+  dispatchMes(state, context, -pictId);
+
+  // s_msg.c: requeue the corresponding *text* message.
+  state.MessagePort = pictId;
+
+  // s_msg.c: `autoGo` consumes MesX/MesY after it triggers the UI auto-goto.
+  if (state.autoGo && (state.MesX || state.MesY)) {
+    state.MesX = 0;
+    state.MesY = 0;
+  }
 }
 
 /**

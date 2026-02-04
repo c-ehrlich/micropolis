@@ -6,6 +6,7 @@ import { MicropolisRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
 import { dispatchSimPhase } from '../sim/simulate.ts';
+import { updateDate } from '../systems/date-time.ts';
 import { doDisasters } from '../systems/disasters.ts';
 
 const { WORLD_Y } = World;
@@ -61,12 +62,14 @@ describe('Disasters E2E', () => {
     // 0,0 -> SetFire x/y selection
     // 5 -> SetFire fire variant (Rand16 & 7)
     const rng = new StubRng([0, 0, 0, 0, 5]);
-    const messages: Array<[number, number, number]> = [];
+    const messages: number[] = [];
+    const messagesAt: Array<[number, number, number]> = [];
     const context = createSimContext({
       store,
       rng,
       hooks: {
-        sendMesAt: (id, x, y) => messages.push([id, x, y]),
+        sendMes: (id) => messages.push(id),
+        sendMesAt: (id, x, y) => messagesAt.push([id, x, y]),
       },
     });
 
@@ -76,10 +79,13 @@ describe('Disasters E2E', () => {
     store.write('map', indexFor(x, y), Tile.LHTHR + 1);
 
     dispatchSimPhase(15, state, context, { doDisasters });
+    updateDate(state, context);
 
     const map = store.getLayer('map') as Uint16Array;
     expect(map[indexFor(x, y)]).toBe(Tile.FIRE + 5 + TileFlag.ANIMBIT);
     // Message -20 sent by `SetFire` in `s_disast.c`.
-    expect(messages).toEqual([[-20, x, y]]);
+    // s_msg.c doMessage checks `if (MesX || MesY)`; with x=y=0, this behaves like SendMes.
+    expect(messages).toEqual([-20]);
+    expect(messagesAt).toEqual([]);
   });
 });

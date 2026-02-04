@@ -104,6 +104,10 @@ export function initWillStuff(
   state.MessagePort = 0;
   state.MesX = 0;
   state.MesY = 0;
+  // s_msg.c / w_stubs.c message loop scratch (runtime-only).
+  state.MesNum = 0;
+  state.LastMesTime = 0;
+  state.LastPicNum = 0;
   state.RoadFund = 0;
   state.PoliceFund = 0;
   state.FireFund = 0;

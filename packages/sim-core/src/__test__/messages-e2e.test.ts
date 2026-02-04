@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
 import { dispatchSimPhase } from '../sim/simulate.ts';
+import { updateDate } from '../systems/date-time.ts';
 import { sendMessages } from '../systems/messages.ts';
 
 describe('Messages E2E', () => {
@@ -22,6 +23,8 @@ describe('Messages E2E', () => {
 
     // TotalZPop/4 >= ResZPop => message 1 in SendMessages (s_msg.c).
     dispatchSimPhase(10, state, context, { sendMessages });
+    // w_update.c updateDate calls s_msg.c doMessage to deliver queued messages.
+    updateDate(state, context);
 
     expect(sent).toEqual([1]);
   });

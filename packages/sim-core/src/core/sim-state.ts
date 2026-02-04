@@ -181,6 +181,21 @@ export interface SimState {
   MesX: number;
   MesY: number;
   LastPicNum: number;
+  /**
+   * Active message id managed by the UI message loop.
+   *
+   * Mirrors `MesNum` in `ref/micropolis/src/sim/w_stubs.c` / `ref/micropolis/src/sim/s_msg.c`.
+   * This is runtime/UI-only state (not part of `.cty` persistence).
+   */
+  MesNum: number;
+  /**
+   * Tick timestamp for the current `MesNum`.
+   *
+   * Mirrors `LastMesTime` in `ref/micropolis/src/sim/w_stubs.c` / `ref/micropolis/src/sim/s_msg.c`,
+   * as returned by `TickCount()` (sim-core sources this via `SimHooks.tickCount()`).
+   * This is runtime/UI-only state (not part of `.cty` persistence).
+   */
+  LastMesTime: number;
   LastCityPop: number;
   LastCategory: number;
 
@@ -360,6 +375,8 @@ export function createSimState(): SimState {
     MesX: 0,
     MesY: 0,
     LastPicNum: 0,
+    MesNum: 0,
+    LastMesTime: 0,
     LastCityPop: 0,
     LastCategory: 0,
 

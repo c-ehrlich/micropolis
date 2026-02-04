@@ -59,7 +59,7 @@ Ensure every path that changes `TotalFunds` marks funds dirty so `DoUpdateHeads`
 - [ ] Heads parity: wire `uiSet` heads keys in `packages/sim-ui`.
 Consume `demandR/demandC/demandI`, `funds`, and options keys, and wire `NewMapFlags`/`NewMap` into map invalidation/redraw logic (see `packages/sim-ui/IMPORTANT.md` + `ref/micropolis/src/sim/w_update.c`).
 
-- [ ] Message parity: model picture-message requeue and timeouts.
+- [x] Message parity: model picture-message requeue and timeouts.
 `doMessage` in `ref/micropolis/src/sim/s_msg.c` requeues picture messages (`MessagePort = pictId`) and manages expiry (via `MesNum`, `LastMesTime`, and `TickCount()`); decide whether this behavior lives in sim-core or sim-ui and implement parity accordingly.
 Also reconcile/adjust sim-core date handling so it matches the C call chain `updateDate()` -> `doMessage()` in `ref/micropolis/src/sim/w_update.c`:
 - Ensure the megalinium rollover message uses the message-port gated `SendMes(-40)` path (not an unconditional UI hook call), matching `ref/micropolis/src/sim/w_update.c`.

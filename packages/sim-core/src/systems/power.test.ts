@@ -5,6 +5,7 @@ import { PowerMap, Tile, TileFlag, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
+import { updateDate } from './date-time.ts';
 import { doPowerScan, pushPowerStack, setZPowerAt } from './power.ts';
 
 const { POWERMAPROW } = PowerMap;
@@ -144,6 +145,7 @@ describe('doPowerScan', () => {
     pushPowerStack(state, plant.x, plant.y);
 
     doPowerScan(state, context);
+    updateDate(state, context);
 
     expect(hooks.sendMes).toHaveBeenCalledWith(40);
 

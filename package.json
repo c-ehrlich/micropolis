@@ -15,7 +15,8 @@
     "test": "turbo test",
     "test:watch": "pnpm --filter @city/web test:watch",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm test && pnpm typecheck && pnpm format"
   },
   "devDependencies": {
     "@tanstack/eslint-plugin-router": "1.131.2",

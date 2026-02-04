@@ -1,7 +1,7 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
-import { _consumeMessagePort } from './messages.ts';
+import { doMessage, sendMes } from './messages.ts';
 
 const TICKS_PER_YEAR = 48;
 const TICKS_PER_MONTH = 4;
@@ -223,10 +223,13 @@ export function updateDate(state: SimState, context: SimContext): void {
   if (year >= MEGALINIUM_YEAR) {
     setYear(state, context, state.StartingYear);
     year = state.StartingYear;
-    context.hooks.sendMes(-40);
+    // w_update.c updateDate: rollover uses SendMes(-40), i.e. MessagePort-gated.
+    sendMes(state, context, -40);
   }
 
-  _consumeMessagePort(state);
+  // w_update.c updateDate always calls doMessage() (s_msg.c), which consumes/requeues
+  // MessagePort and manages expiry based on TickCount().
+  doMessage(state, context);
 
   if (state.LastCityYear !== year || state.LastCityMonth !== month) {
     state.LastCityYear = year;
