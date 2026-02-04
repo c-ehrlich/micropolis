@@ -179,7 +179,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`ClearMap`, `ClearUnnatural`)
 
-- [ ] Implement `PutOnMap` overwrite rules.
+- [x] Implement `PutOnMap` overwrite rules.
   - Requirements:
     - Code: port `PutOnMap(Mchar, Xoff, Yoff)` including:
       - `Mchar == 0` early return,
