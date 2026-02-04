@@ -300,7 +300,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`MakeNakedIsland`)
 
-- [ ] Port `MakeIsland` (naked island + SmoothRiver + DoTrees).
+- [x] Port `MakeIsland` (naked island + SmoothRiver + DoTrees).
   - Requirements:
     - Code: `MakeIsland()` = `MakeNakedIsland(); SmoothRiver(); DoTrees();`.
     - Tests: spy-based test verifying call order and that lakes/rivers are not invoked.
