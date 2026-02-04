@@ -224,7 +224,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`GetRandStart`)
 
-- [ ] Port `IsTree` predicate.
+- [x] Port `IsTree` predicate.
   - Requirements:
     - Code: `IsTree(cell)` uses `(cell & LOMASK)` within `[WOODS_LOW..WOODS_HIGH]` (`TREEBASE..UNUSED_TRASH2`).
     - Tests: boundary values (20, 21, 39, 40) and flagged variants.
