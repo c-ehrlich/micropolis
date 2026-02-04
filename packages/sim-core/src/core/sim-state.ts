@@ -44,6 +44,45 @@ export interface SimState {
   firePercent: number;
   autoBudget: boolean;
   autoBulldoze: boolean;
+  /**
+   * Auto-go-to message coordinates.
+   * Mirrors `autoGo` in `ref/micropolis/src/sim/headers/sim.h` / `ref/micropolis/src/sim/s_fileio.c`.
+   *
+   * Notes:
+   * - Persisted in `.cty` via `MiscHis[54]` (see `s_fileio.c loadFile/saveFile`).
+   * - Used by the message system (`ref/micropolis/src/sim/s_msg.c`) when MesX/MesY are set.
+   */
+  autoGo: boolean;
+  /**
+   * Sound enabled toggle.
+   * Mirrors `UserSoundOn` in `ref/micropolis/src/sim/headers/sim.h` / `ref/micropolis/src/sim/s_fileio.c`.
+   *
+   * Notes:
+   * - Persisted in `.cty` via `MiscHis[55]` (see `s_fileio.c loadFile/saveFile`).
+   * - Gates sound playback in `ref/micropolis/src/sim/w_sound.c`.
+   */
+  userSoundOn: boolean;
+  /**
+   * Animation runtime option (UI-only in C).
+   * Mirrors `DoAnimation` in `ref/micropolis/src/sim/sim.c` and `ref/micropolis/src/sim/w_update.c`.
+   *
+   * Not persisted in `.cty` (runtime option in the classic UI).
+   */
+  doAnimation: boolean;
+  /**
+   * Messages runtime option (UI-only in C).
+   * Mirrors `DoMessages` in `ref/micropolis/src/sim/sim.c` and `ref/micropolis/src/sim/w_update.c`.
+   *
+   * Not persisted in `.cty` (runtime option in the classic UI).
+   */
+  doMessages: boolean;
+  /**
+   * Notices runtime option (UI-only in C).
+   * Mirrors `DoNotices` in `ref/micropolis/src/sim/sim.c` and `ref/micropolis/src/sim/w_update.c`.
+   *
+   * Not persisted in `.cty` (runtime option in the classic UI).
+   */
+  doNotices: boolean;
 
   // Population + census
   ResPop: number;
@@ -219,6 +258,11 @@ export function createSimState(): SimState {
     firePercent: 1,
     autoBudget: true,
     autoBulldoze: true,
+    autoGo: true,
+    userSoundOn: true,
+    doAnimation: true,
+    doMessages: true,
+    doNotices: true,
 
     // Population + census
     ResPop: 0,
@@ -350,6 +394,8 @@ export function createSimState(): SimState {
     DoInitialEval: 0,
     InitSimLoad: 2,
     TaxFlag: 0,
-    MustUpdateOptions: 0,
+    // C sim_init (ref/micropolis/src/sim/sim.c) sets MustUpdateOptions=1 so the first heads run
+    // emits option state via w_update.c updateOptions -> UpdateOptionsMenu.
+    MustUpdateOptions: 1,
   };
 }

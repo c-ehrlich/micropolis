@@ -120,8 +120,13 @@ describe('Date/time mapping', () => {
     state.LastFunds = -1;
     state.MustUpdateOptions = 1;
     state.autoBudget = false;
+    state.autoGo = true;
     state.autoBulldoze = true;
     state.NoDisasters = true;
+    state.userSoundOn = false;
+    state.doAnimation = true;
+    state.doMessages = false;
+    state.doNotices = true;
     markFundsDirty(state);
 
     doUpdateHeads(state, context);
@@ -134,8 +139,16 @@ describe('Date/time mapping', () => {
     expect(uiSet).toHaveBeenCalledWith('funds', 'Funds: $1,234');
     // w_update.c updateOptions uses option flags (limited to sim-core fields).
     expect(uiSet).toHaveBeenCalledWith('optionAutoBudget', false);
+    // w_update.c updateOptions packs these flags into bits (1..128) and forwards them to
+    // UpdateOptionsMenu(), which emits 8 booleans via UISetOptions.
+    // sim-core models this as discrete `uiSet` keys.
+    expect(uiSet).toHaveBeenCalledWith('optionAutoGo', true);
     expect(uiSet).toHaveBeenCalledWith('optionAutoBulldoze', true);
     expect(uiSet).toHaveBeenCalledWith('optionDisasters', false);
+    expect(uiSet).toHaveBeenCalledWith('optionUserSoundOn', false);
+    expect(uiSet).toHaveBeenCalledWith('optionDoAnimation', true);
+    expect(uiSet).toHaveBeenCalledWith('optionDoMessages', false);
+    expect(uiSet).toHaveBeenCalledWith('optionDoNotices', true);
   });
 
   it('forces a funds refresh on the first heads run', () => {

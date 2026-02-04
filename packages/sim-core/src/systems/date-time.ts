@@ -153,8 +153,10 @@ function showValves(state: SimState, context: SimContext): void {
 
 /**
  * Options head update.
- * Mirrors `updateOptions` in `ref/micropolis/src/sim/w_update.c`, limited to
- * the option fields currently tracked in sim-core.
+ * Mirrors `updateOptions` / `UpdateOptionsMenu` in `ref/micropolis/src/sim/w_update.c`.
+ *
+ * C packs options into a bitfield and emits 8 booleans via `UISetOptions`.
+ * sim-core emits the same 8 booleans as discrete `uiSet` keys.
  */
 function updateOptions(state: SimState, context: SimContext): void {
   if (!state.MustUpdateOptions) {
@@ -162,8 +164,13 @@ function updateOptions(state: SimState, context: SimContext): void {
   }
 
   context.hooks.uiSet('optionAutoBudget', state.autoBudget);
+  context.hooks.uiSet('optionAutoGo', state.autoGo);
   context.hooks.uiSet('optionAutoBulldoze', state.autoBulldoze);
   context.hooks.uiSet('optionDisasters', !state.NoDisasters);
+  context.hooks.uiSet('optionUserSoundOn', state.userSoundOn);
+  context.hooks.uiSet('optionDoAnimation', state.doAnimation);
+  context.hooks.uiSet('optionDoMessages', state.doMessages);
+  context.hooks.uiSet('optionDoNotices', state.doNotices);
   state.MustUpdateOptions = 0;
 }
 

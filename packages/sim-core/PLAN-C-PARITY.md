@@ -41,7 +41,7 @@ Reset `PowerStackNum` in `initSimMemory` to mirror `ref/micropolis/src/sim/s_sim
 - [x] Integer width behavior.
 Leave JS number behavior unchanged (no 16-bit wrapping). Document the intentional divergence and the reasoning in code comments where most impactful.
 
-- [ ] Heads parity: add missing option fields to `SimState` and persistence.
+- [x] Heads parity: add missing option fields to `SimState` and persistence.
 Add missing option fields and ensure `updateOptions` covers the full C set from `ref/micropolis/src/sim/w_update.c`:
 - Persisted in `.cty` (see `ref/micropolis/spec/persistence/SPEC.md` / `ref/micropolis/src/sim/s_fileio.c`):
   - `autoGo`, `UserSoundOn` (already parsed/written by `packages/sim-core/src/io/cty.ts`, but not currently wired into `SimState`).
