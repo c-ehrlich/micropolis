@@ -1,0 +1,82 @@
+{
+  "generatedBy": "@city/micropolis-c-harness gen:terrain-fixtures",
+  "cReference": "ref/micropolis/src/sim/s_gen.c (GenerateMap + helpers)",
+  "world": {
+    "width": 120,
+    "height": 100
+  },
+  "fixtures": [
+    {
+      "seed": 123,
+      "treeLevel": -1,
+      "lakeLevel": -1,
+      "curveLevel": -1,
+      "createIsland": -1,
+      "format": "u16le",
+      "file": "gen_seed-123_tree--1_lake--1_curve--1_island--1.u16le",
+      "dumpPath": "packages/sim-core/fixtures/terrain/gen_seed-123_tree--1_lake--1_curve--1_island--1.u16le",
+      "args": [
+        "--seed=123",
+        "--treeLevel=-1",
+        "--lakeLevel=-1",
+        "--curveLevel=-1",
+        "--createIsland=-1",
+        "--format=u16le"
+      ]
+    },
+    {
+      "seed": 123,
+      "treeLevel": 0,
+      "lakeLevel": 0,
+      "curveLevel": 0,
+      "createIsland": 1,
+      "format": "u16le",
+      "file": "gen_seed-123_tree-0_lake-0_curve-0_island-1.u16le",
+      "dumpPath": "packages/sim-core/fixtures/terrain/gen_seed-123_tree-0_lake-0_curve-0_island-1.u16le",
+      "args": [
+        "--seed=123",
+        "--treeLevel=0",
+        "--lakeLevel=0",
+        "--curveLevel=0",
+        "--createIsland=1",
+        "--format=u16le"
+      ]
+    },
+    {
+      "seed": 5,
+      "treeLevel": -1,
+      "lakeLevel": -1,
+      "curveLevel": -1,
+      "createIsland": -1,
+      "format": "u16le",
+      "file": "gen_seed-5_tree--1_lake--1_curve--1_island--1.u16le",
+      "dumpPath": "packages/sim-core/fixtures/terrain/gen_seed-5_tree--1_lake--1_curve--1_island--1.u16le",
+      "args": [
+        "--seed=5",
+        "--treeLevel=-1",
+        "--lakeLevel=-1",
+        "--curveLevel=-1",
+        "--createIsland=-1",
+        "--format=u16le"
+      ]
+    },
+    {
+      "seed": 456,
+      "treeLevel": 0,
+      "lakeLevel": -1,
+      "curveLevel": -1,
+      "createIsland": 0,
+      "format": "u16le",
+      "file": "gen_seed-456_tree-0_lake--1_curve--1_island-0.u16le",
+      "dumpPath": "packages/sim-core/fixtures/terrain/gen_seed-456_tree-0_lake--1_curve--1_island-0.u16le",
+      "args": [
+        "--seed=456",
+        "--treeLevel=0",
+        "--lakeLevel=-1",
+        "--curveLevel=-1",
+        "--createIsland=0",
+        "--format=u16le"
+      ]
+    }
+  ]
+}

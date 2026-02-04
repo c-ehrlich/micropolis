@@ -14,6 +14,7 @@
     "lint:check": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "test-parity": "turbo test-parity",
     "test:watch": "pnpm --filter @city/web test:watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

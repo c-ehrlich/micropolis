@@ -1,0 +1,9 @@
+{
+  "name": "@city/micropolis-c-harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:terrain": "node scripts/build-terrain-harness.mjs",
+    "gen:terrain-fixtures": "node scripts/gen-terrain-fixtures.mjs"
+  }
+}
