@@ -307,7 +307,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`MakeIsland`)
 
-- [ ] Port `DoRivers`, `DoBRiv`, `DoSRiv` (direction drift rules).
+- [x] Port `DoRivers`, `DoBRiv`, `DoSRiv` (direction drift rules).
   - Requirements:
     - Code: implement the 3-river sequence from `DoRivers()` (including `LastDir ^ 4`).
     - Code: implement `DoBRiv` / `DoSRiv` loops with the exact bounds checks (`MapX+4/MapY+4` vs `+3/+3`), direction update rules, and `MoveMap(Dir)` masking.
