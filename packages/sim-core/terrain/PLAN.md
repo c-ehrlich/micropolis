@@ -152,7 +152,7 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/s_gen.c`
     - `ref/micropolis/spec/terrain/SPEC.md`
 
-- [ ] Add a deterministic “terrain RNG adapter” for unit tests.
+- [x] Add a deterministic “terrain RNG adapter” for unit tests.
   - Requirements:
     - Code: define an internal RNG interface used by terrain code (e.g. `{ seed(n): void; next16(): number; rand(range): number }`).
     - Code: adapter for `MicropolisRng` (`packages/sim-core/src/core/rng.ts`) so production uses the real RNG unchanged.
