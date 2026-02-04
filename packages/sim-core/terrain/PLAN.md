@@ -231,7 +231,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`IsTree`, `WOODS_LOW/WOODS_HIGH` defines)
 
-- [ ] Port `TreeSplash` + `DoTrees` (including “TreeLevel < 0” rules).
+- [x] Port `TreeSplash` + `DoTrees` (including “TreeLevel < 0” rules).
   - Requirements:
     - Code: implement `TreeSplash(xloc, yloc)` exactly (distance selection, random directions, DIRT-only placement via masked compare, write `WOODS + BLBNBIT`).
     - Code: implement `DoTrees()` amount selection and call `SmoothTrees()` twice.
