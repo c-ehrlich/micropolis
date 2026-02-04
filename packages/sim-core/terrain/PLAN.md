@@ -160,7 +160,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (SeedRand/Rand16/Rand)
 
-- [ ] Implement `TestBounds` + `indexFor` helpers (shared by terrain routines).
+- [x] Implement `TestBounds` + `indexFor` helpers (shared by terrain routines).
   - Requirements:
     - Code: implement `testBounds(x, y)` exactly as C’s macro.
     - Code: standardize on `indexFor(x,y) = x * WORLD_Y + y` for map access.
