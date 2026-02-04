@@ -3,6 +3,7 @@ import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import { indexFor, testBounds } from './helpers.ts';
 import { moveMap } from './move-map.ts';
 import type { TerrainRng } from './rng.ts';
+import { smoothTrees } from './smooth-trees.ts';
 
 /**
  * Compute the number of `TreeSplash` calls (`Amount`) performed by `DoTrees`.
@@ -101,11 +102,12 @@ export interface DoTreesDeps {
   treeSplash?: (map: Uint16Array, xloc: number, yloc: number) => void;
 
   /**
-   * Required smoothing routine invoked twice after all splashes.
+   * Optional smoothing routine invoked twice after all splashes.
    *
    * In C, `DoTrees` always calls `SmoothTrees(); SmoothTrees();`. We keep this
-   * as an injected dependency for now because the `SmoothTrees` port is a
-   * separate PLAN.md item.
+   * as an injectable dependency primarily for unit tests (spies).
+   *
+   * When omitted, {@link smoothTrees} is used (1:1 C behavior).
    */
   smoothTrees?: (map: Uint16Array) => void;
 }
@@ -136,12 +138,7 @@ export function doTrees(
     ((targetMap: Uint16Array, xloc: number, yloc: number) =>
       treeSplash(targetMap, rng, xloc, yloc, treeLevel));
 
-  const smoothTreesImpl = deps.smoothTrees;
-  if (smoothTreesImpl === undefined) {
-    throw new Error(
-      'doTrees: deps.smoothTrees is required (SmoothTrees() is a separate terrain port item)',
-    );
-  }
+  const smoothTreesImpl = deps.smoothTrees ?? smoothTrees;
 
   for (let i = 0; i < amount; i += 1) {
     const xloc = rng.rand(World.WORLD_X - 1);

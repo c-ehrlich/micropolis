@@ -243,7 +243,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`TreeSplash`, `DoTrees`)
 
-- [ ] Port `SmoothTrees` (TEdTab + checkerboard variant).
+- [x] Port `SmoothTrees` (TEdTab + checkerboard variant).
   - Requirements:
     - Code: implement 4-neighbor bitindex, `TEdTab`, odd/even `(x+y)&1` adjustment, and `BLBNBIT` writes.
     - Tests:
