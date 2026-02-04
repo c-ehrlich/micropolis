@@ -11,6 +11,7 @@ import {
   evalInit,
   getAssValue,
   getScore,
+  voteProblems,
 } from './evaluation.ts';
 
 const { HWLDY } = World;
@@ -127,6 +128,20 @@ describe('Evaluation system', () => {
     expect(state.ProblemTable[2]).toBe(7);
     // s_eval.c DoProblems: top problems come from ProblemVotes; this RNG yields 0,1,2 then no max => 7.
     expect(Array.from(state.ProblemOrder)).toEqual([0, 1, 2, 7]);
+  });
+
+  it('preserves the VoteProblems off-by-one cadence from s_eval.c', () => {
+    const state = createSimState();
+    const context = createSimContext({ rng: new ZeroRng() });
+
+    state.ProblemTable.fill(0);
+    state.ProblemTable[0] = 300;
+
+    voteProblems(state, context);
+
+    // s_eval.c VoteProblems bug: `x > PROBNUM` allows index 10 (PROBNUM=10) before wrap.
+    // Over 600 iterations, x=0 appears 55 times (11-step cycle), so votes hit 55.
+    expect(state.ProblemVotes[0]).toBe(55);
   });
 
   it('computes city score using problem sums and modifiers', () => {

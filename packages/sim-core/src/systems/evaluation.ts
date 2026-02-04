@@ -149,7 +149,8 @@ export function doProblems(state: SimState, context: SimContext): void {
 
 /**
  * Monte Carlo voting over problem table entries.
- * Mirrors `VoteProblems` in `ref/micropolis/src/sim/s_eval.c` (1:1 port, including PROBNUM loop bounds).
+ * Mirrors `VoteProblems` in `ref/micropolis/src/sim/s_eval.c`, including the
+ * `x > PROBNUM` loop bound bug (see `ref/micropolis/src/sim/headers/sim.h`).
  */
 export function voteProblems(state: SimState, context: SimContext): void {
   state.ProblemVotes.fill(0);
@@ -158,7 +159,10 @@ export function voteProblems(state: SimState, context: SimContext): void {
   let z = 0;
   let count = 0;
   while (z < 100 && count < 600) {
-    const value = state.ProblemTable[x] ?? 0;
+    // C bug: `x` is allowed to reach PROBNUM before the wrap, producing a
+    // one-past-the-end read/write. We discard any out-of-bounds vote but keep
+    // the extra iteration to preserve the observable sampling cadence.
+    const value = x === PROBLEM_COUNT ? 0 : (state.ProblemTable[x] ?? 0);
     if (context.rng.rand(300) < value) {
       if (x < state.ProblemVotes.length) {
         state.ProblemVotes[x] = (state.ProblemVotes[x] ?? 0) + 1;

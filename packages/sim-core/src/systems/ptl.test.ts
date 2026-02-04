@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, World } from '../core/constants.ts';
+import { MAP_FLAGS } from '../core/map-flags.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
@@ -73,5 +74,10 @@ describe('PTLScan', () => {
 
     expect(state.PolluteAverage).toBe(averageNonZero(pollutionAfter));
     expect(state.LVAverage).toBe(averageNonZero(landValueMem));
+
+    // s_scan.c PTLScan: NewMapFlags[DYMAP|PLMAP|LVMAP] = 1.
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.LVMAP]).toBe(1);
   });
 });

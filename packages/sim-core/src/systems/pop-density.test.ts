@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag, World } from '../core/constants.ts';
+import { MAP_FLAGS } from '../core/map-flags.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
@@ -47,6 +48,11 @@ describe('PopDenScan', () => {
     expect(state.CCy).toBe(y);
     expect(state.CCx2).toBe(x >> 1);
     expect(state.CCy2).toBe(y >> 1);
+
+    // s_scan.c PopDenScan: NewMapFlags[DYMAP|PDMAP|RGMAP] = 1.
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.RGMAP]).toBe(1);
 
     store.commitTick();
   });

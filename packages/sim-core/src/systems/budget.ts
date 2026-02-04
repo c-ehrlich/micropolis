@@ -1,16 +1,18 @@
 import { assertDefined } from '../core/assert.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
-import { runUiUpdate } from './date-time.ts';
-import { sendMes } from './messages.ts';
+import { markFundsDirty, runUiUpdate } from './date-time.ts';
+import { clearMes, sendMes } from './messages.ts';
 
 const R_LEVELS = [0.7, 0.9, 1.2] as const;
 const F_LEVELS = [1.4, 1.2, 0.8] as const;
 
 const toInt = (value: number): number => Math.trunc(value);
 
+// Budget spends mutate TotalFunds; mark funds dirty for DoUpdateHeads parity.
 const spend = (state: SimState, dollars: number): void => {
   state.TotalFunds = state.TotalFunds - dollars;
+  markFundsDirty(state);
 };
 
 export function doBudget(state: SimState, context: SimContext): void {
@@ -113,6 +115,8 @@ export function doBudgetNow(state: SimState, context: SimContext, fromMenu: bool
 
   state.autoBudget = false;
   state.MustUpdateOptions = 1;
+  // w_budget.c: ClearMes before SendMes(29) when autobudget runs out of funds.
+  clearMes(state);
   sendMes(state, context, 29);
 
   context.hooks.showBudgetWindowAndStartWaiting();

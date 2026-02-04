@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { World } from '../core/constants.ts';
+import { MAP_FLAGS } from '../core/map-flags.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { MicropolisRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
@@ -108,6 +109,11 @@ describe('CrimeScan', () => {
 
     const policeMapEffect = store.getLayer('policeMapEffect') as Int16Array;
     expect(policeMapEffect[smIndex(5, 5)]).toBe(10);
+
+    // s_scan.c CrimeScan: NewMapFlags[DYMAP|CRMAP|POMAP] = 1.
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.CRMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.POMAP]).toBe(1);
   });
 
   it('clamps computed crime into [0, 250]', () => {

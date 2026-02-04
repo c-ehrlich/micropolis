@@ -107,6 +107,8 @@ describe('Budget system', () => {
     const state = createSimState();
 
     state.autoBudget = true;
+    state.MessagePort = 7;
+    state.LastPicNum = 12;
     state.TotalFunds = 150;
     state.TaxFund = 0;
     state.RoadFund = 100;
@@ -119,9 +121,13 @@ describe('Budget system', () => {
     doBudgetNow(state, context, false);
 
     expect(state.autoBudget).toBe(false);
-    expect(state.MustUpdateOptions).toBe(1);
+    // w_budget.c: DoUpdateHeads runs updateOptions and clears MustUpdateOptions.
+    expect(state.MustUpdateOptions).toBe(0);
     expect(calls).toContain('sendMes:29');
     expect(calls).toContain('showBudgetWindowAndStartWaiting');
+    // w_budget.c: ClearMes before SendMes(29) when autobudget runs out of funds.
+    expect(state.MessagePort).toBe(29);
+    expect(state.LastPicNum).toBe(0);
     expect(state.RoadSpend).toBe(100);
     expect(state.FireSpend).toBe(50);
     expect(state.PoliceSpend).toBe(0);

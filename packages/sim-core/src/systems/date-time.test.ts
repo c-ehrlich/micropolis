@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
-import { currentMonthIndex, currentYear, runUiUpdate, setYear, updateDate } from './date-time.ts';
+import {
+  currentMonthIndex,
+  currentYear,
+  doUpdateHeads,
+  markFundsDirty,
+  runUiUpdate,
+  setYear,
+  updateDate,
+} from './date-time.ts';
 
 describe('Date/time mapping', () => {
   it('maps CityTime to year and month index', () => {
@@ -78,6 +86,56 @@ describe('Date/time mapping', () => {
     expect(state.LastCityTime).toBe(2);
     expect(sendMes).toHaveBeenCalledWith(-40);
     expect(uiSet).toHaveBeenCalledWith('date', 'Mar 1900');
+  });
+
+  it('consumes the message port during date updates', () => {
+    const context = createSimContext();
+    const state = createSimState();
+
+    state.MessagePort = 12;
+    state.MesX = 4;
+    state.MesY = 9;
+
+    updateDate(state, context);
+
+    // w_update.c updateDate -> doMessage consumes MessagePort.
+    expect(state.MessagePort).toBe(0);
+  });
+
+  it('updates demand, funds, and options during heads update', () => {
+    const uiSet = vi.fn();
+    const context = createSimContext({ hooks: { uiSet } });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+    state.LastCityYear = 1900;
+    state.LastCityMonth = 0;
+
+    state.ValveFlag = 1;
+    state.RValve = 100;
+    state.CValve = -200;
+    state.IValve = 300;
+    state.TotalFunds = 1234;
+    state.LastFunds = -1;
+    state.MustUpdateOptions = 1;
+    state.autoBudget = false;
+    state.autoBulldoze = true;
+    state.NoDisasters = true;
+    markFundsDirty(state);
+
+    doUpdateHeads(state, context);
+
+    // w_update.c drawValve divides by 100 and clamps to +/-1500.
+    expect(uiSet).toHaveBeenCalledWith('demandR', 1);
+    expect(uiSet).toHaveBeenCalledWith('demandC', -2);
+    expect(uiSet).toHaveBeenCalledWith('demandI', 3);
+    // w_update.c ReallyUpdateFunds formats "Funds: $1,234".
+    expect(uiSet).toHaveBeenCalledWith('funds', 'Funds: $1,234');
+    // w_update.c updateOptions uses option flags (limited to sim-core fields).
+    expect(uiSet).toHaveBeenCalledWith('optionAutoBudget', false);
+    expect(uiSet).toHaveBeenCalledWith('optionAutoBulldoze', true);
+    expect(uiSet).toHaveBeenCalledWith('optionDisasters', false);
   });
 
   it('invokes the UI heads hook after updating the date', () => {

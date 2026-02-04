@@ -1,4 +1,5 @@
 import { Tile, TileMask, World } from '../core/constants.ts';
+import { MAP_FLAGS } from '../core/map-flags.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import { doSmooth, doSmooth2, getDisCC } from './pop-density.ts';
@@ -202,4 +203,8 @@ export function ptlScan(state: SimState, context: SimContext): void {
   state.PolluteAverage = pnum ? Math.floor(ptot / pnum) : 0;
 
   smoothTerrain(state, terrainMem, qtem);
+
+  state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
+  state.NewMapFlags[MAP_FLAGS.PLMAP] = 1;
+  state.NewMapFlags[MAP_FLAGS.LVMAP] = 1;
 }

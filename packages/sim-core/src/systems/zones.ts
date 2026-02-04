@@ -7,6 +7,7 @@ import type { SimState } from '../core/sim-state.ts';
 import type { MapScanContext } from './map-scan.ts';
 import { sendMesAt } from './messages.ts';
 import { setZPowerAt } from './power.ts';
+import { makeTraf as makeTrafFull, type TrafficSource } from './traffic.ts';
 
 const { WORLD_X, WORLD_Y, HWLDY, SmX, SmY } = World;
 const { LOMASK } = TileMask;
@@ -106,6 +107,12 @@ export type MeltdownHandler = (system: ZoneSystemContext, x: number, y: number) 
 
 export interface ZoneHandlerOptions {
   makeTraf?: MakeTrafHandler;
+  /**
+   * Select the traffic gate behavior for zoning.
+   * `full` uses `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`,
+   * `simplified` uses the perimeter road check (default).
+   */
+  trafficMode?: 'simplified' | 'full';
   findPerimeterRoad?: FindPerimeterRoadHandler;
   pushPowerStack?: PushPowerStackHandler;
   doMeltdown?: MeltdownHandler;
@@ -116,8 +123,6 @@ const noop = () => {};
 const indexFor = (x: number, y: number) => x * WORLD_Y + y;
 
 const isInBounds = (x: number, y: number) => x >= 0 && x < WORLD_X && y >= 0 && y < WORLD_Y;
-
-const toSigned16 = (value: number) => (value << 16) >> 16;
 
 const div = (value: number, divisor: number) => Math.trunc(value / divisor);
 
@@ -390,11 +395,13 @@ export function doIndustrial(
     if (!powered) {
       zscore = -500;
     }
-    if (zscore > -350 && toSigned16(zscore - 26380) > toSigned16(rng.next16Signed())) {
+    // C casts to signed 16-bit before comparing with Rand16Signed; values stay in range,
+    // so we keep JS numbers unwrapped (intentional divergence from 16-bit overflow).
+    if (zscore > -350 && zscore - 26380 > rng.next16Signed()) {
       doIndIn(system, x, y, tpop, rng.next16() & 1, options);
       return;
     }
-    if (zscore < 350 && toSigned16(zscore + 26380) < toSigned16(rng.next16Signed())) {
+    if (zscore < 350 && zscore + 26380 < rng.next16Signed()) {
       doIndOut(system, x, y, tpop, rng.next16() & 1, options);
     }
   }
@@ -426,12 +433,12 @@ export function doCommercial(
     if (!powered) {
       zscore = -500;
     }
-    if (trfGood && zscore > -350 && toSigned16(zscore - 26380) > toSigned16(rng.next16Signed())) {
+    if (trfGood && zscore > -350 && zscore - 26380 > rng.next16Signed()) {
       const value = getCRVal(system, x, y);
       doComIn(system, x, y, tpop, value, options);
       return;
     }
-    if (zscore < 350 && toSigned16(zscore + 26380) < toSigned16(rng.next16Signed())) {
+    if (zscore < 350 && zscore + 26380 < rng.next16Signed()) {
       const value = getCRVal(system, x, y);
       doComOut(system, x, y, tpop, value, options);
     }
@@ -464,7 +471,7 @@ export function doResidential(
     if (!powered) {
       zscore = -500;
     }
-    if (zscore > -350 && toSigned16(zscore - 26380) > toSigned16(rng.next16Signed())) {
+    if (zscore > -350 && zscore - 26380 > rng.next16Signed()) {
       if (!tpop && (rng.next16() & 3) === 0) {
         makeHosp(system, x, y, options);
         return;
@@ -473,7 +480,7 @@ export function doResidential(
       doResIn(system, x, y, tileId, tpop, value, options);
       return;
     }
-    if (zscore < 350 && toSigned16(zscore + 26380) < toSigned16(rng.next16Signed())) {
+    if (zscore < 350 && zscore + 26380 < rng.next16Signed()) {
       const value = getCRVal(system, x, y);
       doResOut(system, x, y, tileId, tpop, value, options);
     }
@@ -1053,7 +1060,10 @@ export function findPerimeterRoad(system: ZoneSystemContext, x: number, y: numbe
 
 /**
  * Simplified traffic gate for zoning: returns 1 if a perimeter road exists, -1 otherwise.
- * Not the same as `systems/traffic.makeTraf`, which performs the full traffic simulation.
+ * Diverges from `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`, which performs
+ * full pathfinding and traffic density updates.
+ * This lightweight gate is preserved to keep zoning scans fast; pass
+ * `options.makeTraf` or `trafficMode: 'full'` to use the full traffic system.
  */
 function makeTrafSimplified(
   system: ZoneSystemContext,
@@ -1064,6 +1074,9 @@ function makeTrafSimplified(
 ): number {
   if (options.makeTraf) {
     return options.makeTraf(zoneType, system, x, y);
+  }
+  if (options.trafficMode === 'full') {
+    return makeTrafFull(system.state, system.context, x, y, zoneType as TrafficSource);
   }
   const findRoad = options.findPerimeterRoad ?? findPerimeterRoad;
   return findRoad(system, x, y) ? 1 : -1;

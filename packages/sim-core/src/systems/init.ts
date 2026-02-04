@@ -193,6 +193,8 @@ export function initSimMemory(
   state.ScoreType = 0;
 
   if (systems.doPowerScan) {
+    // s_sim.c InitSimMemory: reset before DoPowerScan to clear powermem.
+    state.PowerStackNum = 0;
     systems.doPowerScan();
   }
   state.NewPower = 1;
