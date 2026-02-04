@@ -254,7 +254,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`SmoothTrees`, `TEdTab`)
 
-- [ ] Port `SmoothRiver` (REdTab + random +1).
+- [x] Port `SmoothRiver` (REdTab + random +1).
   - Requirements:
     - Code: process only tiles with raw equality `Map[x][y] == REDGE`.
     - Code: bitindex uses masked checks for “neighbor is not DIRT and not woods-range”.
