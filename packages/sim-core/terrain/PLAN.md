@@ -193,7 +193,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`PutOnMap`)
 
-- [ ] Port `BRivPlop` + `SRivPlop` matrices.
+- [x] Port `BRivPlop` + `SRivPlop` matrices.
   - Requirements:
     - Code: copy the `BRMatrix[9][9]` and `SRMatrix[6][6]` constants and apply via `PutOnMap`.
     - Tests:

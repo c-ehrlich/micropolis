@@ -15,3 +15,4 @@
   */
   ```
 - when writing tests, if you assert that some function called with some arguments returns some number, or something like that, document where in the micropolis c codebase these "magic" numbers are coming from
+- put test files next to the file that they're testing, if they are testing primarily functionality from one file. if the file is named foo.ts, name the test foo.test.ts.
