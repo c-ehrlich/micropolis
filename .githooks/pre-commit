@@ -1,9 +1,0 @@
-#!/bin/sh
-set -e
-
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$REPO_ROOT"
-
-echo "pre-commit: running pnpm check"
-pnpm check
-

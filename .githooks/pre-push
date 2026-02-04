@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+if [ "${CITY_SKIP_GITHOOKS:-}" = "1" ]; then
+  exit 0
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "pre-push: warning: working tree has uncommitted changes; checks run against the working tree."
+fi
+
+echo "pre-push: running pnpm check:hook"
+pnpm check:hook

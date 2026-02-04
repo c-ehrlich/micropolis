@@ -34,19 +34,34 @@ function run(command) {
 /**
  * Root repo checks.
  *
- * Note: `lint` and `format` are currently "fixing" (write to disk), so running
- * everything in parallel can be nondeterministic. By default we run fixers
- * serially, then run read-only checks (`test`, `typecheck`) in parallel for
- * speed.
+ * Note: `lint` and `format` are currently "fixing" (write to disk), so by
+ * default we run fixers serially, then run read-only checks (`test`,
+ * `typecheck`) in parallel for speed.
  *
  * Set `CITY_CHECK_UNSAFE_PARALLEL=1` to run everything in parallel anyway.
+ *
+ * Pass `--hook` (or set `CITY_CHECK_MODE=hook`) to run read-only checks that
+ * are suitable for git hooks (no auto-fixing).
  */
-const steps = [
-  { name: 'lint', command: 'pnpm lint', mutatesWorkingTree: true },
-  { name: 'format', command: 'pnpm format', mutatesWorkingTree: true },
-  { name: 'test', command: 'pnpm test', mutatesWorkingTree: false },
-  { name: 'typecheck', command: 'pnpm typecheck', mutatesWorkingTree: false },
-];
+const hookMode = process.argv.includes('--hook') || process.env.CITY_CHECK_MODE === 'hook';
+
+const steps = hookMode
+  ? [
+      { name: 'lint', command: 'pnpm lint:check', mutatesWorkingTree: false },
+      {
+        name: 'format',
+        command: 'pnpm format:check',
+        mutatesWorkingTree: false,
+      },
+      { name: 'test', command: 'pnpm test', mutatesWorkingTree: false },
+      { name: 'typecheck', command: 'pnpm typecheck', mutatesWorkingTree: false },
+    ]
+  : [
+      { name: 'lint', command: 'pnpm lint', mutatesWorkingTree: true },
+      { name: 'format', command: 'pnpm format', mutatesWorkingTree: true },
+      { name: 'test', command: 'pnpm test', mutatesWorkingTree: false },
+      { name: 'typecheck', command: 'pnpm typecheck', mutatesWorkingTree: false },
+    ];
 
 /** @type {{ name: string; command: string; code: number; signal: string | null; output: string }[]} */
 const failures = [];

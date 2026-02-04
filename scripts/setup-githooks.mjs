@@ -5,9 +5,9 @@ import { execFileSync } from 'node:child_process';
  *
  * Mirrors the common "hooks in repo + core.hooksPath" approach:
  * - Hooks live in `.githooks/` so they can be versioned.
- * - `core.hooksPath` is set to `.githooks` so `git commit` runs them.
+ * - `core.hooksPath` is set to `.githooks` so `git commit` / `git push` run them.
  *
- * The hook itself runs `pnpm check` and blocks commits on any failures.
+ * The hook runs `pnpm check:hook` and blocks pushes on any failures.
  */
 function main() {
   if (process.env.CITY_SKIP_GITHOOKS === '1') {
@@ -51,7 +51,7 @@ function main() {
     process.stdout.write(
       [
         'Warning: failed to set core.hooksPath to enable repo githooks.',
-        'To enable the pre-commit hook manually, run:',
+        'To enable the githooks manually, run:',
         '  git config core.hooksPath .githooks',
       ].join('\n') + '\n',
     );

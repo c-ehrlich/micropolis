@@ -11,12 +11,14 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint -- --fix",
+    "lint:check": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:watch": "pnpm --filter @city/web test:watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "check:hook": "node scripts/check.mjs --hook"
   },
   "devDependencies": {
     "@tanstack/eslint-plugin-router": "1.131.2",
