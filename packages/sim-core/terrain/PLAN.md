@@ -168,7 +168,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/headers/macros.h` (`TestBounds`)
 
-- [ ] Implement `clearMap()` (DIRT fill) and `clearUnnatural()` (raw > WOODS => DIRT).
+- [x] Implement `clearMap()` (DIRT fill) and `clearUnnatural()` (raw > WOODS => DIRT).
   - Requirements:
     - Code: `clearMap(map)` sets every tile to `Tile.DIRT`.
     - Code: `clearUnnatural(map)` matches C’s **raw** comparison (`tile > WOODS`, no masking).
