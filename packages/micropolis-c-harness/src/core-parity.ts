@@ -209,11 +209,6 @@ export interface CoreOracleState {
   NuclearPop: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
-  LVAverage: number;
-  CrimeAverage: number;
-  PolluteAverage: number;
-  CCx: number;
-  CCy: number;
   CCx2: number;
   CCy2: number;
   PolMaxX: number;
@@ -367,11 +362,6 @@ interface CoreOracleSnapshotJson {
   NuclearPop: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
-  LVAverage: number;
-  CrimeAverage: number;
-  PolluteAverage: number;
-  CCx: number;
-  CCy: number;
   CCx2: number;
   CCy2: number;
   PolMaxX: number;
@@ -619,11 +609,6 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     NuclearPop: Math.trunc(state.NuclearPop),
     PwrdZCnt: Math.trunc(state.PwrdZCnt),
     unPwrdZCnt: Math.trunc(state.unPwrdZCnt),
-    LVAverage: Math.trunc(state.LVAverage),
-    CrimeAverage: Math.trunc(state.CrimeAverage),
-    PolluteAverage: Math.trunc(state.PolluteAverage),
-    CCx: Math.trunc(state.CCx),
-    CCy: Math.trunc(state.CCy),
     CCx2: Math.trunc(state.CCx2),
     CCy2: Math.trunc(state.CCy2),
     PolMaxX: Math.trunc(state.PolMaxX),
@@ -954,11 +939,6 @@ function readCoreOracleState(dir: string): CoreOracleState {
     NuclearPop: snapshot.NuclearPop,
     PwrdZCnt: snapshot.PwrdZCnt,
     unPwrdZCnt: snapshot.unPwrdZCnt,
-    LVAverage: snapshot.LVAverage,
-    CrimeAverage: snapshot.CrimeAverage,
-    PolluteAverage: snapshot.PolluteAverage,
-    CCx: snapshot.CCx,
-    CCy: snapshot.CCy,
     CCx2: snapshot.CCx2,
     CCy2: snapshot.CCy2,
     PolMaxX: snapshot.PolMaxX,
