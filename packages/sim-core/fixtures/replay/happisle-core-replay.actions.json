@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "actions": [
+    { "tick": 0, "kind": "set-scalar", "field": "Scycle", "value": 4 },
+    { "tick": 0, "kind": "set-scalar", "field": "NewPower", "value": 1 },
+    { "tick": 2, "kind": "set-rate-og-mem", "x": 5, "y": 2, "value": 201 },
+    { "tick": 2, "kind": "set-rate-og-mem", "x": 5, "y": 3, "value": -201 },
+    { "tick": 3, "kind": "set-trf-density", "x": 10, "y": 5, "value": 201 }
+  ]
+}

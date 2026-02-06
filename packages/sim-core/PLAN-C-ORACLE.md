@@ -132,11 +132,11 @@ Comparison policy:
   - Multi-week replay parity passes across representative fixtures.
 
 ### Phase 5: Replay parity suite
-- [ ] Define canonical `.cty` + action-log fixtures.
-- [ ] Add checkpoint cadence (e.g., every 1/4/16 ticks).
-- [ ] Gate heavy runs under `CITY_TEST_PARITY_*` env knobs.
+- [x] Define canonical `.cty` + action-log fixtures.
+- [x] Add checkpoint cadence (e.g., every 1/4/16 ticks).
+- [x] Gate heavy runs under `CITY_TEST_PARITY_*` env knobs.
 - Exit criteria:
-  - Stable replay parity hash/checkpoint suite in CI parity job.
+  - [x] Stable replay parity hash/checkpoint suite in CI parity job.
 
 ## Risks and Mitigations
 

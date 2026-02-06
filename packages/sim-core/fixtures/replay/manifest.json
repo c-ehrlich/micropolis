@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "defaultTicks": 16,
+  "defaultCheckpointCadence": [1, 4, 16],
+  "fixtures": [
+    {
+      "name": "about-core-replay",
+      "city": "about.cty",
+      "actions": "about-core-replay.actions.json",
+      "seed": 305419896,
+      "expectedReplayHash": 3911010590
+    },
+    {
+      "name": "haight-core-replay",
+      "city": "haight.cty",
+      "actions": "haight-core-replay.actions.json",
+      "seed": 2309737967,
+      "expectedReplayHash": 4244606771
+    },
+    {
+      "name": "happisle-core-replay",
+      "city": "happisle.cty",
+      "actions": "happisle-core-replay.actions.json",
+      "seed": 3405691582,
+      "expectedReplayHash": 2007288253
+    }
+  ]
+}
