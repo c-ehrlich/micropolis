@@ -109,8 +109,8 @@ export interface ZoneHandlerOptions {
   makeTraf?: MakeTrafHandler;
   /**
    * Select the traffic gate behavior for zoning.
-   * `full` uses `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`,
-   * `simplified` uses the perimeter road check (default).
+   * `full` (default) uses `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`.
+   * `simplified` uses the legacy perimeter road check.
    */
   trafficMode?: 'simplified' | 'full';
   findPerimeterRoad?: FindPerimeterRoadHandler;
@@ -383,7 +383,7 @@ export function doIndustrial(
   setSmoke(system, x, y, tileId, powered);
   const tpop = izPop(tileId);
   state.IndPop += tpop;
-  const trfGood = tpop > rng.rand(5) ? makeTrafSimplified(system, x, y, 2, options) : 1;
+  const trfGood = tpop > rng.rand(5) ? makeTrafForZone(system, x, y, 2, options) : 1;
 
   if (trfGood === -1) {
     doIndOut(system, x, y, tpop, rng.next16() & 1, options);
@@ -419,7 +419,7 @@ export function doCommercial(
   state.ComZPop += 1;
   const tpop = czPop(tileId);
   state.ComPop += tpop;
-  const trfGood = tpop > rng.rand(5) ? makeTrafSimplified(system, x, y, 1, options) : 1;
+  const trfGood = tpop > rng.rand(5) ? makeTrafForZone(system, x, y, 1, options) : 1;
 
   if (trfGood === -1) {
     const value = getCRVal(system, x, y);
@@ -457,7 +457,7 @@ export function doResidential(
   state.ResZPop += 1;
   const tpop = tileId === FREEZ ? doFreePop(system, x, y) : rzPop(tileId);
   state.ResPop += tpop;
-  const trfGood = tpop > rng.rand(35) ? makeTrafSimplified(system, x, y, 0, options) : 1;
+  const trfGood = tpop > rng.rand(35) ? makeTrafForZone(system, x, y, 0, options) : 1;
 
   if (trfGood === -1) {
     const value = getCRVal(system, x, y);
@@ -1059,13 +1059,12 @@ export function findPerimeterRoad(system: ZoneSystemContext, x: number, y: numbe
 }
 
 /**
- * Simplified traffic gate for zoning: returns 1 if a perimeter road exists, -1 otherwise.
- * Diverges from `MakeTraf` in `ref/micropolis/src/sim/s_traf.c`, which performs
- * full pathfinding and traffic density updates.
- * This lightweight gate is preserved to keep zoning scans fast; pass
- * `options.makeTraf` or `trafficMode: 'full'` to use the full traffic system.
+ * Zoning traffic gate selection.
+ * Mirrors default `MakeTraf` usage in `ref/micropolis/src/sim/s_zone.c`
+ * (via `s_traf.c`) and keeps an explicit legacy `simplified` mode for
+ * de-risking/experiments.
  */
-function makeTrafSimplified(
+function makeTrafForZone(
   system: ZoneSystemContext,
   x: number,
   y: number,
@@ -1075,11 +1074,11 @@ function makeTrafSimplified(
   if (options.makeTraf) {
     return options.makeTraf(zoneType, system, x, y);
   }
-  if (options.trafficMode === 'full') {
-    return makeTrafFull(system.state, system.context, x, y, zoneType as TrafficSource);
+  if (options.trafficMode === 'simplified') {
+    const findRoad = options.findPerimeterRoad ?? findPerimeterRoad;
+    return findRoad(system, x, y) ? 1 : -1;
   }
-  const findRoad = options.findPerimeterRoad ?? findPerimeterRoad;
-  return findRoad(system, x, y) ? 1 : -1;
+  return makeTrafFull(system.state, system.context, x, y, zoneType as TrafficSource);
 }
 
 export function decROGMem(state: SimState, context: SimContext): void {

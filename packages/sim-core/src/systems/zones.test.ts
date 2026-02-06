@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { PowerMap, Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
-import { createRng } from '../core/rng.ts';
+import { createRng, MicropolisRng } from '../core/rng.ts';
 import type { SimContextOptions } from '../core/sim-context.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
@@ -13,6 +13,20 @@ const { POWERMAPROW } = PowerMap;
 
 const indexFor = (x: number, y: number) => x * WORLD_Y + y;
 const smallIndex = (x: number, y: number) => (x >> 3) * SmY + (y >> 3);
+
+class ZeroRng extends MicropolisRng {
+  override next16(): number {
+    return 0;
+  }
+
+  override next16Signed(): number {
+    return 0;
+  }
+
+  override rand(_range: number): number {
+    return 0;
+  }
+}
 
 const createHarness = (seed = 1, hooks: SimContextOptions['hooks'] = {}) => {
   const store = createClassicMapStore();
@@ -189,5 +203,48 @@ describe('zones', () => {
     expect(rog[0]).toBe(200);
     expect(rog[1]).toBe(-200);
     expect(rog[2]).toBe(0);
+  });
+
+  it('uses full MakeTraf by default for zoning traffic', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store, rng: new ZeroRng(1) });
+    const state = createSimState();
+    store.beginTick();
+    const system = createZoneSystem(state, context);
+    const x = 24;
+    const y = 24;
+    let perimeterCalls = 0;
+
+    // `doIndustrial` calls `MakeTraf` when `tpop > Rand(5)`. With `ZeroRng`,
+    // `Rand(5)` is `0`, and `IZB` yields `tpop=1` (`izPop`) per s_zone.c logic.
+    doZone(system, x, y, Tile.IZB | TileFlag.ZONEBIT | TileFlag.BNCNBIT, {
+      findPerimeterRoad: () => {
+        perimeterCalls += 1;
+        return true;
+      },
+    });
+
+    expect(perimeterCalls).toBe(0);
+  });
+
+  it('uses simplified perimeter gate when trafficMode is simplified', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store, rng: new ZeroRng(1) });
+    const state = createSimState();
+    store.beginTick();
+    const system = createZoneSystem(state, context);
+    const x = 28;
+    const y = 28;
+    let perimeterCalls = 0;
+
+    doZone(system, x, y, Tile.IZB | TileFlag.ZONEBIT | TileFlag.BNCNBIT, {
+      trafficMode: 'simplified',
+      findPerimeterRoad: () => {
+        perimeterCalls += 1;
+        return true;
+      },
+    });
+
+    expect(perimeterCalls).toBe(1);
   });
 });

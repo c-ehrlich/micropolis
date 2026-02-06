@@ -1,3 +1,7 @@
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleMakeTraf,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
 import { Tile, World } from '../core/constants.ts';
@@ -160,5 +164,102 @@ describe('Traffic system', () => {
     expect(trfDensity[1]).toBe(1);
     expect(trfDensity[2]).toBe(176);
     expect(trfDensity[3]).toBe(167);
+  });
+});
+
+describe('Traffic parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches C MakeTraf result, traffic deltas, and traffic maxima', () => {
+    const seed = 0x00c0ffee;
+    const centerX = 9;
+    const centerY = 10;
+    const startX = centerX - 1;
+    const startY = centerY - 2;
+    const pushX = startX + 2;
+    const pushY = startY;
+
+    const oracleBefore = runCoreOracleInitNewCity({ seed });
+    oracleBefore.map[indexFor(startX, startY)] = Tile.ROADS;
+    oracleBefore.map[indexFor(startX + 1, startY)] = Tile.ROADS;
+    oracleBefore.map[indexFor(pushX, pushY)] = Tile.ROADS;
+    oracleBefore.map[indexFor(startX + 3, startY)] = Tile.COMBASE;
+    oracleBefore.trfDensity[trfIndexFor(pushX, pushY)] = 200;
+    oracleBefore.copControl = -1;
+    oracleBefore.copDestX = 0;
+    oracleBefore.copDestY = 0;
+
+    const oracleResult = runCoreOracleMakeTraf({
+      state: oracleBefore,
+      x: centerX,
+      y: centerY,
+      source: 0,
+    });
+
+    const store = createClassicMapStore();
+    const state = createSimState();
+    const sprite = { control: -1, dest_x: 0, dest_y: 0 };
+    const context = createSimContext({
+      store,
+      rng: new MicropolisRng(seed),
+      hooks: {
+        getSprite: (type) => (type === 2 ? sprite : null),
+      },
+    });
+
+    store.beginTick();
+    (store.getLayer('map') as Uint16Array).set(oracleBefore.map);
+    (store.getLayer('trfDensity') as Uint8Array).set(oracleBefore.trfDensity);
+    const tsResult = makeTraf(state, context, centerX, centerY, 0);
+
+    // `SetTrafMem` in `ref/micropolis/src/sim/s_traf.c` adds 50 traffic and caps at
+    // 240 with a `Rand(5)` branch; this assertion confirms those exact C constants.
+    expect(tsResult).toBe(oracleResult.result);
+    expect(Array.from(store.getLayer('trfDensity') as Uint8Array)).toEqual(
+      Array.from(oracleResult.state.trfDensity),
+    );
+    expect(state.TrafMaxX).toBe(oracleResult.state.TrafMaxX);
+    expect(state.TrafMaxY).toBe(oracleResult.state.TrafMaxY);
+    expect(sprite.dest_x).toBe(oracleResult.state.copDestX);
+    expect(sprite.dest_y).toBe(oracleResult.state.copDestY);
+    store.commitTick();
+  });
+
+  it('matches C MakeTraf no-road result (-1)', () => {
+    const seed = 0x0000beef;
+    const centerX = 10;
+    const centerY = 10;
+
+    const oracleBefore = runCoreOracleInitNewCity({ seed });
+    const oracleResult = runCoreOracleMakeTraf({
+      state: oracleBefore,
+      x: centerX,
+      y: centerY,
+      source: 0,
+    });
+
+    const store = createClassicMapStore();
+    const state = createSimState();
+    const context = createSimContext({
+      store,
+      rng: new MicropolisRng(seed),
+    });
+
+    store.beginTick();
+    (store.getLayer('map') as Uint16Array).set(oracleBefore.map);
+    (store.getLayer('trfDensity') as Uint8Array).set(oracleBefore.trfDensity);
+    const tsResult = makeTraf(state, context, centerX, centerY, 0);
+
+    // `MakeTraf` in `ref/micropolis/src/sim/s_traf.c` returns `-1` when `FindPRoad`
+    // fails on all 12 perimeter probes.
+    expect(tsResult).toBe(-1);
+    expect(tsResult).toBe(oracleResult.result);
+    expect(Array.from(store.getLayer('trfDensity') as Uint8Array)).toEqual(
+      Array.from(oracleResult.state.trfDensity),
+    );
+    store.commitTick();
   });
 });

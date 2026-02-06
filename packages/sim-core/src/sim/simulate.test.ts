@@ -1,7 +1,15 @@
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleStepPhase,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
+import { MAP_FLAGS } from '../core/map-flags.ts';
+import { createClassicMapStore } from '../core/map-store.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState, type SimState } from '../core/sim-state.ts';
+import { decTrafficMem as decTrafficMemSystem } from '../systems/traffic.ts';
+import { decROGMem as decROGMemSystem } from '../systems/zones.ts';
 import {
   dispatchSimPhase,
   MAP_DIRTY_PHASE_10,
@@ -211,5 +219,75 @@ describe('SimFrame gating and cycles', () => {
     expect(state.Scycle).toBe(0);
     expect(state.CityTime).toBe(1);
     expect(calls).toEqual(['setValves', 'clearCensus']);
+  });
+});
+
+describe('Simulate parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches phase 10 traffic/ROG decay and map dirty flags', () => {
+    const oracleBefore = runCoreOracleInitNewCity({
+      seed: 0x1234abcd,
+      cityTime: 48,
+      cityTax: 7,
+      simSpeed: 3,
+    });
+    oracleBefore.Scycle = 10;
+    oracleBefore.trfDensity[0] = 24;
+    oracleBefore.trfDensity[1] = 25;
+    oracleBefore.trfDensity[2] = 200;
+    oracleBefore.trfDensity[3] = 201;
+    oracleBefore.rateOGMem[0] = 201;
+    oracleBefore.rateOGMem[1] = -201;
+
+    const oracleAfter = runCoreOracleStepPhase(oracleBefore, 10);
+
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+    state.CityTime = oracleBefore.CityTime;
+    state.CityTax = oracleBefore.CityTax;
+    state.AvCityTax = oracleBefore.AvCityTax;
+    state.Scycle = oracleBefore.Scycle;
+    state.Fcycle = oracleBefore.Fcycle;
+    state.SimSpeed = oracleBefore.SimSpeed;
+    state.DoInitialEval = oracleBefore.DoInitialEval;
+    state.NewPower = oracleBefore.NewPower;
+    state.NewMapFlags.fill(0);
+
+    store.beginTick();
+    (store.getLayer('trfDensity') as Uint8Array).set(oracleBefore.trfDensity);
+    (store.getLayer('rateOGMem') as Int16Array).set(oracleBefore.rateOGMem);
+    dispatchSimPhase(10, state, context, {
+      decROGMem: decROGMemSystem,
+      decTrafficMem: decTrafficMemSystem,
+      markMapDirty: (flags) => {
+        for (const flag of flags) {
+          state.NewMapFlags[MAP_FLAGS[flag]] = 1;
+        }
+      },
+    });
+
+    const tsTrfDensity = store.getLayer('trfDensity') as Uint8Array;
+    const tsRateOGMem = store.getLayer('rateOGMem') as Int16Array;
+
+    // Magic threshold values come directly from `DecTrafficMem` and `DecROGMem`
+    // in `ref/micropolis/src/sim/s_sim.c`:
+    // - traffic decay uses 24/200 cutoffs and decrements 24 or 34
+    // - ROG decay clamps overflowed values to +/-200
+    expect(Array.from(tsTrfDensity)).toEqual(Array.from(oracleAfter.trfDensity));
+    expect(Array.from(tsRateOGMem)).toEqual(Array.from(oracleAfter.rateOGMem));
+
+    expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(oracleAfter.NewMapFlags.ALMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.REMAP]).toBe(oracleAfter.NewMapFlags.REMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.COMAP]).toBe(oracleAfter.NewMapFlags.COMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.INMAP]).toBe(oracleAfter.NewMapFlags.INMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.RDMAP]).toBe(oracleAfter.NewMapFlags.RDMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.TDMAP]).toBe(oracleAfter.NewMapFlags.TDMAP);
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(oracleAfter.NewMapFlags.DYMAP);
+    store.commitTick();
   });
 });

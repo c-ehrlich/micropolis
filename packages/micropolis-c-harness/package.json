@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./terrain-parity": "./src/terrain-parity.ts"
+    "./terrain-parity": "./src/terrain-parity.ts",
+    "./core-parity": "./src/core-parity.ts"
   },
   "scripts": {
     "build:terrain": "node scripts/build-terrain-harness.mjs",
+    "build:core": "node scripts/build-core-oracle.mjs",
     "gen:terrain-fixtures": "node scripts/gen-terrain-fixtures.mjs"
   }
 }

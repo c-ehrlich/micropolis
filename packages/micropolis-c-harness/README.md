@@ -58,3 +58,37 @@ Implemented ops:
 - `srivPlop`
 - `makeLakes`
 - `doRivers`
+
+## Core Oracle (Headless Simulation)
+
+- Source:
+  - `packages/micropolis-c-harness/core/core_oracle.c`
+  - `ref/micropolis/src/sim/s_traf.c` (compiled directly with a headless shim header)
+- Binary output (generated): `packages/micropolis-c-harness/build/core/micropolis-core-oracle`
+- TS wrapper: `@city/micropolis-c-harness/core-parity`
+
+### Build
+
+```sh
+pnpm --filter @city/micropolis-c-harness build:core
+```
+
+### Commands
+
+`micropolis-core-oracle <command> --state-dir <dir> [options]`
+
+- `init-new-city [--seed <u32>] [--city-time <i64>] [--city-tax <i32>] [--sim-speed <i32>]`
+- `step-phase --phase <0..15>`
+- `step-tick [--start-phase <0..15>]`
+- `make-traf --x <i32> --y <i32> --source <0|1|2>`
+- `snapshot`
+
+State directory files:
+
+- `snapshot.json` (scalar metadata)
+- `map.u16le` (`Map[WORLD_X][WORLD_Y]`, x-major)
+- `trf-density.u8` (`TrfDensity[HWLDX][HWLDY]`, x-major)
+- `rate-og-mem.i16le` (`RateOGMem[SmX][SmY]`, x-major)
+
+Current snapshot transport is `json+binary` sidecars.
+Planned follow-up: migrate to a single binary envelope after schema stabilization.
