@@ -1,8 +1,15 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  decodeTerrainMapU16LE,
+  findTerrainMapMismatch,
+  formatTerrainMapMismatch,
+  readTerrainMapU16LE,
+  runTerrainHarness,
+  TERRAIN_TILE_COUNT,
+} from '@city/micropolis-c-harness/terrain-parity';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
@@ -12,25 +19,6 @@ import { createSimState } from '../core/sim-state.ts';
 import { generateMap } from './generate.ts';
 
 /**
- * Loads a raw `uint16_t` little-endian dump produced by `micropolis-terrain-harness`.
- *
- * C reference:
- * - Harness output format in `packages/micropolis-c-harness/terrain/terrain_harness.c`
- * - Tile storage is `Map[x][y]` in `ref/micropolis/src/sim/s_gen.c`.
- */
-const loadU16LE = (filePath: string): Uint16Array => {
-  const buf = readFileSync(filePath);
-  expect(buf.byteLength % 2).toBe(0);
-
-  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  const words = new Uint16Array(buf.byteLength / 2);
-  for (let i = 0; i < words.length; i += 1) {
-    words[i] = view.getUint16(i * 2, true);
-  }
-  return words;
-};
-
-/**
  * Asserts byte-for-byte equality of two classic Micropolis maps.
  *
  * C reference:
@@ -38,16 +26,10 @@ const loadU16LE = (filePath: string): Uint16Array => {
  */
 const expectMapsEqual = (actual: Uint16Array, expected: Uint16Array): void => {
   expect(actual).toHaveLength(World.WORLD_X * World.WORLD_Y);
-  expect(expected).toHaveLength(World.WORLD_X * World.WORLD_Y);
-
-  for (let i = 0; i < expected.length; i += 1) {
-    if (actual[i] !== expected[i]) {
-      const x = Math.trunc(i / World.WORLD_Y);
-      const y = i % World.WORLD_Y;
-      throw new Error(
-        `map mismatch at x=${x} y=${y} index=${i}: expected=${expected[i]} actual=${actual[i]}`,
-      );
-    }
+  expect(expected).toHaveLength(TERRAIN_TILE_COUNT);
+  const mismatch = findTerrainMapMismatch(actual, expected);
+  if (mismatch !== null) {
+    throw new Error(formatTerrainMapMismatch(mismatch));
   }
 };
 
@@ -69,7 +51,7 @@ describe('terrain/generateMap parity against C fixtures', () => {
 
   for (const fixture of manifest.fixtures) {
     it(`matches ${fixture.file}`, () => {
-      const expected = loadU16LE(path.join(FIXTURE_DIR, fixture.file));
+      const expected = readTerrainMapU16LE(path.join(FIXTURE_DIR, fixture.file));
 
       const state = createSimState();
       const context = createSimContext();
@@ -95,20 +77,6 @@ describe('terrain/generateMap property parity against C harness (env-gated)', ()
     return;
   }
 
-  const HARNESS_PKG = path.resolve(SIM_CORE_ROOT, '..', 'micropolis-c-harness');
-  const HARNESS_BIN = path.join(HARNESS_PKG, 'build', 'terrain', 'micropolis-terrain-harness');
-  const HARNESS_BUILD_SCRIPT = path.join(HARNESS_PKG, 'scripts', 'build-terrain-harness.mjs');
-
-  const ensureHarness = (): void => {
-    if (existsSync(HARNESS_BIN)) {
-      return;
-    }
-    execFileSync(process.execPath, [HARNESS_BUILD_SCRIPT], { stdio: 'inherit' });
-    if (!existsSync(HARNESS_BIN)) {
-      throw new Error(`expected harness binary at ${HARNESS_BIN}`);
-    }
-  };
-
   /**
    * Runs the terrain harness and returns the generated map as a `Uint16Array`.
    *
@@ -122,26 +90,19 @@ describe('terrain/generateMap property parity against C harness (env-gated)', ()
     curveLevel: number;
     createIsland: number;
   }): Uint16Array => {
-    const out = execFileSync(HARNESS_BIN, [
-      `--seed=${opts.seed}`,
-      `--treeLevel=${opts.treeLevel}`,
-      `--lakeLevel=${opts.lakeLevel}`,
-      `--curveLevel=${opts.curveLevel}`,
-      `--createIsland=${opts.createIsland}`,
-      '--format=u16le',
-    ]);
-
-    const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
-    const words = new Uint16Array(out.byteLength / 2);
-    for (let i = 0; i < words.length; i += 1) {
-      words[i] = view.getUint16(i * 2, true);
-    }
-    return words;
+    return decodeTerrainMapU16LE(
+      runTerrainHarness([
+        `--seed=${opts.seed}`,
+        `--treeLevel=${opts.treeLevel}`,
+        `--lakeLevel=${opts.lakeLevel}`,
+        `--curveLevel=${opts.curveLevel}`,
+        `--createIsland=${opts.createIsland}`,
+        '--format=u16le',
+      ]),
+    );
   };
 
   it('matches C for many random seeds/knobs', () => {
-    ensureHarness();
-
     const numRuns = process.env.CITY_TEST_PARITY_RUNS
       ? Math.trunc(Number(process.env.CITY_TEST_PARITY_RUNS))
       : 25;

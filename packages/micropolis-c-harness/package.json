@@ -2,6 +2,9 @@
   "name": "@city/micropolis-c-harness",
   "private": true,
   "type": "module",
+  "exports": {
+    "./terrain-parity": "./src/terrain-parity.ts"
+  },
   "scripts": {
     "build:terrain": "node scripts/build-terrain-harness.mjs",
     "gen:terrain-fixtures": "node scripts/gen-terrain-fixtures.mjs"

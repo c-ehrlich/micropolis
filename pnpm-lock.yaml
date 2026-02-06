@@ -98,12 +98,17 @@ importers:
         specifier: 7.3.1
         version: 7.3.1(@types/node@25.0.10)(tsx@4.21.0)
 
+  packages/micropolis-c-harness: {}
+
   packages/shared: {}
 
   packages/sim-assets: {}
 
   packages/sim-core:
     devDependencies:
+      '@city/micropolis-c-harness':
+        specifier: workspace:*
+        version: link:../micropolis-c-harness
       '@types/node':
         specifier: 25.0.10
         version: 25.0.10

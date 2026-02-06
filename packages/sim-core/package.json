@@ -14,6 +14,7 @@
     "test:watch": "pnpm -w vitest --root packages/sim-core"
   },
   "devDependencies": {
+    "@city/micropolis-c-harness": "workspace:*",
     "@types/node": "25.0.10",
     "fast-check": "catalog:"
   }

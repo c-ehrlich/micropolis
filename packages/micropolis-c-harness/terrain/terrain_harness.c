@@ -121,6 +121,12 @@ static void BRivPlop(void);
 static void SRivPlop(void);
 static void SmoothWater(void);
 
+/* Op-mode dispatch values. */
+typedef enum TerrainOp {
+  TERRAIN_OP_NONE = 0,
+  TERRAIN_OP_NOOP = 1,
+} TerrainOp;
+
 /* --- Begin: 1:1 terrain logic from `ref/micropolis/src/sim/s_gen.c` --- */
 
 static int ERand(int limit)
@@ -596,12 +602,17 @@ static void usage(FILE *out)
 {
   fprintf(out,
           "micropolis-terrain-harness\\n"
+          "default mode (GenerateMap):\\n"
           "  --seed <u32>\\n"
           "  --treeLevel <i32>\\n"
           "  --lakeLevel <i32>\\n"
           "  --curveLevel <i32>\\n"
           "  --createIsland <i32>\\n"
           "  [--runSmoothWater] (default: off)\\n"
+          "op mode:\\n"
+          "  --op <name>\\n"
+          "  --input-map <path>\\n"
+          "  op names: noop\\n"
           "  [--format u16le|json] (default: u16le)\\n"
           "  [--dump-path <path>] (default: stdout)\\n");
 }
@@ -652,6 +663,81 @@ static int write_u16le(FILE *f)
   return 1;
 }
 
+/**
+ * Loads a map dump in x-major `u16le` order into `Map[x][y]`.
+ *
+ * This mirrors the harness output ordering and Micropolis terrain storage
+ * (`Map[x][y]`) from `ref/micropolis/src/sim/s_gen.c`.
+ */
+static int read_u16le(FILE *f)
+{
+  int x, y;
+  for (x = 0; x < WORLD_X; x++) {
+    for (y = 0; y < WORLD_Y; y++) {
+      uint8_t b[2];
+      if (fread(b, 1, 2, f) != 2)
+        return 0;
+      Map[x][y] = (uint16_t)(((uint16_t)b[1] << 8u) | (uint16_t)b[0]);
+    }
+  }
+  return 1;
+}
+
+static int load_map_from_path(const char *input_map_path)
+{
+  FILE *in = fopen(input_map_path, "rb");
+  if (in == NULL) {
+    fprintf(stderr, "failed to open input map '%s': %s\n", input_map_path, strerror(errno));
+    return 0;
+  }
+
+  if (!read_u16le(in)) {
+    if (ferror(in)) {
+      fprintf(stderr, "failed to read input map '%s': %s\n", input_map_path, strerror(errno));
+    } else {
+      fprintf(stderr,
+              "input map '%s' is too short: expected exactly %d bytes\n",
+              input_map_path,
+              WORLD_X * WORLD_Y * 2);
+    }
+    fclose(in);
+    return 0;
+  }
+
+  if (fgetc(in) != EOF) {
+    fprintf(stderr,
+            "input map '%s' has extra bytes: expected exactly %d bytes\n",
+            input_map_path,
+            WORLD_X * WORLD_Y * 2);
+    fclose(in);
+    return 0;
+  }
+
+  fclose(in);
+  return 1;
+}
+
+static int parse_op(const char *name, TerrainOp *out)
+{
+  if (strcmp(name, "noop") == 0) {
+    *out = TERRAIN_OP_NOOP;
+    return 1;
+  }
+  return 0;
+}
+
+static int run_op(TerrainOp op)
+{
+  switch (op) {
+  case TERRAIN_OP_NOOP:
+    /* Intentionally does nothing: map is loaded and emitted unchanged. */
+    return 1;
+  case TERRAIN_OP_NONE:
+  default:
+    return 0;
+  }
+}
+
 static int write_json(FILE *f)
 {
   int x, y;
@@ -676,9 +762,12 @@ int main(int argc, char **argv)
   uint32_t seed_u32 = 0;
   int have_seed = 0;
   int have_tree = 0, have_lake = 0, have_curve = 0, have_island = 0;
+  int have_op = 0;
   int run_smooth_water = 0;
   const char *format = "u16le";
   const char *dump_path = NULL;
+  const char *op_name = NULL;
+  const char *input_map_path = NULL;
 
   int i = 1;
   while (i < argc) {
@@ -717,6 +806,16 @@ int main(int argc, char **argv)
       dump_path = v;
     } else if (strcmp(a, "--dump-path") == 0 && i + 1 < argc) {
       dump_path = argv[++i];
+    } else if ((v = arg_value(a, "--op=")) != NULL) {
+      op_name = v;
+      have_op = 1;
+    } else if (strcmp(a, "--op") == 0 && i + 1 < argc) {
+      op_name = argv[++i];
+      have_op = 1;
+    } else if ((v = arg_value(a, "--input-map=")) != NULL) {
+      input_map_path = v;
+    } else if (strcmp(a, "--input-map") == 0 && i + 1 < argc) {
+      input_map_path = argv[++i];
     } else if (strcmp(a, "--runSmoothWater") == 0) {
       run_smooth_water = 1;
     } else {
@@ -735,16 +834,46 @@ int main(int argc, char **argv)
     i++;
   }
 
-  if (!have_seed || !have_tree || !have_lake || !have_curve || !have_island) {
-    fprintf(stderr, "missing required args\n");
-    usage(stderr);
-    return 2;
-  }
+  if (have_op) {
+    TerrainOp op = TERRAIN_OP_NONE;
+    if (op_name == NULL || op_name[0] == '\0') {
+      fprintf(stderr, "missing value for --op\n");
+      usage(stderr);
+      return 2;
+    }
+    if (!parse_op(op_name, &op)) {
+      fprintf(stderr, "unknown op: %s\n", op_name);
+      usage(stderr);
+      return 2;
+    }
+    if (input_map_path == NULL || input_map_path[0] == '\0') {
+      fprintf(stderr, "missing required --input-map for --op mode\n");
+      usage(stderr);
+      return 2;
+    }
+    if (run_smooth_water) {
+      fprintf(stderr, "--runSmoothWater is only valid in default GenerateMap mode\n");
+      return 2;
+    }
+    if (!load_map_from_path(input_map_path)) {
+      return 1;
+    }
+    if (!run_op(op)) {
+      fprintf(stderr, "failed to run op: %s\n", op_name);
+      return 1;
+    }
+  } else {
+    if (!have_seed || !have_tree || !have_lake || !have_curve || !have_island) {
+      fprintf(stderr, "missing required args\n");
+      usage(stderr);
+      return 2;
+    }
 
-  GenerateMap((int)seed_u32);
-  if (run_smooth_water) {
-    /* `SmoothWater()` exists in `ref/micropolis/src/sim/s_gen.c` but is not called by `GenerateMap`. */
-    SmoothWater();
+    GenerateMap((int)seed_u32);
+    if (run_smooth_water) {
+      /* `SmoothWater()` exists in `ref/micropolis/src/sim/s_gen.c` but is not called by `GenerateMap`. */
+      SmoothWater();
+    }
   }
 
   FILE *out = stdout;

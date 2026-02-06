@@ -19,3 +19,13 @@ pnpm --filter @city/micropolis-c-harness build:terrain
 pnpm --filter @city/micropolis-c-harness gen:terrain-fixtures
 ```
 
+### Terrain op mode (map transforms)
+
+`micropolis-terrain-harness` now supports operation mode:
+
+- `--op <name>`
+- `--input-map <path>` (x-major `u16le`, required in op mode)
+- `--format u16le|json`
+- `--dump-path <path>`
+
+Phase 0 includes `--op noop` for exact map I/O round-trip parity checks.
