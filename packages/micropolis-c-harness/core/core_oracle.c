@@ -7,7 +7,7 @@
  * Primary references:
  * - ref/micropolis/src/sim/s_traf.c (compiled directly)
  * - ref/micropolis/src/sim/s_sim.c (Simulate/DecTrafficMem/DecROGMem logic)
- * - ref/micropolis/src/sim/s_power.c (MoveMapSim)
+ * - ref/micropolis/src/sim/s_power.c (DoPowerScan/MoveMapSim/PowerStack)
  * - ref/micropolis/src/sim/s_sim.c + ref/micropolis/src/sim/rand.c (RNG)
  */
 
@@ -25,23 +25,31 @@
 #define MAP_FILE "map.u16le"
 #define TRF_FILE "trf-density.u8"
 #define ROG_FILE "rate-og-mem.i16le"
+#define POWER_FILE "power.u16le"
+#define POWER_STACK_X_FILE "power-stack-x.u8"
+#define POWER_STACK_Y_FILE "power-stack-y.u8"
 #define SNAPSHOT_FILE "snapshot.json"
 
 #define MAP_WORD_COUNT (WORLD_X * WORLD_Y)
 #define TRF_BYTE_COUNT (HWLDX * HWLDY)
 #define ROG_WORD_COUNT (SmX * SmY)
+#define POWER_WORD_COUNT PWRMAPSIZE
+#define POWER_STACK_BYTE_COUNT PWRSTKSIZE
 
 /* --- Reference-sim globals required by s_traf.c and Simulate logic. --- */
 
 static uint16_t gMapStorage[WORLD_X][WORLD_Y];
 static Byte gTrfStorage[HWLDX][HWLDY];
 short RateOGMem[SmX][SmY];
+short PowerMap[POWERMAPLEN];
 
 short *Map[WORLD_X];
 Byte *TrfDensity[HWLDX];
 
 short SMapX;
 short SMapY;
+short CChr;
+short CChr9;
 
 short SimSpeed;
 short CityTax;
@@ -52,6 +60,10 @@ short DoInitialEval;
 short NewPower;
 short NewMapFlags[NMAPS];
 QUAD CityTime;
+short CoalPop;
+short NuclearPop;
+short PwrdZCnt;
+short unPwrdZCnt;
 
 /* s_traf.c defines these globals. */
 extern short TrafMaxX;
@@ -94,22 +106,16 @@ static void SeedRand(int seed) { sim_srand((uint32_t)seed); }
 
 void CityEvaluation(void) {}
 void SetValves(void) {}
-void ClearCensus(void) {}
-void MapScan(int x1, int x2)
-{
-  (void)x1;
-  (void)x2;
-}
 void TakeCensus(void) {}
 void Take2Census(void) {}
 void CollectTax(void) {}
 void SendMessages(void) {}
-void DoPowerScan(void) {}
 void PTLScan(void) {}
 void CrimeScan(void) {}
 void PopDenScan(void) {}
 void FireAnalysis(void) {}
 void DoDisasters(void) {}
+void SendMes(int id) { (void)id; }
 
 SimSprite *GetSprite(int type)
 {
@@ -119,46 +125,110 @@ SimSprite *GetSprite(int type)
   return NULL;
 }
 
-/* `MoveMapSim` from ref/micropolis/src/sim/s_power.c. */
-int MoveMapSim(short MDir)
+/*
+ * Set `PWRBIT` on the current `Map[SMapX][SMapY]` tile.
+ *
+ * Mirrors `SetZPower` in `ref/micropolis/src/sim/s_zone.c` (power-only subset):
+ * - `NUCLEAR` / `POWERPLANT` are always powered.
+ * - Other conductive tiles depend on `PowerMap`.
+ */
+static short SetZPower(void)
 {
-  switch (MDir) {
-  case 0:
-    if (SMapY > 0) {
-      SMapY--;
-      return (TRUE);
-    }
-    if (SMapY < 0)
-      SMapY = 0;
-    return (FALSE);
-  case 1:
-    if (SMapX < (WORLD_X - 1)) {
-      SMapX++;
-      return (TRUE);
-    }
-    if (SMapX > (WORLD_X - 1))
-      SMapX = WORLD_X - 1;
-    return (FALSE);
-  case 2:
-    if (SMapY < (WORLD_Y - 1)) {
-      SMapY++;
-      return (TRUE);
-    }
-    if (SMapY > (WORLD_Y - 1))
-      SMapY = WORLD_Y - 1;
-    return (FALSE);
-  case 3:
-    if (SMapX > 0) {
-      SMapX--;
-      return (TRUE);
-    }
-    if (SMapX < 0)
-      SMapX = 0;
-    return (FALSE);
-  case 4:
-    return (TRUE);
+  QUAD powerWord;
+
+  if ((CChr9 == NUCLEAR) || (CChr9 == POWERPLANT) ||
+      ((powerWord = POWERWORD(SMapX, SMapY)),
+       ((powerWord < PWRMAPSIZE) && (PowerMap[powerWord] & (1 << (SMapX & 15)))))) {
+    Map[SMapX][SMapY] = CChr | PWRBIT;
+    return 1;
   }
-  return (FALSE);
+
+  Map[SMapX][SMapY] = CChr & (~PWRBIT);
+  return 0;
+}
+
+/*
+ * Zone power/counter behavior required by phase-level power parity.
+ *
+ * Mirrors the `DoZone` + power-plant subset in:
+ * - `ref/micropolis/src/sim/s_zone.c`
+ */
+static void DoZoneLite(void)
+{
+  short zonePwrFlg;
+
+  zonePwrFlg = SetZPower();
+  if (zonePwrFlg) {
+    PwrdZCnt++;
+  } else {
+    unPwrdZCnt++;
+  }
+
+  if (CChr9 == POWERPLANT) {
+    CoalPop++;
+    PushPowerStack();
+    return;
+  }
+  if (CChr9 == NUCLEAR) {
+    NuclearPop++;
+    PushPowerStack();
+  }
+}
+
+/*
+ * Minimal `MapScan` behavior for power+zone interaction parity.
+ *
+ * Mirrors `MapScan` in `ref/micropolis/src/sim/s_sim.c` for:
+ * - `CChr/CChr9` tracking
+ * - `NewPower` conductive updates (`SetZPower`)
+ * - zone power counters (`DoZone` path)
+ */
+void MapScan(int x1, int x2)
+{
+  short x;
+  short y;
+
+  for (x = x1; x < x2; x++) {
+    for (y = 0; y < WORLD_Y; y++) {
+      if ((CChr = Map[x][y]) != 0) {
+        CChr9 = CChr & LOMASK;
+        if (CChr9 >= FLOOD) {
+          SMapX = x;
+          SMapY = y;
+
+          if (NewPower && (CChr & CONDBIT)) {
+            SetZPower();
+          }
+
+          if (CChr & ZONEBIT) {
+            DoZoneLite();
+            continue;
+          }
+
+          if ((CChr9 >= SOMETINYEXP) && (CChr9 <= LASTTINYEXP)) {
+            Map[x][y] = RUBBLE + (Rand16() & 3) + BULLBIT;
+          }
+        }
+      }
+    }
+  }
+}
+
+/*
+ * Per-tick census reset required for phase progression parity.
+ *
+ * Mirrors `ClearCensus` in `ref/micropolis/src/sim/s_sim.c` (power subset).
+ */
+void ClearCensus(void)
+{
+  short z;
+
+  z = 0;
+  PwrdZCnt = z;
+  unPwrdZCnt = z;
+  CoalPop = z;
+  NuclearPop = z;
+  PowerStackNum = z;
 }
 
 /* `DecTrafficMem` from ref/micropolis/src/sim/s_sim.c. */
@@ -347,6 +417,15 @@ static void ResetStateDefaults(uint32_t seed)
     }
   }
 
+  for (x = 0; x < POWERMAPLEN; x++) {
+    PowerMap[x] = 0;
+  }
+
+  for (x = 0; x < PWRSTKSIZE; x++) {
+    PowerStackX[x] = 0;
+    PowerStackY[x] = 0;
+  }
+
   CityTime = 50;
   CityTax = 7;
   AvCityTax = 0;
@@ -357,6 +436,13 @@ static void ResetStateDefaults(uint32_t seed)
   NewPower = 0;
   SMapX = 0;
   SMapY = 0;
+  CChr = 0;
+  CChr9 = 0;
+  CoalPop = 0;
+  NuclearPop = 0;
+  PwrdZCnt = 0;
+  unPwrdZCnt = 0;
+  PowerStackNum = 0;
   TrafMaxX = 0;
   TrafMaxY = 0;
 
@@ -554,6 +640,107 @@ static int ReadRogBin(const char *path)
   return 1;
 }
 
+static int WritePowerBin(const char *path)
+{
+  FILE *file;
+  int i;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open power map for write: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  for (i = 0; i < PWRMAPSIZE; i++) {
+    uint16_t word;
+    unsigned char bytes[2];
+
+    word = (uint16_t)(PowerMap[i] & 0xffffu);
+    bytes[0] = (unsigned char)(word & 0xffu);
+    bytes[1] = (unsigned char)((word >> 8) & 0xffu);
+    if (fwrite(bytes, 1u, 2u, file) != 2u) {
+      fclose(file);
+      fprintf(stderr, "failed to write power map bytes: %s\n", path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadPowerBin(const char *path)
+{
+  FILE *file;
+  int i;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open power map for read: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  for (i = 0; i < PWRMAPSIZE; i++) {
+    unsigned char bytes[2];
+    uint16_t word;
+
+    if (fread(bytes, 1u, 2u, file) != 2u) {
+      fclose(file);
+      fprintf(stderr, "power map size mismatch: %s\n", path);
+      return 0;
+    }
+    word = (uint16_t)(((uint16_t)bytes[1] << 8) | (uint16_t)bytes[0]);
+    PowerMap[i] = (short)word;
+  }
+
+  for (i = PWRMAPSIZE; i < POWERMAPLEN; i++) {
+    PowerMap[i] = 0;
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int WritePowerStackBin(const char *path, const char *stack)
+{
+  FILE *file;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open power stack for write: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  if (fwrite(stack, 1u, (size_t)PWRSTKSIZE, file) != (size_t)PWRSTKSIZE) {
+    fclose(file);
+    fprintf(stderr, "failed to write power stack bytes: %s\n", path);
+    return 0;
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadPowerStackBin(const char *path, char *stack)
+{
+  FILE *file;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open power stack for read: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  if (fread(stack, 1u, (size_t)PWRSTKSIZE, file) != (size_t)PWRSTKSIZE) {
+    fclose(file);
+    fprintf(stderr, "power stack size mismatch: %s\n", path);
+    return 0;
+  }
+
+  fclose(file);
+  return 1;
+}
+
 static int WriteSnapshotJson(const char *path)
 {
   FILE *file;
@@ -577,6 +764,12 @@ static int WriteSnapshotJson(const char *path)
   fprintf(file, "  \"SimSpeed\": %d,\n", SimSpeed);
   fprintf(file, "  \"DoInitialEval\": %d,\n", DoInitialEval);
   fprintf(file, "  \"NewPower\": %d,\n", NewPower);
+  fprintf(file, "  \"CChr9\": %d,\n", CChr9);
+  fprintf(file, "  \"CoalPop\": %d,\n", CoalPop);
+  fprintf(file, "  \"NuclearPop\": %d,\n", NuclearPop);
+  fprintf(file, "  \"PwrdZCnt\": %d,\n", PwrdZCnt);
+  fprintf(file, "  \"unPwrdZCnt\": %d,\n", unPwrdZCnt);
+  fprintf(file, "  \"PowerStackNum\": %d,\n", PowerStackNum);
   fprintf(file, "  \"TrafMaxX\": %d,\n", TrafMaxX);
   fprintf(file, "  \"TrafMaxY\": %d,\n", TrafMaxY);
   fprintf(file, "  \"copControl\": %d,\n", gCopSprite.control);
@@ -733,6 +926,42 @@ static int ReadSnapshotJson(const char *path)
   }
   NewPower = (short)value;
 
+  if (!ParseJsonI64(json, "CChr9", &value)) {
+    free(json);
+    return 0;
+  }
+  CChr9 = (short)value;
+
+  if (!ParseJsonI64(json, "CoalPop", &value)) {
+    free(json);
+    return 0;
+  }
+  CoalPop = (short)value;
+
+  if (!ParseJsonI64(json, "NuclearPop", &value)) {
+    free(json);
+    return 0;
+  }
+  NuclearPop = (short)value;
+
+  if (!ParseJsonI64(json, "PwrdZCnt", &value)) {
+    free(json);
+    return 0;
+  }
+  PwrdZCnt = (short)value;
+
+  if (!ParseJsonI64(json, "unPwrdZCnt", &value)) {
+    free(json);
+    return 0;
+  }
+  unPwrdZCnt = (short)value;
+
+  if (!ParseJsonI64(json, "PowerStackNum", &value)) {
+    free(json);
+    return 0;
+  }
+  PowerStackNum = (int)value;
+
   if (!ParseJsonI64(json, "TrafMaxX", &value)) {
     free(json);
     return 0;
@@ -839,6 +1068,21 @@ static int SaveStateDir(const char *stateDir)
   if (!WriteRogBin(path))
     return 0;
 
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_FILE))
+    return 0;
+  if (!WritePowerBin(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_STACK_X_FILE))
+    return 0;
+  if (!WritePowerStackBin(path, PowerStackX))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_STACK_Y_FILE))
+    return 0;
+  if (!WritePowerStackBin(path, PowerStackY))
+    return 0;
+
   return 1;
 }
 
@@ -864,6 +1108,21 @@ static int LoadStateDir(const char *stateDir)
   if (!JoinPath(path, sizeof(path), stateDir, ROG_FILE))
     return 0;
   if (!ReadRogBin(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_FILE))
+    return 0;
+  if (!ReadPowerBin(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_STACK_X_FILE))
+    return 0;
+  if (!ReadPowerStackBin(path, PowerStackX))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POWER_STACK_Y_FILE))
+    return 0;
+  if (!ReadPowerStackBin(path, PowerStackY))
     return 0;
 
   return 1;
@@ -927,6 +1186,7 @@ static void PrintUsage(void)
   fprintf(stderr, "  step-phase --phase <0..15>\n");
   fprintf(stderr, "  step-tick [--start-phase <0..15>]\n");
   fprintf(stderr, "  make-traf --x <i32> --y <i32> --source <-1..2>\n");
+  fprintf(stderr, "  do-power-scan\n");
   fprintf(stderr, "  snapshot\n");
 }
 
@@ -1078,12 +1338,22 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  if (strcmp(command, "do-power-scan") == 0) {
+    DoPowerScan();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
   if (strcmp(command, "snapshot") == 0) {
     printf("{\n");
     printf("  \"snapshotVersion\": %d,\n", SNAPSHOT_VERSION);
     printf("  \"mapWords\": %d,\n", MAP_WORD_COUNT);
     printf("  \"trfBytes\": %d,\n", TRF_BYTE_COUNT);
     printf("  \"rogWords\": %d,\n", ROG_WORD_COUNT);
+    printf("  \"powerWords\": %d,\n", POWER_WORD_COUNT);
+    printf("  \"powerStackBytes\": %d,\n", POWER_STACK_BYTE_COUNT);
     printf("  \"rngNext\": %u,\n", gRandNext);
     printf("  \"CityTime\": %lld,\n", (long long)CityTime);
     printf("  \"CityTax\": %d,\n", CityTax);
@@ -1091,6 +1361,12 @@ int main(int argc, char **argv)
     printf("  \"Scycle\": %d,\n", Scycle);
     printf("  \"Fcycle\": %d,\n", Fcycle);
     printf("  \"SimSpeed\": %d,\n", SimSpeed);
+    printf("  \"CChr9\": %d,\n", CChr9);
+    printf("  \"CoalPop\": %d,\n", CoalPop);
+    printf("  \"NuclearPop\": %d,\n", NuclearPop);
+    printf("  \"PwrdZCnt\": %d,\n", PwrdZCnt);
+    printf("  \"unPwrdZCnt\": %d,\n", unPwrdZCnt);
+    printf("  \"PowerStackNum\": %d,\n", PowerStackNum);
     printf("  \"TrafMaxX\": %d,\n", TrafMaxX);
     printf("  \"TrafMaxY\": %d,\n", TrafMaxY);
     printf("  \"copControl\": %d,\n", gCopSprite.control);

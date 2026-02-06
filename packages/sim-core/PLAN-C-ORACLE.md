@@ -113,8 +113,8 @@ Comparison policy:
   - Existing intentional traffic divergence can be removed or reduced with confidence.
 
 ### Phase 2: Power + zone interaction
-- [ ] Add power scan + zone power-bit parity checkpoints.
-- [ ] Compare `DoPowerScan` outputs and zone powered/unpowered counters under tick progression.
+- [x] Add power scan + zone power-bit parity checkpoints.
+- [x] Compare `DoPowerScan` outputs and zone powered/unpowered counters under tick progression.
 - Exit criteria:
   - Power map and powered zone effects match under replay checkpoints.
 

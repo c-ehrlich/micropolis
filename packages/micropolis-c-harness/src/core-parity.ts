@@ -23,6 +23,10 @@ export const CORE_MAP_WORD_COUNT = CORE_WORLD_X * CORE_WORLD_Y;
 export const CORE_TRF_CELL_COUNT = CORE_HWLDX * CORE_HWLDY;
 /** Cell count for `RateOGMem[SmX][SmY]` in Micropolis C. */
 export const CORE_ROG_CELL_COUNT = CORE_SMX * CORE_SMY;
+/** Word count for `PowerMap[PWRMAPSIZE]` in Micropolis C runtime usage. */
+export const CORE_POWER_WORD_COUNT = ((CORE_WORLD_X + 15) >> 4) * CORE_WORLD_Y;
+/** Byte count for `PowerStackX/Y[PWRSTKSIZE]` in Micropolis C. */
+export const CORE_POWER_STACK_COUNT = (CORE_WORLD_X * CORE_WORLD_Y) >> 2;
 
 const HARNESS_PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CORE_BIN = path.join(HARNESS_PKG, 'build', 'core', 'micropolis-core-oracle');
@@ -39,11 +43,24 @@ const TRAFFIC_SOURCE = path.resolve(
   'sim',
   's_traf.c',
 );
+const POWER_SOURCE = path.resolve(
+  HARNESS_PKG,
+  '..',
+  '..',
+  'ref',
+  'micropolis',
+  'src',
+  'sim',
+  's_power.c',
+);
 
 const SNAPSHOT_FILE = 'snapshot.json';
 const MAP_FILE = 'map.u16le';
 const TRF_FILE = 'trf-density.u8';
 const ROG_FILE = 'rate-og-mem.i16le';
+const POWER_FILE = 'power.u16le';
+const POWER_STACK_X_FILE = 'power-stack-x.u8';
+const POWER_STACK_Y_FILE = 'power-stack-y.u8';
 
 let hasEnsuredCoreOracle = false;
 
@@ -71,6 +88,12 @@ export interface CoreOracleState {
   SimSpeed: number;
   DoInitialEval: number;
   NewPower: number;
+  CChr9: number;
+  CoalPop: number;
+  NuclearPop: number;
+  PwrdZCnt: number;
+  unPwrdZCnt: number;
+  PowerStackNum: number;
   TrafMaxX: number;
   TrafMaxY: number;
   copControl: number;
@@ -80,6 +103,9 @@ export interface CoreOracleState {
   map: Uint16Array;
   trfDensity: Uint8Array;
   rateOGMem: Int16Array;
+  powerMap: Uint16Array;
+  powerStackX: Uint8Array;
+  powerStackY: Uint8Array;
 }
 
 export interface CoreOracleInitNewCityOptions {
@@ -114,6 +140,12 @@ interface CoreOracleSnapshotJson {
   SimSpeed: number;
   DoInitialEval: number;
   NewPower: number;
+  CChr9: number;
+  CoalPop: number;
+  NuclearPop: number;
+  PwrdZCnt: number;
+  unPwrdZCnt: number;
+  PowerStackNum: number;
   TrafMaxX: number;
   TrafMaxY: number;
   copControl: number;
@@ -133,7 +165,7 @@ interface CoreOracleSnapshotJson {
  * Ensures `micropolis-core-oracle` is available.
  *
  * Wraps `packages/micropolis-c-harness/scripts/build-core-oracle.mjs`, which compiles
- * the headless core oracle and the reference `s_traf.c` translation unit.
+ * the headless core oracle and the reference `s_traf.c`/`s_power.c` translation units.
  */
 export function ensureCoreOracle(): string {
   if (hasEnsuredCoreOracle) {
@@ -145,7 +177,8 @@ export function ensureCoreOracle(): string {
     statSync(CORE_BIN).mtimeMs < statSync(CORE_BUILD_SCRIPT).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(CORE_SOURCE).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(CORE_HEADER).mtimeMs ||
-    statSync(CORE_BIN).mtimeMs < statSync(TRAFFIC_SOURCE).mtimeMs;
+    statSync(CORE_BIN).mtimeMs < statSync(TRAFFIC_SOURCE).mtimeMs ||
+    statSync(CORE_BIN).mtimeMs < statSync(POWER_SOURCE).mtimeMs;
 
   if (needsBuild) {
     execFileSync(process.execPath, [CORE_BUILD_SCRIPT], { stdio: 'inherit' });
@@ -259,6 +292,12 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     SimSpeed: Math.trunc(state.SimSpeed),
     DoInitialEval: Math.trunc(state.DoInitialEval),
     NewPower: Math.trunc(state.NewPower),
+    CChr9: Math.trunc(state.CChr9),
+    CoalPop: Math.trunc(state.CoalPop),
+    NuclearPop: Math.trunc(state.NuclearPop),
+    PwrdZCnt: Math.trunc(state.PwrdZCnt),
+    unPwrdZCnt: Math.trunc(state.unPwrdZCnt),
+    PowerStackNum: Math.trunc(state.PowerStackNum),
     TrafMaxX: Math.trunc(state.TrafMaxX),
     TrafMaxY: Math.trunc(state.TrafMaxY),
     copControl: Math.trunc(state.copControl),
@@ -287,11 +326,29 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
       `invalid rateOGMem length: ${state.rateOGMem.length} (expected ${CORE_ROG_CELL_COUNT})`,
     );
   }
+  if (state.powerMap.length !== CORE_POWER_WORD_COUNT) {
+    throw new Error(
+      `invalid powerMap length: ${state.powerMap.length} (expected ${CORE_POWER_WORD_COUNT})`,
+    );
+  }
+  if (state.powerStackX.length !== CORE_POWER_STACK_COUNT) {
+    throw new Error(
+      `invalid powerStackX length: ${state.powerStackX.length} (expected ${CORE_POWER_STACK_COUNT})`,
+    );
+  }
+  if (state.powerStackY.length !== CORE_POWER_STACK_COUNT) {
+    throw new Error(
+      `invalid powerStackY length: ${state.powerStackY.length} (expected ${CORE_POWER_STACK_COUNT})`,
+    );
+  }
 
   writeFileSync(path.join(dir, SNAPSHOT_FILE), `${JSON.stringify(snapshot, null, 2)}\n`);
   writeFileSync(path.join(dir, MAP_FILE), encodeCoreU16LE(state.map));
   writeFileSync(path.join(dir, TRF_FILE), state.trfDensity);
   writeFileSync(path.join(dir, ROG_FILE), encodeCoreI16LE(state.rateOGMem));
+  writeFileSync(path.join(dir, POWER_FILE), encodeCoreU16LE(state.powerMap));
+  writeFileSync(path.join(dir, POWER_STACK_X_FILE), state.powerStackX);
+  writeFileSync(path.join(dir, POWER_STACK_Y_FILE), state.powerStackY);
 }
 
 /**
@@ -306,6 +363,9 @@ function readCoreOracleState(dir: string): CoreOracleState {
   const map = decodeCoreU16LE(readFileSync(path.join(dir, MAP_FILE)));
   const trfDensity = new Uint8Array(readFileSync(path.join(dir, TRF_FILE)));
   const rateOGMem = decodeCoreI16LE(readFileSync(path.join(dir, ROG_FILE)));
+  const powerMap = decodeCoreU16LE(readFileSync(path.join(dir, POWER_FILE)));
+  const powerStackX = new Uint8Array(readFileSync(path.join(dir, POWER_STACK_X_FILE)));
+  const powerStackY = new Uint8Array(readFileSync(path.join(dir, POWER_STACK_Y_FILE)));
 
   if (map.length !== CORE_MAP_WORD_COUNT) {
     throw new Error(`oracle map size mismatch: ${map.length} (expected ${CORE_MAP_WORD_COUNT})`);
@@ -318,6 +378,21 @@ function readCoreOracleState(dir: string): CoreOracleState {
   if (rateOGMem.length !== CORE_ROG_CELL_COUNT) {
     throw new Error(
       `oracle rateOGMem size mismatch: ${rateOGMem.length} (expected ${CORE_ROG_CELL_COUNT})`,
+    );
+  }
+  if (powerMap.length !== CORE_POWER_WORD_COUNT) {
+    throw new Error(
+      `oracle powerMap size mismatch: ${powerMap.length} (expected ${CORE_POWER_WORD_COUNT})`,
+    );
+  }
+  if (powerStackX.length !== CORE_POWER_STACK_COUNT) {
+    throw new Error(
+      `oracle powerStackX size mismatch: ${powerStackX.length} (expected ${CORE_POWER_STACK_COUNT})`,
+    );
+  }
+  if (powerStackY.length !== CORE_POWER_STACK_COUNT) {
+    throw new Error(
+      `oracle powerStackY size mismatch: ${powerStackY.length} (expected ${CORE_POWER_STACK_COUNT})`,
     );
   }
 
@@ -334,6 +409,12 @@ function readCoreOracleState(dir: string): CoreOracleState {
     SimSpeed: snapshot.SimSpeed,
     DoInitialEval: snapshot.DoInitialEval,
     NewPower: snapshot.NewPower,
+    CChr9: snapshot.CChr9,
+    CoalPop: snapshot.CoalPop,
+    NuclearPop: snapshot.NuclearPop,
+    PwrdZCnt: snapshot.PwrdZCnt,
+    unPwrdZCnt: snapshot.unPwrdZCnt,
+    PowerStackNum: snapshot.PowerStackNum,
     TrafMaxX: snapshot.TrafMaxX,
     TrafMaxY: snapshot.TrafMaxY,
     copControl: snapshot.copControl,
@@ -352,6 +433,9 @@ function readCoreOracleState(dir: string): CoreOracleState {
     map,
     trfDensity,
     rateOGMem,
+    powerMap,
+    powerStackX,
+    powerStackY,
   };
 }
 
@@ -373,7 +457,7 @@ function withTempStateDir<T>(run: (dir: string) => T): T {
  * Creates a fresh deterministic oracle city state.
  *
  * This maps to headless initialization in `core_oracle.c`, which seeds RNG and clears
- * `Map`, `TrfDensity`, and `RateOGMem` in C-compatible layouts.
+ * `Map`, `TrfDensity`, `RateOGMem`, `PowerMap`, and power-stack buffers.
  */
 export function runCoreOracleInitNewCity(
   options: CoreOracleInitNewCityOptions = {},
@@ -427,6 +511,20 @@ export function runCoreOracleStepTick(state: CoreOracleState, startPhase = 0): C
       '--start-phase',
       `${Math.trunc(startPhase)}`,
     ]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `DoPowerScan` and returns the updated snapshot state.
+ *
+ * Mirrors `DoPowerScan` in `ref/micropolis/src/sim/s_power.c`, including
+ * `PowerMap` writes and `PowerStackNum` consumption.
+ */
+export function runCoreOracleDoPowerScan(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['do-power-scan', '--state-dir', stateDir]);
     return readCoreOracleState(stateDir);
   });
 }

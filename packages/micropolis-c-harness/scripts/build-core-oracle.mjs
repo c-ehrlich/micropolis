@@ -8,6 +8,7 @@ const WORKSPACE_ROOT = path.resolve(ROOT, '..', '..');
 const CORE_DIR = path.join(ROOT, 'core');
 const SRC = path.join(CORE_DIR, 'core_oracle.c');
 const TRAF_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 's_traf.c');
+const POWER_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 's_power.c');
 const OUT_DIR = path.join(ROOT, 'build', 'core');
 const OUT = path.join(OUT_DIR, 'micropolis-core-oracle');
 
@@ -34,6 +35,7 @@ const args = [
   OUT,
   SRC,
   TRAF_SRC,
+  POWER_SRC,
 ];
 
 const result = spawnSync(cc, args, { stdio: 'inherit' });

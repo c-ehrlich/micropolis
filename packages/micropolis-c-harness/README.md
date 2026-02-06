@@ -64,6 +64,7 @@ Implemented ops:
 - Source:
   - `packages/micropolis-c-harness/core/core_oracle.c`
   - `ref/micropolis/src/sim/s_traf.c` (compiled directly with a headless shim header)
+  - `ref/micropolis/src/sim/s_power.c` (compiled directly with a headless shim header)
 - Binary output (generated): `packages/micropolis-c-harness/build/core/micropolis-core-oracle`
 - TS wrapper: `@city/micropolis-c-harness/core-parity`
 
@@ -81,6 +82,7 @@ pnpm --filter @city/micropolis-c-harness build:core
 - `step-phase --phase <0..15>`
 - `step-tick [--start-phase <0..15>]`
 - `make-traf --x <i32> --y <i32> --source <0|1|2>`
+- `do-power-scan`
 - `snapshot`
 
 State directory files:
@@ -89,6 +91,9 @@ State directory files:
 - `map.u16le` (`Map[WORLD_X][WORLD_Y]`, x-major)
 - `trf-density.u8` (`TrfDensity[HWLDX][HWLDY]`, x-major)
 - `rate-og-mem.i16le` (`RateOGMem[SmX][SmY]`, x-major)
+- `power.u16le` (`PowerMap[PWRMAPSIZE]`, linear)
+- `power-stack-x.u8` (`PowerStackX[PWRSTKSIZE]`, linear)
+- `power-stack-y.u8` (`PowerStackY[PWRSTKSIZE]`, linear)
 
 Current snapshot transport is `json+binary` sidecars.
 Planned follow-up: migrate to a single binary envelope after schema stabilization.
