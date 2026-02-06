@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SNAPSHOT_VERSION 1
+#define SNAPSHOT_VERSION 2
 #define MAP_FILE "map.u16le"
 #define TRF_FILE "trf-density.u8"
 #define ROG_FILE "rate-og-mem.i16le"
@@ -50,7 +50,7 @@
 #define QUARTER_BYTE_COUNT (QWX * QWY)
 #define SMALL_WORD_COUNT (SmX * SmY)
 
-/* --- Reference-sim globals required by s_traf.c and Simulate logic. --- */
+/* --- Reference-sim globals required by core parity commands. --- */
 
 static uint16_t gMapStorage[WORLD_X][WORLD_Y];
 static Byte gTrfStorage[HWLDX][HWLDY];
@@ -88,26 +88,104 @@ short CChr;
 short CChr9;
 
 short SimSpeed;
+short GameLevel;
+short TaxFlag;
 short CityTax;
 short AvCityTax;
 short Scycle;
 short Fcycle;
 short DoInitialEval;
 short NewPower;
+short NewMap;
+short MustUpdateOptions;
+short NewMapFlags[NMAPS];
 QUAD CityTime;
+short StartingYear;
+QUAD LastCityTime;
+QUAD LastCityYear;
+QUAD LastCityMonth;
+QUAD LastFunds;
+QUAD LastMesTime;
+short LastPicNum;
+short MessagePort;
+short MesX;
+short MesY;
+short MesNum;
+short autoGo;
+short UserSoundOn;
+short DoAnimation;
+short DoMessages;
+short DoNotices;
+short ScenarioID;
+short ScoreType;
+short ScoreWait;
+QUAD LastCityPop;
+short LastCategory;
+short CityClass;
+short CityScore;
+short TrafficAverage;
+short CrimeAverage;
+short PolluteAverage;
+short ResPop;
+short ComPop;
+short IndPop;
+short TotalPop;
+short ResZPop;
+short ComZPop;
+short IndZPop;
+short TotalZPop;
+short StadiumPop;
+short PortPop;
+short APortPop;
+short ResCap;
+short ComCap;
+short IndCap;
+QUAD TotalFunds;
+QUAD TaxFund;
+QUAD RoadFund;
+QUAD PoliceFund;
+QUAD FireFund;
+QUAD CashFlow;
+QUAD RoadSpend;
+QUAD PoliceSpend;
+QUAD FireSpend;
+short RoadTotal;
+short RailTotal;
+short RoadEffect;
+short PoliceEffect;
+short FireEffect;
+short PolicePop;
+short FireStPop;
+short LVAverage;
+float roadPercent;
+float policePercent;
+float firePercent;
+short autoBudget;
+short autoBulldoze;
+short NoDisasters;
+short DisasterEvent;
+short DisasterWait;
+short FloodCnt;
+short FloodX;
+short FloodY;
+short CrashX;
+short CrashY;
+short CCx;
+short CCy;
 short CoalPop;
 short NuclearPop;
 short PwrdZCnt;
 short unPwrdZCnt;
-short LVAverage;
-short CrimeAverage;
-short PolluteAverage;
 
 /* s_traf.c defines these globals. */
 extern short TrafMaxX;
 extern short TrafMaxY;
 
 static SimSprite gCopSprite;
+static QUAD gTickNow;
+static short gDidLoseGame;
+static short gDidWinGame;
+static short gDidEarthquake;
 
 /* --- Deterministic RNG (`rand.c` + `s_sim.c`) --- */
 
@@ -140,16 +218,50 @@ int Rand(int range)
 
 static void SeedRand(int seed) { sim_srand((uint32_t)seed); }
 
-/* --- No-op UI/system hooks for Simulate phase dispatch. --- */
+/* --- No-op UI/system hooks that do not affect deterministic oracle state. --- */
 
 void CityEvaluation(void) {}
 void SetValves(void) {}
 void TakeCensus(void) {}
 void Take2Census(void) {}
-void CollectTax(void) {}
-void SendMessages(void) {}
-void DoDisasters(void) {}
-void SendMes(int id) { (void)id; }
+void makeDollarDecimalStr(char *numStr, char *dollarStr)
+{
+  if ((numStr == NULL) || (dollarStr == NULL)) {
+    return;
+  }
+  snprintf(dollarStr, 256u, "$%s", numStr);
+}
+
+void ShowBudgetWindowAndStartWaiting(void) {}
+void drawBudgetWindow(void) {}
+void drawCurrPercents(void) {}
+void MakeTornado(void) {}
+void MakeMonster(void) {}
+void DropFireBombs(void) {}
+void DoEarthQuake(void) { gDidEarthquake = 1; }
+void DoMeltdown(short x, short y)
+{
+  (void)x;
+  (void)y;
+}
+
+void DoLoseGame(void) { gDidLoseGame = 1; }
+void DoWinGame(void) { gDidWinGame = 1; }
+
+QUAD TickCount(void) { return gTickNow; }
+
+void UpdateFunds(void)
+{
+  /* Mirrors w_stubs.c UpdateFunds side effect needed by budget parity. */
+}
+
+void SetFunds(int dollars)
+{
+  TotalFunds = dollars;
+  UpdateFunds();
+}
+
+void Spend(int dollars) { SetFunds((int)(TotalFunds - dollars)); }
 
 /*
  * Population helpers required by `GetPDen` in `ref/micropolis/src/sim/s_scan.c`.
@@ -469,6 +581,692 @@ void Simulate(int mod16)
   }
 }
 
+/* --- Phase 4 systems: messages, heads/date, budget, and disasters. --- */
+
+void ClearMes(void)
+{
+  MessagePort = 0;
+  MesX = 0;
+  MesY = 0;
+  LastPicNum = 0;
+}
+
+void SendMes(int Mnum)
+{
+  if (Mnum < 0) {
+    if (Mnum != LastPicNum) {
+      MessagePort = (short)Mnum;
+      MesX = 0;
+      MesY = 0;
+      LastPicNum = (short)Mnum;
+      return;
+    }
+  } else if (!MessagePort) {
+    MessagePort = (short)Mnum;
+    MesX = 0;
+    MesY = 0;
+  }
+}
+
+void SendMesAt(short Mnum, short x, short y)
+{
+  short beforePort;
+  beforePort = MessagePort;
+  SendMes(Mnum);
+  if (MessagePort != beforePort) {
+    MesX = x;
+    MesY = y;
+  }
+}
+
+static void DoScenarioScore(int type)
+{
+  short z;
+
+  z = -200;
+  switch (type) {
+  case 1:
+  case 2:
+  case 3:
+    if (CityClass >= 4)
+      z = -100;
+    break;
+  case 4:
+    if (TrafficAverage < 80)
+      z = -100;
+    break;
+  case 5:
+    if (CityScore > 500)
+      z = -100;
+    break;
+  case 6:
+    if (CrimeAverage < 60)
+      z = -100;
+    break;
+  case 7:
+  case 8:
+    if (CityScore > 500)
+      z = -100;
+    break;
+  default:
+    break;
+  }
+
+  ClearMes();
+  SendMes(z);
+
+  if (z == -200) {
+    DoLoseGame();
+  }
+}
+
+static void CheckGrowth(void)
+{
+  QUAD thisCityPop;
+  short z;
+
+  if (CityTime & 3) {
+    return;
+  }
+
+  z = 0;
+  thisCityPop = ((ResPop) + (ComPop * 8L) + (IndPop * 8L)) * 20L;
+  if (LastCityPop) {
+    if ((LastCityPop < 2000) && (thisCityPop >= 2000))
+      z = 35;
+    if ((LastCityPop < 10000) && (thisCityPop >= 10000))
+      z = 36;
+    if ((LastCityPop < 50000L) && (thisCityPop >= 50000L))
+      z = 37;
+    if ((LastCityPop < 100000L) && (thisCityPop >= 100000L))
+      z = 38;
+    if ((LastCityPop < 500000L) && (thisCityPop >= 500000L))
+      z = 39;
+  }
+
+  if (z && (z != LastCategory)) {
+    SendMes(-z);
+    LastCategory = z;
+  }
+  LastCityPop = thisCityPop;
+}
+
+void SendMessages(void)
+{
+  short z;
+  short powerPop;
+  double TM;
+
+  if ((ScenarioID) && (ScoreType) && (ScoreWait)) {
+    ScoreWait--;
+    if (!ScoreWait) {
+      DoScenarioScore(ScoreType);
+    }
+  }
+
+  CheckGrowth();
+
+  TotalZPop = ResZPop + ComZPop + IndZPop;
+  powerPop = NuclearPop + CoalPop;
+
+  z = (short)(CityTime & 63);
+  switch (z) {
+  case 1:
+    if ((TotalZPop >> 2) >= ResZPop)
+      SendMes(1);
+    break;
+  case 5:
+    if ((TotalZPop >> 3) >= ComZPop)
+      SendMes(2);
+    break;
+  case 10:
+    if ((TotalZPop >> 3) >= IndZPop)
+      SendMes(3);
+    break;
+  case 14:
+    if ((TotalZPop > 10) && ((TotalZPop << 1) > RoadTotal))
+      SendMes(4);
+    break;
+  case 18:
+    if ((TotalZPop > 50) && (TotalZPop > RailTotal))
+      SendMes(5);
+    break;
+  case 22:
+    if ((TotalZPop > 10) && (powerPop == 0))
+      SendMes(6);
+    break;
+  case 26:
+    if ((ResPop > 500) && (StadiumPop == 0)) {
+      SendMes(7);
+      ResCap = 1;
+    } else {
+      ResCap = 0;
+    }
+    break;
+  case 28:
+    if ((IndPop > 70) && (PortPop == 0)) {
+      SendMes(8);
+      IndCap = 1;
+    } else {
+      IndCap = 0;
+    }
+    break;
+  case 30:
+    if ((ComPop > 100) && (APortPop == 0)) {
+      SendMes(9);
+      ComCap = 1;
+    } else {
+      ComCap = 0;
+    }
+    break;
+  case 32:
+    TM = unPwrdZCnt + PwrdZCnt;
+    if (TM != 0.0) {
+      if (((double)PwrdZCnt / TM) < 0.7) {
+        SendMes(15);
+      }
+    }
+    break;
+  case 35:
+    if (PolluteAverage > 60)
+      SendMes(-10);
+    break;
+  case 42:
+    if (CrimeAverage > 100)
+      SendMes(-11);
+    break;
+  case 45:
+    if ((TotalPop > 60) && (FireStPop == 0))
+      SendMes(13);
+    break;
+  case 48:
+    if ((TotalPop > 60) && (PolicePop == 0))
+      SendMes(14);
+    break;
+  case 51:
+    if (CityTax > 12)
+      SendMes(16);
+    break;
+  case 54:
+    if ((RoadEffect < 20) && (RoadTotal > 30))
+      SendMes(17);
+    break;
+  case 57:
+    if ((FireEffect < 700) && (TotalPop > 20))
+      SendMes(18);
+    break;
+  case 60:
+    if ((PoliceEffect < 700) && (TotalPop > 20))
+      SendMes(19);
+    break;
+  case 63:
+    if (TrafficAverage > 60)
+      SendMes(-12);
+    break;
+  default:
+    break;
+  }
+}
+
+static void doMessage(void)
+{
+  short pictId;
+
+  if (MessagePort) {
+    MesNum = MessagePort;
+    MessagePort = 0;
+    LastMesTime = TickCount();
+  } else {
+    if (MesNum == 0)
+      return;
+    if (MesNum < 0) {
+      MesNum = (short)(-MesNum);
+      LastMesTime = TickCount();
+    } else if ((TickCount() - LastMesTime) > (60 * 30)) {
+      MesNum = 0;
+      return;
+    }
+  }
+
+  if (MesNum >= 0) {
+    if (MesNum == 0) {
+      return;
+    }
+    if (MesNum > 60) {
+      MesNum = 0;
+      return;
+    }
+
+    if (autoGo && (MesX || MesY)) {
+      MesX = 0;
+      MesY = 0;
+    }
+    return;
+  }
+
+  pictId = (short)(-MesNum);
+  MessagePort = pictId;
+
+  if (autoGo && (MesX || MesY)) {
+    MesX = 0;
+    MesY = 0;
+  }
+}
+
+static void OracleUpdateOptions(void)
+{
+  if (!MustUpdateOptions) {
+    return;
+  }
+  MustUpdateOptions = 0;
+}
+
+static void OracleReallyUpdateFunds(void)
+{
+  if (TotalFunds < 0) {
+    TotalFunds = 0;
+  }
+  if (TotalFunds != LastFunds) {
+    LastFunds = TotalFunds;
+  }
+}
+
+static void OracleUpdateDate(void);
+
+static void OracleSetYear(int year)
+{
+  if (year < StartingYear) {
+    year = StartingYear;
+  }
+
+  year = (year - StartingYear) - ((int)CityTime / 48);
+  CityTime += (QUAD)year * 48;
+  OracleUpdateDate();
+}
+
+static void OracleUpdateDate(void)
+{
+  int y;
+  int m;
+  int megalinium;
+
+  megalinium = 1000000;
+  LastCityTime = CityTime >> 2;
+
+  y = ((int)CityTime / 48) + (int)StartingYear;
+  m = ((int)CityTime % 48) >> 2;
+
+  if (y >= megalinium) {
+    OracleSetYear(StartingYear);
+    y = StartingYear;
+    SendMes(-40);
+  }
+
+  doMessage();
+
+  if ((LastCityYear != y) || (LastCityMonth != m)) {
+    LastCityYear = y;
+    LastCityMonth = m;
+  }
+}
+
+void DoUpdateHeads(void)
+{
+  OracleUpdateDate();
+  OracleReallyUpdateFunds();
+  OracleUpdateOptions();
+}
+
+void DoBudgetNow(int fromMenu)
+{
+  QUAD yumDuckets;
+  QUAD total;
+  QUAD moreDough;
+  QUAD fireInt;
+  QUAD policeInt;
+  QUAD roadInt;
+
+  fireInt = (int)(((float)FireFund) * firePercent);
+  policeInt = (int)(((float)PoliceFund) * policePercent);
+  roadInt = (int)(((float)RoadFund) * roadPercent);
+  total = fireInt + policeInt + roadInt;
+  yumDuckets = TaxFund + TotalFunds;
+
+  if (yumDuckets > total) {
+    FireSpend = fireInt;
+    PoliceSpend = policeInt;
+    RoadSpend = roadInt;
+  } else if (total > 0) {
+    if (yumDuckets > roadInt) {
+      RoadSpend = roadInt;
+      yumDuckets -= roadInt;
+
+      if (yumDuckets > fireInt) {
+        FireSpend = fireInt;
+        yumDuckets -= fireInt;
+
+        if (yumDuckets > policeInt) {
+          PoliceSpend = policeInt;
+          yumDuckets -= policeInt;
+        } else {
+          PoliceSpend = yumDuckets;
+          if (yumDuckets > 0)
+            policePercent = ((float)yumDuckets) / ((float)PoliceFund);
+          else
+            policePercent = 0.0f;
+        }
+      } else {
+        FireSpend = yumDuckets;
+        PoliceSpend = 0;
+        policePercent = 0.0f;
+        if (yumDuckets > 0)
+          firePercent = ((float)yumDuckets) / ((float)FireFund);
+        else
+          firePercent = 0.0f;
+      }
+    } else {
+      RoadSpend = yumDuckets;
+      if (yumDuckets > 0)
+        roadPercent = ((float)yumDuckets) / ((float)RoadFund);
+      else
+        roadPercent = 0.0f;
+
+      FireSpend = 0;
+      PoliceSpend = 0;
+      firePercent = 0.0f;
+      policePercent = 0.0f;
+    }
+  } else {
+    FireSpend = 0;
+    PoliceSpend = 0;
+    RoadSpend = 0;
+    firePercent = 1.0f;
+    policePercent = 1.0f;
+    roadPercent = 1.0f;
+  }
+
+noMoney:
+  if ((!autoBudget) || fromMenu) {
+    ShowBudgetWindowAndStartWaiting();
+
+    if (!fromMenu) {
+      total = FireSpend + PoliceSpend + RoadSpend;
+      moreDough = (QUAD)(TaxFund - total);
+      Spend((int)(-moreDough));
+    }
+    drawBudgetWindow();
+    drawCurrPercents();
+    DoUpdateHeads();
+  } else {
+    if ((yumDuckets) > total) {
+      moreDough = (QUAD)(TaxFund - total);
+      Spend((int)(-moreDough));
+      FireSpend = FireFund;
+      PoliceSpend = PoliceFund;
+      RoadSpend = RoadFund;
+      drawBudgetWindow();
+      drawCurrPercents();
+      DoUpdateHeads();
+    } else {
+      autoBudget = 0;
+      MustUpdateOptions = 1;
+      ClearMes();
+      SendMes(29);
+      goto noMoney;
+    }
+  }
+}
+
+void DoBudget(void) { DoBudgetNow(0); }
+
+void CollectTax(void)
+{
+  static float RLevels[3] = {0.7f, 0.9f, 1.2f};
+  static float FLevels[3] = {1.4f, 1.2f, 0.8f};
+  short z;
+  short level;
+
+  CashFlow = 0;
+  if (TaxFlag) {
+    return;
+  }
+
+  z = (short)(AvCityTax / 48);
+  (void)z;
+  AvCityTax = 0;
+  PoliceFund = PolicePop * 100;
+  FireFund = FireStPop * 100;
+
+  level = GameLevel;
+  if (level < 0 || level > 2) {
+    level = 0;
+  }
+
+  RoadFund = (QUAD)(((RoadTotal + (RailTotal * 2)) * RLevels[level]));
+  TaxFund = (((QUAD)TotalPop * LVAverage) / 120) * CityTax * FLevels[level];
+  if (TotalPop) {
+    CashFlow = TaxFund - (PoliceFund + FireFund + RoadFund);
+    DoBudget();
+  } else {
+    RoadEffect = 32;
+    PoliceEffect = 1000;
+    FireEffect = 1000;
+  }
+}
+
+void FireZone(short xloc, short yloc, short tile)
+{
+  short rx;
+  short ry;
+  short xymax;
+  short zoneId;
+  short x;
+  short y;
+  short xt;
+  short yt;
+  short value;
+
+  rx = xloc >> 3;
+  ry = yloc >> 3;
+  if ((rx >= 0) && (rx < SmX) && (ry >= 0) && (ry < SmY)) {
+    RateOGMem[rx][ry] -= 20;
+  }
+
+  xymax = 4;
+  zoneId = (short)(tile & LOMASK);
+  if (zoneId < PORTBASE) {
+    xymax = 2;
+  } else if (zoneId == AIRPORT) {
+    xymax = 5;
+  }
+
+  for (x = -1; x < xymax; x++) {
+    for (y = -1; y < xymax; y++) {
+      xt = xloc + x;
+      yt = yloc + y;
+      if (!TestBounds(xt, yt)) {
+        continue;
+      }
+      value = Map[xt][yt];
+      if ((value & LOMASK) >= ROADBASE) {
+        Map[xt][yt] = value | BULLBIT;
+      }
+    }
+  }
+}
+
+static int Vunerable(int tem)
+{
+  int tem2;
+
+  tem2 = tem & LOMASK;
+  if ((tem2 < RESBASE) || (tem2 > LASTZONE) || (tem & ZONEBIT))
+    return FALSE;
+  return TRUE;
+}
+
+static void SetFire(void)
+{
+  short x;
+  short y;
+  short z;
+
+  x = (short)Rand(WORLD_X - 1);
+  y = (short)Rand(WORLD_Y - 1);
+  z = Map[x][y];
+  if (!(z & ZONEBIT)) {
+    z = (short)(z & LOMASK);
+    if ((z > LHTHR) && (z < LASTZONE)) {
+      Map[x][y] = FIRE + ANIMBIT + (Rand16() & 7);
+      CrashX = x;
+      CrashY = y;
+      SendMesAt(-20, x, y);
+    }
+  }
+}
+
+static void MakeFlood(void)
+{
+  static short Dx[4] = {0, 1, 0, -1};
+  static short Dy[4] = {-1, 0, 1, 0};
+  short xx;
+  short yy;
+  short c;
+  short z;
+  short t;
+  short x;
+  short y;
+
+  for (z = 0; z < 300; z++) {
+    x = (short)Rand(WORLD_X - 1);
+    y = (short)Rand(WORLD_Y - 1);
+    c = (short)(Map[x][y] & LOMASK);
+    if ((c > 4) && (c < 21)) {
+      for (t = 0; t < 4; t++) {
+        xx = x + Dx[t];
+        yy = y + Dy[t];
+        if (TestBounds(xx, yy)) {
+          c = Map[xx][yy];
+          if ((c == 0) || ((c & BULLBIT) && (c & BURNBIT))) {
+            Map[xx][yy] = FLOOD;
+            FloodCnt = 30;
+            SendMesAt(-42, xx, yy);
+            FloodX = xx;
+            FloodY = yy;
+            return;
+          }
+        }
+      }
+    }
+  }
+}
+
+static void MakeEarthquake(void)
+{
+  short x;
+  short y;
+  short z;
+  short time;
+
+  DoEarthQuake();
+  SendMesAt(-23, CCx, CCy);
+
+  time = (short)(Rand(700) + 300);
+  for (z = 0; z < time; z++) {
+    x = (short)Rand(WORLD_X - 1);
+    y = (short)Rand(WORLD_Y - 1);
+    if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1)))
+      continue;
+    if (Vunerable(Map[x][y])) {
+      if (z & 0x3)
+        Map[x][y] = (RUBBLE + BULLBIT) + (Rand16() & 3);
+      else
+        Map[x][y] = (FIRE + ANIMBIT) + (Rand16() & 7);
+    }
+  }
+}
+
+static void ScenarioDisaster(void)
+{
+  switch (DisasterEvent) {
+  case 1:
+    break;
+  case 2:
+    if (DisasterWait == 1)
+      MakeEarthquake();
+    break;
+  case 3:
+    DropFireBombs();
+    break;
+  case 4:
+    break;
+  case 5:
+    if (DisasterWait == 1)
+      MakeMonster();
+    break;
+  case 6:
+    break;
+  case 7:
+    if (DisasterWait == 1)
+      DoMeltdown(CCx, CCy);
+    break;
+  case 8:
+    if ((DisasterWait % 24) == 0)
+      MakeFlood();
+    break;
+  default:
+    break;
+  }
+  if (DisasterWait)
+    DisasterWait--;
+  else
+    DisasterEvent = 0;
+}
+
+void DoDisasters(void)
+{
+  static short DisChance[3] = {10 * 48, 5 * 48, 60};
+  short x;
+
+  if (FloodCnt)
+    FloodCnt--;
+  if (DisasterEvent)
+    ScenarioDisaster();
+
+  x = GameLevel;
+  if (x > 2)
+    x = 0;
+
+  if (NoDisasters)
+    return;
+  if (!Rand(DisChance[x])) {
+    x = (short)Rand(8);
+    switch (x) {
+    case 0:
+    case 1:
+      SetFire();
+      break;
+    case 2:
+    case 3:
+      MakeFlood();
+      break;
+    case 4:
+      break;
+    case 5:
+      MakeTornado();
+      break;
+    case 6:
+      MakeEarthquake();
+      break;
+    case 7:
+    case 8:
+      if (PolluteAverage > 60)
+        MakeMonster();
+      break;
+    }
+  }
+}
+
 /* --- State IO --- */
 
 static void BindLayerPointers(void)
@@ -545,17 +1343,92 @@ static void ResetStateDefaults(uint32_t seed)
   }
 
   CityTime = 50;
+  StartingYear = 1900;
   CityTax = 7;
+  GameLevel = 0;
+  TaxFlag = 0;
   AvCityTax = 0;
   Scycle = 0;
   Fcycle = 0;
   SimSpeed = 3;
   DoInitialEval = 0;
   NewPower = 0;
+  MustUpdateOptions = 1;
   SMapX = 0;
   SMapY = 0;
   CChr = 0;
   CChr9 = 0;
+  LastCityTime = -1;
+  LastCityYear = -1;
+  LastCityMonth = -1;
+  LastFunds = -1;
+  LastMesTime = 0;
+  LastPicNum = 0;
+  MessagePort = 0;
+  MesX = 0;
+  MesY = 0;
+  MesNum = 0;
+  autoGo = 1;
+  UserSoundOn = 1;
+  DoAnimation = 1;
+  DoMessages = 1;
+  DoNotices = 1;
+  ScenarioID = 0;
+  ScoreType = 0;
+  ScoreWait = 0;
+  LastCityPop = 0;
+  LastCategory = 0;
+  CityClass = 0;
+  CityScore = 500;
+  TrafficAverage = 0;
+  CrimeAverage = 0;
+  PolluteAverage = 0;
+  ResPop = 0;
+  ComPop = 0;
+  IndPop = 0;
+  TotalPop = 0;
+  ResZPop = 0;
+  ComZPop = 0;
+  IndZPop = 0;
+  TotalZPop = 0;
+  StadiumPop = 0;
+  PortPop = 0;
+  APortPop = 0;
+  ResCap = 0;
+  ComCap = 0;
+  IndCap = 0;
+  TotalFunds = 0;
+  TaxFund = 0;
+  RoadFund = 0;
+  PoliceFund = 0;
+  FireFund = 0;
+  CashFlow = 0;
+  RoadSpend = 0;
+  PoliceSpend = 0;
+  FireSpend = 0;
+  RoadTotal = 0;
+  RailTotal = 0;
+  RoadEffect = 32;
+  PoliceEffect = 1000;
+  FireEffect = 1000;
+  PolicePop = 0;
+  FireStPop = 0;
+  LVAverage = 0;
+  roadPercent = 1.0f;
+  policePercent = 1.0f;
+  firePercent = 1.0f;
+  autoBudget = 1;
+  autoBulldoze = 1;
+  NoDisasters = 0;
+  DisasterEvent = 0;
+  DisasterWait = 0;
+  FloodCnt = 0;
+  FloodX = 0;
+  FloodY = 0;
+  CrashX = 0;
+  CrashY = 0;
+  CCx = 0;
+  CCy = 0;
   CoalPop = 0;
   NuclearPop = 0;
   PwrdZCnt = 0;
@@ -584,6 +1457,10 @@ static void ResetStateDefaults(uint32_t seed)
   gCopSprite.control = -1;
   gCopSprite.dest_x = 0;
   gCopSprite.dest_y = 0;
+  gTickNow = 0;
+  gDidLoseGame = 0;
+  gDidWinGame = 0;
+  gDidEarthquake = 0;
 
   SeedRand((int)seed);
 }
@@ -1042,14 +1919,93 @@ static int WriteSnapshotJson(const char *path)
   fprintf(file, "  \"snapshotFormat\": \"json+binary\",\n");
   fprintf(file, "  \"snapshotFormatTodo\": \"TODO(c-oracle): migrate to a single binary envelope once schema stabilizes\",\n");
   fprintf(file, "  \"rngNext\": %u,\n", gRandNext);
+  fprintf(file, "  \"TickNow\": %lld,\n", (long long)gTickNow);
   fprintf(file, "  \"CityTime\": %lld,\n", (long long)CityTime);
+  fprintf(file, "  \"StartingYear\": %d,\n", StartingYear);
   fprintf(file, "  \"CityTax\": %d,\n", CityTax);
+  fprintf(file, "  \"GameLevel\": %d,\n", GameLevel);
+  fprintf(file, "  \"TaxFlag\": %d,\n", TaxFlag);
   fprintf(file, "  \"AvCityTax\": %d,\n", AvCityTax);
   fprintf(file, "  \"Scycle\": %d,\n", Scycle);
   fprintf(file, "  \"Fcycle\": %d,\n", Fcycle);
   fprintf(file, "  \"SimSpeed\": %d,\n", SimSpeed);
   fprintf(file, "  \"DoInitialEval\": %d,\n", DoInitialEval);
   fprintf(file, "  \"NewPower\": %d,\n", NewPower);
+  fprintf(file, "  \"MustUpdateOptions\": %d,\n", MustUpdateOptions);
+  fprintf(file, "  \"LastCityTime\": %lld,\n", (long long)LastCityTime);
+  fprintf(file, "  \"LastCityYear\": %lld,\n", (long long)LastCityYear);
+  fprintf(file, "  \"LastCityMonth\": %lld,\n", (long long)LastCityMonth);
+  fprintf(file, "  \"LastFunds\": %lld,\n", (long long)LastFunds);
+  fprintf(file, "  \"TotalFunds\": %lld,\n", (long long)TotalFunds);
+  fprintf(file, "  \"TaxFund\": %lld,\n", (long long)TaxFund);
+  fprintf(file, "  \"RoadFund\": %lld,\n", (long long)RoadFund);
+  fprintf(file, "  \"PoliceFund\": %lld,\n", (long long)PoliceFund);
+  fprintf(file, "  \"FireFund\": %lld,\n", (long long)FireFund);
+  fprintf(file, "  \"CashFlow\": %lld,\n", (long long)CashFlow);
+  fprintf(file, "  \"RoadSpend\": %lld,\n", (long long)RoadSpend);
+  fprintf(file, "  \"PoliceSpend\": %lld,\n", (long long)PoliceSpend);
+  fprintf(file, "  \"FireSpend\": %lld,\n", (long long)FireSpend);
+  fprintf(file, "  \"roadPercent\": %.17g,\n", (double)roadPercent);
+  fprintf(file, "  \"policePercent\": %.17g,\n", (double)policePercent);
+  fprintf(file, "  \"firePercent\": %.17g,\n", (double)firePercent);
+  fprintf(file, "  \"autoBudget\": %d,\n", autoBudget);
+  fprintf(file, "  \"autoBulldoze\": %d,\n", autoBulldoze);
+  fprintf(file, "  \"autoGo\": %d,\n", autoGo);
+  fprintf(file, "  \"UserSoundOn\": %d,\n", UserSoundOn);
+  fprintf(file, "  \"DoAnimation\": %d,\n", DoAnimation);
+  fprintf(file, "  \"DoMessages\": %d,\n", DoMessages);
+  fprintf(file, "  \"DoNotices\": %d,\n", DoNotices);
+  fprintf(file, "  \"RoadTotal\": %d,\n", RoadTotal);
+  fprintf(file, "  \"RailTotal\": %d,\n", RailTotal);
+  fprintf(file, "  \"RoadEffect\": %d,\n", RoadEffect);
+  fprintf(file, "  \"PoliceEffect\": %d,\n", PoliceEffect);
+  fprintf(file, "  \"FireEffect\": %d,\n", FireEffect);
+  fprintf(file, "  \"PolicePop\": %d,\n", PolicePop);
+  fprintf(file, "  \"FireStPop\": %d,\n", FireStPop);
+  fprintf(file, "  \"LVAverage\": %d,\n", LVAverage);
+  fprintf(file, "  \"MessagePort\": %d,\n", MessagePort);
+  fprintf(file, "  \"MesX\": %d,\n", MesX);
+  fprintf(file, "  \"MesY\": %d,\n", MesY);
+  fprintf(file, "  \"MesNum\": %d,\n", MesNum);
+  fprintf(file, "  \"LastMesTime\": %lld,\n", (long long)LastMesTime);
+  fprintf(file, "  \"LastPicNum\": %d,\n", LastPicNum);
+  fprintf(file, "  \"ScenarioID\": %d,\n", ScenarioID);
+  fprintf(file, "  \"ScoreType\": %d,\n", ScoreType);
+  fprintf(file, "  \"ScoreWait\": %d,\n", ScoreWait);
+  fprintf(file, "  \"LastCityPop\": %lld,\n", (long long)LastCityPop);
+  fprintf(file, "  \"LastCategory\": %d,\n", LastCategory);
+  fprintf(file, "  \"CityClass\": %d,\n", CityClass);
+  fprintf(file, "  \"CityScore\": %d,\n", CityScore);
+  fprintf(file, "  \"TrafficAverage\": %d,\n", TrafficAverage);
+  fprintf(file, "  \"CrimeAverage\": %d,\n", CrimeAverage);
+  fprintf(file, "  \"PolluteAverage\": %d,\n", PolluteAverage);
+  fprintf(file, "  \"ResPop\": %d,\n", ResPop);
+  fprintf(file, "  \"ComPop\": %d,\n", ComPop);
+  fprintf(file, "  \"IndPop\": %d,\n", IndPop);
+  fprintf(file, "  \"TotalPop\": %d,\n", TotalPop);
+  fprintf(file, "  \"ResZPop\": %d,\n", ResZPop);
+  fprintf(file, "  \"ComZPop\": %d,\n", ComZPop);
+  fprintf(file, "  \"IndZPop\": %d,\n", IndZPop);
+  fprintf(file, "  \"TotalZPop\": %d,\n", TotalZPop);
+  fprintf(file, "  \"StadiumPop\": %d,\n", StadiumPop);
+  fprintf(file, "  \"PortPop\": %d,\n", PortPop);
+  fprintf(file, "  \"APortPop\": %d,\n", APortPop);
+  fprintf(file, "  \"ResCap\": %d,\n", ResCap);
+  fprintf(file, "  \"ComCap\": %d,\n", ComCap);
+  fprintf(file, "  \"IndCap\": %d,\n", IndCap);
+  fprintf(file, "  \"NoDisasters\": %d,\n", NoDisasters);
+  fprintf(file, "  \"DisasterEvent\": %d,\n", DisasterEvent);
+  fprintf(file, "  \"DisasterWait\": %d,\n", DisasterWait);
+  fprintf(file, "  \"FloodCnt\": %d,\n", FloodCnt);
+  fprintf(file, "  \"FloodX\": %d,\n", FloodX);
+  fprintf(file, "  \"FloodY\": %d,\n", FloodY);
+  fprintf(file, "  \"CrashX\": %d,\n", CrashX);
+  fprintf(file, "  \"CrashY\": %d,\n", CrashY);
+  fprintf(file, "  \"CCx\": %d,\n", CCx);
+  fprintf(file, "  \"CCy\": %d,\n", CCy);
+  fprintf(file, "  \"DidLoseGame\": %d,\n", gDidLoseGame);
+  fprintf(file, "  \"DidWinGame\": %d,\n", gDidWinGame);
+  fprintf(file, "  \"DidEarthquake\": %d,\n", gDidEarthquake);
   fprintf(file, "  \"CChr9\": %d,\n", CChr9);
   fprintf(file, "  \"CoalPop\": %d,\n", CoalPop);
   fprintf(file, "  \"NuclearPop\": %d,\n", NuclearPop);
@@ -1123,6 +2079,35 @@ static int ParseJsonI64(const char *json, const char *key, long long *out)
   return 1;
 }
 
+static int ParseJsonDouble(const char *json, const char *key, double *out)
+{
+  char pattern[96];
+  const char *found;
+  const char *value;
+  char *end;
+  double parsed;
+
+  snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+  found = strstr(json, pattern);
+  if (found == NULL)
+    return 0;
+
+  value = strchr(found, ':');
+  if (value == NULL)
+    return 0;
+  value++;
+  while ((*value != '\0') && isspace((unsigned char)*value))
+    value++;
+
+  errno = 0;
+  parsed = strtod(value, &end);
+  if ((end == value) || (errno != 0))
+    return 0;
+
+  *out = parsed;
+  return 1;
+}
+
 static int ReadWholeFile(const char *path, char **outBuf)
 {
   FILE *file;
@@ -1172,22 +2157,138 @@ static int ReadSnapshotJson(const char *path)
 {
   char *json;
   long long value;
+  double fvalue;
 
   if (!ReadWholeFile(path, &json)) {
     return 0;
   }
 
-  if (!ParseJsonI64(json, "rngNext", &value)) {
-    free(json);
-    return 0;
-  }
-  gRandNext = (uint32_t)value;
+/* clang-format off */
+#define READ_I64(KEY, TARGET, CAST)              \
+  do {                                           \
+    if (!ParseJsonI64(json, KEY, &value)) {     \
+      free(json);                                \
+      return 0;                                  \
+    }                                            \
+    TARGET = (CAST)value;                        \
+  } while (0)
+#define READ_F64(KEY, TARGET)                    \
+  do {                                           \
+    if (!ParseJsonDouble(json, KEY, &fvalue)) { \
+      free(json);                                \
+      return 0;                                  \
+    }                                            \
+    TARGET = (float)fvalue;                      \
+  } while (0)
+/* clang-format on */
 
-  if (!ParseJsonI64(json, "CityTime", &value)) {
-    free(json);
-    return 0;
-  }
-  CityTime = (QUAD)value;
+  READ_I64("rngNext", gRandNext, uint32_t);
+  READ_I64("TickNow", gTickNow, QUAD);
+  READ_I64("CityTime", CityTime, QUAD);
+  READ_I64("StartingYear", StartingYear, short);
+  READ_I64("CityTax", CityTax, short);
+  READ_I64("GameLevel", GameLevel, short);
+  READ_I64("TaxFlag", TaxFlag, short);
+  READ_I64("AvCityTax", AvCityTax, short);
+  READ_I64("Scycle", Scycle, short);
+  READ_I64("Fcycle", Fcycle, short);
+  READ_I64("SimSpeed", SimSpeed, short);
+  READ_I64("DoInitialEval", DoInitialEval, short);
+  READ_I64("NewPower", NewPower, short);
+  READ_I64("MustUpdateOptions", MustUpdateOptions, short);
+  READ_I64("LastCityTime", LastCityTime, QUAD);
+  READ_I64("LastCityYear", LastCityYear, QUAD);
+  READ_I64("LastCityMonth", LastCityMonth, QUAD);
+  READ_I64("LastFunds", LastFunds, QUAD);
+  READ_I64("TotalFunds", TotalFunds, QUAD);
+  READ_I64("TaxFund", TaxFund, QUAD);
+  READ_I64("RoadFund", RoadFund, QUAD);
+  READ_I64("PoliceFund", PoliceFund, QUAD);
+  READ_I64("FireFund", FireFund, QUAD);
+  READ_I64("CashFlow", CashFlow, QUAD);
+  READ_I64("RoadSpend", RoadSpend, QUAD);
+  READ_I64("PoliceSpend", PoliceSpend, QUAD);
+  READ_I64("FireSpend", FireSpend, QUAD);
+  READ_F64("roadPercent", roadPercent);
+  READ_F64("policePercent", policePercent);
+  READ_F64("firePercent", firePercent);
+  READ_I64("autoBudget", autoBudget, short);
+  READ_I64("autoBulldoze", autoBulldoze, short);
+  READ_I64("autoGo", autoGo, short);
+  READ_I64("UserSoundOn", UserSoundOn, short);
+  READ_I64("DoAnimation", DoAnimation, short);
+  READ_I64("DoMessages", DoMessages, short);
+  READ_I64("DoNotices", DoNotices, short);
+  READ_I64("RoadTotal", RoadTotal, short);
+  READ_I64("RailTotal", RailTotal, short);
+  READ_I64("RoadEffect", RoadEffect, short);
+  READ_I64("PoliceEffect", PoliceEffect, short);
+  READ_I64("FireEffect", FireEffect, short);
+  READ_I64("PolicePop", PolicePop, short);
+  READ_I64("FireStPop", FireStPop, short);
+  READ_I64("LVAverage", LVAverage, short);
+  READ_I64("MessagePort", MessagePort, short);
+  READ_I64("MesX", MesX, short);
+  READ_I64("MesY", MesY, short);
+  READ_I64("MesNum", MesNum, short);
+  READ_I64("LastMesTime", LastMesTime, QUAD);
+  READ_I64("LastPicNum", LastPicNum, short);
+  READ_I64("ScenarioID", ScenarioID, short);
+  READ_I64("ScoreType", ScoreType, short);
+  READ_I64("ScoreWait", ScoreWait, short);
+  READ_I64("LastCityPop", LastCityPop, QUAD);
+  READ_I64("LastCategory", LastCategory, short);
+  READ_I64("CityClass", CityClass, short);
+  READ_I64("CityScore", CityScore, short);
+  READ_I64("TrafficAverage", TrafficAverage, short);
+  READ_I64("CrimeAverage", CrimeAverage, short);
+  READ_I64("PolluteAverage", PolluteAverage, short);
+  READ_I64("ResPop", ResPop, short);
+  READ_I64("ComPop", ComPop, short);
+  READ_I64("IndPop", IndPop, short);
+  READ_I64("TotalPop", TotalPop, short);
+  READ_I64("ResZPop", ResZPop, short);
+  READ_I64("ComZPop", ComZPop, short);
+  READ_I64("IndZPop", IndZPop, short);
+  READ_I64("TotalZPop", TotalZPop, short);
+  READ_I64("StadiumPop", StadiumPop, short);
+  READ_I64("PortPop", PortPop, short);
+  READ_I64("APortPop", APortPop, short);
+  READ_I64("ResCap", ResCap, short);
+  READ_I64("ComCap", ComCap, short);
+  READ_I64("IndCap", IndCap, short);
+  READ_I64("NoDisasters", NoDisasters, short);
+  READ_I64("DisasterEvent", DisasterEvent, short);
+  READ_I64("DisasterWait", DisasterWait, short);
+  READ_I64("FloodCnt", FloodCnt, short);
+  READ_I64("FloodX", FloodX, short);
+  READ_I64("FloodY", FloodY, short);
+  READ_I64("CrashX", CrashX, short);
+  READ_I64("CrashY", CrashY, short);
+  READ_I64("CCx", CCx, short);
+  READ_I64("CCy", CCy, short);
+  READ_I64("DidLoseGame", gDidLoseGame, short);
+  READ_I64("DidWinGame", gDidWinGame, short);
+  READ_I64("DidEarthquake", gDidEarthquake, short);
+  READ_I64("CChr9", CChr9, short);
+  READ_I64("CoalPop", CoalPop, short);
+  READ_I64("NuclearPop", NuclearPop, short);
+  READ_I64("PwrdZCnt", PwrdZCnt, short);
+  READ_I64("unPwrdZCnt", unPwrdZCnt, short);
+  READ_I64("PowerStackNum", PowerStackNum, int);
+  READ_I64("TrafMaxX", TrafMaxX, short);
+  READ_I64("TrafMaxY", TrafMaxY, short);
+  READ_I64("copControl", gCopSprite.control, int);
+  READ_I64("copDestX", gCopSprite.dest_x, int);
+  READ_I64("copDestY", gCopSprite.dest_y, int);
+  READ_I64("NewMapFlags_ALMAP", NewMapFlags[ALMAP], short);
+  READ_I64("NewMapFlags_REMAP", NewMapFlags[REMAP], short);
+  READ_I64("NewMapFlags_COMAP", NewMapFlags[COMAP], short);
+  READ_I64("NewMapFlags_INMAP", NewMapFlags[INMAP], short);
+  READ_I64("NewMapFlags_PRMAP", NewMapFlags[PRMAP], short);
+  READ_I64("NewMapFlags_RDMAP", NewMapFlags[RDMAP], short);
+  READ_I64("NewMapFlags_TDMAP", NewMapFlags[TDMAP], short);
+  READ_I64("NewMapFlags_DYMAP", NewMapFlags[DYMAP], short);
 
   if (!ParseJsonI64(json, "CityTax", &value)) {
     free(json);
@@ -1458,6 +2559,8 @@ static int ReadSnapshotJson(const char *path)
     return 0;
   }
   NewMapFlags[DYMAP] = (short)value;
+#undef READ_I64
+#undef READ_F64
 
   free(json);
   return 1;
@@ -1706,6 +2809,12 @@ static void PrintUsage(void)
   fprintf(stderr, "  step-tick [--start-phase <0..15>]\n");
   fprintf(stderr, "  make-traf --x <i32> --y <i32> --source <-1..2>\n");
   fprintf(stderr, "  do-power-scan\n");
+  fprintf(stderr, "  send-messages\n");
+  fprintf(stderr, "  collect-tax\n");
+  fprintf(stderr, "  do-budget-now [--from-menu <0|1>]\n");
+  fprintf(stderr, "  update-date\n");
+  fprintf(stderr, "  do-message\n");
+  fprintf(stderr, "  do-disasters\n");
   fprintf(stderr, "  snapshot\n");
 }
 
@@ -1859,6 +2968,63 @@ int main(int argc, char **argv)
 
   if (strcmp(command, "do-power-scan") == 0) {
     DoPowerScan();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "send-messages") == 0) {
+    SendMessages();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "collect-tax") == 0) {
+    CollectTax();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "do-budget-now") == 0) {
+    const char *fromMenuRaw;
+    long fromMenu;
+
+    fromMenu = 0;
+    fromMenuRaw = FindArgValue(argc, argv, "--from-menu");
+    if ((fromMenuRaw != NULL) && !ParseLongArg(fromMenuRaw, "--from-menu", &fromMenu)) {
+      return 2;
+    }
+
+    DoBudgetNow((int)fromMenu);
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "update-date") == 0) {
+    OracleUpdateDate();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "do-message") == 0) {
+    doMessage();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "do-disasters") == 0) {
+    DoDisasters();
     if (!SaveStateDir(stateDir)) {
       return 1;
     }

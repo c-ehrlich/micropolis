@@ -1,3 +1,8 @@
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleSendMessages,
+  runCoreOracleUpdateDate,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createSimContext } from '../core/sim-context.ts';
@@ -261,5 +266,89 @@ describe('SendMessages', () => {
 
     expect(state.ResCap).toBe(0);
     expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
+});
+
+describe('Messages parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches C scenario score countdown + message port consumption', () => {
+    const tickNow = 12_345;
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x01020304, cityTime: 0, cityTax: 7 });
+    oracleBefore.TickNow = tickNow;
+    oracleBefore.ScenarioID = 1;
+    oracleBefore.ScoreType = 1;
+    oracleBefore.ScoreWait = 1;
+    oracleBefore.CityClass = 4;
+
+    const oracleAfterSend = runCoreOracleSendMessages(oracleBefore);
+    const oracleAfter = runCoreOracleUpdateDate(oracleAfterSend);
+
+    const context = createSimContext({
+      hooks: {
+        tickCount: () => tickNow,
+      },
+    });
+    const state = createSimState();
+    state.CityTime = oracleBefore.CityTime;
+    state.StartingYear = oracleBefore.StartingYear;
+    state.ScenarioID = oracleBefore.ScenarioID;
+    state.ScoreType = oracleBefore.ScoreType;
+    state.ScoreWait = oracleBefore.ScoreWait;
+    state.CityClass = oracleBefore.CityClass;
+    state.MessagePort = oracleBefore.MessagePort;
+    state.MesNum = oracleBefore.MesNum;
+    state.MesX = oracleBefore.MesX;
+    state.MesY = oracleBefore.MesY;
+    state.LastMesTime = oracleBefore.LastMesTime;
+    state.LastPicNum = oracleBefore.LastPicNum;
+
+    // s_msg.c SendMessages: ScoreWait countdown triggers DoScenarioScore at 0.
+    sendMessages(state, context);
+    // w_update.c updateDate always calls s_msg.c doMessage for message-port consumption.
+    updateDate(state, context);
+
+    expect(state.ScoreWait).toBe(oracleAfter.ScoreWait);
+    expect(state.MessagePort).toBe(oracleAfter.MessagePort);
+    expect(state.MesNum).toBe(oracleAfter.MesNum);
+    expect(state.LastMesTime).toBe(oracleAfter.LastMesTime);
+    expect(state.LastPicNum).toBe(oracleAfter.LastPicNum);
+  });
+
+  it('matches C megalinium rollover message behavior', () => {
+    const tickNow = 77;
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00abc123, cityTax: 7 });
+    // w_update.c updateDate uses `megalinium = 1000000` and computes year as `CityTime/48 + StartingYear`.
+    oracleBefore.CityTime = (1_000_000 - oracleBefore.StartingYear) * 48;
+    oracleBefore.TickNow = tickNow;
+    oracleBefore.MessagePort = 0;
+    oracleBefore.MesNum = 0;
+    oracleBefore.LastMesTime = 0;
+
+    const oracleAfter = runCoreOracleUpdateDate(oracleBefore);
+
+    const context = createSimContext({
+      hooks: {
+        tickCount: () => tickNow,
+      },
+    });
+    const state = createSimState();
+    state.StartingYear = oracleBefore.StartingYear;
+    state.CityTime = oracleBefore.CityTime;
+    state.MessagePort = oracleBefore.MessagePort;
+    state.MesNum = oracleBefore.MesNum;
+    state.LastMesTime = oracleBefore.LastMesTime;
+
+    // w_update.c rollover path queues SendMes(-40), then doMessage requeues text id 40.
+    updateDate(state, context);
+
+    expect(state.CityTime).toBe(oracleAfter.CityTime);
+    expect(state.LastCityYear).toBe(oracleAfter.LastCityYear);
+    expect(state.LastCityMonth).toBe(oracleAfter.LastCityMonth);
+    expect(state.MessagePort).toBe(oracleAfter.MessagePort);
+    expect(state.MesNum).toBe(oracleAfter.MesNum);
   });
 });

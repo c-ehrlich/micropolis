@@ -117,14 +117,93 @@ export interface CoreOracleState {
   snapshotFormat: 'json+binary';
   snapshotFormatTodo: string;
   rngNext: number;
+  TickNow: number;
   CityTime: number;
+  StartingYear: number;
   CityTax: number;
+  GameLevel: number;
+  TaxFlag: number;
   AvCityTax: number;
   Scycle: number;
   Fcycle: number;
   SimSpeed: number;
   DoInitialEval: number;
   NewPower: number;
+  MustUpdateOptions: number;
+  LastCityTime: number;
+  LastCityYear: number;
+  LastCityMonth: number;
+  LastFunds: number;
+  TotalFunds: number;
+  TaxFund: number;
+  RoadFund: number;
+  PoliceFund: number;
+  FireFund: number;
+  CashFlow: number;
+  RoadSpend: number;
+  PoliceSpend: number;
+  FireSpend: number;
+  roadPercent: number;
+  policePercent: number;
+  firePercent: number;
+  autoBudget: number;
+  autoBulldoze: number;
+  autoGo: number;
+  UserSoundOn: number;
+  DoAnimation: number;
+  DoMessages: number;
+  DoNotices: number;
+  RoadTotal: number;
+  RailTotal: number;
+  RoadEffect: number;
+  PoliceEffect: number;
+  FireEffect: number;
+  PolicePop: number;
+  FireStPop: number;
+  LVAverage: number;
+  MessagePort: number;
+  MesX: number;
+  MesY: number;
+  MesNum: number;
+  LastMesTime: number;
+  LastPicNum: number;
+  ScenarioID: number;
+  ScoreType: number;
+  ScoreWait: number;
+  LastCityPop: number;
+  LastCategory: number;
+  CityClass: number;
+  CityScore: number;
+  TrafficAverage: number;
+  CrimeAverage: number;
+  PolluteAverage: number;
+  ResPop: number;
+  ComPop: number;
+  IndPop: number;
+  TotalPop: number;
+  ResZPop: number;
+  ComZPop: number;
+  IndZPop: number;
+  TotalZPop: number;
+  StadiumPop: number;
+  PortPop: number;
+  APortPop: number;
+  ResCap: number;
+  ComCap: number;
+  IndCap: number;
+  NoDisasters: number;
+  DisasterEvent: number;
+  DisasterWait: number;
+  FloodCnt: number;
+  FloodX: number;
+  FloodY: number;
+  CrashX: number;
+  CrashY: number;
+  CCx: number;
+  CCy: number;
+  DidLoseGame: number;
+  DidWinGame: number;
+  DidEarthquake: number;
   CChr9: number;
   CoalPop: number;
   NuclearPop: number;
@@ -186,19 +265,103 @@ export interface CoreOracleMakeTrafResult {
   state: CoreOracleState;
 }
 
+export interface CoreOracleDoBudgetNowOptions {
+  state: CoreOracleState;
+  fromMenu?: boolean;
+}
+
 interface CoreOracleSnapshotJson {
   snapshotVersion: number;
   snapshotFormat: 'json+binary';
   snapshotFormatTodo: string;
   rngNext: number;
+  TickNow: number;
   CityTime: number;
+  StartingYear: number;
   CityTax: number;
+  GameLevel: number;
+  TaxFlag: number;
   AvCityTax: number;
   Scycle: number;
   Fcycle: number;
   SimSpeed: number;
   DoInitialEval: number;
   NewPower: number;
+  MustUpdateOptions: number;
+  LastCityTime: number;
+  LastCityYear: number;
+  LastCityMonth: number;
+  LastFunds: number;
+  TotalFunds: number;
+  TaxFund: number;
+  RoadFund: number;
+  PoliceFund: number;
+  FireFund: number;
+  CashFlow: number;
+  RoadSpend: number;
+  PoliceSpend: number;
+  FireSpend: number;
+  roadPercent: number;
+  policePercent: number;
+  firePercent: number;
+  autoBudget: number;
+  autoBulldoze: number;
+  autoGo: number;
+  UserSoundOn: number;
+  DoAnimation: number;
+  DoMessages: number;
+  DoNotices: number;
+  RoadTotal: number;
+  RailTotal: number;
+  RoadEffect: number;
+  PoliceEffect: number;
+  FireEffect: number;
+  PolicePop: number;
+  FireStPop: number;
+  LVAverage: number;
+  MessagePort: number;
+  MesX: number;
+  MesY: number;
+  MesNum: number;
+  LastMesTime: number;
+  LastPicNum: number;
+  ScenarioID: number;
+  ScoreType: number;
+  ScoreWait: number;
+  LastCityPop: number;
+  LastCategory: number;
+  CityClass: number;
+  CityScore: number;
+  TrafficAverage: number;
+  CrimeAverage: number;
+  PolluteAverage: number;
+  ResPop: number;
+  ComPop: number;
+  IndPop: number;
+  TotalPop: number;
+  ResZPop: number;
+  ComZPop: number;
+  IndZPop: number;
+  TotalZPop: number;
+  StadiumPop: number;
+  PortPop: number;
+  APortPop: number;
+  ResCap: number;
+  ComCap: number;
+  IndCap: number;
+  NoDisasters: number;
+  DisasterEvent: number;
+  DisasterWait: number;
+  FloodCnt: number;
+  FloodX: number;
+  FloodY: number;
+  CrashX: number;
+  CrashY: number;
+  CCx: number;
+  CCy: number;
+  DidLoseGame: number;
+  DidWinGame: number;
+  DidEarthquake: number;
   CChr9: number;
   CoalPop: number;
   NuclearPop: number;
@@ -364,14 +527,93 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     snapshotFormat: state.snapshotFormat,
     snapshotFormatTodo: state.snapshotFormatTodo,
     rngNext: state.rngNext >>> 0,
+    TickNow: Math.trunc(state.TickNow),
     CityTime: Math.trunc(state.CityTime),
+    StartingYear: Math.trunc(state.StartingYear),
     CityTax: Math.trunc(state.CityTax),
+    GameLevel: Math.trunc(state.GameLevel),
+    TaxFlag: Math.trunc(state.TaxFlag),
     AvCityTax: Math.trunc(state.AvCityTax),
     Scycle: Math.trunc(state.Scycle),
     Fcycle: Math.trunc(state.Fcycle),
     SimSpeed: Math.trunc(state.SimSpeed),
     DoInitialEval: Math.trunc(state.DoInitialEval),
     NewPower: Math.trunc(state.NewPower),
+    MustUpdateOptions: Math.trunc(state.MustUpdateOptions),
+    LastCityTime: Math.trunc(state.LastCityTime),
+    LastCityYear: Math.trunc(state.LastCityYear),
+    LastCityMonth: Math.trunc(state.LastCityMonth),
+    LastFunds: Math.trunc(state.LastFunds),
+    TotalFunds: Math.trunc(state.TotalFunds),
+    TaxFund: Math.trunc(state.TaxFund),
+    RoadFund: Math.trunc(state.RoadFund),
+    PoliceFund: Math.trunc(state.PoliceFund),
+    FireFund: Math.trunc(state.FireFund),
+    CashFlow: Math.trunc(state.CashFlow),
+    RoadSpend: Math.trunc(state.RoadSpend),
+    PoliceSpend: Math.trunc(state.PoliceSpend),
+    FireSpend: Math.trunc(state.FireSpend),
+    roadPercent: state.roadPercent,
+    policePercent: state.policePercent,
+    firePercent: state.firePercent,
+    autoBudget: Math.trunc(state.autoBudget),
+    autoBulldoze: Math.trunc(state.autoBulldoze),
+    autoGo: Math.trunc(state.autoGo),
+    UserSoundOn: Math.trunc(state.UserSoundOn),
+    DoAnimation: Math.trunc(state.DoAnimation),
+    DoMessages: Math.trunc(state.DoMessages),
+    DoNotices: Math.trunc(state.DoNotices),
+    RoadTotal: Math.trunc(state.RoadTotal),
+    RailTotal: Math.trunc(state.RailTotal),
+    RoadEffect: Math.trunc(state.RoadEffect),
+    PoliceEffect: Math.trunc(state.PoliceEffect),
+    FireEffect: Math.trunc(state.FireEffect),
+    PolicePop: Math.trunc(state.PolicePop),
+    FireStPop: Math.trunc(state.FireStPop),
+    LVAverage: Math.trunc(state.LVAverage),
+    MessagePort: Math.trunc(state.MessagePort),
+    MesX: Math.trunc(state.MesX),
+    MesY: Math.trunc(state.MesY),
+    MesNum: Math.trunc(state.MesNum),
+    LastMesTime: Math.trunc(state.LastMesTime),
+    LastPicNum: Math.trunc(state.LastPicNum),
+    ScenarioID: Math.trunc(state.ScenarioID),
+    ScoreType: Math.trunc(state.ScoreType),
+    ScoreWait: Math.trunc(state.ScoreWait),
+    LastCityPop: Math.trunc(state.LastCityPop),
+    LastCategory: Math.trunc(state.LastCategory),
+    CityClass: Math.trunc(state.CityClass),
+    CityScore: Math.trunc(state.CityScore),
+    TrafficAverage: Math.trunc(state.TrafficAverage),
+    CrimeAverage: Math.trunc(state.CrimeAverage),
+    PolluteAverage: Math.trunc(state.PolluteAverage),
+    ResPop: Math.trunc(state.ResPop),
+    ComPop: Math.trunc(state.ComPop),
+    IndPop: Math.trunc(state.IndPop),
+    TotalPop: Math.trunc(state.TotalPop),
+    ResZPop: Math.trunc(state.ResZPop),
+    ComZPop: Math.trunc(state.ComZPop),
+    IndZPop: Math.trunc(state.IndZPop),
+    TotalZPop: Math.trunc(state.TotalZPop),
+    StadiumPop: Math.trunc(state.StadiumPop),
+    PortPop: Math.trunc(state.PortPop),
+    APortPop: Math.trunc(state.APortPop),
+    ResCap: Math.trunc(state.ResCap),
+    ComCap: Math.trunc(state.ComCap),
+    IndCap: Math.trunc(state.IndCap),
+    NoDisasters: Math.trunc(state.NoDisasters),
+    DisasterEvent: Math.trunc(state.DisasterEvent),
+    DisasterWait: Math.trunc(state.DisasterWait),
+    FloodCnt: Math.trunc(state.FloodCnt),
+    FloodX: Math.trunc(state.FloodX),
+    FloodY: Math.trunc(state.FloodY),
+    CrashX: Math.trunc(state.CrashX),
+    CrashY: Math.trunc(state.CrashY),
+    CCx: Math.trunc(state.CCx),
+    CCy: Math.trunc(state.CCy),
+    DidLoseGame: Math.trunc(state.DidLoseGame),
+    DidWinGame: Math.trunc(state.DidWinGame),
+    DidEarthquake: Math.trunc(state.DidEarthquake),
     CChr9: Math.trunc(state.CChr9),
     CoalPop: Math.trunc(state.CoalPop),
     NuclearPop: Math.trunc(state.NuclearPop),
@@ -620,14 +862,93 @@ function readCoreOracleState(dir: string): CoreOracleState {
     snapshotFormat: snapshot.snapshotFormat,
     snapshotFormatTodo: snapshot.snapshotFormatTodo,
     rngNext: snapshot.rngNext >>> 0,
+    TickNow: snapshot.TickNow,
     CityTime: snapshot.CityTime,
+    StartingYear: snapshot.StartingYear,
     CityTax: snapshot.CityTax,
+    GameLevel: snapshot.GameLevel,
+    TaxFlag: snapshot.TaxFlag,
     AvCityTax: snapshot.AvCityTax,
     Scycle: snapshot.Scycle,
     Fcycle: snapshot.Fcycle,
     SimSpeed: snapshot.SimSpeed,
     DoInitialEval: snapshot.DoInitialEval,
     NewPower: snapshot.NewPower,
+    MustUpdateOptions: snapshot.MustUpdateOptions,
+    LastCityTime: snapshot.LastCityTime,
+    LastCityYear: snapshot.LastCityYear,
+    LastCityMonth: snapshot.LastCityMonth,
+    LastFunds: snapshot.LastFunds,
+    TotalFunds: snapshot.TotalFunds,
+    TaxFund: snapshot.TaxFund,
+    RoadFund: snapshot.RoadFund,
+    PoliceFund: snapshot.PoliceFund,
+    FireFund: snapshot.FireFund,
+    CashFlow: snapshot.CashFlow,
+    RoadSpend: snapshot.RoadSpend,
+    PoliceSpend: snapshot.PoliceSpend,
+    FireSpend: snapshot.FireSpend,
+    roadPercent: snapshot.roadPercent,
+    policePercent: snapshot.policePercent,
+    firePercent: snapshot.firePercent,
+    autoBudget: snapshot.autoBudget,
+    autoBulldoze: snapshot.autoBulldoze,
+    autoGo: snapshot.autoGo,
+    UserSoundOn: snapshot.UserSoundOn,
+    DoAnimation: snapshot.DoAnimation,
+    DoMessages: snapshot.DoMessages,
+    DoNotices: snapshot.DoNotices,
+    RoadTotal: snapshot.RoadTotal,
+    RailTotal: snapshot.RailTotal,
+    RoadEffect: snapshot.RoadEffect,
+    PoliceEffect: snapshot.PoliceEffect,
+    FireEffect: snapshot.FireEffect,
+    PolicePop: snapshot.PolicePop,
+    FireStPop: snapshot.FireStPop,
+    LVAverage: snapshot.LVAverage,
+    MessagePort: snapshot.MessagePort,
+    MesX: snapshot.MesX,
+    MesY: snapshot.MesY,
+    MesNum: snapshot.MesNum,
+    LastMesTime: snapshot.LastMesTime,
+    LastPicNum: snapshot.LastPicNum,
+    ScenarioID: snapshot.ScenarioID,
+    ScoreType: snapshot.ScoreType,
+    ScoreWait: snapshot.ScoreWait,
+    LastCityPop: snapshot.LastCityPop,
+    LastCategory: snapshot.LastCategory,
+    CityClass: snapshot.CityClass,
+    CityScore: snapshot.CityScore,
+    TrafficAverage: snapshot.TrafficAverage,
+    CrimeAverage: snapshot.CrimeAverage,
+    PolluteAverage: snapshot.PolluteAverage,
+    ResPop: snapshot.ResPop,
+    ComPop: snapshot.ComPop,
+    IndPop: snapshot.IndPop,
+    TotalPop: snapshot.TotalPop,
+    ResZPop: snapshot.ResZPop,
+    ComZPop: snapshot.ComZPop,
+    IndZPop: snapshot.IndZPop,
+    TotalZPop: snapshot.TotalZPop,
+    StadiumPop: snapshot.StadiumPop,
+    PortPop: snapshot.PortPop,
+    APortPop: snapshot.APortPop,
+    ResCap: snapshot.ResCap,
+    ComCap: snapshot.ComCap,
+    IndCap: snapshot.IndCap,
+    NoDisasters: snapshot.NoDisasters,
+    DisasterEvent: snapshot.DisasterEvent,
+    DisasterWait: snapshot.DisasterWait,
+    FloodCnt: snapshot.FloodCnt,
+    FloodX: snapshot.FloodX,
+    FloodY: snapshot.FloodY,
+    CrashX: snapshot.CrashX,
+    CrashY: snapshot.CrashY,
+    CCx: snapshot.CCx,
+    CCy: snapshot.CCy,
+    DidLoseGame: snapshot.DidLoseGame,
+    DidWinGame: snapshot.DidWinGame,
+    DidEarthquake: snapshot.DidEarthquake,
     CChr9: snapshot.CChr9,
     CoalPop: snapshot.CoalPop,
     NuclearPop: snapshot.NuclearPop,
@@ -773,6 +1094,91 @@ export function runCoreOracleDoPowerScan(state: CoreOracleState): CoreOracleStat
   return withTempStateDir((stateDir) => {
     writeCoreOracleState(stateDir, state);
     runCoreOracle(['do-power-scan', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `SendMessages` and returns the updated snapshot state.
+ *
+ * Mirrors `SendMessages` in `ref/micropolis/src/sim/s_msg.c` via the headless
+ * oracle command implementation.
+ */
+export function runCoreOracleSendMessages(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['send-messages', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `CollectTax` and returns the updated snapshot state.
+ *
+ * Mirrors `CollectTax` in `ref/micropolis/src/sim/s_sim.c` (which dispatches
+ * budget behavior through `w_budget.c` logic).
+ */
+export function runCoreOracleCollectTax(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['collect-tax', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `DoBudgetNow` and returns the updated snapshot state.
+ *
+ * Mirrors `DoBudgetNow` in `ref/micropolis/src/sim/w_budget.c`.
+ */
+export function runCoreOracleDoBudgetNow(options: CoreOracleDoBudgetNowOptions): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    const args = ['do-budget-now', '--state-dir', stateDir] as string[];
+    if (options.fromMenu !== undefined) {
+      args.push('--from-menu', options.fromMenu ? '1' : '0');
+    }
+    runCoreOracle(args);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `updateDate` heads-time logic and returns updated snapshot state.
+ *
+ * Mirrors `updateDate` in `ref/micropolis/src/sim/w_update.c` including
+ * `doMessage` message-port consumption behavior from `s_msg.c`.
+ */
+export function runCoreOracleUpdateDate(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['update-date', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `doMessage` directly and returns updated snapshot state.
+ *
+ * Mirrors `doMessage` in `ref/micropolis/src/sim/s_msg.c`.
+ */
+export function runCoreOracleDoMessage(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['do-message', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `DoDisasters` and returns updated snapshot state.
+ *
+ * Mirrors `DoDisasters` in `ref/micropolis/src/sim/s_disast.c`.
+ */
+export function runCoreOracleDoDisasters(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['do-disasters', '--state-dir', stateDir]);
     return readCoreOracleState(stateDir);
   });
 }
