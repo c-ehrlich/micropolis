@@ -127,6 +127,8 @@ typedef enum TerrainOp {
   TERRAIN_OP_NOOP = 1,
   TERRAIN_OP_SMOOTH_TREES = 2,
   TERRAIN_OP_PUT_ON_MAP = 3,
+  TERRAIN_OP_SMOOTH_WATER = 4,
+  TERRAIN_OP_SMOOTH_RIVER = 5,
 } TerrainOp;
 
 /* Op arguments for routines that are not pure map-in/map-out. */
@@ -628,7 +630,7 @@ static void usage(FILE *out)
           "op mode:\\n"
           "  --op <name>\\n"
           "  --input-map <path>\\n"
-          "  op names: noop, smoothTrees, putOnMap\\n"
+          "  op names: noop, smoothTrees, putOnMap, smoothWater, smoothRiver\\n"
           "  putOnMap args: --map-x <i32> --map-y <i32> --mchar <i32> --xoff <i32> --yoff <i32>\\n"
           "  [--seed <u32>] (required only for RNG ops)\\n"
           "  [--format u16le|json] (default: u16le)\\n"
@@ -749,6 +751,14 @@ static int parse_op(const char *name, TerrainOp *out)
     *out = TERRAIN_OP_PUT_ON_MAP;
     return 1;
   }
+  if (strcmp(name, "smoothWater") == 0) {
+    *out = TERRAIN_OP_SMOOTH_WATER;
+    return 1;
+  }
+  if (strcmp(name, "smoothRiver") == 0) {
+    *out = TERRAIN_OP_SMOOTH_RIVER;
+    return 1;
+  }
   return 0;
 }
 
@@ -758,7 +768,10 @@ static int op_requires_seed(TerrainOp op)
   case TERRAIN_OP_NOOP:
   case TERRAIN_OP_SMOOTH_TREES:
   case TERRAIN_OP_PUT_ON_MAP:
+  case TERRAIN_OP_SMOOTH_WATER:
     return 0;
+  case TERRAIN_OP_SMOOTH_RIVER:
+    return 1;
   case TERRAIN_OP_NONE:
   default:
     return 0;
@@ -780,6 +793,12 @@ static int run_op(TerrainOp op, const TerrainOpArgs *op_args)
     MapX = op_args->map_x;
     MapY = op_args->map_y;
     PutOnMap(op_args->mchar, op_args->xoff, op_args->yoff);
+    return 1;
+  case TERRAIN_OP_SMOOTH_WATER:
+    SmoothWater();
+    return 1;
+  case TERRAIN_OP_SMOOTH_RIVER:
+    SmoothRiver();
     return 1;
   case TERRAIN_OP_NONE:
   default:

@@ -114,12 +114,12 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 ### Phase 2: core smoothing parity
 
-- [ ] `P2.1` Implement `--op smoothWater`.
+- [x] `P2.1` Implement `--op smoothWater`.
   - C ref: `SmoothWater` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `smooth-water.c-harness.test.ts` with branch-biased maps (water/woods edges and flagged tiles).
   - Done when: all three passes match map-for-map.
 
-- [ ] `P2.2` Implement `--op smoothRiver` with op-local seeding semantics.
+- [x] `P2.2` Implement `--op smoothRiver` with op-local seeding semantics.
   - C ref: `SmoothRiver` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `smooth-river.c-harness.test.ts` with `--seed`, plus property runs that stress `Rand(1)` branch.
   - Done when: edge tile choices and optional `temp++` behavior match exactly.
@@ -157,8 +157,8 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 - [x] `smoothTrees`
 - [x] `putOnMap`
-- [ ] `smoothWater`
-- [ ] `smoothRiver`
+- [x] `smoothWater`
+- [x] `smoothRiver`
 - [ ] `brivPlop`
 - [ ] `srivPlop`
 - [ ] `makeLakes`
