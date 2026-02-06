@@ -4,10 +4,16 @@ import {
 } from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
+import { Tile, TileFlag, World } from '../core/constants.ts';
 import { MAP_FLAGS } from '../core/map-flags.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
+import { createRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState, type SimState } from '../core/sim-state.ts';
+import { crimeScan } from '../systems/crime.ts';
+import { fireAnalysis } from '../systems/fire-coverage.ts';
+import { popDenScan } from '../systems/pop-density.ts';
+import { ptlScan } from '../systems/ptl.ts';
 import { decTrafficMem as decTrafficMemSystem } from '../systems/traffic.ts';
 import { decROGMem as decROGMemSystem } from '../systems/zones.ts';
 import {
@@ -17,6 +23,13 @@ import {
   runSimFrame,
   type SimPhaseSystems,
 } from './simulate.ts';
+
+const { WORLD_Y, HWLDY, QWY, SmY } = World;
+
+const mapIndex = (x: number, y: number): number => x * WORLD_Y + y;
+const halfIndex = (x: number, y: number): number => x * HWLDY + y;
+const quarterIndex = (x: number, y: number): number => x * QWY + y;
+const smallIndex = (x: number, y: number): number => x * SmY + y;
 
 const makeState = (overrides: Partial<SimState> = {}) => {
   const state = createSimState();
@@ -288,6 +301,166 @@ describe('Simulate parity against C oracle (env-gated)', () => {
     expect(state.NewMapFlags[MAP_FLAGS.RDMAP]).toBe(oracleAfter.NewMapFlags.RDMAP);
     expect(state.NewMapFlags[MAP_FLAGS.TDMAP]).toBe(oracleAfter.NewMapFlags.TDMAP);
     expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(oracleAfter.NewMapFlags.DYMAP);
+    store.commitTick();
+  });
+
+  it('matches phase 12..15 scan-derived snapshots and map flags', () => {
+    const seed = 0x2468ace0;
+    const zoneFlags = TileFlag.ZONEBIT | TileFlag.BURNBIT;
+    const oracleBefore = runCoreOracleInitNewCity({ seed, simSpeed: 0 });
+    oracleBefore.Scycle = 0;
+    oracleBefore.DonDither = 0;
+    oracleBefore.CCx = 40;
+    oracleBefore.CCy = 28;
+    oracleBefore.CCx2 = oracleBefore.CCx >> 1;
+    oracleBefore.CCy2 = oracleBefore.CCy >> 1;
+
+    oracleBefore.map[mapIndex(20, 20)] = Tile.RZB | zoneFlags;
+    oracleBefore.map[mapIndex(24, 20)] = Tile.CZB | zoneFlags;
+    oracleBefore.map[mapIndex(28, 20)] = Tile.IZB | zoneFlags;
+    oracleBefore.map[mapIndex(32, 24)] = Tile.FREEZ | zoneFlags;
+    oracleBefore.map[mapIndex(31, 23)] = Tile.LHTHR;
+    oracleBefore.map[mapIndex(32, 23)] = Tile.HHTHR;
+    oracleBefore.map[mapIndex(33, 23)] = Tile.LHTHR;
+    oracleBefore.map[mapIndex(18, 18)] = Tile.HTRFBASE;
+    oracleBefore.map[mapIndex(18, 19)] = Tile.ROADS;
+    oracleBefore.map[mapIndex(19, 18)] = Tile.RADTILE;
+    oracleBefore.map[mapIndex(30, 22)] = Tile.POWERPLANT;
+
+    oracleBefore.terrainMem[quarterIndex(4, 4)] = 40;
+    oracleBefore.terrainMem[quarterIndex(5, 5)] = 80;
+    oracleBefore.pollutionMem[halfIndex(10, 10)] = 55;
+    oracleBefore.crimeMem[halfIndex(10, 10)] = 200;
+    oracleBefore.popDensity[halfIndex(10, 10)] = 90;
+    oracleBefore.popDensity[halfIndex(16, 12)] = 120;
+    oracleBefore.popDensity[halfIndex(18, 12)] = 100;
+    oracleBefore.policeMap[smallIndex(2, 2)] = 64;
+    oracleBefore.policeMap[smallIndex(3, 2)] = 32;
+    oracleBefore.fireStMap[smallIndex(2, 2)] = 120;
+    oracleBefore.fireStMap[smallIndex(3, 3)] = 80;
+
+    const store = createClassicMapStore();
+    const state = createSimState();
+    const context = createSimContext({ store, rng: createRng(seed) });
+    state.CityTime = oracleBefore.CityTime;
+    state.CityTax = oracleBefore.CityTax;
+    state.AvCityTax = oracleBefore.AvCityTax;
+    state.Scycle = oracleBefore.Scycle;
+    state.Fcycle = oracleBefore.Fcycle;
+    state.SimSpeed = oracleBefore.SimSpeed;
+    state.DoInitialEval = oracleBefore.DoInitialEval;
+    state.NewPower = oracleBefore.NewPower;
+    state.CChr9 = oracleBefore.CChr9;
+    state.CoalPop = oracleBefore.CoalPop;
+    state.NuclearPop = oracleBefore.NuclearPop;
+    state.PwrdZCnt = oracleBefore.PwrdZCnt;
+    state.unPwrdZCnt = oracleBefore.unPwrdZCnt;
+    state.LVAverage = oracleBefore.LVAverage;
+    state.CrimeAverage = oracleBefore.CrimeAverage;
+    state.PolluteAverage = oracleBefore.PolluteAverage;
+    state.CCx = oracleBefore.CCx;
+    state.CCy = oracleBefore.CCy;
+    state.CCx2 = oracleBefore.CCx2;
+    state.CCy2 = oracleBefore.CCy2;
+    state.PolMaxX = oracleBefore.PolMaxX;
+    state.PolMaxY = oracleBefore.PolMaxY;
+    state.CrimeMaxX = oracleBefore.CrimeMaxX;
+    state.CrimeMaxY = oracleBefore.CrimeMaxY;
+    state.DonDither = oracleBefore.DonDither;
+    state.NewMapFlags.fill(0);
+
+    store.beginTick();
+    (store.getLayer('map') as Uint16Array).set(oracleBefore.map);
+    (store.getLayer('popDensity') as Uint8Array).set(oracleBefore.popDensity);
+    (store.getLayer('pollutionMem') as Uint8Array).set(oracleBefore.pollutionMem);
+    (store.getLayer('landValueMem') as Uint8Array).set(oracleBefore.landValueMem);
+    (store.getLayer('crimeMem') as Uint8Array).set(oracleBefore.crimeMem);
+    (store.getLayer('terrainMem') as Uint8Array).set(oracleBefore.terrainMem);
+    (store.getLayer('fireStMap') as Int16Array).set(oracleBefore.fireStMap);
+    (store.getLayer('policeMap') as Int16Array).set(oracleBefore.policeMap);
+    (store.getLayer('policeMapEffect') as Int16Array).set(oracleBefore.policeMapEffect);
+    (store.getLayer('fireRate') as Int16Array).set(oracleBefore.fireRate);
+    (store.getLayer('comRate') as Int16Array).set(oracleBefore.comRate);
+
+    const oracleMapFlags = (oracleFlags: typeof oracleBefore.NewMapFlags) => [
+      oracleFlags.ALMAP,
+      oracleFlags.REMAP,
+      oracleFlags.COMAP,
+      oracleFlags.INMAP,
+      oracleFlags.PRMAP,
+      oracleFlags.RDMAP,
+      oracleFlags.PDMAP,
+      oracleFlags.RGMAP,
+      oracleFlags.TDMAP,
+      oracleFlags.PLMAP,
+      oracleFlags.CRMAP,
+      oracleFlags.LVMAP,
+      oracleFlags.FIMAP,
+      oracleFlags.POMAP,
+      oracleFlags.DYMAP,
+    ];
+
+    let oracleAfter = oracleBefore;
+    for (const phase of [12, 13, 14, 15]) {
+      oracleAfter = runCoreOracleStepPhase(oracleAfter, phase);
+      dispatchSimPhase(phase, state, context, { ptlScan, crimeScan, popDenScan, fireAnalysis });
+
+      expect(Array.from(state.NewMapFlags)).toEqual(oracleMapFlags(oracleAfter.NewMapFlags));
+
+      if (phase === 12) {
+        expect(Array.from(store.getLayer('pollutionMem') as Uint8Array)).toEqual(
+          Array.from(oracleAfter.pollutionMem),
+        );
+        expect(Array.from(store.getLayer('landValueMem') as Uint8Array)).toEqual(
+          Array.from(oracleAfter.landValueMem),
+        );
+        expect(Array.from(store.getLayer('terrainMem') as Uint8Array)).toEqual(
+          Array.from(oracleAfter.terrainMem),
+        );
+        expect(state.LVAverage).toBe(oracleAfter.LVAverage);
+        expect(state.PolluteAverage).toBe(oracleAfter.PolluteAverage);
+        expect(state.PolMaxX).toBe(oracleAfter.PolMaxX);
+        expect(state.PolMaxY).toBe(oracleAfter.PolMaxY);
+      }
+
+      if (phase === 13) {
+        expect(Array.from(store.getLayer('crimeMem') as Uint8Array)).toEqual(
+          Array.from(oracleAfter.crimeMem),
+        );
+        expect(Array.from(store.getLayer('policeMap') as Int16Array)).toEqual(
+          Array.from(oracleAfter.policeMap),
+        );
+        expect(Array.from(store.getLayer('policeMapEffect') as Int16Array)).toEqual(
+          Array.from(oracleAfter.policeMapEffect),
+        );
+        expect(state.CrimeAverage).toBe(oracleAfter.CrimeAverage);
+        expect(state.CrimeMaxX).toBe(oracleAfter.CrimeMaxX);
+        expect(state.CrimeMaxY).toBe(oracleAfter.CrimeMaxY);
+      }
+
+      if (phase === 14) {
+        expect(Array.from(store.getLayer('popDensity') as Uint8Array)).toEqual(
+          Array.from(oracleAfter.popDensity),
+        );
+        expect(Array.from(store.getLayer('comRate') as Int16Array)).toEqual(
+          Array.from(oracleAfter.comRate),
+        );
+        expect(state.CCx).toBe(oracleAfter.CCx);
+        expect(state.CCy).toBe(oracleAfter.CCy);
+        expect(state.CCx2).toBe(oracleAfter.CCx2);
+        expect(state.CCy2).toBe(oracleAfter.CCy2);
+      }
+
+      if (phase === 15) {
+        expect(Array.from(store.getLayer('fireStMap') as Int16Array)).toEqual(
+          Array.from(oracleAfter.fireStMap),
+        );
+        expect(Array.from(store.getLayer('fireRate') as Int16Array)).toEqual(
+          Array.from(oracleAfter.fireRate),
+        );
+      }
+    }
+
     store.commitTick();
   });
 });
