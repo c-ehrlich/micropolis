@@ -34,9 +34,22 @@ pnpm --filter @city/micropolis-c-harness gen:terrain-fixtures
   - `--mchar <i32>`
   - `--xoff <i32>`
   - `--yoff <i32>`
+- op-specific args for `--op brivPlop|srivPlop`:
+  - `--map-x <i32>`
+  - `--map-y <i32>`
+- op-specific args for `--op doRivers`:
+  - `--x-start <i32>`
+  - `--y-start <i32>`
+  - optional `--curveLevel <i32>` (defaults to `-1` if omitted)
 
 Implemented ops:
 
 - `noop`
 - `smoothTrees`
 - `putOnMap`
+- `smoothWater`
+- `smoothRiver`
+- `brivPlop`
+- `srivPlop`
+- `makeLakes`
+- `doRivers`

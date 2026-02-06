@@ -129,17 +129,25 @@ typedef enum TerrainOp {
   TERRAIN_OP_PUT_ON_MAP = 3,
   TERRAIN_OP_SMOOTH_WATER = 4,
   TERRAIN_OP_SMOOTH_RIVER = 5,
+  TERRAIN_OP_BRIV_PLOP = 6,
+  TERRAIN_OP_SRIV_PLOP = 7,
+  TERRAIN_OP_MAKE_LAKES = 8,
+  TERRAIN_OP_DO_RIVERS = 9,
 } TerrainOp;
 
 /* Op arguments for routines that are not pure map-in/map-out. */
 typedef struct TerrainOpArgs {
   int map_x;
   int map_y;
+  int x_start;
+  int y_start;
   int mchar;
   int xoff;
   int yoff;
   int have_map_x;
   int have_map_y;
+  int have_x_start;
+  int have_y_start;
   int have_mchar;
   int have_xoff;
   int have_yoff;
@@ -630,8 +638,10 @@ static void usage(FILE *out)
           "op mode:\\n"
           "  --op <name>\\n"
           "  --input-map <path>\\n"
-          "  op names: noop, smoothTrees, putOnMap, smoothWater, smoothRiver\\n"
+          "  op names: noop, smoothTrees, putOnMap, smoothWater, smoothRiver, brivPlop, srivPlop, makeLakes, doRivers\\n"
           "  putOnMap args: --map-x <i32> --map-y <i32> --mchar <i32> --xoff <i32> --yoff <i32>\\n"
+          "  plop args: --map-x <i32> --map-y <i32>\\n"
+          "  doRivers args: --x-start <i32> --y-start <i32> [--curveLevel <i32>]\\n"
           "  [--seed <u32>] (required only for RNG ops)\\n"
           "  [--format u16le|json] (default: u16le)\\n"
           "  [--dump-path <path>] (default: stdout)\\n");
@@ -759,6 +769,22 @@ static int parse_op(const char *name, TerrainOp *out)
     *out = TERRAIN_OP_SMOOTH_RIVER;
     return 1;
   }
+  if (strcmp(name, "brivPlop") == 0) {
+    *out = TERRAIN_OP_BRIV_PLOP;
+    return 1;
+  }
+  if (strcmp(name, "srivPlop") == 0) {
+    *out = TERRAIN_OP_SRIV_PLOP;
+    return 1;
+  }
+  if (strcmp(name, "makeLakes") == 0) {
+    *out = TERRAIN_OP_MAKE_LAKES;
+    return 1;
+  }
+  if (strcmp(name, "doRivers") == 0) {
+    *out = TERRAIN_OP_DO_RIVERS;
+    return 1;
+  }
   return 0;
 }
 
@@ -768,9 +794,13 @@ static int op_requires_seed(TerrainOp op)
   case TERRAIN_OP_NOOP:
   case TERRAIN_OP_SMOOTH_TREES:
   case TERRAIN_OP_PUT_ON_MAP:
+  case TERRAIN_OP_BRIV_PLOP:
+  case TERRAIN_OP_SRIV_PLOP:
   case TERRAIN_OP_SMOOTH_WATER:
     return 0;
   case TERRAIN_OP_SMOOTH_RIVER:
+  case TERRAIN_OP_MAKE_LAKES:
+  case TERRAIN_OP_DO_RIVERS:
     return 1;
   case TERRAIN_OP_NONE:
   default:
@@ -778,7 +808,14 @@ static int op_requires_seed(TerrainOp op)
   }
 }
 
+static int op_requires_map_cursor_args(TerrainOp op)
+{
+  return op == TERRAIN_OP_PUT_ON_MAP || op == TERRAIN_OP_BRIV_PLOP || op == TERRAIN_OP_SRIV_PLOP;
+}
+
 static int op_requires_put_on_map_args(TerrainOp op) { return op == TERRAIN_OP_PUT_ON_MAP; }
+
+static int op_requires_river_start_args(TerrainOp op) { return op == TERRAIN_OP_DO_RIVERS; }
 
 static int run_op(TerrainOp op, const TerrainOpArgs *op_args)
 {
@@ -794,11 +831,31 @@ static int run_op(TerrainOp op, const TerrainOpArgs *op_args)
     MapY = op_args->map_y;
     PutOnMap(op_args->mchar, op_args->xoff, op_args->yoff);
     return 1;
+  case TERRAIN_OP_BRIV_PLOP:
+    MapX = op_args->map_x;
+    MapY = op_args->map_y;
+    BRivPlop();
+    return 1;
+  case TERRAIN_OP_SRIV_PLOP:
+    MapX = op_args->map_x;
+    MapY = op_args->map_y;
+    SRivPlop();
+    return 1;
   case TERRAIN_OP_SMOOTH_WATER:
     SmoothWater();
     return 1;
   case TERRAIN_OP_SMOOTH_RIVER:
     SmoothRiver();
+    return 1;
+  case TERRAIN_OP_MAKE_LAKES:
+    MakeLakes();
+    return 1;
+  case TERRAIN_OP_DO_RIVERS:
+    XStart = op_args->x_start;
+    YStart = op_args->y_start;
+    MapX = XStart;
+    MapY = YStart;
+    DoRivers();
     return 1;
   case TERRAIN_OP_NONE:
   default:
@@ -893,6 +950,14 @@ int main(int argc, char **argv)
       op_args.have_map_y = parse_i32(v, &op_args.map_y);
     } else if (strcmp(a, "--map-y") == 0 && i + 1 < argc) {
       op_args.have_map_y = parse_i32(argv[++i], &op_args.map_y);
+    } else if ((v = arg_value(a, "--x-start=")) != NULL) {
+      op_args.have_x_start = parse_i32(v, &op_args.x_start);
+    } else if (strcmp(a, "--x-start") == 0 && i + 1 < argc) {
+      op_args.have_x_start = parse_i32(argv[++i], &op_args.x_start);
+    } else if ((v = arg_value(a, "--y-start=")) != NULL) {
+      op_args.have_y_start = parse_i32(v, &op_args.y_start);
+    } else if (strcmp(a, "--y-start") == 0 && i + 1 < argc) {
+      op_args.have_y_start = parse_i32(argv[++i], &op_args.y_start);
     } else if ((v = arg_value(a, "--mchar=")) != NULL) {
       op_args.have_mchar = parse_i32(v, &op_args.mchar);
     } else if (strcmp(a, "--mchar") == 0 && i + 1 < argc) {
@@ -918,6 +983,8 @@ int main(int argc, char **argv)
         (!have_island && strncmp(a, "--createIsland", 14) == 0) ||
         (!op_args.have_map_x && strncmp(a, "--map-x", 7) == 0) ||
         (!op_args.have_map_y && strncmp(a, "--map-y", 7) == 0) ||
+        (!op_args.have_x_start && strncmp(a, "--x-start", 9) == 0) ||
+        (!op_args.have_y_start && strncmp(a, "--y-start", 9) == 0) ||
         (!op_args.have_mchar && strncmp(a, "--mchar", 7) == 0) ||
         (!op_args.have_xoff && strncmp(a, "--xoff", 6) == 0) ||
         (!op_args.have_yoff && strncmp(a, "--yoff", 6) == 0)) {
@@ -953,10 +1020,17 @@ int main(int argc, char **argv)
       fprintf(stderr, "missing required --seed for op: %s\n", op_name);
       return 2;
     }
+    if (op_requires_map_cursor_args(op) && (!op_args.have_map_x || !op_args.have_map_y)) {
+      fprintf(stderr, "missing required map cursor args: --map-x --map-y\n");
+      return 2;
+    }
     if (op_requires_put_on_map_args(op) &&
-        (!op_args.have_map_x || !op_args.have_map_y || !op_args.have_mchar || !op_args.have_xoff || !op_args.have_yoff)) {
-      fprintf(stderr,
-              "missing required putOnMap args: --map-x --map-y --mchar --xoff --yoff\n");
+        (!op_args.have_mchar || !op_args.have_xoff || !op_args.have_yoff)) {
+      fprintf(stderr, "missing required putOnMap args: --mchar --xoff --yoff\n");
+      return 2;
+    }
+    if (op_requires_river_start_args(op) && (!op_args.have_x_start || !op_args.have_y_start)) {
+      fprintf(stderr, "missing required doRivers args: --x-start --y-start\n");
       return 2;
     }
     if (!load_map_from_path(input_map_path)) {

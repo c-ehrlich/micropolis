@@ -126,17 +126,17 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 ### Phase 3: plop and pipeline components
 
-- [ ] `P3.1` Implement `--op brivPlop` and `--op srivPlop`.
+- [x] `P3.1` Implement `--op brivPlop` and `--op srivPlop`.
   - C refs: `BRivPlop`, `SRivPlop` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `river-plops.c-harness.test.ts` with map cursor variants and bounds-clipping cases.
   - Done when: matrix applications match exactly.
 
-- [ ] `P3.2` Implement `--op makeLakes`.
+- [x] `P3.2` Implement `--op makeLakes`.
   - C ref: `MakeLakes` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `make-lakes.c-harness.test.ts` for fixed + property cases; include odd `LakeLevel` values to confirm C integer truncation (`LakeLevel / 2`).
   - Done when: lake counts and plop-type distribution match for identical inputs and seeds.
 
-- [ ] `P3.3` Implement `--op doRivers`.
+- [x] `P3.3` Implement `--op doRivers`.
   - C refs: `DoRivers`, `DoBRiv`, `DoSRiv` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `do-rivers.c-harness.test.ts` with explicit `xStart/yStart`, fixed seeds, and branch-biased property inputs.
   - Done when: river walk and direction drift behavior match exactly.
@@ -159,10 +159,10 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 - [x] `putOnMap`
 - [x] `smoothWater`
 - [x] `smoothRiver`
-- [ ] `brivPlop`
-- [ ] `srivPlop`
-- [ ] `makeLakes`
-- [ ] `doRivers`
+- [x] `brivPlop`
+- [x] `srivPlop`
+- [x] `makeLakes`
+- [x] `doRivers`
 
 ## Definition of Done (Global)
 
