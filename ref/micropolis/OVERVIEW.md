@@ -1,8 +1,10 @@
 ## Spec Coverage Checklist
 
+Status note: this checklist tracks the TypeScript port status in this repository (code is source of truth).
+
 - [x] Core simulation (`spec/core/SPEC.md`)
 - [ ] UI/rendering/tools/sprites (`spec/ui/SPEC.md`)
-- [ ] Terrain generation (`spec/terrain/SPEC.md`)
+- [x] Terrain generation (`spec/terrain/SPEC.md`) (non-UI `GenerateMap` pipeline in `packages/sim-core/src/terrain`)
 - [ ] Persistence & scenarios (`spec/persistence/SPEC.md`)
 - [ ] Resources/assets (`spec/resources/SPEC.md`)
 - [ ] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`)

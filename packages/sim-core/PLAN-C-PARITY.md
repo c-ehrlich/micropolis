@@ -23,8 +23,8 @@ Implement the missing `NewMapFlags` updates in PTL, Crime, and PopDen to match `
 - [x] Emulate C bug in `VoteProblems`.
 Replicate the out-of-bounds access behavior from `ref/micropolis/src/sim/s_eval.c` (the `x > PROBNUM` loop bound). Use explicit, well-annotated code to preserve the C bug, with comments pointing to `s_eval.c` and `sim.h` `PROBNUM`.
 
-- [x] Emulate the zoning traffic quirk, but document it for potential removal.
-Retain the simplified zone traffic gate behavior as a deliberate non-C quirk for now, with thorough documentation in `packages/sim-core/src/systems/zones.ts` explaining the difference from `MakeTraf` in `ref/micropolis/src/sim/s_traf.c` and why it is preserved. Make the full `MakeTraf` path easy to enable later (explicit switch or injection), and note the intended future cleanup.
+- [x] Zoning traffic gate parity by default, with legacy simplified mode kept as opt-in.
+Use full `MakeTraf` behavior by default in zoning (C-parity path), while keeping an explicit `trafficMode: 'simplified'` option in `packages/sim-core/src/systems/zones.ts` for de-risking and experiments. Document that simplified mode is intentionally non-C and must not be the default parity mode.
 
 - [x] Implement full `DoUpdateHeads` (core behavior).
 Complete the `DoUpdateHeads` port in `packages/sim-core/src/systems/date-time.ts` to include demand valves, funds (with `MustUpdateFunds` gating), options (limited to fields tracked in sim-core), and message-port handling consistent with `ref/micropolis/src/sim/w_update.c`.
@@ -75,4 +75,4 @@ Cover at least:
 - [ ] Extend e2e fixtures as needed once the behavior changes land, ensuring any magic numbers are tied to C sources in comments.
 
 Notes
-This plan intentionally preserves the simplified zoning traffic quirk for now (see item 3) even though it diverges from C. All such divergences must be explicitly documented in code with pointers to C sources.
+Any intentional divergences from C must be explicitly documented in code with pointers to C sources. The zoning `simplified` traffic mode is one such opt-in divergence and is not the default parity path.

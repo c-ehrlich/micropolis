@@ -114,7 +114,7 @@ Legend
 
 ---
 
-- 8. Power System
+- [x] 8. Power System
   - References:
     - Plan: Power System
     - Spec: “Power System”
@@ -127,7 +127,7 @@ Legend
 
 ---
 
-- 9. Zoning + Growth + ROG
+- [x] 9. Zoning + Growth + ROG
   - References:
     - Plan: Zoning and Growth
     - Spec: “Zoning and Growth” (DoZone/DoResidential/DoCommercial/DoIndustrial etc.)
@@ -141,7 +141,7 @@ Legend
 
 ---
 
-- 10. Traffic System
+- [x] 10. Traffic System
   - References:
     - Plan: Traffic System
     - Spec: “Traffic System”
@@ -166,7 +166,7 @@ Legend
 
 ---
 
-- 12. Crime
+- [x] 12. Crime
   - References:
     - Plan: Crime
     - Spec: “Crime”
@@ -178,7 +178,7 @@ Legend
 
 ---
 
-- 13. Pop Density + Commercial Rate
+- [x] 13. Pop Density + Commercial Rate
   - References:
     - Plan: PopDen
     - Spec: “Population Density and Commercial Rate”
@@ -213,7 +213,7 @@ Legend
 
 ---
 
-- 16. Census + Graphs
+- [x] 16. Census + Graphs
   - References:
     - Plan: Census and Graphs
     - Spec: “Census and Graphs”
@@ -261,7 +261,7 @@ Legend
 
 ---
 
-- 20. Demand Valves
+- [x] 20. Demand Valves
   - References:
     - Plan: City Demand Valves
     - Spec: “City Demand Valves”
@@ -284,7 +284,7 @@ Legend
 
 ---
 
-- 22. Heat Simulation (optional debug)
+- [x] 22. Heat Simulation (optional debug)
   - References:
     - Plan: Heat Simulation
     - Spec: “Heat Simulation (Optional Debug Mode)”
@@ -295,12 +295,12 @@ Legend
 
 ---
 
-- 23. Integration Tests (end-to-end)
+- [x] 23. Integration Tests (end-to-end)
   - References:
     - Plan: Test strategy
     - Spec: All sections implicitly
     - Micropolis: city fixtures in `ref/micropolis/cities`
-  - [ ] Success criteria:
-    - [ ] Golden replay: `.cty` fixtures + N weeks produce stable hashes.
-    - [ ] Phase isolation tests ensure each derived layer updates only in its phase.
-    - [ ] Determinism: same seed + action log => identical hashes.
+  - [x] Success criteria:
+    - [x] Golden replay: `.cty` fixtures + N weeks produce stable hashes.
+    - [x] Phase isolation tests ensure each derived layer updates only in its phase.
+    - [x] Determinism: same seed + action log => identical hashes.

@@ -52,15 +52,26 @@ This extends the current terrain harness pattern (`packages/micropolis-c-harness
 - Rule: if a callback mutates simulation state in C, it must be preserved in headless mode.
 
 ### 3) Oracle command contract
+Implemented now (CLI-per-invocation):
 - `init-new-city` (with seed + options)
-- `load-cty` (from bytes/path)
-- `apply-tool` (tool id + coords + options)
 - `step-phase` (one mod16 phase)
 - `step-tick` (16 phases)
-- `step-realtime` (deterministic realtime ticks; no UI loop)
-- `snapshot` (full selected state)
+- `make-traf`
+- `do-power-scan`
+- `send-messages`
+- `collect-tax`
+- `do-budget-now`
+- `update-date`
+- `do-message`
+- `do-disasters`
+- `snapshot`
 
-Initial implementation can be CLI-per-invocation; move to a persistent process mode if startup cost is high.
+Planned extensions (not implemented yet):
+- `load-cty` (from bytes/path)
+- `apply-tool` (tool id + coords + options)
+- `step-realtime` (deterministic realtime ticks; no UI loop)
+
+If startup cost becomes a bottleneck, move to a persistent process mode.
 
 ### 4) Snapshot contract
 - Map and derived arrays emitted as little-endian typed buffers with fixed order.
@@ -152,19 +163,16 @@ Risk: parity runtime cost.
 Risk: hidden intentional divergences.
 - Mitigation: maintain an explicit divergence registry in `PLAN-C-PARITY.md`, enforced by comparator filters.
 
-## Recommended Next Subsystem to Port/Parity-Harden
+## Recommended Next Work Package
 
-Traffic (`s_traf.c`) is the best next target.
+Phase 5 replay parity suite (still open) is now the highest-value remaining oracle work.
 
-Why traffic next
-- It is already called out as an intentional divergence risk in zoning (`packages/sim-core/src/systems/zones.ts` simplified gate vs full `MakeTraf`).
-- It is deterministic but branchy (direction choice, stack/backtracking, density writes), so C-oracle parity gives high confidence quickly.
-- It has high downstream impact on growth/evaluation and therefore replay stability.
-- The TS side already has a full `MakeTraf` port path (`packages/sim-core/src/systems/traffic.ts`), so parity work can start immediately without first writing large new TS functionality.
+Why this next
+- Earlier subsystem phases (traffic, power, scan-derived systems, messages/budget/scenarios/disasters) already have oracle parity tests in-tree.
+- Replay-level checkpoints will validate cross-system interaction over time, which is the main remaining parity risk.
+- This directly supports the non-UI 1:1 parity goal for full simulation runs.
 
-Suggested immediate task after this plan
-- Add a traffic-focused oracle command and first parity suite comparing:
-  - `MakeTraf` result code (`-1/0/1`)
-  - `TrfDensity` deltas
-  - `TrafMaxX/TrafMaxY`
-  - any cop destination updates exposed by hooks/state.
+Suggested immediate tasks
+- Define canonical `.cty` + action-log fixture set.
+- Add checkpoint cadence at replay scale (for example every 1/4/16 ticks).
+- Wire replay parity runs behind `CITY_TEST_PARITY_*` knobs for CI/runtime control.

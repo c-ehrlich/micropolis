@@ -133,7 +133,7 @@ Options (`opts`) should include the generator knobs:
 - `reseedAfter?: 'clock' | { seed: number } | false` (for production vs deterministic tests)
 
 ## Testing Plan
-- Add fixture-driven parity tests under `packages/sim-core/src/__test__/terrain-gen-parity.test.ts`.
+- Add fixture-driven parity tests under `packages/sim-core/src/terrain/generate.c-harness.test.ts`.
 - Each test case loads a fixture (`Uint16Array`) and compares it to TS output for:
   - normal non-island path,
   - forced island (`createIsland=1`),
@@ -334,23 +334,24 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/s_gen.c` (`GenerateMap`)
     - `ref/micropolis/spec/terrain/SPEC.md` (pipeline notes)
 
-- [ ] Add a controllable `RandomlySeedRand` equivalent (parity shape + deterministic tests).
+- [ ] Add an exact C-shape `RandomlySeedRand` equivalent (parity shape + deterministic tests).
   - Requirements:
     - Code: implement reseed mixing equivalent to `SeedRand(tv_usec ^ tv_sec ^ sim_rand())` with an injected time source.
     - Tests: verify injection is honored and reseed runs only on non-early-return path.
+    - Status in code today: `generateMap` already supports controllable reseeding via `reseedAfter: 'clock' | { seed } | false`, but `'clock'` currently uses `Date.now()`-derived mixing (`packages/sim-core/src/core/rng.ts`) rather than exact `tv_usec/tv_sec` parity.
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (`GenerateMap` reseed behavior)
 
-- [ ] Add fixture-driven parity tests + first fixture.
+- [x] Add fixture-driven parity tests + first fixture.
   - Requirements:
     - Fixtures: commit one fixture under `packages/sim-core/fixtures/terrain/` (raw `uint16`, column-major).
-    - Tests: `terrain-gen-parity.test.ts` loads the fixture and asserts exact equality with TS output.
+    - Tests: `packages/sim-core/src/terrain/generate.c-harness.test.ts` loads fixtures and asserts exact equality with TS output.
     - Docs: test comments record exact parameters and cite `s_gen.c`/spec for “magic numbers”.
   - C references:
     - `ref/micropolis/src/sim/s_gen.c`
     - `ref/micropolis/spec/terrain/SPEC.md`
 
-- [ ] Add fixtures for branch coverage (forced island + early-return random island).
+- [x] Add fixtures for branch coverage (forced island + early-return random island).
   - Requirements:
     - Fixtures: at least two more fixtures:
       - `CreateIsland=1` (forced island),
@@ -360,7 +361,7 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/s_gen.c`
     - `ref/micropolis/spec/terrain/SPEC.md` (early return note)
 
-- [ ] Add fixtures for parameter edge cases (`TreeLevel/LakeLevel/CurveLevel` 0 and positive).
+- [x] Add fixtures for parameter edge cases (`TreeLevel/LakeLevel/CurveLevel` 0 and positive).
   - Requirements:
     - Fixtures: cases where each level is `0` (disables that stage) and at least one positive value.
     - Tests: parity tests per fixture; tests explain what “0 disables” means with C citations.
@@ -380,7 +381,6 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/w_sim.c` (command exposure / integration surface)
 
 ## Next Steps
-1) Implement TS terrain generator (1:1 port) with careful masked vs unmasked checks.
-2) Add a small C harness to generate golden fixtures.
-3) Land fixture-driven parity tests.
-4) Decide whether to expose Option A only, or also provide Option B as a convenience.
+1) Implement exact `RandomlySeedRand` parity (`tv_usec ^ tv_sec ^ sim_rand`) with deterministic injection hooks.
+2) Add a core-only `resetForNewCityFromSeed` helper for non-UI new-city orchestration.
+3) Keep extending C-oracle replay parity to cover terrain + core orchestration together.

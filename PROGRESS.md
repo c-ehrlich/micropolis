@@ -1,17 +1,27 @@
-## Fully implemented (in packages/sim-core)
+## Progress Snapshot (Code-Verified)
 
-- ref/micropolis/spec/core/SPEC.md (line 1) — core sim loop + subsystems are implemented across packages/sim-core/src/sim/simulate.ts (line 1) and packages/sim-core/src/systems/*.ts (line 1) (power/zones/traffic/ptl/crime/pop-density/fire/budget/census/eval/messages/disasters/valves/date-time/heat).
+This file tracks implementation status in the TypeScript port. Source of truth is code/tests in this repository.
 
-## Partially implemented
+## Implemented
 
-- ref/micropolis/spec/persistence/SPEC.md (line 1) — .cty binary format + meta packing/unpacking are implemented (cty.ts (line 1), cty-state.ts (line 1)), but scenario loading (snro.*) and the full UI-wired Save/Load flows from the spec are not.
-- ref/micropolis/spec/ui/SPEC.md (line 1) — we have substantial “UI-adjacent” logic in sim-core (tool application + costs/sizes: tool-actions.ts (line 1); sprite/object runtime sim: realtime.ts (line 1)), but not the actual rendering/views/overlays/graphs/widgets described by the spec.
+- `ref/micropolis/spec/core/SPEC.md`:
+  - Core simulation loop + systems are implemented in `packages/sim-core/src/sim/simulate.ts` and `packages/sim-core/src/systems/*.ts`.
+  - Includes power, zones/growth, traffic, PTL, crime, pop density, fire coverage, budget, census/history, evaluation, messages/scenarios, disasters, valves, date/time, and optional heat.
+- `ref/micropolis/spec/terrain/SPEC.md` (non-UI terrain generation):
+  - `GenerateMap` pipeline and terrain routines are implemented in `packages/sim-core/src/terrain/*.ts`.
+  - Fixture parity and C-harness parity tests exist in `packages/sim-core/src/terrain/*.c-harness.test.ts` plus fixtures in `packages/sim-core/fixtures/terrain/`.
 
-## Not implemented (in packages/sim-core)
+## Partially Implemented
 
-- ref/micropolis/spec/terrain/SPEC.md — no terrain generation pipeline (MakeIsland/DoRivers/DoTrees, etc.).
-- ref/micropolis/spec/resources/SPEC.md — no resource/asset loading (string tables, tilesets, sound files).
-- ref/micropolis/spec/scripting/SPEC.md — no Tcl/Tk command API layer.
-- ref/micropolis/spec/integration/SPEC.md — no Sugar/networking/stdin integration.
+- `ref/micropolis/spec/persistence/SPEC.md`:
+  - `.cty` format read/write and metadata mapping are implemented in `packages/sim-core/src/io/cty.ts` and `packages/sim-core/src/io/cty-state.ts`.
+  - Scenario file loading (`snro.*`) and full C-style Save/Load orchestration are not yet implemented as public TS APIs.
+- `ref/micropolis/spec/ui/SPEC.md`:
+  - UI-adjacent logic exists in sim-core (`tool-actions.ts`, `realtime.ts`, heads/message behavior in core systems).
+  - Actual rendering/widgets/overlays/graphs/UI event-loop behavior are out of scope in sim-core and not implemented in `packages/sim-ui` (stub package).
 
-This matches the high-level checklist in OVERVIEW.md (line 1) (core checked; the others not).
+## Not Yet Implemented (Non-UI Adjacent Packages)
+
+- `ref/micropolis/spec/resources/SPEC.md` package work (`packages/sim-assets`) remains a stub.
+- `ref/micropolis/spec/scripting/SPEC.md` package work (`packages/sim-scripting`) remains a stub.
+- `ref/micropolis/spec/integration/SPEC.md` package work (`packages/sim-integration`) remains a stub.
