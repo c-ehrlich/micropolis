@@ -125,9 +125,9 @@ Comparison policy:
   - Phase 12-15 snapshots match for deterministic fixtures.
 
 ### Phase 4: Messages, budget, scenarios, disasters
-- [ ] Add message-port and date/update behavior parity checks.
-- [ ] Add budget and scenario countdown parity checkpoints.
-- [ ] Add disaster deterministic tests under fixed seeds.
+- [x] Add message-port and date/update behavior parity checks.
+- [x] Add budget and scenario countdown parity checkpoints.
+- [x] Add disaster deterministic tests under fixed seeds.
 - Exit criteria:
   - Multi-week replay parity passes across representative fixtures.
 

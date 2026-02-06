@@ -1,3 +1,8 @@
+import {
+  runCoreOracleCollectTax,
+  runCoreOracleDoBudgetNow,
+  runCoreOracleInitNewCity,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
 import { createSimContext } from '../core/sim-context.ts';
@@ -161,5 +166,119 @@ describe('Budget system', () => {
     expect(state.PoliceEffect).toBe(250);
     expect(state.FireEffect).toBe(1000);
     expect(calls).toEqual(['drawCurrPercents']);
+  });
+});
+
+describe('Budget parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches C CollectTax + autobudget spend path', () => {
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x0badc0de });
+    oracleBefore.TotalFunds = 1000;
+    oracleBefore.TotalPop = 100;
+    oracleBefore.LVAverage = 10;
+    oracleBefore.CityTax = 7;
+    oracleBefore.GameLevel = 1;
+    oracleBefore.PolicePop = 5;
+    oracleBefore.FireStPop = 2;
+    oracleBefore.RoadTotal = 10;
+    oracleBefore.RailTotal = 3;
+    oracleBefore.AvCityTax = 96;
+    oracleBefore.autoBudget = 1;
+    oracleBefore.roadPercent = 1;
+    oracleBefore.firePercent = 1;
+    oracleBefore.policePercent = 1;
+
+    const oracleAfter = runCoreOracleCollectTax(oracleBefore);
+
+    const context = createSimContext();
+    const state = createSimState();
+    state.TotalFunds = oracleBefore.TotalFunds;
+    state.TotalPop = oracleBefore.TotalPop;
+    state.LVAverage = oracleBefore.LVAverage;
+    state.CityTax = oracleBefore.CityTax;
+    state.GameLevel = oracleBefore.GameLevel;
+    state.PolicePop = oracleBefore.PolicePop;
+    state.FireStPop = oracleBefore.FireStPop;
+    state.RoadTotal = oracleBefore.RoadTotal;
+    state.RailTotal = oracleBefore.RailTotal;
+    state.AvCityTax = oracleBefore.AvCityTax;
+    state.autoBudget = oracleBefore.autoBudget !== 0;
+    state.roadPercent = oracleBefore.roadPercent;
+    state.firePercent = oracleBefore.firePercent;
+    state.policePercent = oracleBefore.policePercent;
+
+    // s_sim.c CollectTax constants: RLevels/FLevels with truncation on integer storage.
+    collectTax(state, context);
+
+    expect(state.TaxFund).toBe(oracleAfter.TaxFund);
+    expect(state.RoadFund).toBe(oracleAfter.RoadFund);
+    expect(state.FireFund).toBe(oracleAfter.FireFund);
+    expect(state.PoliceFund).toBe(oracleAfter.PoliceFund);
+    expect(state.CashFlow).toBe(oracleAfter.CashFlow);
+    expect(state.TotalFunds).toBe(oracleAfter.TotalFunds);
+    expect(state.RoadSpend).toBe(oracleAfter.RoadSpend);
+    expect(state.FireSpend).toBe(oracleAfter.FireSpend);
+    expect(state.PoliceSpend).toBe(oracleAfter.PoliceSpend);
+    expect(state.AvCityTax).toBe(oracleAfter.AvCityTax);
+  });
+
+  it('matches C DoBudgetNow insufficient-funds warning flow', () => {
+    const tickNow = 500;
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00dd00dd, cityTime: 0 });
+    oracleBefore.TickNow = tickNow;
+    oracleBefore.autoBudget = 1;
+    oracleBefore.MessagePort = 7;
+    oracleBefore.LastPicNum = 12;
+    oracleBefore.TotalFunds = 150;
+    oracleBefore.TaxFund = 0;
+    oracleBefore.RoadFund = 100;
+    oracleBefore.FireFund = 100;
+    oracleBefore.PoliceFund = 100;
+    oracleBefore.roadPercent = 1;
+    oracleBefore.firePercent = 1;
+    oracleBefore.policePercent = 1;
+
+    const oracleAfter = runCoreOracleDoBudgetNow({
+      state: oracleBefore,
+      fromMenu: false,
+    });
+
+    const context = createSimContext({
+      hooks: {
+        tickCount: () => tickNow,
+      },
+    });
+    const state = createSimState();
+    state.CityTime = oracleBefore.CityTime;
+    state.StartingYear = oracleBefore.StartingYear;
+    state.autoBudget = true;
+    state.MessagePort = 7;
+    state.LastPicNum = 12;
+    state.TotalFunds = 150;
+    state.TaxFund = 0;
+    state.RoadFund = 100;
+    state.FireFund = 100;
+    state.PoliceFund = 100;
+    state.roadPercent = 1;
+    state.firePercent = 1;
+    state.policePercent = 1;
+
+    // w_budget.c `DoBudgetNow` no-money path clears messages then queues message 29.
+    doBudgetNow(state, context, false);
+
+    expect(state.autoBudget ? 1 : 0).toBe(oracleAfter.autoBudget);
+    expect(state.MustUpdateOptions).toBe(oracleAfter.MustUpdateOptions);
+    expect(state.LastPicNum).toBe(oracleAfter.LastPicNum);
+    expect(state.MessagePort).toBe(oracleAfter.MessagePort);
+    expect(state.MesNum).toBe(oracleAfter.MesNum);
+    expect(state.LastMesTime).toBe(oracleAfter.LastMesTime);
+    expect(state.RoadSpend).toBe(oracleAfter.RoadSpend);
+    expect(state.FireSpend).toBe(oracleAfter.FireSpend);
+    expect(state.PoliceSpend).toBe(oracleAfter.PoliceSpend);
+    expect(state.TotalFunds).toBe(oracleAfter.TotalFunds);
   });
 });

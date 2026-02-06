@@ -35,13 +35,21 @@
 
 #define PWRBIT 32768
 #define CONDBIT 16384
+#define BURNBIT 8192
 #define BULLBIT 4096
+#define ANIMBIT 2048
 #define ZONEBIT 1024
 #define LOMASK 1023
 
+#define DIRT 0
+#define RIVER 2
+#define CHANNEL 4
+#define FIRSTRIVEDGE 5
+#define WOODS5 43
 #define RUBBLE 44
 #define FLOOD 48
 #define RADTILE 52
+#define FIRE 56
 #define FIREBASE 56
 
 #define ROADBASE 64
@@ -63,9 +71,11 @@
 #define INDBASE 612
 #define INDCLR 616
 #define LASTIND 620
-#define PORT 698
 #define PORTBASE 693
 #define IZB 625
+#define LASTZONE 826
+#define PORT 698
+#define AIRPORT 716
 #define POWERPLANT 750
 #define LASTPOWERPLANT 760
 #define NUCLEAR 816
@@ -131,7 +141,10 @@ extern short CChr;
 extern short CChr9;
 extern short PowerMap[POWERMAPLEN];
 
+extern QUAD TotalFunds;
 extern short SimSpeed;
+extern short GameLevel;
+extern short TaxFlag;
 extern short CityTax;
 extern short AvCityTax;
 extern short Scycle;
@@ -139,20 +152,87 @@ extern short Fcycle;
 extern short DoInitialEval;
 extern short NewPower;
 extern short NewMap;
+extern short MustUpdateOptions;
 extern short NewMapFlags[NMAPS];
 extern QUAD CityTime;
+extern short StartingYear;
 extern QUAD DonDither;
-extern short CoalPop;
-extern short NuclearPop;
-extern short PwrdZCnt;
-extern short unPwrdZCnt;
-extern short LVAverage;
+extern QUAD LastCityTime;
+extern QUAD LastCityYear;
+extern QUAD LastCityMonth;
+extern QUAD LastFunds;
+extern QUAD LastMesTime;
+extern short LastPicNum;
+extern short MessagePort;
+extern short MesX;
+extern short MesY;
+extern short MesNum;
+extern short autoGo;
+extern short UserSoundOn;
+extern short DoAnimation;
+extern short DoMessages;
+extern short DoNotices;
+extern short ScenarioID;
+extern short ScoreType;
+extern short ScoreWait;
+extern QUAD LastCityPop;
+extern short LastCategory;
+extern short CityClass;
+extern short CityScore;
+extern short TrafficAverage;
 extern short CrimeAverage;
 extern short PolluteAverage;
+extern short ResPop;
+extern short ComPop;
+extern short IndPop;
+extern short TotalPop;
+extern short ResZPop;
+extern short ComZPop;
+extern short IndZPop;
+extern short TotalZPop;
+extern short StadiumPop;
+extern short PortPop;
+extern short APortPop;
+extern short ResCap;
+extern short ComCap;
+extern short IndCap;
+extern QUAD TaxFund;
+extern QUAD RoadFund;
+extern QUAD PoliceFund;
+extern QUAD FireFund;
+extern QUAD CashFlow;
+extern QUAD RoadSpend;
+extern QUAD PoliceSpend;
+extern QUAD FireSpend;
+extern short RoadTotal;
+extern short RailTotal;
+extern short RoadEffect;
+extern short PoliceEffect;
+extern short FireEffect;
+extern short PolicePop;
+extern short FireStPop;
+extern short LVAverage;
+extern float roadPercent;
+extern float policePercent;
+extern float firePercent;
+extern short autoBudget;
+extern short autoBulldoze;
+extern short NoDisasters;
+extern short DisasterEvent;
+extern short DisasterWait;
+extern short FloodCnt;
+extern short FloodX;
+extern short FloodY;
+extern short CrashX;
+extern short CrashY;
 extern short CCx;
 extern short CCy;
 extern short CCx2;
 extern short CCy2;
+extern short CoalPop;
+extern short NuclearPop;
+extern short PwrdZCnt;
+extern short unPwrdZCnt;
 extern short PolMaxX;
 extern short PolMaxY;
 extern short CrimeMaxX;
@@ -171,6 +251,7 @@ int DoFreePop(int ch9);
 int RZPop(int ch9);
 int CZPop(int ch9);
 int IZPop(int ch9);
+QUAD TickCount(void);
 
 void CityEvaluation(void);
 void SetValves(void);
@@ -187,6 +268,26 @@ int PopDenScan(void);
 int FireAnalysis(void);
 void DoDisasters(void);
 void SendMes(int id);
+void SendMesAt(short id, short x, short y);
+void ClearMes(void);
+void DoLoseGame(void);
+void DoWinGame(void);
+void DoBudget(void);
+void DoBudgetNow(int fromMenu);
+void DoUpdateHeads(void);
+void UpdateFunds(void);
+void Spend(int dollars);
+void SetFunds(int dollars);
+void ShowBudgetWindowAndStartWaiting(void);
+void drawBudgetWindow(void);
+void drawCurrPercents(void);
+void makeDollarDecimalStr(char *numStr, char *dollarStr);
+void MakeTornado(void);
+void MakeMonster(void);
+void DropFireBombs(void);
+void DoEarthQuake(void);
+void DoMeltdown(short x, short y);
+void FireZone(short x, short y, short tile);
 
 void DecTrafficMem(void);
 void DecROGMem(void);

@@ -83,6 +83,12 @@ pnpm --filter @city/micropolis-c-harness build:core
 - `step-tick [--start-phase <0..15>]`
 - `make-traf --x <i32> --y <i32> --source <0|1|2>`
 - `do-power-scan`
+- `send-messages`
+- `collect-tax`
+- `do-budget-now [--from-menu <0|1>]`
+- `update-date`
+- `do-message`
+- `do-disasters`
 - `snapshot`
 
 State directory files:

@@ -1,3 +1,7 @@
+import {
+  runCoreOracleDoDisasters,
+  runCoreOracleInitNewCity,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag, World } from '../core/constants.ts';
@@ -411,5 +415,66 @@ describe('Disaster events', () => {
       [x + 2, y + 2],
     ]);
     expect(messages).toEqual([[-43, x, y]]);
+  });
+});
+
+describe('Disaster parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches C DoDisasters random SetFire path under a fixed seed', () => {
+    const chance = 10 * 48;
+    const maxSeed = 200_000;
+    let chosenSeed = 0;
+    let fireX = 0;
+    let fireY = 0;
+    let fireVariant = 0;
+
+    for (let seed = 1; seed < maxSeed; seed += 1) {
+      const probe = new MicropolisRng(seed);
+      // s_disast.c DoDisasters: for level 0, trigger when Rand(10*48) == 0.
+      if (probe.rand(chance) !== 0) continue;
+      const pick = probe.rand(8);
+      // s_disast.c routes picks 0/1 to SetFire.
+      if (pick !== 0 && pick !== 1) continue;
+      fireX = probe.rand(World.WORLD_X - 1);
+      fireY = probe.rand(World.WORLD_Y - 1);
+      // s_disast.c SetFire fire-tile variant uses Rand16() & 7.
+      fireVariant = probe.next16() & 7;
+      chosenSeed = seed;
+      break;
+    }
+
+    expect(chosenSeed).toBeGreaterThan(0);
+
+    const oracleBefore = runCoreOracleInitNewCity({ seed: chosenSeed });
+    oracleBefore.GameLevel = 0;
+    oracleBefore.FloodCnt = 2;
+    oracleBefore.map[indexFor(fireX, fireY)] = Tile.LHTHR + 1;
+
+    const oracleAfter = runCoreOracleDoDisasters(oracleBefore);
+
+    const store = createClassicMapStore();
+    store.beginTick();
+    const state = createSimState();
+    state.GameLevel = 0;
+    state.FloodCnt = 2;
+    const context = createSimContext({
+      store,
+      rng: new MicropolisRng(chosenSeed),
+    });
+    (store.getLayer('map') as Uint16Array).set(oracleBefore.map);
+
+    doDisasters(state, context);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(map[indexFor(fireX, fireY)]).toBe(Tile.FIRE + fireVariant + TileFlag.ANIMBIT);
+    expect(Array.from(map)).toEqual(Array.from(oracleAfter.map));
+    expect(state.FloodCnt).toBe(oracleAfter.FloodCnt);
+    expect(state.CrashX).toBe(oracleAfter.CrashX);
+    expect(state.CrashY).toBe(oracleAfter.CrashY);
+    expect(state.MessagePort).toBe(oracleAfter.MessagePort);
   });
 });
