@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { World } from '../core/constants.ts';
-import { indexFor, testBounds } from '../terrain/helpers.ts';
+import { indexFor, testBounds } from './helpers.ts';
 
 describe('terrain bounds helpers', () => {
   it('matches Micropolis TestBounds(x,y) semantics', () => {

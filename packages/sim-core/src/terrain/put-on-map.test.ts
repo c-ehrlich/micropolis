@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
-import { indexFor } from '../terrain/helpers.ts';
-import { putOnMap } from '../terrain/put-on-map.ts';
+import { indexFor } from './helpers.ts';
+import { putOnMap } from './put-on-map.ts';
 
 describe('terrain PutOnMap overwrite rules', () => {
   it('treats Mchar=0 as a no-op (does not clear the target tile)', () => {

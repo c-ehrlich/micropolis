@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag, World } from '../core/constants.ts';
-import { clearMap, clearUnnatural } from '../terrain/clear.ts';
-import { indexFor } from '../terrain/helpers.ts';
+import { clearMap, clearUnnatural } from './clear.ts';
+import { indexFor } from './helpers.ts';
 
 describe('terrain clear routines', () => {
   it('clearMap fills every tile with DIRT', () => {

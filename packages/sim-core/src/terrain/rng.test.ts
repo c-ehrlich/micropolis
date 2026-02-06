@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { QueueTerrainRng } from '../terrain/rng.ts';
+import { QueueTerrainRng } from './rng.ts';
 
 describe('terrain RNG adapter', () => {
   it('treats Rand(range) as inclusive of the upper bound', () => {

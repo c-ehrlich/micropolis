@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, World } from '../core/constants.ts';
-import { indexFor } from '../terrain/helpers.ts';
-import { bRivPlop, sRivPlop } from '../terrain/river-plops.ts';
+import { indexFor } from './helpers.ts';
+import { bRivPlop, sRivPlop } from './river-plops.ts';
 
 describe('terrain river plop matrices', () => {
   it('bRivPlop applies the 9x9 BRMatrix via PutOnMap offsets', () => {
