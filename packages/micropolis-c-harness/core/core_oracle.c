@@ -1478,12 +1478,17 @@ static void ClearDerivedLayersForLoad(void)
   unPwrdZCnt = 0;
 }
 
-static int LoadCtyFile(const char *path)
+/*
+ * Decode `.cty` bytes with Micropolis `_load_file` size/array semantics.
+ *
+ * Mirrors the accepted-size gate and array copy targets in
+ * `ref/micropolis/src/sim/s_fileio.c`:
+ * - accepts only 27120 / 99120 / 219120 byte payloads
+ * - loads history arrays, misc array, and first 120x100 map region
+ * - applies `loadFile` scalar normalization and post-load resets.
+ */
+static int LoadCtyBytes(const unsigned char *buffer, size_t size, const char *source)
 {
-  FILE *file;
-  long size;
-  unsigned char *buffer;
-  size_t readLen;
   int mapWords;
   int i;
   int32_t cityTime;
@@ -1491,55 +1496,18 @@ static int LoadCtyFile(const char *path)
   int32_t cityTax;
   int32_t simSpeed;
 
-  file = fopen(path, "rb");
-  if (file == NULL) {
-    fprintf(stderr, "failed to open cty file: %s (%s)\n", path, strerror(errno));
+  if ((size != 27120u) && (size != 99120u) && (size != 219120u)) {
+    fprintf(stderr, "unsupported cty size: %lu\n", (unsigned long)size);
+    return 0;
+  }
+  if (size < (size_t)(CTY_HEADER_BYTES + (MAP_WORD_COUNT * 2))) {
+    fprintf(stderr, "cty payload too small for 120x100 map: %s\n", source);
     return 0;
   }
 
-  if (fseek(file, 0L, SEEK_END) != 0) {
-    fclose(file);
-    return 0;
-  }
-  size = ftell(file);
-  if (size < 0) {
-    fclose(file);
-    return 0;
-  }
-  if (fseek(file, 0L, SEEK_SET) != 0) {
-    fclose(file);
-    return 0;
-  }
-
-  if ((size != 27120L) && (size != 99120L) && (size != 219120L)) {
-    fclose(file);
-    fprintf(stderr, "unsupported cty size: %ld\n", size);
-    return 0;
-  }
-  if (size < (CTY_HEADER_BYTES + (MAP_WORD_COUNT * 2))) {
-    fclose(file);
-    fprintf(stderr, "cty file too small for 120x100 map: %s\n", path);
-    return 0;
-  }
-
-  buffer = (unsigned char *)malloc((size_t)size);
-  if (buffer == NULL) {
-    fclose(file);
-    return 0;
-  }
-
-  readLen = fread(buffer, 1u, (size_t)size, file);
-  fclose(file);
-  if (readLen != (size_t)size) {
-    free(buffer);
-    fprintf(stderr, "failed to read cty bytes: %s\n", path);
-    return 0;
-  }
-
-  mapWords = (int)((size - CTY_HEADER_BYTES) / 2L);
+  mapWords = (int)((size - (size_t)CTY_HEADER_BYTES) / 2u);
   if (mapWords < MAP_WORD_COUNT) {
-    free(buffer);
-    fprintf(stderr, "cty map payload too short: %s\n", path);
+    fprintf(stderr, "cty map payload too short: %s\n", source);
     return 0;
   }
 
@@ -1564,7 +1532,7 @@ static int LoadCtyFile(const char *path)
 
     x = i / WORLD_Y;
     y = i % WORLD_Y;
-    src = buffer + CTY_HEADER_BYTES + (i * 2);
+    src = buffer + CTY_HEADER_BYTES + ((size_t)i * 2u);
     word = ReadBEU16(src);
     gMapStorage[x][y] = (short)word;
   }
@@ -1613,6 +1581,108 @@ static int LoadCtyFile(const char *path)
   NewMap = 0;
 
   ClearDerivedLayersForLoad();
+  return 1;
+}
+
+/*
+ * Read all remaining stream bytes into memory.
+ *
+ * Used by the stdin-powered `load-cty-bytes` command for parity tests that
+ * avoid temporary filesystem bridge files.
+ */
+static int ReadAllBytesFromStream(FILE *stream, unsigned char **outBuffer, size_t *outSize)
+{
+  unsigned char *buffer;
+  size_t size;
+  size_t capacity;
+
+  buffer = NULL;
+  size = 0u;
+  capacity = 0u;
+
+  for (;;) {
+    size_t available;
+    size_t readLen;
+    unsigned char *next;
+
+    if (size == capacity) {
+      size_t nextCapacity = (capacity == 0u) ? 8192u : (capacity * 2u);
+      if (nextCapacity < capacity) {
+        free(buffer);
+        return 0;
+      }
+      next = (unsigned char *)realloc(buffer, nextCapacity);
+      if (next == NULL) {
+        free(buffer);
+        return 0;
+      }
+      buffer = next;
+      capacity = nextCapacity;
+    }
+
+    available = capacity - size;
+    readLen = fread(buffer + size, 1u, available, stream);
+    size += readLen;
+
+    if (readLen < available) {
+      if (ferror(stream)) {
+        free(buffer);
+        return 0;
+      }
+      break;
+    }
+  }
+
+  *outBuffer = buffer;
+  *outSize = size;
+  return 1;
+}
+
+static int LoadCtyFile(const char *path)
+{
+  FILE *file;
+  long size;
+  unsigned char *buffer;
+  size_t readLen;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open cty file: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  if (fseek(file, 0L, SEEK_END) != 0) {
+    fclose(file);
+    return 0;
+  }
+  size = ftell(file);
+  if (size < 0) {
+    fclose(file);
+    return 0;
+  }
+  if (fseek(file, 0L, SEEK_SET) != 0) {
+    fclose(file);
+    return 0;
+  }
+
+  buffer = (unsigned char *)malloc((size_t)size);
+  if (buffer == NULL) {
+    fclose(file);
+    return 0;
+  }
+
+  readLen = fread(buffer, 1u, (size_t)size, file);
+  fclose(file);
+  if (readLen != (size_t)size) {
+    free(buffer);
+    fprintf(stderr, "failed to read cty bytes: %s\n", path);
+    return 0;
+  }
+
+  if (!LoadCtyBytes(buffer, (size_t)size, path)) {
+    free(buffer);
+    return 0;
+  }
 
   free(buffer);
   return 1;
@@ -4173,6 +4243,7 @@ static void PrintUsage(void)
   fprintf(stderr, "commands:\n");
   fprintf(stderr, "  init-new-city [--seed <u32>] [--city-time <i64>] [--city-tax <i32>] [--sim-speed <i32>]\n");
   fprintf(stderr, "  load-cty --cty-path <path>\n");
+  fprintf(stderr, "  load-cty-bytes < stdin-bytes\n");
   fprintf(stderr, "  step-phase --phase <0..15>\n");
   fprintf(stderr, "  step-tick [--start-phase <0..15>]\n");
   fprintf(stderr, "  step-realtime --ticks <non-negative i64>\n");
@@ -4273,6 +4344,30 @@ int main(int argc, char **argv)
     if (!LoadCtyFile(ctyPathRaw)) {
       return 1;
     }
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "load-cty-bytes") == 0) {
+    unsigned char *ctyBytes;
+    size_t ctyByteLength;
+
+    ctyBytes = NULL;
+    ctyByteLength = 0u;
+    if (!ReadAllBytesFromStream(stdin, &ctyBytes, &ctyByteLength)) {
+      free(ctyBytes);
+      fprintf(stderr, "failed to read cty bytes from stdin\n");
+      return 1;
+    }
+
+    if (!LoadCtyBytes(ctyBytes, ctyByteLength, "stdin")) {
+      free(ctyBytes);
+      return 1;
+    }
+    free(ctyBytes);
+
     if (!SaveStateDir(stateDir)) {
       return 1;
     }

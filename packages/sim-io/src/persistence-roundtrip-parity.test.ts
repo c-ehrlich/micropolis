@@ -1,13 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import {
   type CoreOracleState,
   runCoreOracleInitNewCity,
-  runCoreOracleLoadCty,
+  runCoreOracleLoadCtyBytes,
   runCoreOracleSaveCty,
 } from '../../micropolis-c-harness/src/core-parity.ts';
 import {
@@ -197,34 +193,15 @@ function createSeededRuntimePair(input: PersistenceSeedCase): SeededRuntimePair 
 }
 
 /**
- * Temporary `.cty` path wrapper around the oracle path-based load command.
- * Wraps headless `load-cty --cty-path` from `packages/micropolis-c-harness/core/core_oracle.c`
- * (intentional test-only filesystem indirection).
- */
-function withTempCtyPath<T>(cityBytes: Uint8Array, run: (ctyPath: string) => T): T {
-  const dir = mkdtempSync(path.join(tmpdir(), 'sim-io-parity-'));
-  const ctyPath = path.join(dir, 'case.cty');
-  writeFileSync(ctyPath, cityBytes);
-
-  try {
-    return run(ctyPath);
-  } finally {
-    rmSync(dir, { force: true, recursive: true });
-  }
-}
-
-/**
  * Loads `.cty` bytes through the C oracle loader.
  * Mirrors `loadFile` normalization rules in `ref/micropolis/src/sim/s_fileio.c`
- * via headless `load-cty` (1:1 loader semantics; temporary file is intentional).
+ * via headless `load-cty-bytes` (1:1 loader semantics; no temp file indirection).
  */
 function loadOracleFromBytes(cityBytes: Uint8Array, seed: number): CoreOracleState {
-  return withTempCtyPath(cityBytes, (ctyPath) =>
-    runCoreOracleLoadCty({
-      state: runCoreOracleInitNewCity({ seed }),
-      ctyPath,
-    }),
-  );
+  return runCoreOracleLoadCtyBytes({
+    state: runCoreOracleInitNewCity({ seed }),
+    ctyBytes: cityBytes,
+  });
 }
 
 /**
@@ -585,6 +562,37 @@ describe('persistence round-trip parity with C oracle', () => {
 
       expectOracleArraysMatchCity(oracleAfterLoad, cityBytes);
       expectTsArraysMatchCity(tsState, cityBytes);
+    }
+  });
+
+  it('rejects invalid city byte lengths in both TS and C loader paths', () => {
+    // `_load_file` in `ref/micropolis/src/sim/s_fileio.c` accepts only
+    // 27120, 99120, or 219120 byte payloads; all other sizes are rejected.
+    const invalidLengths = [
+      0,
+      CTY_BYTES_NORMAL - 1,
+      CTY_BYTES_NORMAL + 1,
+      CTY_BYTES_DOUBLE - 1,
+      CTY_BYTES_DOUBLE + 1,
+      CTY_BYTES_TRIPLE - 1,
+      CTY_BYTES_TRIPLE + 1,
+    ];
+
+    for (const byteLength of invalidLengths) {
+      const invalidBytes = new Uint8Array(byteLength);
+
+      expect(() =>
+        runCoreOracleLoadCtyBytes({
+          state: runCoreOracleInitNewCity({ seed: 0x00770000 + byteLength }),
+          ctyBytes: invalidBytes,
+        }),
+      ).toThrow();
+
+      const tsState = createSimState();
+      const tsContext = createSimContext({ store: createClassicMapStore() });
+      expect(() => loadFileLikeC(tsState, tsContext, invalidBytes)).toThrow(
+        `unsupported city file length: ${byteLength}`,
+      );
     }
   });
 });

@@ -5,4 +5,5 @@
 - [x] Load->simulate replay fixture checks (`fixtures/load-replay`, `src/replay-fixtures.test.ts`)
 - [x] C-style save orchestration parity helpers (`saveFile`/`SaveCity`/`SaveCityAs`)
 - [x] Save byte-parity checks against C oracle (`src/save-parity.test.ts`, `runCoreOracleSaveCty`)
-- [x] TS<->C `.cty` interoperability round-trip parity checks (`src/persistence-roundtrip-parity.test.ts`, `runCoreOracleLoadCty`, `runCoreOracleSaveCty`)
+- [x] TS<->C `.cty` interoperability round-trip parity checks (`src/persistence-roundtrip-parity.test.ts`, `runCoreOracleLoadCtyBytes`, `runCoreOracleSaveCty`)
+- [x] Invalid `.cty` byte-length rejection parity checks for TS + C loaders (`src/persistence-roundtrip-parity.test.ts`; C `_load_file` sizes: `27120`, `99120`, `219120`)

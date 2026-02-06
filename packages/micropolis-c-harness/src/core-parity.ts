@@ -293,6 +293,11 @@ export interface CoreOracleLoadCtyOptions {
   ctyPath: string;
 }
 
+export interface CoreOracleLoadCtyBytesOptions {
+  state: CoreOracleState;
+  ctyBytes: Uint8Array;
+}
+
 /**
  * Input payload for oracle `.cty` save-byte extraction.
  * Mirrors the `saveFile` runtime inputs in `ref/micropolis/src/sim/s_fileio.c`:
@@ -577,8 +582,11 @@ export function decodeCoreI16LE(bytes: Uint8Array): Int16Array {
  *
  * This wraps the CLI contract implemented in `core/core_oracle.c`.
  */
-function runCoreOracle(args: readonly string[]): Buffer {
+function runCoreOracle(args: readonly string[], options?: { stdinBytes?: Uint8Array }): Buffer {
   const bin = ensureCoreOracle();
+  if (options?.stdinBytes !== undefined) {
+    return execFileSync(bin, [...args], { input: options.stdinBytes });
+  }
   return execFileSync(bin, [...args]);
 }
 
@@ -1242,6 +1250,23 @@ export function runCoreOracleLoadCty(options: CoreOracleLoadCtyOptions): CoreOra
   return withTempStateDir((stateDir) => {
     writeCoreOracleState(stateDir, options.state);
     runCoreOracle(['load-cty', '--state-dir', stateDir, '--cty-path', options.ctyPath]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Loads `.cty` bytes into an existing oracle snapshot state without temp files.
+ *
+ * Mirrors `_load_file` + `loadFile` load semantics from
+ * `ref/micropolis/src/sim/s_fileio.c` through the headless
+ * `load-cty-bytes` command in `packages/micropolis-c-harness/core/core_oracle.c`.
+ * Intentional difference: bytes are streamed over stdin instead of loading
+ * from `CityFileName` or `--cty-path`.
+ */
+export function runCoreOracleLoadCtyBytes(options: CoreOracleLoadCtyBytesOptions): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    runCoreOracle(['load-cty-bytes', '--state-dir', stateDir], { stdinBytes: options.ctyBytes });
     return readCoreOracleState(stateDir);
   });
 }
