@@ -10,6 +10,7 @@ const SRC = path.join(CORE_DIR, 'core_oracle.c');
 const TRAF_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 's_traf.c');
 const POWER_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 's_power.c');
 const SCAN_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 's_scan.c');
+const CON_SRC = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'src', 'sim', 'w_con.c');
 const OUT_DIR = path.join(ROOT, 'build', 'core');
 const OUT = path.join(OUT_DIR, 'micropolis-core-oracle');
 
@@ -27,6 +28,7 @@ const args = [
   '-Wno-return-type',
   '-Wno-unused-variable',
   '-Wno-parentheses',
+  '-Wno-unused-parameter',
   '-Wno-error=implicit-int',
   '-Wno-error=implicit-function-declaration',
   '-Wno-error=return-type',
@@ -39,6 +41,7 @@ const args = [
   TRAF_SRC,
   POWER_SRC,
   SCAN_SRC,
+  CON_SRC,
 ];
 
 const result = spawnSync(cc, args, { stdio: 'inherit' });

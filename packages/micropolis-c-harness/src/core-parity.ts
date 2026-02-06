@@ -73,6 +73,16 @@ const SCAN_SOURCE = path.resolve(
   'sim',
   's_scan.c',
 );
+const CONNECTIVITY_SOURCE = path.resolve(
+  HARNESS_PKG,
+  '..',
+  '..',
+  'ref',
+  'micropolis',
+  'src',
+  'sim',
+  'w_con.c',
+);
 
 const SNAPSHOT_FILE = 'snapshot.json';
 const MAP_FILE = 'map.u16le';
@@ -260,6 +270,44 @@ export interface CoreOracleMakeTrafResult {
   state: CoreOracleState;
 }
 
+export interface CoreOracleLoadCtyOptions {
+  state: CoreOracleState;
+  ctyPath: string;
+}
+
+export type CoreOracleToolName =
+  | 'res'
+  | 'com'
+  | 'ind'
+  | 'fire'
+  | 'query'
+  | 'police'
+  | 'wire'
+  | 'bulldoze'
+  | 'rail'
+  | 'road'
+  | 'chalk'
+  | 'eraser'
+  | 'stadium'
+  | 'park'
+  | 'seaport'
+  | 'coal'
+  | 'nuclear'
+  | 'airport'
+  | 'network';
+
+export interface CoreOracleApplyToolOptions {
+  state: CoreOracleState;
+  tool: CoreOracleToolName;
+  x: number;
+  y: number;
+}
+
+export interface CoreOracleApplyToolResult {
+  code: number;
+  state: CoreOracleState;
+}
+
 export interface CoreOracleDoBudgetNowOptions {
   state: CoreOracleState;
   fromMenu?: boolean;
@@ -411,7 +459,8 @@ export function ensureCoreOracle(): string {
     statSync(CORE_BIN).mtimeMs < statSync(CORE_HEADER).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(TRAFFIC_SOURCE).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(POWER_SOURCE).mtimeMs ||
-    statSync(CORE_BIN).mtimeMs < statSync(SCAN_SOURCE).mtimeMs;
+    statSync(CORE_BIN).mtimeMs < statSync(SCAN_SOURCE).mtimeMs ||
+    statSync(CORE_BIN).mtimeMs < statSync(CONNECTIVITY_SOURCE).mtimeMs;
 
   if (needsBuild) {
     execFileSync(process.execPath, [CORE_BUILD_SCRIPT], { stdio: 'inherit' });
@@ -1065,6 +1114,35 @@ export function runCoreOracleStepTick(state: CoreOracleState, startPhase = 0): C
 }
 
 /**
+ * Loads a `.cty` file into an existing oracle snapshot state.
+ *
+ * Mirrors the load normalization path in `ref/micropolis/src/sim/s_fileio.c`
+ * as implemented by the headless `load-cty` command in
+ * `packages/micropolis-c-harness/core/core_oracle.c`.
+ */
+export function runCoreOracleLoadCty(options: CoreOracleLoadCtyOptions): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    runCoreOracle(['load-cty', '--state-dir', stateDir, '--cty-path', options.ctyPath]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Advances deterministic headless realtime ticks in the C oracle.
+ *
+ * Mirrors `TickCount`-driven realtime time progression from
+ * `ref/micropolis/src/sim/sim.c` in a command-driven headless form.
+ */
+export function runCoreOracleStepRealtime(state: CoreOracleState, ticks: number): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['step-realtime', '--state-dir', stateDir, '--ticks', `${Math.trunc(ticks)}`]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
  * Runs C `DoPowerScan` and returns the updated snapshot state.
  *
  * Mirrors `DoPowerScan` in `ref/micropolis/src/sim/s_power.c`, including
@@ -1160,6 +1238,37 @@ export function runCoreOracleDoDisasters(state: CoreOracleState): CoreOracleStat
     writeCoreOracleState(stateDir, state);
     runCoreOracle(['do-disasters', '--state-dir', stateDir]);
     return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs one C tool operation and returns result code + updated snapshot state.
+ *
+ * Mirrors the tool behavior from `ref/micropolis/src/sim/w_tool.c` and
+ * connectivity rules in `ref/micropolis/src/sim/w_con.c` through the
+ * headless `apply-tool` oracle command.
+ */
+export function runCoreOracleApplyTool(
+  options: CoreOracleApplyToolOptions,
+): CoreOracleApplyToolResult {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    const raw = runCoreOracle([
+      'apply-tool',
+      '--state-dir',
+      stateDir,
+      '--tool',
+      options.tool,
+      '--x',
+      `${Math.trunc(options.x)}`,
+      '--y',
+      `${Math.trunc(options.y)}`,
+    ]);
+    const parsed = JSON.parse(raw.toString('utf8')) as { code: number };
+    return {
+      code: Math.trunc(parsed.code),
+      state: readCoreOracleState(stateDir),
+    };
   });
 }
 

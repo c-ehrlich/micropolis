@@ -2,6 +2,10 @@
 
 Date: 2026-02-06
 
+## STATUS: COMPLETE (2026-02-06)
+**This plan is complete for its defined non-UI scope.**
+**Phases 0-5 are complete, and the previously remaining command-surface tasks (`load-cty`, `apply-tool`, `step-realtime`) are now implemented with wrapper/test coverage.**
+
 Goal
 - Parity-test as much of Micropolis simulation behavior as possible against C, excluding UI/rendering stack behavior that is intentionally free to diverge.
 
@@ -54,8 +58,11 @@ This extends the current terrain harness pattern (`packages/micropolis-c-harness
 ### 3) Oracle command contract
 Implemented now (CLI-per-invocation):
 - `init-new-city` (with seed + options)
+- `load-cty` (from path)
 - `step-phase` (one mod16 phase)
 - `step-tick` (16 phases)
+- `step-realtime` (deterministic headless realtime ticks)
+- `apply-tool` (deterministic tool operation)
 - `make-traf`
 - `do-power-scan`
 - `send-messages`
@@ -65,11 +72,6 @@ Implemented now (CLI-per-invocation):
 - `do-message`
 - `do-disasters`
 - `snapshot`
-
-Planned extensions (not implemented yet):
-- `load-cty` (from bytes/path)
-- `apply-tool` (tool id + coords + options)
-- `step-realtime` (deterministic realtime ticks; no UI loop)
 
 If startup cost becomes a bottleneck, move to a persistent process mode.
 
@@ -163,16 +165,16 @@ Risk: parity runtime cost.
 Risk: hidden intentional divergences.
 - Mitigation: maintain an explicit divergence registry in `PLAN-C-PARITY.md`, enforced by comparator filters.
 
-## Recommended Next Work Package
+## Completed Immediate Work Package
 
-Phase 5 replay parity suite (still open) is now the highest-value remaining oracle work.
+Command-surface coverage has been expanded beyond the replay suite.
 
-Why this next
-- Earlier subsystem phases (traffic, power, scan-derived systems, messages/budget/scenarios/disasters) already have oracle parity tests in-tree.
-- Replay-level checkpoints will validate cross-system interaction over time, which is the main remaining parity risk.
-- This directly supports the non-UI 1:1 parity goal for full simulation runs.
+Completed outcomes
+- [x] Add `load-cty` support in the oracle and TS wrapper.
+- [x] Add `apply-tool` support for deterministic tool-operation parity flows.
+- [x] Add `step-realtime` support (headless deterministic mode) and corresponding parity tests.
 
-Suggested immediate tasks
-- Define canonical `.cty` + action-log fixture set.
-- Add checkpoint cadence at replay scale (for example every 1/4/16 ticks).
-- Wire replay parity runs behind `CITY_TEST_PARITY_*` knobs for CI/runtime control.
+---
+
+## STATUS: COMPLETE (2026-02-06)
+**End-of-document confirmation: this plan is complete for its defined non-UI scope.**

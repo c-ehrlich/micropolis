@@ -65,6 +65,8 @@ Implemented ops:
   - `packages/micropolis-c-harness/core/core_oracle.c`
   - `ref/micropolis/src/sim/s_traf.c` (compiled directly with a headless shim header)
   - `ref/micropolis/src/sim/s_power.c` (compiled directly with a headless shim header)
+  - `ref/micropolis/src/sim/s_scan.c` (compiled directly with a headless shim header)
+  - `ref/micropolis/src/sim/w_con.c` (compiled directly for tool/connectivity parity)
 - Binary output (generated): `packages/micropolis-c-harness/build/core/micropolis-core-oracle`
 - TS wrapper: `@city/micropolis-c-harness/core-parity`
 
@@ -79,8 +81,11 @@ pnpm --filter @city/micropolis-c-harness build:core
 `micropolis-core-oracle <command> --state-dir <dir> [options]`
 
 - `init-new-city [--seed <u32>] [--city-time <i64>] [--city-tax <i32>] [--sim-speed <i32>]`
+- `load-cty --cty-path <path>`
 - `step-phase --phase <0..15>`
 - `step-tick [--start-phase <0..15>]`
+- `step-realtime --ticks <non-negative i64>`
+- `apply-tool --tool <name|id> --x <i32> --y <i32>`
 - `make-traf --x <i32> --y <i32> --source <0|1|2>`
 - `do-power-scan`
 - `send-messages`

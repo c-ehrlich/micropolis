@@ -40,50 +40,132 @@
 #define ANIMBIT 2048
 #define ZONEBIT 1024
 #define LOMASK 1023
+#define BNCNBIT (BURNBIT | CONDBIT)
 
 #define DIRT 0
 #define RIVER 2
+#define REDGE 3
 #define CHANNEL 4
 #define FIRSTRIVEDGE 5
+#define LASTRIVEDGE 20
+#define TREEBASE 21
+#define LASTTREE 36
+#define WOODS 37
+#define WOODS2 40
+#define WOODS3 41
+#define WOODS4 42
 #define WOODS5 43
 #define RUBBLE 44
+#define LASTRUBBLE 47
 #define FLOOD 48
 #define RADTILE 52
 #define FIRE 56
 #define FIREBASE 56
 
 #define ROADBASE 64
+#define HBRIDGE 64
+#define VBRIDGE 65
+#define ROADS 66
+#define INTERSECTION 76
+#define HROADPOWER 77
+#define VROADPOWER 78
+#define BRWH 79
 #define LTRFBASE 80
+#define BRWV 95
 #define HTRFBASE 144
+#define LASTROAD 206
+
 #define POWERBASE 208
+#define HPOWER 208
+#define VPOWER 209
+#define LHPOWER 210
+#define LVPOWER 211
 #define RAILHPOWERV 221
+#define RAILVPOWERH 222
 #define RAILBASE 224
+#define HRAIL 224
+#define VRAIL 225
+#define LHRAIL 226
+#define LVRAIL 227
+#define HRAILROAD 237
+#define VRAILROAD 238
 #define LASTRAIL 238
+
 #define RESBASE 240
 #define FREEZ 244
-
 #define LHTHR 249
 #define HHTHR 260
 #define RZB 265
+#define HOSPITAL 409
+#define CHURCH 418
 #define COMBASE 423
 #define COMCLR 427
 #define CZB 436
 #define INDBASE 612
 #define INDCLR 616
 #define LASTIND 620
-#define PORTBASE 693
+#define IND1 621
 #define IZB 625
-#define LASTZONE 826
+#define IND2 641
+#define IND3 644
+#define IND4 649
+#define IND5 650
+#define IND6 676
+#define IND7 677
+#define IND8 686
+#define IND9 689
+#define PORTBASE 693
 #define PORT 698
+#define LASTPORT 708
+#define AIRPORTBASE 709
 #define AIRPORT 716
+#define COALBASE 745
 #define POWERPLANT 750
 #define LASTPOWERPLANT 760
+#define FIRESTBASE 761
+#define FIRESTATION 765
+#define POLICESTBASE 770
+#define POLICESTATION 774
+#define STADIUMBASE 779
+#define STADIUM 784
+#define FULLSTADIUM 800
+#define NUCLEARBASE 811
 #define NUCLEAR 816
+#define LASTZONE 826
 
+#define HBRDG0 828
+#define HBRDG1 829
+#define HBRDG2 830
+#define HBRDG3 831
+
+#define RADAR0 832
+#define RADAR1 833
+#define RADAR2 834
+#define RADAR3 835
+#define RADAR4 836
+#define RADAR5 837
+#define RADAR6 838
+#define RADAR7 839
+
+#define FOUNTAIN 840
 #define TELEBASE 844
 #define TELELAST 851
+#define SMOKEBASE 852
+#define TINYEXP 860
 #define SOMETINYEXP 864
 #define LASTTINYEXP 867
+
+#define COALSMOKE1 916
+#define COALSMOKE2 920
+#define COALSMOKE3 924
+#define COALSMOKE4 928
+#define FOOTBALLGAME1 932
+#define FOOTBALLGAME2 940
+
+#define VBRDG0 948
+#define VBRDG1 949
+#define VBRDG2 950
+#define VBRDG3 951
 
 #define COP 2
 
@@ -293,5 +375,6 @@ void DecTrafficMem(void);
 void DecROGMem(void);
 void Simulate(int mod16);
 int MakeTraf(int Zt);
+int ConnecTile(short x, short y, short *TileAdrPtr, short Command);
 
 #endif

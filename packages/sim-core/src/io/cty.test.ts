@@ -1,3 +1,11 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleLoadCty,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
 import { getOrThrow } from '../core/assert.ts';
@@ -17,6 +25,10 @@ import {
 } from './cty.ts';
 
 const CLASSIC_DIMENSIONS = { width: 120, height: 100 };
+const FIXTURE_CITY = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../fixtures/cities/about.cty',
+);
 
 function fillHistories(target: ReturnType<typeof createCityFile>['histories']): void {
   for (let i = 0; i < CITY_HISTORY_LENGTH; i += 1) {
@@ -211,5 +223,35 @@ describe('city file persistence', () => {
     expect(normalized.policePercent).toBe(1);
     expect(normalized.firePercent).toBe(1);
     expect(normalized.roadPercent).toBe(1);
+  });
+
+  it('matches oracle load-cty normalization for classic fixtures', () => {
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00c7f1e });
+    const oracleAfter = runCoreOracleLoadCty({ state: oracleBefore, ctyPath: FIXTURE_CITY });
+
+    const cityBytes = readFileSync(FIXTURE_CITY);
+    const city = decodeCityFileForMap(cityBytes, CLASSIC_DIMENSIONS);
+    const rawMeta = readCityMeta(city.misc);
+    const normalized = applyLoadNormalization(rawMeta);
+
+    // `s_fileio.c` `loadFile` uses `SetFunds` on `MiscHis[50..51]` and applies
+    // normalized `CityTime`/`CityTax`/`SimSpeed`.
+    expect(oracleAfter.TotalFunds).toBe(rawMeta.totalFunds);
+    expect(oracleAfter.CityTime).toBe(normalized.cityTime);
+    expect(oracleAfter.CityTax).toBe(normalized.cityTax);
+    expect(oracleAfter.SimSpeed).toBe(normalized.simSpeed);
+
+    // `InitFundingLevel()` in `s_fileio.c` resets all funding percents to 1.0.
+    expect(oracleAfter.policePercent).toBe(1);
+    expect(oracleAfter.firePercent).toBe(1);
+    expect(oracleAfter.roadPercent).toBe(1);
+
+    expect(oracleAfter.autoBulldoze).toBe(rawMeta.autoBulldoze ? 1 : 0);
+    expect(oracleAfter.autoBudget).toBe(rawMeta.autoBudget ? 1 : 0);
+    expect(oracleAfter.autoGo).toBe(rawMeta.autoGo ? 1 : 0);
+    expect(oracleAfter.UserSoundOn).toBe(rawMeta.userSoundOn ? 1 : 0);
+
+    const oracleMapPrefix = Array.from(oracleAfter.map.slice(0, city.map.length));
+    expect(oracleMapPrefix).toEqual(Array.from(city.map));
   });
 });

@@ -1267,6 +1267,1128 @@ void DoDisasters(void)
   }
 }
 
+/* --- Tool and CTY load commands (headless parity extensions). --- */
+
+#define CTY_HISTORY_WORDS 240
+#define CTY_MISC_WORDS 120
+#define CTY_HEADER_WORDS ((CTY_HISTORY_WORDS * 6) + CTY_MISC_WORDS)
+#define CTY_HEADER_BYTES (CTY_HEADER_WORDS * 2)
+
+enum {
+  TOOL_RESIDENTIAL = 0,
+  TOOL_COMMERCIAL = 1,
+  TOOL_INDUSTRIAL = 2,
+  TOOL_FIRE = 3,
+  TOOL_QUERY = 4,
+  TOOL_POLICE = 5,
+  TOOL_WIRE = 6,
+  TOOL_BULLDOZE = 7,
+  TOOL_RAIL = 8,
+  TOOL_ROAD = 9,
+  TOOL_CHALK = 10,
+  TOOL_ERASER = 11,
+  TOOL_STADIUM = 12,
+  TOOL_PARK = 13,
+  TOOL_SEAPORT = 14,
+  TOOL_COAL = 15,
+  TOOL_NUCLEAR = 16,
+  TOOL_AIRPORT = 17,
+  TOOL_NETWORK = 18,
+  TOOL_COUNT = 19
+};
+
+static QUAD ToolCost[20] = {100, 100, 100, 500, 0,   500, 5,   1,   20, 10,
+                            0,   0,   5000, 10,  3000, 3000, 5000, 10000, 100, 0};
+
+static short ToolSize[20] = {3, 3, 3, 3, 1, 3, 1, 1, 1, 1, 0, 0, 4, 1, 4, 4, 4, 6, 1, 0};
+static short ToolOffset[20] = {1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0};
+
+static uint16_t ReadBEU16(const unsigned char *src)
+{
+  return (uint16_t)(((uint16_t)src[0] << 8) | (uint16_t)src[1]);
+}
+
+static int16_t ReadBEI16(const unsigned char *src) { return (int16_t)ReadBEU16(src); }
+
+static int32_t ReadMiscI32(const short misc[CTY_MISC_WORDS], int index)
+{
+  uint32_t hi;
+  uint32_t lo;
+  uint32_t packed;
+
+  hi = (uint32_t)((uint16_t)misc[index]);
+  lo = (uint32_t)((uint16_t)misc[index + 1]);
+  packed = (hi << 16) | lo;
+  return (int32_t)packed;
+}
+
+static void ClearDerivedLayersForLoad(void)
+{
+  int x;
+  int y;
+
+  for (x = 0; x < HWLDX; x++) {
+    for (y = 0; y < HWLDY; y++) {
+      gTrfStorage[x][y] = 0;
+      gPopDensityStorage[x][y] = 0;
+      gPollutionStorage[x][y] = 0;
+      gLandValueStorage[x][y] = 0;
+      gCrimeStorage[x][y] = 0;
+      gTemStorage[x][y] = 0;
+      gTem2Storage[x][y] = 0;
+    }
+  }
+
+  for (x = 0; x < QWX; x++) {
+    for (y = 0; y < QWY; y++) {
+      gTerrainStorage[x][y] = 0;
+      gQtemStorage[x][y] = 0;
+    }
+  }
+
+  for (x = 0; x < SmX; x++) {
+    for (y = 0; y < SmY; y++) {
+      RateOGMem[x][y] = 0;
+      FireStMap[x][y] = 0;
+      PoliceMap[x][y] = 0;
+      PoliceMapEffect[x][y] = 0;
+      ComRate[x][y] = 0;
+      FireRate[x][y] = 0;
+      STem[x][y] = 0;
+    }
+  }
+
+  for (x = 0; x < PWRMAPSIZE; x++) {
+    PowerMap[x] = 0;
+  }
+  for (x = PWRMAPSIZE; x < POWERMAPLEN; x++) {
+    PowerMap[x] = 0;
+  }
+  for (x = 0; x < PWRSTKSIZE; x++) {
+    PowerStackX[x] = 0;
+    PowerStackY[x] = 0;
+  }
+
+  TrafMaxX = 0;
+  TrafMaxY = 0;
+  PowerStackNum = 0;
+  NewPower = 0;
+  CChr = 0;
+  CChr9 = 0;
+  CoalPop = 0;
+  NuclearPop = 0;
+  PwrdZCnt = 0;
+  unPwrdZCnt = 0;
+}
+
+static int LoadCtyFile(const char *path)
+{
+  FILE *file;
+  long size;
+  unsigned char *buffer;
+  size_t readLen;
+  int mapWords;
+  int i;
+  short misc[CTY_MISC_WORDS];
+  int32_t cityTime;
+  int32_t totalFunds;
+  int32_t cityTax;
+  int32_t simSpeed;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open cty file: %s (%s)\n", path, strerror(errno));
+    return 0;
+  }
+
+  if (fseek(file, 0L, SEEK_END) != 0) {
+    fclose(file);
+    return 0;
+  }
+  size = ftell(file);
+  if (size < 0) {
+    fclose(file);
+    return 0;
+  }
+  if (fseek(file, 0L, SEEK_SET) != 0) {
+    fclose(file);
+    return 0;
+  }
+
+  if ((size != 27120L) && (size != 99120L) && (size != 219120L)) {
+    fclose(file);
+    fprintf(stderr, "unsupported cty size: %ld\n", size);
+    return 0;
+  }
+  if (size < (CTY_HEADER_BYTES + (MAP_WORD_COUNT * 2))) {
+    fclose(file);
+    fprintf(stderr, "cty file too small for 120x100 map: %s\n", path);
+    return 0;
+  }
+
+  buffer = (unsigned char *)malloc((size_t)size);
+  if (buffer == NULL) {
+    fclose(file);
+    return 0;
+  }
+
+  readLen = fread(buffer, 1u, (size_t)size, file);
+  fclose(file);
+  if (readLen != (size_t)size) {
+    free(buffer);
+    fprintf(stderr, "failed to read cty bytes: %s\n", path);
+    return 0;
+  }
+
+  mapWords = (int)((size - CTY_HEADER_BYTES) / 2L);
+  if (mapWords < MAP_WORD_COUNT) {
+    free(buffer);
+    fprintf(stderr, "cty map payload too short: %s\n", path);
+    return 0;
+  }
+
+  for (i = 0; i < MAP_WORD_COUNT; i++) {
+    int x;
+    int y;
+    uint16_t word;
+    const unsigned char *src;
+
+    x = i / WORLD_Y;
+    y = i % WORLD_Y;
+    src = buffer + CTY_HEADER_BYTES + (i * 2);
+    word = ReadBEU16(src);
+    gMapStorage[x][y] = (short)word;
+  }
+
+  for (i = 0; i < CTY_MISC_WORDS; i++) {
+    misc[i] = ReadBEI16(buffer + ((CTY_HISTORY_WORDS * 6 + i) * 2));
+  }
+
+  cityTime = ReadMiscI32(misc, 8);
+  totalFunds = ReadMiscI32(misc, 50);
+  cityTax = (int32_t)misc[56];
+  simSpeed = (int32_t)misc[57];
+
+  if (cityTime < 0) {
+    cityTime = 0;
+  }
+  if ((cityTax < 0) || (cityTax > 20)) {
+    cityTax = 7;
+  }
+  if ((simSpeed < 0) || (simSpeed > 3)) {
+    simSpeed = 3;
+  }
+
+  CityTime = (QUAD)cityTime;
+  CityTax = (short)cityTax;
+  SimSpeed = (short)simSpeed;
+  autoBulldoze = (misc[52] != 0) ? 1 : 0;
+  autoBudget = (misc[53] != 0) ? 1 : 0;
+  autoGo = (misc[54] != 0) ? 1 : 0;
+  UserSoundOn = (misc[55] != 0) ? 1 : 0;
+  MustUpdateOptions = 1;
+  ScenarioID = 0;
+  DoInitialEval = 0;
+
+  policePercent = 1.0f;
+  firePercent = 1.0f;
+  roadPercent = 1.0f;
+  SetFunds((int)totalFunds);
+
+  ClearMes();
+  MesNum = 0;
+  LastMesTime = 0;
+  LastCityTime = -1;
+  LastCityYear = -1;
+  LastCityMonth = -1;
+
+  for (i = 0; i < NMAPS; i++) {
+    NewMapFlags[i] = 0;
+  }
+  NewMap = 0;
+
+  ClearDerivedLayersForLoad();
+
+  free(buffer);
+  return 1;
+}
+
+static short ToolTally(short tileValue)
+{
+  if (((tileValue >= FIRSTRIVEDGE) && (tileValue <= LASTRUBBLE)) ||
+      ((tileValue >= (POWERBASE + 2)) && (tileValue <= (POWERBASE + 12))) ||
+      ((tileValue >= TINYEXP) && (tileValue <= (LASTTINYEXP + 2)))) {
+    return 1;
+  }
+  return 0;
+}
+
+static short CheckBigZone(short id, short *deltaHPtr, short *deltaVPtr)
+{
+  switch (id) {
+  case POWERPLANT:
+  case PORT:
+  case NUCLEAR:
+  case STADIUM:
+    *deltaHPtr = 0;
+    *deltaVPtr = 0;
+    return 4;
+  case POWERPLANT + 1:
+  case COALSMOKE3:
+  case COALSMOKE3 + 1:
+  case COALSMOKE3 + 2:
+  case PORT + 1:
+  case NUCLEAR + 1:
+  case STADIUM + 1:
+    *deltaHPtr = -1;
+    *deltaVPtr = 0;
+    return 4;
+  case POWERPLANT + 4:
+  case PORT + 4:
+  case NUCLEAR + 4:
+  case STADIUM + 4:
+    *deltaHPtr = 0;
+    *deltaVPtr = -1;
+    return 4;
+  case POWERPLANT + 5:
+  case PORT + 5:
+  case NUCLEAR + 5:
+  case STADIUM + 5:
+    *deltaHPtr = -1;
+    *deltaVPtr = -1;
+    return 4;
+  case AIRPORT:
+    *deltaHPtr = 0;
+    *deltaVPtr = 0;
+    return 6;
+  case AIRPORT + 1:
+    *deltaHPtr = -1;
+    *deltaVPtr = 0;
+    return 6;
+  case AIRPORT + 2:
+    *deltaHPtr = -2;
+    *deltaVPtr = 0;
+    return 6;
+  case AIRPORT + 3:
+    *deltaHPtr = -3;
+    *deltaVPtr = 0;
+    return 6;
+  case AIRPORT + 6:
+    *deltaHPtr = 0;
+    *deltaVPtr = -1;
+    return 6;
+  case AIRPORT + 7:
+    *deltaHPtr = -1;
+    *deltaVPtr = -1;
+    return 6;
+  case AIRPORT + 8:
+    *deltaHPtr = -2;
+    *deltaVPtr = -1;
+    return 6;
+  case AIRPORT + 9:
+    *deltaHPtr = -3;
+    *deltaVPtr = -1;
+    return 6;
+  case AIRPORT + 12:
+    *deltaHPtr = 0;
+    *deltaVPtr = -2;
+    return 6;
+  case AIRPORT + 13:
+    *deltaHPtr = -1;
+    *deltaVPtr = -2;
+    return 6;
+  case AIRPORT + 14:
+    *deltaHPtr = -2;
+    *deltaVPtr = -2;
+    return 6;
+  case AIRPORT + 15:
+    *deltaHPtr = -3;
+    *deltaVPtr = -2;
+    return 6;
+  case AIRPORT + 18:
+    *deltaHPtr = 0;
+    *deltaVPtr = -3;
+    return 6;
+  case AIRPORT + 19:
+    *deltaHPtr = -1;
+    *deltaVPtr = -3;
+    return 6;
+  case AIRPORT + 20:
+    *deltaHPtr = -2;
+    *deltaVPtr = -3;
+    return 6;
+  case AIRPORT + 21:
+    *deltaHPtr = -3;
+    *deltaVPtr = -3;
+    return 6;
+  default:
+    *deltaHPtr = 0;
+    *deltaVPtr = 0;
+    return 0;
+  }
+}
+
+static short CheckSize(short temp)
+{
+  if (((temp >= (RESBASE - 1)) && (temp <= (PORTBASE - 1))) ||
+      ((temp >= (LASTPOWERPLANT + 1)) && (temp <= (POLICESTATION + 4)))) {
+    return 3;
+  }
+  if (((temp >= PORTBASE) && (temp <= LASTPORT)) || ((temp >= COALBASE) && (temp <= LASTPOWERPLANT)) ||
+      ((temp >= STADIUMBASE) && (temp <= LASTZONE))) {
+    return 4;
+  }
+  return 0;
+}
+
+static void Check3x3Border(short xMap, short yMap)
+{
+  short xPos;
+  short yPos;
+  short cnt;
+
+  xPos = xMap;
+  yPos = yMap - 1;
+  for (cnt = 0; cnt < 3; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap - 1;
+  yPos = yMap;
+  for (cnt = 0; cnt < 3; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+
+  xPos = xMap;
+  yPos = yMap + 3;
+  for (cnt = 0; cnt < 3; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap + 3;
+  yPos = yMap;
+  for (cnt = 0; cnt < 3; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+}
+
+static void Check4x4Border(short xMap, short yMap)
+{
+  short xPos;
+  short yPos;
+  short cnt;
+
+  xPos = xMap;
+  yPos = yMap - 1;
+  for (cnt = 0; cnt < 4; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap - 1;
+  yPos = yMap;
+  for (cnt = 0; cnt < 4; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+
+  xPos = xMap;
+  yPos = yMap + 4;
+  for (cnt = 0; cnt < 4; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap + 4;
+  yPos = yMap;
+  for (cnt = 0; cnt < 4; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+}
+
+static void Check6x6Border(short xMap, short yMap)
+{
+  short xPos;
+  short yPos;
+  short cnt;
+
+  xPos = xMap;
+  yPos = yMap - 1;
+  for (cnt = 0; cnt < 6; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap - 1;
+  yPos = yMap;
+  for (cnt = 0; cnt < 6; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+
+  xPos = xMap;
+  yPos = yMap + 6;
+  for (cnt = 0; cnt < 6; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    xPos++;
+  }
+
+  xPos = xMap + 6;
+  yPos = yMap;
+  for (cnt = 0; cnt < 6; cnt++) {
+    ConnecTile(xPos, yPos, &Map[xPos][yPos], 0);
+    yPos++;
+  }
+}
+
+static int Check3x3Tool(short mapH, short mapV, short base, short tool)
+{
+  short rowNum;
+  short columnNum;
+  short holdMapH;
+  short holdMapV;
+  short xPos;
+  short yPos;
+  short cost;
+  short tileValue;
+  short flag;
+
+  mapH--;
+  mapV--;
+  if ((mapH < 0) || (mapH > (WORLD_X - 3)) || (mapV < 0) || (mapV > (WORLD_Y - 3))) {
+    return -1;
+  }
+
+  xPos = holdMapH = mapH;
+  yPos = holdMapV = mapV;
+  flag = 1;
+  cost = 0;
+
+  for (rowNum = 0; rowNum <= 2; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 2; columnNum++) {
+      tileValue = Map[mapH++][mapV] & LOMASK;
+      if (autoBulldoze) {
+        if (tileValue != 0) {
+          if (ToolTally(tileValue)) {
+            cost++;
+          } else {
+            flag = 0;
+          }
+        }
+      } else if (tileValue != 0) {
+        flag = 0;
+      }
+    }
+    mapV++;
+  }
+
+  if (flag == 0) {
+    return -1;
+  }
+
+  cost += (short)ToolCost[tool];
+  if ((TotalFunds - cost) < 0) {
+    return -2;
+  }
+
+  Spend(cost);
+  UpdateFunds();
+
+  mapV = holdMapV;
+  for (rowNum = 0; rowNum <= 2; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 2; columnNum++) {
+      if ((columnNum == 1) && (rowNum == 1)) {
+        Map[mapH++][mapV] = base + BNCNBIT + ZONEBIT;
+      } else {
+        Map[mapH++][mapV] = base + BNCNBIT;
+      }
+      base++;
+    }
+    mapV++;
+  }
+  Check3x3Border(xPos, yPos);
+  return 1;
+}
+
+static int Check4x4Tool(short mapH, short mapV, short base, short aniFlag, short tool)
+{
+  short rowNum;
+  short columnNum;
+  short h;
+  short v;
+  short holdMapH;
+  short xMap;
+  short yMap;
+  short tileValue;
+  short flag;
+  short cost;
+
+  mapH--;
+  mapV--;
+  if ((mapH < 0) || (mapH > (WORLD_X - 4)) || (mapV < 0) || (mapV > (WORLD_Y - 4))) {
+    return -1;
+  }
+
+  h = xMap = holdMapH = mapH;
+  v = yMap = mapV;
+  flag = 1;
+  cost = 0;
+
+  for (rowNum = 0; rowNum <= 3; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 3; columnNum++) {
+      tileValue = Map[mapH++][mapV] & LOMASK;
+      if (autoBulldoze) {
+        if (tileValue != 0) {
+          if (ToolTally(tileValue)) {
+            cost++;
+          } else {
+            flag = 0;
+          }
+        }
+      } else if (tileValue != 0) {
+        flag = 0;
+      }
+    }
+    mapV++;
+  }
+
+  if (flag == 0) {
+    return -1;
+  }
+
+  cost += (short)ToolCost[tool];
+  if ((TotalFunds - cost) < 0) {
+    return -2;
+  }
+
+  Spend(cost);
+  UpdateFunds();
+
+  mapV = v;
+  holdMapH = h;
+  for (rowNum = 0; rowNum <= 3; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 3; columnNum++) {
+      if ((columnNum == 1) && (rowNum == 1)) {
+        Map[mapH++][mapV] = base + BNCNBIT + ZONEBIT;
+      } else if ((columnNum == 1) && (rowNum == 2) && aniFlag) {
+        Map[mapH++][mapV] = base + BNCNBIT + ANIMBIT;
+      } else {
+        Map[mapH++][mapV] = base + BNCNBIT;
+      }
+      base++;
+    }
+    mapV++;
+  }
+  Check4x4Border(xMap, yMap);
+  return 1;
+}
+
+static int Check6x6Tool(short mapH, short mapV, short base, short tool)
+{
+  short rowNum;
+  short columnNum;
+  short h;
+  short v;
+  short holdMapH;
+  short xMap;
+  short yMap;
+  short flag;
+  short tileValue;
+  short cost;
+
+  mapH--;
+  mapV--;
+  if ((mapH < 0) || (mapH > (WORLD_X - 6)) || (mapV < 0) || (mapV > (WORLD_Y - 6))) {
+    return -1;
+  }
+
+  h = xMap = holdMapH = mapH;
+  v = yMap = mapV;
+  flag = 1;
+  cost = 0;
+
+  for (rowNum = 0; rowNum <= 5; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 5; columnNum++) {
+      tileValue = Map[mapH++][mapV] & LOMASK;
+      if (autoBulldoze) {
+        if (tileValue != 0) {
+          if (ToolTally(tileValue)) {
+            cost++;
+          } else {
+            flag = 0;
+          }
+        }
+      } else if (tileValue != 0) {
+        flag = 0;
+      }
+    }
+    mapV++;
+  }
+
+  if (flag == 0) {
+    return -1;
+  }
+
+  cost += (short)ToolCost[tool];
+  if ((TotalFunds - cost) < 0) {
+    return -2;
+  }
+
+  Spend(cost);
+  UpdateFunds();
+
+  mapV = v;
+  holdMapH = h;
+  for (rowNum = 0; rowNum <= 5; rowNum++) {
+    mapH = holdMapH;
+    for (columnNum = 0; columnNum <= 5; columnNum++) {
+      if ((columnNum == 1) && (rowNum == 1)) {
+        Map[mapH++][mapV] = base + BNCNBIT + ZONEBIT;
+      } else {
+        Map[mapH++][mapV] = base + BNCNBIT;
+      }
+      base++;
+    }
+    mapV++;
+  }
+  Check6x6Border(xMap, yMap);
+  return 1;
+}
+
+static void Put3x3Rubble(short x, short y)
+{
+  int xx;
+  int yy;
+  int zz;
+
+  for (xx = x - 1; xx < x + 2; xx++) {
+    for (yy = y - 1; yy < y + 2; yy++) {
+      if (TestBounds(xx, yy)) {
+        zz = Map[xx][yy] & LOMASK;
+        if ((zz != RADTILE) && (zz != 0)) {
+          Map[xx][yy] = (DoAnimation ? (TINYEXP + Rand(2)) : SOMETINYEXP) | ANIMBIT | BULLBIT;
+        }
+      }
+    }
+  }
+}
+
+static void Put4x4Rubble(short x, short y)
+{
+  int xx;
+  int yy;
+  int zz;
+
+  for (xx = x - 1; xx < x + 3; xx++) {
+    for (yy = y - 1; yy < y + 3; yy++) {
+      if (TestBounds(xx, yy)) {
+        zz = Map[xx][yy] & LOMASK;
+        if ((zz != RADTILE) && (zz != 0)) {
+          Map[xx][yy] = (DoAnimation ? (TINYEXP + Rand(2)) : SOMETINYEXP) | ANIMBIT | BULLBIT;
+        }
+      }
+    }
+  }
+}
+
+static void Put6x6Rubble(short x, short y)
+{
+  int xx;
+  int yy;
+  int zz;
+
+  for (xx = x - 1; xx < x + 5; xx++) {
+    for (yy = y - 1; yy < y + 5; yy++) {
+      if (TestBounds(xx, yy)) {
+        zz = Map[xx][yy] & LOMASK;
+        if ((zz != RADTILE) && (zz != 0)) {
+          Map[xx][yy] = (DoAnimation ? (TINYEXP + Rand(2)) : SOMETINYEXP) | ANIMBIT | BULLBIT;
+        }
+      }
+    }
+  }
+}
+
+static int PutDownPark(short mapH, short mapV)
+{
+  short value;
+  short tile;
+
+  if ((TotalFunds - ToolCost[TOOL_PARK]) < 0) {
+    return -2;
+  }
+
+  value = (short)Rand(4);
+  if (value == 4) {
+    tile = FOUNTAIN | BURNBIT | BULLBIT | ANIMBIT;
+  } else {
+    tile = (value + WOODS2) | BURNBIT | BULLBIT;
+  }
+
+  if (Map[mapH][mapV] == 0) {
+    Spend((int)ToolCost[TOOL_PARK]);
+    UpdateFunds();
+    Map[mapH][mapV] = tile;
+    return 1;
+  }
+  return -1;
+}
+
+static int PutDownNetwork(short mapH, short mapV)
+{
+  int tile;
+
+  tile = Map[mapH][mapV] & LOMASK;
+  if ((TotalFunds > 0) && ToolTally((short)tile)) {
+    Map[mapH][mapV] = 0;
+    tile = 0;
+    Spend(1);
+  }
+
+  if (tile != 0) {
+    return -1;
+  }
+  if ((TotalFunds - ToolCost[TOOL_NETWORK]) < 0) {
+    return -2;
+  }
+
+  Map[mapH][mapV] = TELEBASE | CONDBIT | BURNBIT | BULLBIT | ANIMBIT;
+  Spend((int)ToolCost[TOOL_NETWORK]);
+  UpdateFunds();
+  return 1;
+}
+
+static int QueryTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return 1;
+}
+
+static int BulldozerTool(short x, short y)
+{
+  unsigned short currTile;
+  unsigned short temp;
+  short zoneSize;
+  short deltaH;
+  short deltaV;
+  int result;
+
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+
+  currTile = Map[x][y];
+  temp = currTile & LOMASK;
+  result = 1;
+
+  if (currTile & ZONEBIT) {
+    if (TotalFunds > 0) {
+      Spend(1);
+      switch (CheckSize((short)temp)) {
+      case 3:
+        Put3x3Rubble(x, y);
+        break;
+      case 4:
+        Put4x4Rubble(x, y);
+        break;
+      case 6:
+        Put6x6Rubble(x, y);
+        break;
+      default:
+        break;
+      }
+    }
+  } else if ((zoneSize = CheckBigZone((short)temp, &deltaH, &deltaV))) {
+    if (TotalFunds > 0) {
+      Spend(1);
+      switch (zoneSize) {
+      case 4:
+        Put4x4Rubble(x + deltaH, y + deltaV);
+        break;
+      case 6:
+        Put6x6Rubble(x + deltaH, y + deltaV);
+        break;
+      default:
+        break;
+      }
+    }
+  } else {
+    if ((temp == RIVER) || (temp == REDGE) || (temp == CHANNEL)) {
+      if (TotalFunds >= 6) {
+        result = ConnecTile(x, y, &Map[x][y], 1);
+        if (temp != (Map[x][y] & LOMASK)) {
+          Spend(5);
+        }
+      } else {
+        result = 0;
+      }
+    } else {
+      result = ConnecTile(x, y, &Map[x][y], 1);
+    }
+  }
+
+  UpdateFunds();
+  return result;
+}
+
+static int RoadTool(short x, short y)
+{
+  int result;
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  result = ConnecTile(x, y, &Map[x][y], 2);
+  UpdateFunds();
+  return result;
+}
+
+static int RailTool(short x, short y)
+{
+  int result;
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  result = ConnecTile(x, y, &Map[x][y], 3);
+  UpdateFunds();
+  return result;
+}
+
+static int WireTool(short x, short y)
+{
+  int result;
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  result = ConnecTile(x, y, &Map[x][y], 4);
+  UpdateFunds();
+  return result;
+}
+
+static int ParkTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return PutDownPark(x, y);
+}
+
+static int ResidentialTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check3x3Tool(x, y, RESBASE, TOOL_RESIDENTIAL);
+}
+
+static int CommercialTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check3x3Tool(x, y, COMBASE, TOOL_COMMERCIAL);
+}
+
+static int IndustrialTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check3x3Tool(x, y, INDBASE, TOOL_INDUSTRIAL);
+}
+
+static int PoliceTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check3x3Tool(x, y, POLICESTBASE, TOOL_POLICE);
+}
+
+static int FireTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check3x3Tool(x, y, FIRESTBASE, TOOL_FIRE);
+}
+
+static int StadiumTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check4x4Tool(x, y, STADIUMBASE, 0, TOOL_STADIUM);
+}
+
+static int CoalTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check4x4Tool(x, y, COALBASE, 1, TOOL_COAL);
+}
+
+static int NuclearTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check4x4Tool(x, y, NUCLEARBASE, 1, TOOL_NUCLEAR);
+}
+
+static int SeaportTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check4x4Tool(x, y, PORTBASE, 0, TOOL_SEAPORT);
+}
+
+static int AirportTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return Check6x6Tool(x, y, AIRPORTBASE, TOOL_AIRPORT);
+}
+
+static int NetworkTool(short x, short y)
+{
+  if ((x < 0) || (x > (WORLD_X - 1)) || (y < 0) || (y > (WORLD_Y - 1))) {
+    return -1;
+  }
+  return PutDownNetwork(x, y);
+}
+
+static int DoToolByState(short tool, short x, short y)
+{
+  switch (tool) {
+  case TOOL_RESIDENTIAL:
+    return ResidentialTool(x, y);
+  case TOOL_COMMERCIAL:
+    return CommercialTool(x, y);
+  case TOOL_INDUSTRIAL:
+    return IndustrialTool(x, y);
+  case TOOL_FIRE:
+    return FireTool(x, y);
+  case TOOL_QUERY:
+    return QueryTool(x, y);
+  case TOOL_POLICE:
+    return PoliceTool(x, y);
+  case TOOL_WIRE:
+    return WireTool(x, y);
+  case TOOL_BULLDOZE:
+    return BulldozerTool(x, y);
+  case TOOL_RAIL:
+    return RailTool(x, y);
+  case TOOL_ROAD:
+    return RoadTool(x, y);
+  case TOOL_CHALK:
+  case TOOL_ERASER:
+    return QueryTool(x, y);
+  case TOOL_STADIUM:
+    return StadiumTool(x, y);
+  case TOOL_PARK:
+    return ParkTool(x, y);
+  case TOOL_SEAPORT:
+    return SeaportTool(x, y);
+  case TOOL_COAL:
+    return CoalTool(x, y);
+  case TOOL_NUCLEAR:
+    return NuclearTool(x, y);
+  case TOOL_AIRPORT:
+    return AirportTool(x, y);
+  case TOOL_NETWORK:
+    return NetworkTool(x, y);
+  default:
+    return 0;
+  }
+}
+
+static int ParseToolState(const char *raw, short *out)
+{
+  if ((raw == NULL) || (out == NULL)) {
+    return 0;
+  }
+
+  if (strcmp(raw, "res") == 0)
+    *out = TOOL_RESIDENTIAL;
+  else if (strcmp(raw, "com") == 0)
+    *out = TOOL_COMMERCIAL;
+  else if (strcmp(raw, "ind") == 0)
+    *out = TOOL_INDUSTRIAL;
+  else if (strcmp(raw, "fire") == 0)
+    *out = TOOL_FIRE;
+  else if (strcmp(raw, "query") == 0)
+    *out = TOOL_QUERY;
+  else if (strcmp(raw, "police") == 0)
+    *out = TOOL_POLICE;
+  else if (strcmp(raw, "wire") == 0)
+    *out = TOOL_WIRE;
+  else if (strcmp(raw, "bulldoze") == 0)
+    *out = TOOL_BULLDOZE;
+  else if (strcmp(raw, "rail") == 0)
+    *out = TOOL_RAIL;
+  else if (strcmp(raw, "road") == 0)
+    *out = TOOL_ROAD;
+  else if (strcmp(raw, "chalk") == 0)
+    *out = TOOL_CHALK;
+  else if (strcmp(raw, "eraser") == 0)
+    *out = TOOL_ERASER;
+  else if (strcmp(raw, "stadium") == 0)
+    *out = TOOL_STADIUM;
+  else if (strcmp(raw, "park") == 0)
+    *out = TOOL_PARK;
+  else if (strcmp(raw, "seaport") == 0)
+    *out = TOOL_SEAPORT;
+  else if (strcmp(raw, "coal") == 0)
+    *out = TOOL_COAL;
+  else if (strcmp(raw, "nuclear") == 0)
+    *out = TOOL_NUCLEAR;
+  else if (strcmp(raw, "airport") == 0)
+    *out = TOOL_AIRPORT;
+  else if (strcmp(raw, "network") == 0)
+    *out = TOOL_NETWORK;
+  else {
+    long parsed;
+    char *end;
+
+    errno = 0;
+    parsed = strtol(raw, &end, 10);
+    if ((raw == end) || (errno != 0) || (*end != '\0') || (parsed < 0) || (parsed >= TOOL_COUNT)) {
+      return 0;
+    }
+    *out = (short)parsed;
+  }
+
+  return 1;
+}
+
+static int StepRealtimeTicks(long ticks)
+{
+  long i;
+
+  if (ticks < 0) {
+    return 0;
+  }
+  for (i = 0; i < ticks; i++) {
+    gTickNow++;
+  }
+  return 1;
+}
+
 /* --- State IO --- */
 
 static void BindLayerPointers(void)
@@ -2805,8 +3927,11 @@ static void PrintUsage(void)
   fprintf(stderr, "usage: micropolis-core-oracle <command> --state-dir <dir> [options]\n");
   fprintf(stderr, "commands:\n");
   fprintf(stderr, "  init-new-city [--seed <u32>] [--city-time <i64>] [--city-tax <i32>] [--sim-speed <i32>]\n");
+  fprintf(stderr, "  load-cty --cty-path <path>\n");
   fprintf(stderr, "  step-phase --phase <0..15>\n");
   fprintf(stderr, "  step-tick [--start-phase <0..15>]\n");
+  fprintf(stderr, "  step-realtime --ticks <non-negative i64>\n");
+  fprintf(stderr, "  apply-tool --tool <name|id> --x <i32> --y <i32>\n");
   fprintf(stderr, "  make-traf --x <i32> --y <i32> --source <-1..2>\n");
   fprintf(stderr, "  do-power-scan\n");
   fprintf(stderr, "  send-messages\n");
@@ -2890,6 +4015,24 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  if (strcmp(command, "load-cty") == 0) {
+    const char *ctyPathRaw;
+
+    ctyPathRaw = FindArgValue(argc, argv, "--cty-path");
+    if (ctyPathRaw == NULL) {
+      fprintf(stderr, "load-cty requires --cty-path\n");
+      return 2;
+    }
+
+    if (!LoadCtyFile(ctyPathRaw)) {
+      return 1;
+    }
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
   if (strcmp(command, "step-phase") == 0) {
     const char *phaseRaw;
     long phase;
@@ -2929,6 +4072,63 @@ int main(int argc, char **argv)
     if (!SaveStateDir(stateDir)) {
       return 1;
     }
+    return 0;
+  }
+
+  if (strcmp(command, "step-realtime") == 0) {
+    const char *ticksRaw;
+    long ticks;
+
+    ticksRaw = FindArgValue(argc, argv, "--ticks");
+    if (ticksRaw == NULL) {
+      fprintf(stderr, "step-realtime requires --ticks\n");
+      return 2;
+    }
+    if (!ParseLongArg(ticksRaw, "--ticks", &ticks)) {
+      return 2;
+    }
+    if (!StepRealtimeTicks(ticks)) {
+      fprintf(stderr, "step-realtime ticks must be non-negative\n");
+      return 2;
+    }
+
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "apply-tool") == 0) {
+    const char *toolRaw;
+    const char *xRaw;
+    const char *yRaw;
+    long x;
+    long y;
+    short toolState;
+    int result;
+
+    toolRaw = FindArgValue(argc, argv, "--tool");
+    xRaw = FindArgValue(argc, argv, "--x");
+    yRaw = FindArgValue(argc, argv, "--y");
+    if ((toolRaw == NULL) || (xRaw == NULL) || (yRaw == NULL)) {
+      fprintf(stderr, "apply-tool requires --tool --x --y\n");
+      return 2;
+    }
+
+    if (!ParseToolState(toolRaw, &toolState)) {
+      fprintf(stderr, "invalid --tool value: %s\n", toolRaw);
+      return 2;
+    }
+    if (!ParseLongArg(xRaw, "--x", &x) || !ParseLongArg(yRaw, "--y", &y)) {
+      return 2;
+    }
+
+    result = DoToolByState(toolState, (short)x, (short)y);
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+
+    printf("{\"code\":%d}\n", result);
     return 0;
   }
 

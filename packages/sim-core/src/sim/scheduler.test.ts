@@ -1,3 +1,7 @@
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleStepRealtime,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
 import { createClocks } from '../core/clocks.ts';
@@ -115,6 +119,21 @@ describe('Realtime tick stepping', () => {
         height: 10,
       }),
     ).toThrow('stepRealtimeTicks viewRect not implemented');
+  });
+
+  it('matches oracle step-realtime TickNow progression', () => {
+    const clocks = createClocks();
+    clocks.realtimeTick = 37;
+
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x0000d00d });
+    oracleBefore.TickNow = clocks.realtimeTick;
+
+    stepRealtimeTicks(clocks, 19);
+    const oracleAfter = runCoreOracleStepRealtime(oracleBefore, 19);
+
+    // Headless oracle `step-realtime` advances `TickNow` deterministically,
+    // mirroring the `TickCount` progression contract used by C message timing.
+    expect(oracleAfter.TickNow).toBe(clocks.realtimeTick);
   });
 });
 
