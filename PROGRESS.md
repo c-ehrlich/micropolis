@@ -15,6 +15,7 @@ This file tracks implementation status in the TypeScript port. Source of truth i
   - Public load/scenario orchestration APIs are implemented in `packages/sim-io/src/load.ts` (`loadFileLikeC`, `loadCityLikeC`, `loadScenarioLikeC`) plus `snro.*` scenario table/resource helpers in `packages/sim-io/src/scenarios.ts` and `packages/sim-io/src/node-files.ts`.
   - Public save orchestration APIs are implemented in `packages/sim-io/src/save.ts` (`saveFileLikeC`, `saveCityLikeC`, `saveCityAsLikeC`) plus Node save-to-path wrappers in `packages/sim-io/src/node-files.ts`.
   - Byte-for-byte save parity checks against the Micropolis C oracle are implemented in `packages/sim-io/src/save-parity.test.ts` via `packages/micropolis-c-harness/src/core-parity.ts` (`runCoreOracleSaveCty`).
+  - Cross-language `.cty` interoperability parity is covered in `packages/sim-io/src/persistence-roundtrip-parity.test.ts`, including TS-save->C-load, C-save->TS-load, TS<->C round-trips, load normalization parity, fixed-point percent truncation checks, and accepted file-size behavior (`27120`, `99120`, `219120`).
 
 ## Partially Implemented
 
