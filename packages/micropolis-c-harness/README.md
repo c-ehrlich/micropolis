@@ -82,6 +82,7 @@ pnpm --filter @city/micropolis-c-harness build:core
 
 - `init-new-city [--seed <u32>] [--city-time <i64>] [--city-tax <i32>] [--sim-speed <i32>]`
 - `load-cty --cty-path <path>`
+- `load-cty-bytes` (reads `.cty` payload from `stdin`)
 - `step-phase --phase <0..15>`
 - `step-tick [--start-phase <0..15>]`
 - `step-realtime --ticks <non-negative i64>`
@@ -95,6 +96,16 @@ pnpm --filter @city/micropolis-c-harness build:core
 - `do-message`
 - `do-disasters`
 - `snapshot`
+
+Examples:
+
+```sh
+# path-based load
+micropolis-core-oracle load-cty --state-dir ./tmp/state --cty-path ./city.cty
+
+# bytes-based load (same loader semantics as load-cty)
+cat ./city.cty | micropolis-core-oracle load-cty-bytes --state-dir ./tmp/state
+```
 
 State directory files:
 

@@ -9,6 +9,7 @@
   "scripts": {
     "build:terrain": "node scripts/build-terrain-harness.mjs",
     "build:core": "node scripts/build-core-oracle.mjs",
-    "gen:terrain-fixtures": "node scripts/gen-terrain-fixtures.mjs"
+    "gen:terrain-fixtures": "node scripts/gen-terrain-fixtures.mjs",
+    "test": "pnpm -w vitest run --root packages/micropolis-c-harness"
   }
 }

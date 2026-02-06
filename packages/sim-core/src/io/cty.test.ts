@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   runCoreOracleInitNewCity,
-  runCoreOracleLoadCty,
+  runCoreOracleLoadCtyBytes,
 } from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it } from 'vitest';
 
@@ -227,9 +227,8 @@ describe('city file persistence', () => {
 
   it('matches oracle load-cty normalization for classic fixtures', () => {
     const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00c7f1e });
-    const oracleAfter = runCoreOracleLoadCty({ state: oracleBefore, ctyPath: FIXTURE_CITY });
-
     const cityBytes = readFileSync(FIXTURE_CITY);
+    const oracleAfter = runCoreOracleLoadCtyBytes({ state: oracleBefore, ctyBytes: cityBytes });
     const city = decodeCityFileForMap(cityBytes, CLASSIC_DIMENSIONS);
     const rawMeta = readCityMeta(city.misc);
     const normalized = applyLoadNormalization(rawMeta);
