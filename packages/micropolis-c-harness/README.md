@@ -28,6 +28,11 @@ pnpm --filter @city/micropolis-c-harness gen:terrain-fixtures
 - `--seed <u32>` (required for RNG-dependent ops)
 - `--format u16le|json`
 - `--dump-path <path>`
+- batch GenerateMap mode:
+  - `--batch-cases <path>`
+  - each case-file line:
+    - `<seed:u32> <treeLevel:i32> <lakeLevel:i32> <curveLevel:i32> <createIsland:i32> <runSmoothWater:0|1>`
+  - writes concatenated `u16le` maps in input order
 - op-specific args for `--op putOnMap`:
   - `--map-x <i32>`
   - `--map-y <i32>`

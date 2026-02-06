@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,6 +53,103 @@ export function ensureTerrainHarness(): string {
 export function runTerrainHarness(args: readonly string[]): Buffer {
   const bin = ensureTerrainHarness();
   return execFileSync(bin, [...args]);
+}
+
+export interface TerrainGenerateHarnessCase {
+  /**
+   * `seed` argument to `GenerateMap(seed)` in Micropolis C.
+   *
+   * C reference:
+   * - `GenerateMap(int r)` in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  seed: number;
+
+  /**
+   * `TreeLevel` global used by `GenerateMap`.
+   *
+   * C reference:
+   * - `TreeLevel` in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  treeLevel: number;
+
+  /**
+   * `LakeLevel` global used by `GenerateMap`.
+   *
+   * C reference:
+   * - `LakeLevel` in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  lakeLevel: number;
+
+  /**
+   * `CurveLevel` global used by `GenerateMap`.
+   *
+   * C reference:
+   * - `CurveLevel` in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  curveLevel: number;
+
+  /**
+   * `CreateIsland` global used by `GenerateMap`.
+   *
+   * C reference:
+   * - `CreateIsland` in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  createIsland: number;
+
+  /**
+   * Optional per-case flag to call `SmoothWater()` after `GenerateMap()`.
+   *
+   * C reference:
+   * - `SmoothWater` in `ref/micropolis/src/sim/s_gen.c` (not called by `GenerateMap`).
+   */
+  runSmoothWater?: boolean;
+}
+
+/**
+ * Runs many `GenerateMap` harness cases in one process.
+ *
+ * This uses harness `--batch-cases` mode, where each input line is:
+ * `<seed:u32> <treeLevel:i32> <lakeLevel:i32> <curveLevel:i32> <createIsland:i32> <runSmoothWater:0|1>`.
+ *
+ * C reference:
+ * - `GenerateMap(int r)` in `ref/micropolis/src/sim/s_gen.c`.
+ */
+export function runTerrainGenerateHarnessBatch(
+  cases: readonly TerrainGenerateHarnessCase[],
+): Uint16Array[] {
+  if (cases.length === 0) {
+    return [];
+  }
+
+  const bin = ensureTerrainHarness();
+  const scratchDir = mkdtempSync(path.join(tmpdir(), 'terrain-harness-batch-'));
+  const batchCasesPath = path.join(scratchDir, 'cases.txt');
+
+  try {
+    const body = cases
+      .map((entry) => {
+        return `${entry.seed >>> 0} ${Math.trunc(entry.treeLevel)} ${Math.trunc(entry.lakeLevel)} ${Math.trunc(entry.curveLevel)} ${Math.trunc(entry.createIsland)} ${entry.runSmoothWater ? 1 : 0}`;
+      })
+      .join('\n');
+    writeFileSync(batchCasesPath, `${body}\n`);
+
+    const raw = execFileSync(bin, [`--batch-cases=${batchCasesPath}`, '--format=u16le']);
+    const expectedByteLength = cases.length * TERRAIN_U16LE_BYTE_SIZE;
+    if (raw.byteLength !== expectedByteLength) {
+      throw new Error(
+        `batch output size mismatch: got=${raw.byteLength} expected=${expectedByteLength}`,
+      );
+    }
+
+    const maps: Uint16Array[] = [];
+    for (let offset = 0; offset < raw.byteLength; offset += TERRAIN_U16LE_BYTE_SIZE) {
+      const slice = raw.subarray(offset, offset + TERRAIN_U16LE_BYTE_SIZE);
+      maps.push(decodeTerrainMapU16LE(slice));
+    }
+    return maps;
+  } finally {
+    rmSync(scratchDir, { force: true, recursive: true });
+  }
 }
 
 /**

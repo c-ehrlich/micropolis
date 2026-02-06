@@ -143,12 +143,12 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 ### Phase 4: scale and performance
 
-- [ ] `P4.1` Extend full `GenerateMap` fixture matrix (stage gates + island branches + odd levels).
+- [x] `P4.1` Extend full `GenerateMap` fixture matrix (stage gates + island branches + odd levels).
   - C ref: `GenerateMap` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: expand `generate.c-harness.test.ts` fixture manifest.
   - Done when: fixture matrix covers `TreeLevel/LakeLevel/CurveLevel` in `{-1,0,1}` plus forced and random islands.
 
-- [ ] `P4.2` Add optional batch parity execution mode if runtime becomes a bottleneck.
+- [x] `P4.2` Add optional batch parity execution mode if runtime becomes a bottleneck.
   - Scope: keep off critical path; enable only for larger property suites.
   - Test: compare batch and per-case harness outputs for identical case sets.
   - Done when: outputs are identical and parity runtime decreases materially.

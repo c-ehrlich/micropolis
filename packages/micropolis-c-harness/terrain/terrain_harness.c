@@ -12,6 +12,7 @@
  * - `ref/micropolis/src/sim/headers/sim.h` (WORLD_X/WORLD_Y, tiles, status bits)
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -643,6 +644,9 @@ static void usage(FILE *out)
           "  plop args: --map-x <i32> --map-y <i32>\\n"
           "  doRivers args: --x-start <i32> --y-start <i32> [--curveLevel <i32>]\\n"
           "  [--seed <u32>] (required only for RNG ops)\\n"
+          "batch mode (GenerateMap cases):\\n"
+          "  --batch-cases <path>\\n"
+          "  case file line format: <seed:u32> <treeLevel:i32> <lakeLevel:i32> <curveLevel:i32> <createIsland:i32> <runSmoothWater:0|1>\\n"
           "  [--format u16le|json] (default: u16le)\\n"
           "  [--dump-path <path>] (default: stdout)\\n");
 }
@@ -863,6 +867,173 @@ static int run_op(TerrainOp op, const TerrainOpArgs *op_args)
   }
 }
 
+/**
+ * Runs one `GenerateMap` case with explicit globals.
+ *
+ * C reference:
+ * - `GenerateMap(int r)` in `ref/micropolis/src/sim/s_gen.c`
+ */
+static void run_generate_case(uint32_t seed_u32,
+                              int tree_level,
+                              int lake_level,
+                              int curve_level,
+                              int create_island,
+                              int run_smooth_water)
+{
+  TreeLevel = tree_level;
+  LakeLevel = lake_level;
+  CurveLevel = curve_level;
+  CreateIsland = create_island;
+  GenerateMap((int)seed_u32);
+  if (run_smooth_water) {
+    /*
+     * `SmoothWater()` exists in `ref/micropolis/src/sim/s_gen.c`
+     * but is not called by `GenerateMap`.
+     */
+    SmoothWater();
+  }
+}
+
+/**
+ * Parses one batch-case line.
+ *
+ * Expected format:
+ *   <seed:u32> <treeLevel:i32> <lakeLevel:i32> <curveLevel:i32> <createIsland:i32> <runSmoothWater:0|1>
+ *
+ * Returns:
+ * - 1 when a case was parsed,
+ * - 0 for empty/comment lines,
+ * - -1 for invalid syntax/range.
+ */
+static int parse_batch_case_line(const char *line,
+                                 uint32_t *seed_u32,
+                                 int *tree_level,
+                                 int *lake_level,
+                                 int *curve_level,
+                                 int *create_island,
+                                 int *run_smooth_water)
+{
+  char *end = NULL;
+  const char *p = line;
+  unsigned long seed = 0;
+  long tree = 0, lake = 0, curve = 0, island = 0, smooth = 0;
+
+  while (*p != '\0' && isspace((unsigned char)*p))
+    p++;
+  if (*p == '\0' || *p == '#')
+    return 0;
+
+  seed = strtoul(p, &end, 10);
+  if (end == p || seed > 0xfffffffful)
+    return -1;
+  p = end;
+
+  tree = strtol(p, &end, 10);
+  if (end == p || tree < (-2147483647L - 1L) || tree > 2147483647L)
+    return -1;
+  p = end;
+
+  lake = strtol(p, &end, 10);
+  if (end == p || lake < (-2147483647L - 1L) || lake > 2147483647L)
+    return -1;
+  p = end;
+
+  curve = strtol(p, &end, 10);
+  if (end == p || curve < (-2147483647L - 1L) || curve > 2147483647L)
+    return -1;
+  p = end;
+
+  island = strtol(p, &end, 10);
+  if (end == p || island < (-2147483647L - 1L) || island > 2147483647L)
+    return -1;
+  p = end;
+
+  smooth = strtol(p, &end, 10);
+  if (end == p || (smooth != 0 && smooth != 1))
+    return -1;
+  p = end;
+
+  while (*p != '\0' && isspace((unsigned char)*p))
+    p++;
+  if (*p != '\0' && *p != '#')
+    return -1;
+
+  *seed_u32 = (uint32_t)seed;
+  *tree_level = (int)tree;
+  *lake_level = (int)lake;
+  *curve_level = (int)curve;
+  *create_island = (int)island;
+  *run_smooth_water = (int)smooth;
+  return 1;
+}
+
+/**
+ * Executes GenerateMap in batch mode and writes concatenated map outputs.
+ *
+ * Each successful case appends one full `WORLD_X * WORLD_Y` map in x-major
+ * little-endian `uint16_t` order.
+ */
+static int run_batch_cases(FILE *out, const char *batch_cases_path, const char *format)
+{
+  FILE *in = NULL;
+  char line[512];
+  int line_no = 0;
+  int case_count = 0;
+
+  if (strcmp(format, "u16le") != 0) {
+    fprintf(stderr, "batch mode only supports --format=u16le\n");
+    return 0;
+  }
+
+  in = fopen(batch_cases_path, "rb");
+  if (in == NULL) {
+    fprintf(stderr, "failed to open batch cases '%s': %s\n", batch_cases_path, strerror(errno));
+    return 0;
+  }
+
+  while (fgets(line, (int)sizeof(line), in) != NULL) {
+    uint32_t seed_u32 = 0;
+    int tree_level = 0, lake_level = 0, curve_level = 0, create_island = 0, run_smooth_water = 0;
+    int parsed = 0;
+    line_no += 1;
+    parsed = parse_batch_case_line(
+        line, &seed_u32, &tree_level, &lake_level, &curve_level, &create_island, &run_smooth_water);
+    if (parsed == 0) {
+      continue;
+    }
+    if (parsed < 0) {
+      fprintf(stderr,
+              "invalid batch case at line %d in '%s': expected 6 numeric fields\n",
+              line_no,
+              batch_cases_path);
+      fclose(in);
+      return 0;
+    }
+
+    run_generate_case(
+        seed_u32, tree_level, lake_level, curve_level, create_island, run_smooth_water);
+    if (!write_u16le(out)) {
+      fprintf(stderr, "failed to write batch output for case at line %d\n", line_no);
+      fclose(in);
+      return 0;
+    }
+    case_count += 1;
+  }
+
+  if (ferror(in)) {
+    fprintf(stderr, "failed to read batch cases '%s': %s\n", batch_cases_path, strerror(errno));
+    fclose(in);
+    return 0;
+  }
+
+  fclose(in);
+  if (case_count <= 0) {
+    fprintf(stderr, "batch case file '%s' did not contain any runnable cases\n", batch_cases_path);
+    return 0;
+  }
+  return 1;
+}
+
 static int write_json(FILE *f)
 {
   int x, y;
@@ -894,6 +1065,7 @@ int main(int argc, char **argv)
   const char *dump_path = NULL;
   const char *op_name = NULL;
   const char *input_map_path = NULL;
+  const char *batch_cases_path = NULL;
 
   int i = 1;
   while (i < argc) {
@@ -942,6 +1114,10 @@ int main(int argc, char **argv)
       input_map_path = v;
     } else if (strcmp(a, "--input-map") == 0 && i + 1 < argc) {
       input_map_path = argv[++i];
+    } else if ((v = arg_value(a, "--batch-cases=")) != NULL) {
+      batch_cases_path = v;
+    } else if (strcmp(a, "--batch-cases") == 0 && i + 1 < argc) {
+      batch_cases_path = argv[++i];
     } else if ((v = arg_value(a, "--map-x=")) != NULL) {
       op_args.have_map_x = parse_i32(v, &op_args.map_x);
     } else if (strcmp(a, "--map-x") == 0 && i + 1 < argc) {
@@ -993,6 +1169,44 @@ int main(int argc, char **argv)
     }
 
     i++;
+  }
+
+  if (batch_cases_path != NULL) {
+    FILE *out = stdout;
+    int ok = 0;
+    if (have_op) {
+      fprintf(stderr, "--batch-cases cannot be combined with --op\n");
+      return 2;
+    }
+    if (batch_cases_path[0] == '\0') {
+      fprintf(stderr, "missing value for --batch-cases\n");
+      usage(stderr);
+      return 2;
+    }
+    if (have_seed || have_tree || have_lake || have_curve || have_island) {
+      fprintf(stderr,
+              "--batch-cases cannot be combined with single-case GenerateMap args "
+              "(--seed/--treeLevel/--lakeLevel/--curveLevel/--createIsland)\n");
+      return 2;
+    }
+    if (run_smooth_water) {
+      fprintf(stderr, "--runSmoothWater is not valid with --batch-cases; set per-case flag in file\n");
+      return 2;
+    }
+
+    if (dump_path != NULL) {
+      out = fopen(dump_path, "wb");
+      if (out == NULL) {
+        fprintf(stderr, "failed to open dump path '%s': %s\n", dump_path, strerror(errno));
+        return 1;
+      }
+    }
+
+    ok = run_batch_cases(out, batch_cases_path, format);
+    if (dump_path != NULL) {
+      fclose(out);
+    }
+    return ok ? 0 : 1;
   }
 
   if (have_op) {
@@ -1050,11 +1264,7 @@ int main(int argc, char **argv)
       return 2;
     }
 
-    GenerateMap((int)seed_u32);
-    if (run_smooth_water) {
-      /* `SmoothWater()` exists in `ref/micropolis/src/sim/s_gen.c` but is not called by `GenerateMap`. */
-      SmoothWater();
-    }
+    run_generate_case(seed_u32, TreeLevel, LakeLevel, CurveLevel, CreateIsland, run_smooth_water);
   }
 
   FILE *out = stdout;
