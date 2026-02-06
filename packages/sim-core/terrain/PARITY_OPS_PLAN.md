@@ -102,12 +102,12 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 ### Phase 1: first two high-value ops
 
-- [ ] `P1.1` Implement `--op smoothTrees`.
+- [x] `P1.1` Implement `--op smoothTrees`.
   - C refs: `SmoothTrees`, `TEdTab` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `smooth-trees.c-harness.test.ts` with deterministic fixture parity + property parity using tree-biased maps.
   - Done when: C op output equals TS `smoothTrees(...)` across fixed and property cases.
 
-- [ ] `P1.2` Implement `--op putOnMap`.
+- [x] `P1.2` Implement `--op putOnMap`.
   - C ref: `PutOnMap` in `ref/micropolis/src/sim/s_gen.c`.
   - Test: `put-on-map.c-harness.test.ts` covering overwrite edge cases and randomized target-cell states.
   - Done when: channel/river overwrite behavior matches exactly for both fixed and property tests.
@@ -155,8 +155,8 @@ Each item is intentionally small and verifiable. Every item must end with at lea
 
 ## Op Coverage Tracker
 
-- [ ] `smoothTrees`
-- [ ] `putOnMap`
+- [x] `smoothTrees`
+- [x] `putOnMap`
 - [ ] `smoothWater`
 - [ ] `smoothRiver`
 - [ ] `brivPlop`

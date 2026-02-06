@@ -25,7 +25,18 @@ pnpm --filter @city/micropolis-c-harness gen:terrain-fixtures
 
 - `--op <name>`
 - `--input-map <path>` (x-major `u16le`, required in op mode)
+- `--seed <u32>` (required for RNG-dependent ops)
 - `--format u16le|json`
 - `--dump-path <path>`
+- op-specific args for `--op putOnMap`:
+  - `--map-x <i32>`
+  - `--map-y <i32>`
+  - `--mchar <i32>`
+  - `--xoff <i32>`
+  - `--yoff <i32>`
 
-Phase 0 includes `--op noop` for exact map I/O round-trip parity checks.
+Implemented ops:
+
+- `noop`
+- `smoothTrees`
+- `putOnMap`

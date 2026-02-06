@@ -125,7 +125,23 @@ static void SmoothWater(void);
 typedef enum TerrainOp {
   TERRAIN_OP_NONE = 0,
   TERRAIN_OP_NOOP = 1,
+  TERRAIN_OP_SMOOTH_TREES = 2,
+  TERRAIN_OP_PUT_ON_MAP = 3,
 } TerrainOp;
+
+/* Op arguments for routines that are not pure map-in/map-out. */
+typedef struct TerrainOpArgs {
+  int map_x;
+  int map_y;
+  int mchar;
+  int xoff;
+  int yoff;
+  int have_map_x;
+  int have_map_y;
+  int have_mchar;
+  int have_xoff;
+  int have_yoff;
+} TerrainOpArgs;
 
 /* --- Begin: 1:1 terrain logic from `ref/micropolis/src/sim/s_gen.c` --- */
 
@@ -612,7 +628,9 @@ static void usage(FILE *out)
           "op mode:\\n"
           "  --op <name>\\n"
           "  --input-map <path>\\n"
-          "  op names: noop\\n"
+          "  op names: noop, smoothTrees, putOnMap\\n"
+          "  putOnMap args: --map-x <i32> --map-y <i32> --mchar <i32> --xoff <i32> --yoff <i32>\\n"
+          "  [--seed <u32>] (required only for RNG ops)\\n"
           "  [--format u16le|json] (default: u16le)\\n"
           "  [--dump-path <path>] (default: stdout)\\n");
 }
@@ -723,14 +741,45 @@ static int parse_op(const char *name, TerrainOp *out)
     *out = TERRAIN_OP_NOOP;
     return 1;
   }
+  if (strcmp(name, "smoothTrees") == 0) {
+    *out = TERRAIN_OP_SMOOTH_TREES;
+    return 1;
+  }
+  if (strcmp(name, "putOnMap") == 0) {
+    *out = TERRAIN_OP_PUT_ON_MAP;
+    return 1;
+  }
   return 0;
 }
 
-static int run_op(TerrainOp op)
+static int op_requires_seed(TerrainOp op)
+{
+  switch (op) {
+  case TERRAIN_OP_NOOP:
+  case TERRAIN_OP_SMOOTH_TREES:
+  case TERRAIN_OP_PUT_ON_MAP:
+    return 0;
+  case TERRAIN_OP_NONE:
+  default:
+    return 0;
+  }
+}
+
+static int op_requires_put_on_map_args(TerrainOp op) { return op == TERRAIN_OP_PUT_ON_MAP; }
+
+static int run_op(TerrainOp op, const TerrainOpArgs *op_args)
 {
   switch (op) {
   case TERRAIN_OP_NOOP:
     /* Intentionally does nothing: map is loaded and emitted unchanged. */
+    return 1;
+  case TERRAIN_OP_SMOOTH_TREES:
+    SmoothTrees();
+    return 1;
+  case TERRAIN_OP_PUT_ON_MAP:
+    MapX = op_args->map_x;
+    MapY = op_args->map_y;
+    PutOnMap(op_args->mchar, op_args->xoff, op_args->yoff);
     return 1;
   case TERRAIN_OP_NONE:
   default:
@@ -764,6 +813,7 @@ int main(int argc, char **argv)
   int have_tree = 0, have_lake = 0, have_curve = 0, have_island = 0;
   int have_op = 0;
   int run_smooth_water = 0;
+  TerrainOpArgs op_args = {0};
   const char *format = "u16le";
   const char *dump_path = NULL;
   const char *op_name = NULL;
@@ -816,6 +866,26 @@ int main(int argc, char **argv)
       input_map_path = v;
     } else if (strcmp(a, "--input-map") == 0 && i + 1 < argc) {
       input_map_path = argv[++i];
+    } else if ((v = arg_value(a, "--map-x=")) != NULL) {
+      op_args.have_map_x = parse_i32(v, &op_args.map_x);
+    } else if (strcmp(a, "--map-x") == 0 && i + 1 < argc) {
+      op_args.have_map_x = parse_i32(argv[++i], &op_args.map_x);
+    } else if ((v = arg_value(a, "--map-y=")) != NULL) {
+      op_args.have_map_y = parse_i32(v, &op_args.map_y);
+    } else if (strcmp(a, "--map-y") == 0 && i + 1 < argc) {
+      op_args.have_map_y = parse_i32(argv[++i], &op_args.map_y);
+    } else if ((v = arg_value(a, "--mchar=")) != NULL) {
+      op_args.have_mchar = parse_i32(v, &op_args.mchar);
+    } else if (strcmp(a, "--mchar") == 0 && i + 1 < argc) {
+      op_args.have_mchar = parse_i32(argv[++i], &op_args.mchar);
+    } else if ((v = arg_value(a, "--xoff=")) != NULL) {
+      op_args.have_xoff = parse_i32(v, &op_args.xoff);
+    } else if (strcmp(a, "--xoff") == 0 && i + 1 < argc) {
+      op_args.have_xoff = parse_i32(argv[++i], &op_args.xoff);
+    } else if ((v = arg_value(a, "--yoff=")) != NULL) {
+      op_args.have_yoff = parse_i32(v, &op_args.yoff);
+    } else if (strcmp(a, "--yoff") == 0 && i + 1 < argc) {
+      op_args.have_yoff = parse_i32(argv[++i], &op_args.yoff);
     } else if (strcmp(a, "--runSmoothWater") == 0) {
       run_smooth_water = 1;
     } else {
@@ -826,7 +896,12 @@ int main(int argc, char **argv)
 
     if ((!have_seed && (strncmp(a, "--seed", 6) == 0)) || (!have_tree && strncmp(a, "--treeLevel", 11) == 0) ||
         (!have_lake && strncmp(a, "--lakeLevel", 11) == 0) || (!have_curve && strncmp(a, "--curveLevel", 12) == 0) ||
-        (!have_island && strncmp(a, "--createIsland", 14) == 0)) {
+        (!have_island && strncmp(a, "--createIsland", 14) == 0) ||
+        (!op_args.have_map_x && strncmp(a, "--map-x", 7) == 0) ||
+        (!op_args.have_map_y && strncmp(a, "--map-y", 7) == 0) ||
+        (!op_args.have_mchar && strncmp(a, "--mchar", 7) == 0) ||
+        (!op_args.have_xoff && strncmp(a, "--xoff", 6) == 0) ||
+        (!op_args.have_yoff && strncmp(a, "--yoff", 6) == 0)) {
       fprintf(stderr, "invalid value for arg: %s\n", a);
       return 2;
     }
@@ -855,10 +930,23 @@ int main(int argc, char **argv)
       fprintf(stderr, "--runSmoothWater is only valid in default GenerateMap mode\n");
       return 2;
     }
+    if (op_requires_seed(op) && !have_seed) {
+      fprintf(stderr, "missing required --seed for op: %s\n", op_name);
+      return 2;
+    }
+    if (op_requires_put_on_map_args(op) &&
+        (!op_args.have_map_x || !op_args.have_map_y || !op_args.have_mchar || !op_args.have_xoff || !op_args.have_yoff)) {
+      fprintf(stderr,
+              "missing required putOnMap args: --map-x --map-y --mchar --xoff --yoff\n");
+      return 2;
+    }
     if (!load_map_from_path(input_map_path)) {
       return 1;
     }
-    if (!run_op(op)) {
+    if (have_seed) {
+      SeedRand((int)seed_u32);
+    }
+    if (!run_op(op, &op_args)) {
       fprintf(stderr, "failed to run op: %s\n", op_name);
       return 1;
     }
