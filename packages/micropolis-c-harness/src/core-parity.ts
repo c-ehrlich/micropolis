@@ -33,6 +33,10 @@ export const CORE_HALF_CELL_COUNT = CORE_HWLDX * CORE_HWLDY;
 export const CORE_QUARTER_CELL_COUNT = CORE_QWX * CORE_QWY;
 /** Cell count for small-resolution (`8x8`) maps in Micropolis C. */
 export const CORE_SMALL_CELL_COUNT = CORE_SMX * CORE_SMY;
+/** Word count for each `*His` history array in Micropolis C (`HISTLEN / 2`). */
+export const CORE_HISTORY_WORD_COUNT = 240;
+/** Word count for `MiscHis` in Micropolis C (`MISCHISTLEN / 2`). */
+export const CORE_MISC_WORD_COUNT = 120;
 /** Word count for `PowerMap[PWRMAPSIZE]` in Micropolis C runtime usage. */
 export const CORE_POWER_WORD_COUNT = ((CORE_WORLD_X + 15) >> 4) * CORE_WORLD_Y;
 /** Byte count for `PowerStackX/Y[PWRSTKSIZE]` in Micropolis C. */
@@ -98,6 +102,13 @@ const POLICE_FILE = 'police-map.i16le';
 const POLICE_EFFECT_FILE = 'police-map-effect.i16le';
 const FIRE_RATE_FILE = 'fire-rate.i16le';
 const COM_RATE_FILE = 'com-rate.i16le';
+const RES_HIS_FILE = 'res-his.i16le';
+const COM_HIS_FILE = 'com-his.i16le';
+const IND_HIS_FILE = 'ind-his.i16le';
+const CRIME_HIS_FILE = 'crime-his.i16le';
+const POLLUTION_HIS_FILE = 'pollution-his.i16le';
+const MONEY_HIS_FILE = 'money-his.i16le';
+const MISC_HIS_FILE = 'misc-his.i16le';
 const POWER_FILE = 'power.u16le';
 const POWER_STACK_X_FILE = 'power-stack-x.u8';
 const POWER_STACK_Y_FILE = 'power-stack-y.u8';
@@ -233,6 +244,13 @@ export interface CoreOracleState {
   copDestX: number;
   copDestY: number;
   NewMapFlags: CoreOracleMapFlags;
+  resHis: Int16Array;
+  comHis: Int16Array;
+  indHis: Int16Array;
+  crimeHis: Int16Array;
+  pollutionHis: Int16Array;
+  moneyHis: Int16Array;
+  miscHis: Int16Array;
   map: Uint16Array;
   trfDensity: Uint8Array;
   popDensity: Uint8Array;
@@ -273,6 +291,15 @@ export interface CoreOracleMakeTrafResult {
 export interface CoreOracleLoadCtyOptions {
   state: CoreOracleState;
   ctyPath: string;
+}
+
+/**
+ * Input payload for oracle `.cty` save-byte extraction.
+ * Mirrors the `saveFile` runtime inputs in `ref/micropolis/src/sim/s_fileio.c`:
+ * scalar state + histories + misc + map buffers.
+ */
+export interface CoreOracleSaveCtyOptions {
+  state: CoreOracleState;
 }
 
 export type CoreOracleToolName =
@@ -691,6 +718,41 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
   if (state.map.length !== CORE_MAP_WORD_COUNT) {
     throw new Error(`invalid map length: ${state.map.length} (expected ${CORE_MAP_WORD_COUNT})`);
   }
+  if (state.resHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid resHis length: ${state.resHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.comHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid comHis length: ${state.comHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.indHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid indHis length: ${state.indHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.crimeHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid crimeHis length: ${state.crimeHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.pollutionHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid pollutionHis length: ${state.pollutionHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.moneyHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `invalid moneyHis length: ${state.moneyHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (state.miscHis.length !== CORE_MISC_WORD_COUNT) {
+    throw new Error(
+      `invalid miscHis length: ${state.miscHis.length} (expected ${CORE_MISC_WORD_COUNT})`,
+    );
+  }
   if (state.trfDensity.length !== CORE_TRF_CELL_COUNT) {
     throw new Error(
       `invalid trfDensity length: ${state.trfDensity.length} (expected ${CORE_TRF_CELL_COUNT})`,
@@ -768,6 +830,13 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
   }
 
   writeFileSync(path.join(dir, SNAPSHOT_FILE), `${JSON.stringify(snapshot, null, 2)}\n`);
+  writeFileSync(path.join(dir, RES_HIS_FILE), encodeCoreI16LE(state.resHis));
+  writeFileSync(path.join(dir, COM_HIS_FILE), encodeCoreI16LE(state.comHis));
+  writeFileSync(path.join(dir, IND_HIS_FILE), encodeCoreI16LE(state.indHis));
+  writeFileSync(path.join(dir, CRIME_HIS_FILE), encodeCoreI16LE(state.crimeHis));
+  writeFileSync(path.join(dir, POLLUTION_HIS_FILE), encodeCoreI16LE(state.pollutionHis));
+  writeFileSync(path.join(dir, MONEY_HIS_FILE), encodeCoreI16LE(state.moneyHis));
+  writeFileSync(path.join(dir, MISC_HIS_FILE), encodeCoreI16LE(state.miscHis));
   writeFileSync(path.join(dir, MAP_FILE), encodeCoreU16LE(state.map));
   writeFileSync(path.join(dir, TRF_FILE), state.trfDensity);
   writeFileSync(path.join(dir, POP_DENSITY_FILE), state.popDensity);
@@ -795,6 +864,13 @@ function readCoreOracleState(dir: string): CoreOracleState {
   const snapshot = JSON.parse(
     readFileSync(path.join(dir, SNAPSHOT_FILE), 'utf8'),
   ) as CoreOracleSnapshotJson;
+  const resHis = decodeCoreI16LE(readFileSync(path.join(dir, RES_HIS_FILE)));
+  const comHis = decodeCoreI16LE(readFileSync(path.join(dir, COM_HIS_FILE)));
+  const indHis = decodeCoreI16LE(readFileSync(path.join(dir, IND_HIS_FILE)));
+  const crimeHis = decodeCoreI16LE(readFileSync(path.join(dir, CRIME_HIS_FILE)));
+  const pollutionHis = decodeCoreI16LE(readFileSync(path.join(dir, POLLUTION_HIS_FILE)));
+  const moneyHis = decodeCoreI16LE(readFileSync(path.join(dir, MONEY_HIS_FILE)));
+  const miscHis = decodeCoreI16LE(readFileSync(path.join(dir, MISC_HIS_FILE)));
   const map = decodeCoreU16LE(readFileSync(path.join(dir, MAP_FILE)));
   const trfDensity = new Uint8Array(readFileSync(path.join(dir, TRF_FILE)));
   const popDensity = new Uint8Array(readFileSync(path.join(dir, POP_DENSITY_FILE)));
@@ -814,6 +890,41 @@ function readCoreOracleState(dir: string): CoreOracleState {
 
   if (map.length !== CORE_MAP_WORD_COUNT) {
     throw new Error(`oracle map size mismatch: ${map.length} (expected ${CORE_MAP_WORD_COUNT})`);
+  }
+  if (resHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle resHis size mismatch: ${resHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (comHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle comHis size mismatch: ${comHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (indHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle indHis size mismatch: ${indHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (crimeHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle crimeHis size mismatch: ${crimeHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (pollutionHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle pollutionHis size mismatch: ${pollutionHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (moneyHis.length !== CORE_HISTORY_WORD_COUNT) {
+    throw new Error(
+      `oracle moneyHis size mismatch: ${moneyHis.length} (expected ${CORE_HISTORY_WORD_COUNT})`,
+    );
+  }
+  if (miscHis.length !== CORE_MISC_WORD_COUNT) {
+    throw new Error(
+      `oracle miscHis size mismatch: ${miscHis.length} (expected ${CORE_MISC_WORD_COUNT})`,
+    );
   }
   if (trfDensity.length !== CORE_TRF_CELL_COUNT) {
     throw new Error(
@@ -1018,6 +1129,13 @@ function readCoreOracleState(dir: string): CoreOracleState {
       POMAP: snapshot.NewMapFlags_POMAP,
       DYMAP: snapshot.NewMapFlags_DYMAP,
     },
+    resHis,
+    comHis,
+    indHis,
+    crimeHis,
+    pollutionHis,
+    moneyHis,
+    miscHis,
     map,
     trfDensity,
     popDensity,
@@ -1125,6 +1243,21 @@ export function runCoreOracleLoadCty(options: CoreOracleLoadCtyOptions): CoreOra
     writeCoreOracleState(stateDir, options.state);
     runCoreOracle(['load-cty', '--state-dir', stateDir, '--cty-path', options.ctyPath]);
     return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Encodes a `.cty` payload from oracle state using C save packing/order.
+ *
+ * Mirrors `saveFile` in `ref/micropolis/src/sim/s_fileio.c` through the
+ * headless `save-cty` command in `packages/micropolis-c-harness/core/core_oracle.c`.
+ * Intentional difference: returns bytes directly instead of writing a path.
+ */
+export function runCoreOracleSaveCty(options: CoreOracleSaveCtyOptions): Uint8Array {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    const raw = runCoreOracle(['save-cty', '--state-dir', stateDir]);
+    return new Uint8Array(raw);
   });
 }
 

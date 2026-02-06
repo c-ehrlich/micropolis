@@ -39,7 +39,19 @@
 #define POLICE_EFFECT_FILE "police-map-effect.i16le"
 #define FIRE_RATE_FILE "fire-rate.i16le"
 #define COM_RATE_FILE "com-rate.i16le"
+#define RES_HIS_FILE "res-his.i16le"
+#define COM_HIS_FILE "com-his.i16le"
+#define IND_HIS_FILE "ind-his.i16le"
+#define CRIME_HIS_FILE "crime-his.i16le"
+#define POLLUTION_HIS_FILE "pollution-his.i16le"
+#define MONEY_HIS_FILE "money-his.i16le"
+#define MISC_HIS_FILE "misc-his.i16le"
 #define SNAPSHOT_FILE "snapshot.json"
+
+#define CTY_HISTORY_WORDS 240
+#define CTY_MISC_WORDS 120
+#define CTY_HEADER_WORDS ((CTY_HISTORY_WORDS * 6) + CTY_MISC_WORDS)
+#define CTY_HEADER_BYTES (CTY_HEADER_WORDS * 2)
 
 #define MAP_WORD_COUNT (WORLD_X * WORLD_Y)
 #define TRF_BYTE_COUNT (HWLDX * HWLDY)
@@ -62,6 +74,13 @@ static Byte gTemStorage[HWLDX][HWLDY];
 static Byte gTem2Storage[HWLDX][HWLDY];
 static Byte gTerrainStorage[QWX][QWY];
 static Byte gQtemStorage[QWX][QWY];
+static short gResHis[CTY_HISTORY_WORDS];
+static short gComHis[CTY_HISTORY_WORDS];
+static short gIndHis[CTY_HISTORY_WORDS];
+static short gCrimeHis[CTY_HISTORY_WORDS];
+static short gPollutionHis[CTY_HISTORY_WORDS];
+static short gMoneyHis[CTY_HISTORY_WORDS];
+static short gMiscHis[CTY_MISC_WORDS];
 short RateOGMem[SmX][SmY];
 short FireStMap[SmX][SmY];
 short PoliceMap[SmX][SmY];
@@ -1267,12 +1286,7 @@ void DoDisasters(void)
   }
 }
 
-/* --- Tool and CTY load commands (headless parity extensions). --- */
-
-#define CTY_HISTORY_WORDS 240
-#define CTY_MISC_WORDS 120
-#define CTY_HEADER_WORDS ((CTY_HISTORY_WORDS * 6) + CTY_MISC_WORDS)
-#define CTY_HEADER_BYTES (CTY_HEADER_WORDS * 2)
+/* --- Tool and CTY load/save commands (headless parity extensions). --- */
 
 enum {
   TOOL_RESIDENTIAL = 0,
@@ -1320,6 +1334,89 @@ static int32_t ReadMiscI32(const short misc[CTY_MISC_WORDS], int index)
   lo = (uint32_t)((uint16_t)misc[index + 1]);
   packed = (hi << 16) | lo;
   return (int32_t)packed;
+}
+
+static void WriteMiscI32(short misc[CTY_MISC_WORDS], int index, int32_t value)
+{
+  uint32_t packed;
+
+  packed = (uint32_t)value;
+  misc[index] = (short)((packed >> 16) & 0xffffu);
+  misc[index + 1] = (short)(packed & 0xffffu);
+}
+
+static int WriteBEI16ToFile(FILE *file, int16_t value)
+{
+  uint16_t word;
+  unsigned char bytes[2];
+
+  word = (uint16_t)value;
+  bytes[0] = (unsigned char)((word >> 8) & 0xffu);
+  bytes[1] = (unsigned char)(word & 0xffu);
+  return fwrite(bytes, 1u, 2u, file) == 2u;
+}
+
+static int WriteCtyHistoryToFile(FILE *file, const short history[CTY_HISTORY_WORDS])
+{
+  int i;
+
+  for (i = 0; i < CTY_HISTORY_WORDS; i++) {
+    if (!WriteBEI16ToFile(file, (int16_t)history[i])) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+/*
+ * Headless save command that mirrors `saveFile` in `ref/micropolis/src/sim/s_fileio.c`.
+ *
+ * Intentional difference: writes to an already-opened stream (stdout in CLI mode)
+ * instead of opening `CityFileName` from the UI flow.
+ */
+static int SaveCtyToStream(FILE *file)
+{
+  int x;
+  int y;
+  short packedMisc[CTY_MISC_WORDS];
+
+  memcpy(packedMisc, gMiscHis, sizeof(packedMisc));
+
+  WriteMiscI32(packedMisc, 50, (int32_t)TotalFunds);
+  WriteMiscI32(packedMisc, 8, (int32_t)CityTime);
+  packedMisc[52] = autoBulldoze;
+  packedMisc[53] = autoBudget;
+  packedMisc[54] = autoGo;
+  packedMisc[55] = UserSoundOn;
+  packedMisc[56] = CityTax;
+  packedMisc[57] = SimSpeed;
+  WriteMiscI32(packedMisc, 58, (int32_t)(policePercent * 65536.0f));
+  WriteMiscI32(packedMisc, 60, (int32_t)(firePercent * 65536.0f));
+  WriteMiscI32(packedMisc, 62, (int32_t)(roadPercent * 65536.0f));
+
+  memcpy(gMiscHis, packedMisc, sizeof(packedMisc));
+
+  if (!WriteCtyHistoryToFile(file, gResHis) || !WriteCtyHistoryToFile(file, gComHis) ||
+      !WriteCtyHistoryToFile(file, gIndHis) || !WriteCtyHistoryToFile(file, gCrimeHis) ||
+      !WriteCtyHistoryToFile(file, gPollutionHis) || !WriteCtyHistoryToFile(file, gMoneyHis)) {
+    return 0;
+  }
+
+  for (x = 0; x < CTY_MISC_WORDS; x++) {
+    if (!WriteBEI16ToFile(file, (int16_t)packedMisc[x])) {
+      return 0;
+    }
+  }
+
+  for (x = 0; x < WORLD_X; x++) {
+    for (y = 0; y < WORLD_Y; y++) {
+      if (!WriteBEI16ToFile(file, (int16_t)gMapStorage[x][y])) {
+        return 0;
+      }
+    }
+  }
+
+  return 1;
 }
 
 static void ClearDerivedLayersForLoad(void)
@@ -1389,7 +1486,6 @@ static int LoadCtyFile(const char *path)
   size_t readLen;
   int mapWords;
   int i;
-  short misc[CTY_MISC_WORDS];
   int32_t cityTime;
   int32_t totalFunds;
   int32_t cityTax;
@@ -1447,6 +1543,19 @@ static int LoadCtyFile(const char *path)
     return 0;
   }
 
+  for (i = 0; i < CTY_HISTORY_WORDS; i++) {
+    gResHis[i] = ReadBEI16(buffer + ((0 * CTY_HISTORY_WORDS + i) * 2));
+    gComHis[i] = ReadBEI16(buffer + ((1 * CTY_HISTORY_WORDS + i) * 2));
+    gIndHis[i] = ReadBEI16(buffer + ((2 * CTY_HISTORY_WORDS + i) * 2));
+    gCrimeHis[i] = ReadBEI16(buffer + ((3 * CTY_HISTORY_WORDS + i) * 2));
+    gPollutionHis[i] = ReadBEI16(buffer + ((4 * CTY_HISTORY_WORDS + i) * 2));
+    gMoneyHis[i] = ReadBEI16(buffer + ((5 * CTY_HISTORY_WORDS + i) * 2));
+  }
+
+  for (i = 0; i < CTY_MISC_WORDS; i++) {
+    gMiscHis[i] = ReadBEI16(buffer + ((CTY_HISTORY_WORDS * 6 + i) * 2));
+  }
+
   for (i = 0; i < MAP_WORD_COUNT; i++) {
     int x;
     int y;
@@ -1460,14 +1569,10 @@ static int LoadCtyFile(const char *path)
     gMapStorage[x][y] = (short)word;
   }
 
-  for (i = 0; i < CTY_MISC_WORDS; i++) {
-    misc[i] = ReadBEI16(buffer + ((CTY_HISTORY_WORDS * 6 + i) * 2));
-  }
-
-  cityTime = ReadMiscI32(misc, 8);
-  totalFunds = ReadMiscI32(misc, 50);
-  cityTax = (int32_t)misc[56];
-  simSpeed = (int32_t)misc[57];
+  cityTime = ReadMiscI32(gMiscHis, 8);
+  totalFunds = ReadMiscI32(gMiscHis, 50);
+  cityTax = (int32_t)gMiscHis[56];
+  simSpeed = (int32_t)gMiscHis[57];
 
   if (cityTime < 0) {
     cityTime = 0;
@@ -1482,10 +1587,10 @@ static int LoadCtyFile(const char *path)
   CityTime = (QUAD)cityTime;
   CityTax = (short)cityTax;
   SimSpeed = (short)simSpeed;
-  autoBulldoze = (misc[52] != 0) ? 1 : 0;
-  autoBudget = (misc[53] != 0) ? 1 : 0;
-  autoGo = (misc[54] != 0) ? 1 : 0;
-  UserSoundOn = (misc[55] != 0) ? 1 : 0;
+  autoBulldoze = (gMiscHis[52] != 0) ? 1 : 0;
+  autoBudget = (gMiscHis[53] != 0) ? 1 : 0;
+  autoGo = (gMiscHis[54] != 0) ? 1 : 0;
+  UserSoundOn = (gMiscHis[55] != 0) ? 1 : 0;
   MustUpdateOptions = 1;
   ScenarioID = 0;
   DoInitialEval = 0;
@@ -2417,6 +2522,7 @@ static void ResetStateDefaults(uint32_t seed)
 {
   int x;
   int y;
+  int i;
 
   for (x = 0; x < WORLD_X; x++) {
     for (y = 0; y < WORLD_Y; y++) {
@@ -2462,6 +2568,18 @@ static void ResetStateDefaults(uint32_t seed)
   for (x = 0; x < PWRSTKSIZE; x++) {
     PowerStackX[x] = 0;
     PowerStackY[x] = 0;
+  }
+
+  for (i = 0; i < CTY_HISTORY_WORDS; i++) {
+    gResHis[i] = 0;
+    gComHis[i] = 0;
+    gIndHis[i] = 0;
+    gCrimeHis[i] = 0;
+    gPollutionHis[i] = 0;
+    gMoneyHis[i] = 0;
+  }
+  for (i = 0; i < CTY_MISC_WORDS; i++) {
+    gMiscHis[i] = 0;
   }
 
   CityTime = 50;
@@ -2919,6 +3037,63 @@ static int ReadRogBin(const char *path)
       value = (int16_t)(((uint16_t)bytes[1] << 8) | (uint16_t)bytes[0]);
       RateOGMem[x][y] = value;
     }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int WriteI16ArrayBin(const char *path, const short *words, size_t length, const char *name)
+{
+  FILE *file;
+  size_t i;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for write: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (i = 0; i < length; i++) {
+    int16_t value;
+    unsigned char bytes[2];
+
+    value = (int16_t)words[i];
+    bytes[0] = (unsigned char)((uint16_t)value & 0xffu);
+    bytes[1] = (unsigned char)(((uint16_t)value >> 8) & 0xffu);
+    if (fwrite(bytes, 1u, 2u, file) != 2u) {
+      fclose(file);
+      fprintf(stderr, "failed to write %s bytes: %s\n", name, path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadI16ArrayBin(const char *path, short *words, size_t length, const char *name)
+{
+  FILE *file;
+  size_t i;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for read: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (i = 0; i < length; i++) {
+    unsigned char bytes[2];
+    int16_t value;
+
+    if (fread(bytes, 1u, 2u, file) != 2u) {
+      fclose(file);
+      fprintf(stderr, "%s size mismatch: %s\n", name, path);
+      return 0;
+    }
+    value = (int16_t)(((uint16_t)bytes[1] << 8) | (uint16_t)bytes[0]);
+    words[i] = (short)value;
   }
 
   fclose(file);
@@ -3697,6 +3872,41 @@ static int SaveStateDir(const char *stateDir)
   if (!WriteSnapshotJson(path))
     return 0;
 
+  if (!JoinPath(path, sizeof(path), stateDir, RES_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gResHis, (size_t)CTY_HISTORY_WORDS, "res-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, COM_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gComHis, (size_t)CTY_HISTORY_WORDS, "com-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, IND_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gIndHis, (size_t)CTY_HISTORY_WORDS, "ind-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, CRIME_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gCrimeHis, (size_t)CTY_HISTORY_WORDS, "crime-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLLUTION_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gPollutionHis, (size_t)CTY_HISTORY_WORDS, "pollution-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, MONEY_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gMoneyHis, (size_t)CTY_HISTORY_WORDS, "money-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, MISC_HIS_FILE))
+    return 0;
+  if (!WriteI16ArrayBin(path, gMiscHis, (size_t)CTY_MISC_WORDS, "misc-his"))
+    return 0;
+
   if (!JoinPath(path, sizeof(path), stateDir, MAP_FILE))
     return 0;
   if (!WriteMapBin(path))
@@ -3787,6 +3997,41 @@ static int LoadStateDir(const char *stateDir)
   if (!JoinPath(path, sizeof(path), stateDir, SNAPSHOT_FILE))
     return 0;
   if (!ReadSnapshotJson(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, RES_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gResHis, (size_t)CTY_HISTORY_WORDS, "res-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, COM_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gComHis, (size_t)CTY_HISTORY_WORDS, "com-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, IND_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gIndHis, (size_t)CTY_HISTORY_WORDS, "ind-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, CRIME_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gCrimeHis, (size_t)CTY_HISTORY_WORDS, "crime-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLLUTION_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gPollutionHis, (size_t)CTY_HISTORY_WORDS, "pollution-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, MONEY_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gMoneyHis, (size_t)CTY_HISTORY_WORDS, "money-his"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, MISC_HIS_FILE))
+    return 0;
+  if (!ReadI16ArrayBin(path, gMiscHis, (size_t)CTY_MISC_WORDS, "misc-his"))
     return 0;
 
   if (!JoinPath(path, sizeof(path), stateDir, MAP_FILE))
@@ -3940,6 +4185,7 @@ static void PrintUsage(void)
   fprintf(stderr, "  update-date\n");
   fprintf(stderr, "  do-message\n");
   fprintf(stderr, "  do-disasters\n");
+  fprintf(stderr, "  save-cty\n");
   fprintf(stderr, "  snapshot\n");
 }
 
@@ -4226,6 +4472,14 @@ int main(int argc, char **argv)
   if (strcmp(command, "do-disasters") == 0) {
     DoDisasters();
     if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "save-cty") == 0) {
+    if (!SaveCtyToStream(stdout)) {
+      fprintf(stderr, "failed to encode save-cty payload\n");
       return 1;
     }
     return 0;
