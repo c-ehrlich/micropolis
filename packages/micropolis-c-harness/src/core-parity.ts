@@ -16,6 +16,10 @@ export const CORE_HWLDY = CORE_WORLD_Y >> 1;
 export const CORE_SMX = CORE_WORLD_X >> 3;
 /** `SmY` from `ref/micropolis/src/sim/headers/sim.h` (1:1 value). */
 export const CORE_SMY = (CORE_WORLD_Y + 7) >> 3;
+/** `QWX` from `ref/micropolis/src/sim/headers/sim.h` (1:1 value). */
+export const CORE_QWX = CORE_WORLD_X >> 2;
+/** `QWY` from `ref/micropolis/src/sim/headers/sim.h` (1:1 value). */
+export const CORE_QWY = (CORE_WORLD_Y + 3) >> 2;
 
 /** Word count for `Map[WORLD_X][WORLD_Y]` in Micropolis C. */
 export const CORE_MAP_WORD_COUNT = CORE_WORLD_X * CORE_WORLD_Y;
@@ -23,6 +27,12 @@ export const CORE_MAP_WORD_COUNT = CORE_WORLD_X * CORE_WORLD_Y;
 export const CORE_TRF_CELL_COUNT = CORE_HWLDX * CORE_HWLDY;
 /** Cell count for `RateOGMem[SmX][SmY]` in Micropolis C. */
 export const CORE_ROG_CELL_COUNT = CORE_SMX * CORE_SMY;
+/** Cell count for half-resolution (`2x2`) maps in Micropolis C. */
+export const CORE_HALF_CELL_COUNT = CORE_HWLDX * CORE_HWLDY;
+/** Cell count for quarter-resolution (`4x4`) maps in Micropolis C. */
+export const CORE_QUARTER_CELL_COUNT = CORE_QWX * CORE_QWY;
+/** Cell count for small-resolution (`8x8`) maps in Micropolis C. */
+export const CORE_SMALL_CELL_COUNT = CORE_SMX * CORE_SMY;
 /** Word count for `PowerMap[PWRMAPSIZE]` in Micropolis C runtime usage. */
 export const CORE_POWER_WORD_COUNT = ((CORE_WORLD_X + 15) >> 4) * CORE_WORLD_Y;
 /** Byte count for `PowerStackX/Y[PWRSTKSIZE]` in Micropolis C. */
@@ -53,11 +63,31 @@ const POWER_SOURCE = path.resolve(
   'sim',
   's_power.c',
 );
+const SCAN_SOURCE = path.resolve(
+  HARNESS_PKG,
+  '..',
+  '..',
+  'ref',
+  'micropolis',
+  'src',
+  'sim',
+  's_scan.c',
+);
 
 const SNAPSHOT_FILE = 'snapshot.json';
 const MAP_FILE = 'map.u16le';
 const TRF_FILE = 'trf-density.u8';
 const ROG_FILE = 'rate-og-mem.i16le';
+const POP_DENSITY_FILE = 'pop-density.u8';
+const POLLUTION_FILE = 'pollution-mem.u8';
+const LAND_VALUE_FILE = 'land-value-mem.u8';
+const CRIME_FILE = 'crime-mem.u8';
+const TERRAIN_FILE = 'terrain-mem.u8';
+const FIRE_ST_FILE = 'fire-st-map.i16le';
+const POLICE_FILE = 'police-map.i16le';
+const POLICE_EFFECT_FILE = 'police-map-effect.i16le';
+const FIRE_RATE_FILE = 'fire-rate.i16le';
+const COM_RATE_FILE = 'com-rate.i16le';
 const POWER_FILE = 'power.u16le';
 const POWER_STACK_X_FILE = 'power-stack-x.u8';
 const POWER_STACK_Y_FILE = 'power-stack-y.u8';
@@ -71,7 +101,14 @@ export interface CoreOracleMapFlags {
   INMAP: number;
   PRMAP: number;
   RDMAP: number;
+  PDMAP: number;
+  RGMAP: number;
   TDMAP: number;
+  PLMAP: number;
+  CRMAP: number;
+  LVMAP: number;
+  FIMAP: number;
+  POMAP: number;
   DYMAP: number;
 }
 
@@ -93,6 +130,18 @@ export interface CoreOracleState {
   NuclearPop: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
+  LVAverage: number;
+  CrimeAverage: number;
+  PolluteAverage: number;
+  CCx: number;
+  CCy: number;
+  CCx2: number;
+  CCy2: number;
+  PolMaxX: number;
+  PolMaxY: number;
+  CrimeMaxX: number;
+  CrimeMaxY: number;
+  DonDither: number;
   PowerStackNum: number;
   TrafMaxX: number;
   TrafMaxY: number;
@@ -102,7 +151,17 @@ export interface CoreOracleState {
   NewMapFlags: CoreOracleMapFlags;
   map: Uint16Array;
   trfDensity: Uint8Array;
+  popDensity: Uint8Array;
+  pollutionMem: Uint8Array;
+  landValueMem: Uint8Array;
+  crimeMem: Uint8Array;
+  terrainMem: Uint8Array;
   rateOGMem: Int16Array;
+  fireStMap: Int16Array;
+  policeMap: Int16Array;
+  policeMapEffect: Int16Array;
+  fireRate: Int16Array;
+  comRate: Int16Array;
   powerMap: Uint16Array;
   powerStackX: Uint8Array;
   powerStackY: Uint8Array;
@@ -145,6 +204,18 @@ interface CoreOracleSnapshotJson {
   NuclearPop: number;
   PwrdZCnt: number;
   unPwrdZCnt: number;
+  LVAverage: number;
+  CrimeAverage: number;
+  PolluteAverage: number;
+  CCx: number;
+  CCy: number;
+  CCx2: number;
+  CCy2: number;
+  PolMaxX: number;
+  PolMaxY: number;
+  CrimeMaxX: number;
+  CrimeMaxY: number;
+  DonDither: number;
   PowerStackNum: number;
   TrafMaxX: number;
   TrafMaxY: number;
@@ -157,7 +228,14 @@ interface CoreOracleSnapshotJson {
   NewMapFlags_INMAP: number;
   NewMapFlags_PRMAP: number;
   NewMapFlags_RDMAP: number;
+  NewMapFlags_PDMAP: number;
+  NewMapFlags_RGMAP: number;
   NewMapFlags_TDMAP: number;
+  NewMapFlags_PLMAP: number;
+  NewMapFlags_CRMAP: number;
+  NewMapFlags_LVMAP: number;
+  NewMapFlags_FIMAP: number;
+  NewMapFlags_POMAP: number;
   NewMapFlags_DYMAP: number;
 }
 
@@ -165,7 +243,8 @@ interface CoreOracleSnapshotJson {
  * Ensures `micropolis-core-oracle` is available.
  *
  * Wraps `packages/micropolis-c-harness/scripts/build-core-oracle.mjs`, which compiles
- * the headless core oracle and the reference `s_traf.c`/`s_power.c` translation units.
+ * the headless core oracle and the reference `s_traf.c`/`s_power.c`/`s_scan.c`
+ * translation units.
  */
 export function ensureCoreOracle(): string {
   if (hasEnsuredCoreOracle) {
@@ -178,7 +257,8 @@ export function ensureCoreOracle(): string {
     statSync(CORE_BIN).mtimeMs < statSync(CORE_SOURCE).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(CORE_HEADER).mtimeMs ||
     statSync(CORE_BIN).mtimeMs < statSync(TRAFFIC_SOURCE).mtimeMs ||
-    statSync(CORE_BIN).mtimeMs < statSync(POWER_SOURCE).mtimeMs;
+    statSync(CORE_BIN).mtimeMs < statSync(POWER_SOURCE).mtimeMs ||
+    statSync(CORE_BIN).mtimeMs < statSync(SCAN_SOURCE).mtimeMs;
 
   if (needsBuild) {
     execFileSync(process.execPath, [CORE_BUILD_SCRIPT], { stdio: 'inherit' });
@@ -297,6 +377,18 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     NuclearPop: Math.trunc(state.NuclearPop),
     PwrdZCnt: Math.trunc(state.PwrdZCnt),
     unPwrdZCnt: Math.trunc(state.unPwrdZCnt),
+    LVAverage: Math.trunc(state.LVAverage),
+    CrimeAverage: Math.trunc(state.CrimeAverage),
+    PolluteAverage: Math.trunc(state.PolluteAverage),
+    CCx: Math.trunc(state.CCx),
+    CCy: Math.trunc(state.CCy),
+    CCx2: Math.trunc(state.CCx2),
+    CCy2: Math.trunc(state.CCy2),
+    PolMaxX: Math.trunc(state.PolMaxX),
+    PolMaxY: Math.trunc(state.PolMaxY),
+    CrimeMaxX: Math.trunc(state.CrimeMaxX),
+    CrimeMaxY: Math.trunc(state.CrimeMaxY),
+    DonDither: Math.trunc(state.DonDither),
     PowerStackNum: Math.trunc(state.PowerStackNum),
     TrafMaxX: Math.trunc(state.TrafMaxX),
     TrafMaxY: Math.trunc(state.TrafMaxY),
@@ -309,7 +401,14 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     NewMapFlags_INMAP: Math.trunc(state.NewMapFlags.INMAP),
     NewMapFlags_PRMAP: Math.trunc(state.NewMapFlags.PRMAP),
     NewMapFlags_RDMAP: Math.trunc(state.NewMapFlags.RDMAP),
+    NewMapFlags_PDMAP: Math.trunc(state.NewMapFlags.PDMAP),
+    NewMapFlags_RGMAP: Math.trunc(state.NewMapFlags.RGMAP),
     NewMapFlags_TDMAP: Math.trunc(state.NewMapFlags.TDMAP),
+    NewMapFlags_PLMAP: Math.trunc(state.NewMapFlags.PLMAP),
+    NewMapFlags_CRMAP: Math.trunc(state.NewMapFlags.CRMAP),
+    NewMapFlags_LVMAP: Math.trunc(state.NewMapFlags.LVMAP),
+    NewMapFlags_FIMAP: Math.trunc(state.NewMapFlags.FIMAP),
+    NewMapFlags_POMAP: Math.trunc(state.NewMapFlags.POMAP),
     NewMapFlags_DYMAP: Math.trunc(state.NewMapFlags.DYMAP),
   };
 
@@ -321,9 +420,59 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
       `invalid trfDensity length: ${state.trfDensity.length} (expected ${CORE_TRF_CELL_COUNT})`,
     );
   }
+  if (state.popDensity.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `invalid popDensity length: ${state.popDensity.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (state.pollutionMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `invalid pollutionMem length: ${state.pollutionMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (state.landValueMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `invalid landValueMem length: ${state.landValueMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (state.crimeMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `invalid crimeMem length: ${state.crimeMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (state.terrainMem.length !== CORE_QUARTER_CELL_COUNT) {
+    throw new Error(
+      `invalid terrainMem length: ${state.terrainMem.length} (expected ${CORE_QUARTER_CELL_COUNT})`,
+    );
+  }
   if (state.rateOGMem.length !== CORE_ROG_CELL_COUNT) {
     throw new Error(
       `invalid rateOGMem length: ${state.rateOGMem.length} (expected ${CORE_ROG_CELL_COUNT})`,
+    );
+  }
+  if (state.fireStMap.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `invalid fireStMap length: ${state.fireStMap.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (state.policeMap.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `invalid policeMap length: ${state.policeMap.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (state.policeMapEffect.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `invalid policeMapEffect length: ${state.policeMapEffect.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (state.fireRate.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `invalid fireRate length: ${state.fireRate.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (state.comRate.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `invalid comRate length: ${state.comRate.length} (expected ${CORE_SMALL_CELL_COUNT})`,
     );
   }
   if (state.powerMap.length !== CORE_POWER_WORD_COUNT) {
@@ -345,7 +494,17 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
   writeFileSync(path.join(dir, SNAPSHOT_FILE), `${JSON.stringify(snapshot, null, 2)}\n`);
   writeFileSync(path.join(dir, MAP_FILE), encodeCoreU16LE(state.map));
   writeFileSync(path.join(dir, TRF_FILE), state.trfDensity);
+  writeFileSync(path.join(dir, POP_DENSITY_FILE), state.popDensity);
+  writeFileSync(path.join(dir, POLLUTION_FILE), state.pollutionMem);
+  writeFileSync(path.join(dir, LAND_VALUE_FILE), state.landValueMem);
+  writeFileSync(path.join(dir, CRIME_FILE), state.crimeMem);
+  writeFileSync(path.join(dir, TERRAIN_FILE), state.terrainMem);
   writeFileSync(path.join(dir, ROG_FILE), encodeCoreI16LE(state.rateOGMem));
+  writeFileSync(path.join(dir, FIRE_ST_FILE), encodeCoreI16LE(state.fireStMap));
+  writeFileSync(path.join(dir, POLICE_FILE), encodeCoreI16LE(state.policeMap));
+  writeFileSync(path.join(dir, POLICE_EFFECT_FILE), encodeCoreI16LE(state.policeMapEffect));
+  writeFileSync(path.join(dir, FIRE_RATE_FILE), encodeCoreI16LE(state.fireRate));
+  writeFileSync(path.join(dir, COM_RATE_FILE), encodeCoreI16LE(state.comRate));
   writeFileSync(path.join(dir, POWER_FILE), encodeCoreU16LE(state.powerMap));
   writeFileSync(path.join(dir, POWER_STACK_X_FILE), state.powerStackX);
   writeFileSync(path.join(dir, POWER_STACK_Y_FILE), state.powerStackY);
@@ -362,7 +521,17 @@ function readCoreOracleState(dir: string): CoreOracleState {
   ) as CoreOracleSnapshotJson;
   const map = decodeCoreU16LE(readFileSync(path.join(dir, MAP_FILE)));
   const trfDensity = new Uint8Array(readFileSync(path.join(dir, TRF_FILE)));
+  const popDensity = new Uint8Array(readFileSync(path.join(dir, POP_DENSITY_FILE)));
+  const pollutionMem = new Uint8Array(readFileSync(path.join(dir, POLLUTION_FILE)));
+  const landValueMem = new Uint8Array(readFileSync(path.join(dir, LAND_VALUE_FILE)));
+  const crimeMem = new Uint8Array(readFileSync(path.join(dir, CRIME_FILE)));
+  const terrainMem = new Uint8Array(readFileSync(path.join(dir, TERRAIN_FILE)));
   const rateOGMem = decodeCoreI16LE(readFileSync(path.join(dir, ROG_FILE)));
+  const fireStMap = decodeCoreI16LE(readFileSync(path.join(dir, FIRE_ST_FILE)));
+  const policeMap = decodeCoreI16LE(readFileSync(path.join(dir, POLICE_FILE)));
+  const policeMapEffect = decodeCoreI16LE(readFileSync(path.join(dir, POLICE_EFFECT_FILE)));
+  const fireRate = decodeCoreI16LE(readFileSync(path.join(dir, FIRE_RATE_FILE)));
+  const comRate = decodeCoreI16LE(readFileSync(path.join(dir, COM_RATE_FILE)));
   const powerMap = decodeCoreU16LE(readFileSync(path.join(dir, POWER_FILE)));
   const powerStackX = new Uint8Array(readFileSync(path.join(dir, POWER_STACK_X_FILE)));
   const powerStackY = new Uint8Array(readFileSync(path.join(dir, POWER_STACK_Y_FILE)));
@@ -375,9 +544,59 @@ function readCoreOracleState(dir: string): CoreOracleState {
       `oracle trfDensity size mismatch: ${trfDensity.length} (expected ${CORE_TRF_CELL_COUNT})`,
     );
   }
+  if (popDensity.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `oracle popDensity size mismatch: ${popDensity.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (pollutionMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `oracle pollutionMem size mismatch: ${pollutionMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (landValueMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `oracle landValueMem size mismatch: ${landValueMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (crimeMem.length !== CORE_HALF_CELL_COUNT) {
+    throw new Error(
+      `oracle crimeMem size mismatch: ${crimeMem.length} (expected ${CORE_HALF_CELL_COUNT})`,
+    );
+  }
+  if (terrainMem.length !== CORE_QUARTER_CELL_COUNT) {
+    throw new Error(
+      `oracle terrainMem size mismatch: ${terrainMem.length} (expected ${CORE_QUARTER_CELL_COUNT})`,
+    );
+  }
   if (rateOGMem.length !== CORE_ROG_CELL_COUNT) {
     throw new Error(
       `oracle rateOGMem size mismatch: ${rateOGMem.length} (expected ${CORE_ROG_CELL_COUNT})`,
+    );
+  }
+  if (fireStMap.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `oracle fireStMap size mismatch: ${fireStMap.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (policeMap.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `oracle policeMap size mismatch: ${policeMap.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (policeMapEffect.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `oracle policeMapEffect size mismatch: ${policeMapEffect.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (fireRate.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `oracle fireRate size mismatch: ${fireRate.length} (expected ${CORE_SMALL_CELL_COUNT})`,
+    );
+  }
+  if (comRate.length !== CORE_SMALL_CELL_COUNT) {
+    throw new Error(
+      `oracle comRate size mismatch: ${comRate.length} (expected ${CORE_SMALL_CELL_COUNT})`,
     );
   }
   if (powerMap.length !== CORE_POWER_WORD_COUNT) {
@@ -414,6 +633,18 @@ function readCoreOracleState(dir: string): CoreOracleState {
     NuclearPop: snapshot.NuclearPop,
     PwrdZCnt: snapshot.PwrdZCnt,
     unPwrdZCnt: snapshot.unPwrdZCnt,
+    LVAverage: snapshot.LVAverage,
+    CrimeAverage: snapshot.CrimeAverage,
+    PolluteAverage: snapshot.PolluteAverage,
+    CCx: snapshot.CCx,
+    CCy: snapshot.CCy,
+    CCx2: snapshot.CCx2,
+    CCy2: snapshot.CCy2,
+    PolMaxX: snapshot.PolMaxX,
+    PolMaxY: snapshot.PolMaxY,
+    CrimeMaxX: snapshot.CrimeMaxX,
+    CrimeMaxY: snapshot.CrimeMaxY,
+    DonDither: snapshot.DonDither,
     PowerStackNum: snapshot.PowerStackNum,
     TrafMaxX: snapshot.TrafMaxX,
     TrafMaxY: snapshot.TrafMaxY,
@@ -427,12 +658,29 @@ function readCoreOracleState(dir: string): CoreOracleState {
       INMAP: snapshot.NewMapFlags_INMAP,
       PRMAP: snapshot.NewMapFlags_PRMAP,
       RDMAP: snapshot.NewMapFlags_RDMAP,
+      PDMAP: snapshot.NewMapFlags_PDMAP,
+      RGMAP: snapshot.NewMapFlags_RGMAP,
       TDMAP: snapshot.NewMapFlags_TDMAP,
+      PLMAP: snapshot.NewMapFlags_PLMAP,
+      CRMAP: snapshot.NewMapFlags_CRMAP,
+      LVMAP: snapshot.NewMapFlags_LVMAP,
+      FIMAP: snapshot.NewMapFlags_FIMAP,
+      POMAP: snapshot.NewMapFlags_POMAP,
       DYMAP: snapshot.NewMapFlags_DYMAP,
     },
     map,
     trfDensity,
+    popDensity,
+    pollutionMem,
+    landValueMem,
+    crimeMem,
+    terrainMem,
     rateOGMem,
+    fireStMap,
+    policeMap,
+    policeMapEffect,
+    fireRate,
+    comRate,
     powerMap,
     powerStackX,
     powerStackY,

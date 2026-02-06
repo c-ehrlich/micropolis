@@ -8,6 +8,7 @@
  * - ref/micropolis/src/sim/s_traf.c (compiled directly)
  * - ref/micropolis/src/sim/s_sim.c (Simulate/DecTrafficMem/DecROGMem logic)
  * - ref/micropolis/src/sim/s_power.c (DoPowerScan/MoveMapSim/PowerStack)
+ * - ref/micropolis/src/sim/s_scan.c (PTL/Crime/PopDensity/Fire scan systems)
  * - ref/micropolis/src/sim/s_sim.c + ref/micropolis/src/sim/rand.c (RNG)
  */
 
@@ -28,6 +29,16 @@
 #define POWER_FILE "power.u16le"
 #define POWER_STACK_X_FILE "power-stack-x.u8"
 #define POWER_STACK_Y_FILE "power-stack-y.u8"
+#define POP_DENSITY_FILE "pop-density.u8"
+#define POLLUTION_FILE "pollution-mem.u8"
+#define LAND_VALUE_FILE "land-value-mem.u8"
+#define CRIME_FILE "crime-mem.u8"
+#define TERRAIN_FILE "terrain-mem.u8"
+#define FIRE_ST_FILE "fire-st-map.i16le"
+#define POLICE_FILE "police-map.i16le"
+#define POLICE_EFFECT_FILE "police-map-effect.i16le"
+#define FIRE_RATE_FILE "fire-rate.i16le"
+#define COM_RATE_FILE "com-rate.i16le"
 #define SNAPSHOT_FILE "snapshot.json"
 
 #define MAP_WORD_COUNT (WORLD_X * WORLD_Y)
@@ -35,16 +46,41 @@
 #define ROG_WORD_COUNT (SmX * SmY)
 #define POWER_WORD_COUNT PWRMAPSIZE
 #define POWER_STACK_BYTE_COUNT PWRSTKSIZE
+#define HALF_BYTE_COUNT (HWLDX * HWLDY)
+#define QUARTER_BYTE_COUNT (QWX * QWY)
+#define SMALL_WORD_COUNT (SmX * SmY)
 
 /* --- Reference-sim globals required by s_traf.c and Simulate logic. --- */
 
 static uint16_t gMapStorage[WORLD_X][WORLD_Y];
 static Byte gTrfStorage[HWLDX][HWLDY];
+static Byte gPopDensityStorage[HWLDX][HWLDY];
+static Byte gPollutionStorage[HWLDX][HWLDY];
+static Byte gLandValueStorage[HWLDX][HWLDY];
+static Byte gCrimeStorage[HWLDX][HWLDY];
+static Byte gTemStorage[HWLDX][HWLDY];
+static Byte gTem2Storage[HWLDX][HWLDY];
+static Byte gTerrainStorage[QWX][QWY];
+static Byte gQtemStorage[QWX][QWY];
 short RateOGMem[SmX][SmY];
+short FireStMap[SmX][SmY];
+short PoliceMap[SmX][SmY];
+short PoliceMapEffect[SmX][SmY];
+short ComRate[SmX][SmY];
+short FireRate[SmX][SmY];
+short STem[SmX][SmY];
 short PowerMap[POWERMAPLEN];
 
 short *Map[WORLD_X];
+Byte *PopDensity[HWLDX];
 Byte *TrfDensity[HWLDX];
+Byte *PollutionMem[HWLDX];
+Byte *LandValueMem[HWLDX];
+Byte *CrimeMem[HWLDX];
+Byte *tem[HWLDX];
+Byte *tem2[HWLDX];
+Byte *TerrainMem[QWX];
+Byte *Qtem[QWX];
 
 short SMapX;
 short SMapY;
@@ -58,12 +94,14 @@ short Scycle;
 short Fcycle;
 short DoInitialEval;
 short NewPower;
-short NewMapFlags[NMAPS];
 QUAD CityTime;
 short CoalPop;
 short NuclearPop;
 short PwrdZCnt;
 short unPwrdZCnt;
+short LVAverage;
+short CrimeAverage;
+short PolluteAverage;
 
 /* s_traf.c defines these globals. */
 extern short TrafMaxX;
@@ -110,12 +148,63 @@ void TakeCensus(void) {}
 void Take2Census(void) {}
 void CollectTax(void) {}
 void SendMessages(void) {}
-void PTLScan(void) {}
-void CrimeScan(void) {}
-void PopDenScan(void) {}
-void FireAnalysis(void) {}
 void DoDisasters(void) {}
 void SendMes(int id) { (void)id; }
+
+/*
+ * Population helpers required by `GetPDen` in `ref/micropolis/src/sim/s_scan.c`.
+ *
+ * These mirror the corresponding routines in `ref/micropolis/src/sim/s_zone.c`.
+ */
+int RZPop(int ch9)
+{
+  short czDen;
+
+  czDen = (((ch9 - RZB) / 9) % 4);
+  return ((czDen * 8) + 16);
+}
+
+int CZPop(int ch9)
+{
+  short czDen;
+
+  if (ch9 == COMCLR)
+    return 0;
+  czDen = (((ch9 - CZB) / 9) % 5) + 1;
+  return czDen;
+}
+
+int IZPop(int ch9)
+{
+  short czDen;
+
+  if (ch9 == INDCLR)
+    return 0;
+  czDen = (((ch9 - IZB) / 9) % 4) + 1;
+  return czDen;
+}
+
+int DoFreePop(int ch9)
+{
+  short count;
+  short loc;
+  short x;
+  short y;
+
+  (void)ch9;
+  count = 0;
+  for (x = SMapX - 1; x <= SMapX + 1; x++) {
+    for (y = SMapY - 1; y <= SMapY + 1; y++) {
+      if ((x >= 0) && (x < WORLD_X) && (y >= 0) && (y < WORLD_Y)) {
+        loc = Map[x][y] & LOMASK;
+        if ((loc >= LHTHR) && (loc <= HHTHR)) {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
 
 SimSprite *GetSprite(int type)
 {
@@ -391,6 +480,16 @@ static void BindLayerPointers(void)
   }
   for (x = 0; x < HWLDX; x++) {
     TrfDensity[x] = gTrfStorage[x];
+    PopDensity[x] = gPopDensityStorage[x];
+    PollutionMem[x] = gPollutionStorage[x];
+    LandValueMem[x] = gLandValueStorage[x];
+    CrimeMem[x] = gCrimeStorage[x];
+    tem[x] = gTemStorage[x];
+    tem2[x] = gTem2Storage[x];
+  }
+  for (x = 0; x < QWX; x++) {
+    TerrainMem[x] = gTerrainStorage[x];
+    Qtem[x] = gQtemStorage[x];
   }
 }
 
@@ -408,12 +507,31 @@ static void ResetStateDefaults(uint32_t seed)
   for (x = 0; x < HWLDX; x++) {
     for (y = 0; y < HWLDY; y++) {
       gTrfStorage[x][y] = 0;
+      gPopDensityStorage[x][y] = 0;
+      gPollutionStorage[x][y] = 0;
+      gLandValueStorage[x][y] = 0;
+      gCrimeStorage[x][y] = 0;
+      gTemStorage[x][y] = 0;
+      gTem2Storage[x][y] = 0;
+    }
+  }
+
+  for (x = 0; x < QWX; x++) {
+    for (y = 0; y < QWY; y++) {
+      gTerrainStorage[x][y] = 0;
+      gQtemStorage[x][y] = 0;
     }
   }
 
   for (x = 0; x < SmX; x++) {
     for (y = 0; y < SmY; y++) {
       RateOGMem[x][y] = 0;
+      FireStMap[x][y] = 0;
+      PoliceMap[x][y] = 0;
+      PoliceMapEffect[x][y] = 0;
+      ComRate[x][y] = 0;
+      FireRate[x][y] = 0;
+      STem[x][y] = 0;
     }
   }
 
@@ -442,6 +560,9 @@ static void ResetStateDefaults(uint32_t seed)
   NuclearPop = 0;
   PwrdZCnt = 0;
   unPwrdZCnt = 0;
+  LVAverage = 0;
+  CrimeAverage = 0;
+  PolluteAverage = 0;
   PowerStackNum = 0;
   TrafMaxX = 0;
   TrafMaxY = 0;
@@ -449,6 +570,16 @@ static void ResetStateDefaults(uint32_t seed)
   for (x = 0; x < NMAPS; x++) {
     NewMapFlags[x] = 0;
   }
+  NewMap = 0;
+  CCx = 0;
+  CCy = 0;
+  CCx2 = 0;
+  CCy2 = 0;
+  PolMaxX = 0;
+  PolMaxY = 0;
+  CrimeMaxX = 0;
+  CrimeMaxY = 0;
+  DonDither = 0;
 
   gCopSprite.control = -1;
   gCopSprite.dest_x = 0;
@@ -570,6 +701,161 @@ static int ReadTrfBin(const char *path)
       fclose(file);
       fprintf(stderr, "traffic size mismatch: %s\n", path);
       return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int WriteHalfBin(const char *path, Byte storage[HWLDX][HWLDY], const char *name)
+{
+  FILE *file;
+  int x;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for write: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < HWLDX; x++) {
+    if (fwrite(storage[x], 1u, (size_t)HWLDY, file) != (size_t)HWLDY) {
+      fclose(file);
+      fprintf(stderr, "failed to write %s bytes: %s\n", name, path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadHalfBin(const char *path, Byte storage[HWLDX][HWLDY], const char *name)
+{
+  FILE *file;
+  int x;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for read: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < HWLDX; x++) {
+    if (fread(storage[x], 1u, (size_t)HWLDY, file) != (size_t)HWLDY) {
+      fclose(file);
+      fprintf(stderr, "%s size mismatch: %s\n", name, path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int WriteQuarterBin(const char *path, Byte storage[QWX][QWY], const char *name)
+{
+  FILE *file;
+  int x;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for write: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < QWX; x++) {
+    if (fwrite(storage[x], 1u, (size_t)QWY, file) != (size_t)QWY) {
+      fclose(file);
+      fprintf(stderr, "failed to write %s bytes: %s\n", name, path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadQuarterBin(const char *path, Byte storage[QWX][QWY], const char *name)
+{
+  FILE *file;
+  int x;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for read: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < QWX; x++) {
+    if (fread(storage[x], 1u, (size_t)QWY, file) != (size_t)QWY) {
+      fclose(file);
+      fprintf(stderr, "%s size mismatch: %s\n", name, path);
+      return 0;
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int WriteSmI16Bin(const char *path, short storage[SmX][SmY], const char *name)
+{
+  FILE *file;
+  int x;
+  int y;
+
+  file = fopen(path, "wb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for write: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < SmX; x++) {
+    for (y = 0; y < SmY; y++) {
+      int16_t value;
+      unsigned char bytes[2];
+
+      value = (int16_t)storage[x][y];
+      bytes[0] = (unsigned char)((uint16_t)value & 0xffu);
+      bytes[1] = (unsigned char)(((uint16_t)value >> 8) & 0xffu);
+      if (fwrite(bytes, 1u, 2u, file) != 2u) {
+        fclose(file);
+        fprintf(stderr, "failed to write %s bytes: %s\n", name, path);
+        return 0;
+      }
+    }
+  }
+
+  fclose(file);
+  return 1;
+}
+
+static int ReadSmI16Bin(const char *path, short storage[SmX][SmY], const char *name)
+{
+  FILE *file;
+  int x;
+  int y;
+
+  file = fopen(path, "rb");
+  if (file == NULL) {
+    fprintf(stderr, "failed to open %s for read: %s (%s)\n", name, path, strerror(errno));
+    return 0;
+  }
+
+  for (x = 0; x < SmX; x++) {
+    for (y = 0; y < SmY; y++) {
+      unsigned char bytes[2];
+      int16_t value;
+
+      if (fread(bytes, 1u, 2u, file) != 2u) {
+        fclose(file);
+        fprintf(stderr, "%s size mismatch: %s\n", name, path);
+        return 0;
+      }
+      value = (int16_t)(((uint16_t)bytes[1] << 8) | (uint16_t)bytes[0]);
+      storage[x][y] = (short)value;
     }
   }
 
@@ -769,6 +1055,18 @@ static int WriteSnapshotJson(const char *path)
   fprintf(file, "  \"NuclearPop\": %d,\n", NuclearPop);
   fprintf(file, "  \"PwrdZCnt\": %d,\n", PwrdZCnt);
   fprintf(file, "  \"unPwrdZCnt\": %d,\n", unPwrdZCnt);
+  fprintf(file, "  \"LVAverage\": %d,\n", LVAverage);
+  fprintf(file, "  \"CrimeAverage\": %d,\n", CrimeAverage);
+  fprintf(file, "  \"PolluteAverage\": %d,\n", PolluteAverage);
+  fprintf(file, "  \"CCx\": %d,\n", CCx);
+  fprintf(file, "  \"CCy\": %d,\n", CCy);
+  fprintf(file, "  \"CCx2\": %d,\n", CCx2);
+  fprintf(file, "  \"CCy2\": %d,\n", CCy2);
+  fprintf(file, "  \"PolMaxX\": %d,\n", PolMaxX);
+  fprintf(file, "  \"PolMaxY\": %d,\n", PolMaxY);
+  fprintf(file, "  \"CrimeMaxX\": %d,\n", CrimeMaxX);
+  fprintf(file, "  \"CrimeMaxY\": %d,\n", CrimeMaxY);
+  fprintf(file, "  \"DonDither\": %lld,\n", (long long)DonDither);
   fprintf(file, "  \"PowerStackNum\": %d,\n", PowerStackNum);
   fprintf(file, "  \"TrafMaxX\": %d,\n", TrafMaxX);
   fprintf(file, "  \"TrafMaxY\": %d,\n", TrafMaxY);
@@ -781,7 +1079,14 @@ static int WriteSnapshotJson(const char *path)
   fprintf(file, "  \"NewMapFlags_INMAP\": %d,\n", NewMapFlags[INMAP]);
   fprintf(file, "  \"NewMapFlags_PRMAP\": %d,\n", NewMapFlags[PRMAP]);
   fprintf(file, "  \"NewMapFlags_RDMAP\": %d,\n", NewMapFlags[RDMAP]);
+  fprintf(file, "  \"NewMapFlags_PDMAP\": %d,\n", NewMapFlags[PDMAP]);
+  fprintf(file, "  \"NewMapFlags_RGMAP\": %d,\n", NewMapFlags[RGMAP]);
   fprintf(file, "  \"NewMapFlags_TDMAP\": %d,\n", NewMapFlags[TDMAP]);
+  fprintf(file, "  \"NewMapFlags_PLMAP\": %d,\n", NewMapFlags[PLMAP]);
+  fprintf(file, "  \"NewMapFlags_CRMAP\": %d,\n", NewMapFlags[CRMAP]);
+  fprintf(file, "  \"NewMapFlags_LVMAP\": %d,\n", NewMapFlags[LVMAP]);
+  fprintf(file, "  \"NewMapFlags_FIMAP\": %d,\n", NewMapFlags[FIMAP]);
+  fprintf(file, "  \"NewMapFlags_POMAP\": %d,\n", NewMapFlags[POMAP]);
   fprintf(file, "  \"NewMapFlags_DYMAP\": %d\n", NewMapFlags[DYMAP]);
   fprintf(file, "}\n");
 
@@ -956,6 +1261,78 @@ static int ReadSnapshotJson(const char *path)
   }
   unPwrdZCnt = (short)value;
 
+  if (!ParseJsonI64(json, "LVAverage", &value)) {
+    free(json);
+    return 0;
+  }
+  LVAverage = (short)value;
+
+  if (!ParseJsonI64(json, "CrimeAverage", &value)) {
+    free(json);
+    return 0;
+  }
+  CrimeAverage = (short)value;
+
+  if (!ParseJsonI64(json, "PolluteAverage", &value)) {
+    free(json);
+    return 0;
+  }
+  PolluteAverage = (short)value;
+
+  if (!ParseJsonI64(json, "CCx", &value)) {
+    free(json);
+    return 0;
+  }
+  CCx = (short)value;
+
+  if (!ParseJsonI64(json, "CCy", &value)) {
+    free(json);
+    return 0;
+  }
+  CCy = (short)value;
+
+  if (!ParseJsonI64(json, "CCx2", &value)) {
+    free(json);
+    return 0;
+  }
+  CCx2 = (short)value;
+
+  if (!ParseJsonI64(json, "CCy2", &value)) {
+    free(json);
+    return 0;
+  }
+  CCy2 = (short)value;
+
+  if (!ParseJsonI64(json, "PolMaxX", &value)) {
+    free(json);
+    return 0;
+  }
+  PolMaxX = (short)value;
+
+  if (!ParseJsonI64(json, "PolMaxY", &value)) {
+    free(json);
+    return 0;
+  }
+  PolMaxY = (short)value;
+
+  if (!ParseJsonI64(json, "CrimeMaxX", &value)) {
+    free(json);
+    return 0;
+  }
+  CrimeMaxX = (short)value;
+
+  if (!ParseJsonI64(json, "CrimeMaxY", &value)) {
+    free(json);
+    return 0;
+  }
+  CrimeMaxY = (short)value;
+
+  if (!ParseJsonI64(json, "DonDither", &value)) {
+    free(json);
+    return 0;
+  }
+  DonDither = (QUAD)value;
+
   if (!ParseJsonI64(json, "PowerStackNum", &value)) {
     free(json);
     return 0;
@@ -1028,11 +1405,53 @@ static int ReadSnapshotJson(const char *path)
   }
   NewMapFlags[RDMAP] = (short)value;
 
+  if (!ParseJsonI64(json, "NewMapFlags_PDMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[PDMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_RGMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[RGMAP] = (short)value;
+
   if (!ParseJsonI64(json, "NewMapFlags_TDMAP", &value)) {
     free(json);
     return 0;
   }
   NewMapFlags[TDMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_PLMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[PLMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_CRMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[CRMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_LVMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[LVMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_FIMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[FIMAP] = (short)value;
+
+  if (!ParseJsonI64(json, "NewMapFlags_POMAP", &value)) {
+    free(json);
+    return 0;
+  }
+  NewMapFlags[POMAP] = (short)value;
 
   if (!ParseJsonI64(json, "NewMapFlags_DYMAP", &value)) {
     free(json);
@@ -1063,9 +1482,59 @@ static int SaveStateDir(const char *stateDir)
   if (!WriteTrfBin(path))
     return 0;
 
+  if (!JoinPath(path, sizeof(path), stateDir, POP_DENSITY_FILE))
+    return 0;
+  if (!WriteHalfBin(path, gPopDensityStorage, "pop-density"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLLUTION_FILE))
+    return 0;
+  if (!WriteHalfBin(path, gPollutionStorage, "pollution"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, LAND_VALUE_FILE))
+    return 0;
+  if (!WriteHalfBin(path, gLandValueStorage, "land-value"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, CRIME_FILE))
+    return 0;
+  if (!WriteHalfBin(path, gCrimeStorage, "crime"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, TERRAIN_FILE))
+    return 0;
+  if (!WriteQuarterBin(path, gTerrainStorage, "terrain"))
+    return 0;
+
   if (!JoinPath(path, sizeof(path), stateDir, ROG_FILE))
     return 0;
   if (!WriteRogBin(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, FIRE_ST_FILE))
+    return 0;
+  if (!WriteSmI16Bin(path, FireStMap, "fire station map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLICE_FILE))
+    return 0;
+  if (!WriteSmI16Bin(path, PoliceMap, "police map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLICE_EFFECT_FILE))
+    return 0;
+  if (!WriteSmI16Bin(path, PoliceMapEffect, "police effect map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, FIRE_RATE_FILE))
+    return 0;
+  if (!WriteSmI16Bin(path, FireRate, "fire-rate"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, COM_RATE_FILE))
+    return 0;
+  if (!WriteSmI16Bin(path, ComRate, "com-rate"))
     return 0;
 
   if (!JoinPath(path, sizeof(path), stateDir, POWER_FILE))
@@ -1105,9 +1574,59 @@ static int LoadStateDir(const char *stateDir)
   if (!ReadTrfBin(path))
     return 0;
 
+  if (!JoinPath(path, sizeof(path), stateDir, POP_DENSITY_FILE))
+    return 0;
+  if (!ReadHalfBin(path, gPopDensityStorage, "pop-density"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLLUTION_FILE))
+    return 0;
+  if (!ReadHalfBin(path, gPollutionStorage, "pollution"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, LAND_VALUE_FILE))
+    return 0;
+  if (!ReadHalfBin(path, gLandValueStorage, "land-value"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, CRIME_FILE))
+    return 0;
+  if (!ReadHalfBin(path, gCrimeStorage, "crime"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, TERRAIN_FILE))
+    return 0;
+  if (!ReadQuarterBin(path, gTerrainStorage, "terrain"))
+    return 0;
+
   if (!JoinPath(path, sizeof(path), stateDir, ROG_FILE))
     return 0;
   if (!ReadRogBin(path))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, FIRE_ST_FILE))
+    return 0;
+  if (!ReadSmI16Bin(path, FireStMap, "fire station map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLICE_FILE))
+    return 0;
+  if (!ReadSmI16Bin(path, PoliceMap, "police map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, POLICE_EFFECT_FILE))
+    return 0;
+  if (!ReadSmI16Bin(path, PoliceMapEffect, "police effect map"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, FIRE_RATE_FILE))
+    return 0;
+  if (!ReadSmI16Bin(path, FireRate, "fire-rate"))
+    return 0;
+
+  if (!JoinPath(path, sizeof(path), stateDir, COM_RATE_FILE))
+    return 0;
+  if (!ReadSmI16Bin(path, ComRate, "com-rate"))
     return 0;
 
   if (!JoinPath(path, sizeof(path), stateDir, POWER_FILE))
@@ -1351,7 +1870,10 @@ int main(int argc, char **argv)
     printf("  \"snapshotVersion\": %d,\n", SNAPSHOT_VERSION);
     printf("  \"mapWords\": %d,\n", MAP_WORD_COUNT);
     printf("  \"trfBytes\": %d,\n", TRF_BYTE_COUNT);
+    printf("  \"halfBytes\": %d,\n", HALF_BYTE_COUNT);
+    printf("  \"quarterBytes\": %d,\n", QUARTER_BYTE_COUNT);
     printf("  \"rogWords\": %d,\n", ROG_WORD_COUNT);
+    printf("  \"smallWords\": %d,\n", SMALL_WORD_COUNT);
     printf("  \"powerWords\": %d,\n", POWER_WORD_COUNT);
     printf("  \"powerStackBytes\": %d,\n", POWER_STACK_BYTE_COUNT);
     printf("  \"rngNext\": %u,\n", gRandNext);
@@ -1366,6 +1888,17 @@ int main(int argc, char **argv)
     printf("  \"NuclearPop\": %d,\n", NuclearPop);
     printf("  \"PwrdZCnt\": %d,\n", PwrdZCnt);
     printf("  \"unPwrdZCnt\": %d,\n", unPwrdZCnt);
+    printf("  \"LVAverage\": %d,\n", LVAverage);
+    printf("  \"CrimeAverage\": %d,\n", CrimeAverage);
+    printf("  \"PolluteAverage\": %d,\n", PolluteAverage);
+    printf("  \"CCx\": %d,\n", CCx);
+    printf("  \"CCy\": %d,\n", CCy);
+    printf("  \"CCx2\": %d,\n", CCx2);
+    printf("  \"CCy2\": %d,\n", CCy2);
+    printf("  \"PolMaxX\": %d,\n", PolMaxX);
+    printf("  \"PolMaxY\": %d,\n", PolMaxY);
+    printf("  \"CrimeMaxX\": %d,\n", CrimeMaxX);
+    printf("  \"CrimeMaxY\": %d,\n", CrimeMaxY);
     printf("  \"PowerStackNum\": %d,\n", PowerStackNum);
     printf("  \"TrafMaxX\": %d,\n", TrafMaxX);
     printf("  \"TrafMaxY\": %d,\n", TrafMaxY);

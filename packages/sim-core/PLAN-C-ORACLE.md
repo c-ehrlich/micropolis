@@ -119,8 +119,8 @@ Comparison policy:
   - Power map and powered zone effects match under replay checkpoints.
 
 ### Phase 3: Scan-derived systems
-- [ ] PTL, crime, pop density, fire coverage parity checkpoints by phase.
-- [ ] Compare map flags and key maxima/averages.
+- [x] PTL, crime, pop density, fire coverage parity checkpoints by phase.
+- [x] Compare map flags and key maxima/averages.
 - Exit criteria:
   - Phase 12-15 snapshots match for deterministic fixtures.
 
