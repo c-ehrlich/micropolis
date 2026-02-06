@@ -334,7 +334,7 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/s_gen.c` (`GenerateMap`)
     - `ref/micropolis/spec/terrain/SPEC.md` (pipeline notes)
 
-- [ ] Add an exact C-shape `RandomlySeedRand` equivalent (parity shape + deterministic tests).
+- [x] Add an exact C-shape `RandomlySeedRand` equivalent (parity shape + deterministic tests).
   - Requirements:
     - Code: implement reseed mixing equivalent to `SeedRand(tv_usec ^ tv_sec ^ sim_rand())` with an injected time source.
     - Tests: verify injection is honored and reseed runs only on non-early-return path.
@@ -368,7 +368,7 @@ Options (`opts`) should include the generator knobs:
   - C references:
     - `ref/micropolis/src/sim/s_gen.c` (conditional stage gates)
 
-- [ ] Add a core-only `resetForNewCityFromSeed` helper (no editor/UI state).
+- [x] Add a core-only `resetForNewCityFromSeed` helper (no editor/UI state).
   - Requirements:
     - Code: helper that:
       - calls `generateMap`,

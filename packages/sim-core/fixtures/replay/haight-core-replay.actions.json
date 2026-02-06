@@ -1,5 +1,27 @@
 {
   "version": 1,
+  "magicNumbers": [
+    {
+      "value": 9,
+      "source": "ref/micropolis/src/sim/s_sim.c (Simulate phase schedule)",
+      "meaning": "Scycle=9 drives phase-10 decay cadence and phase-11 power cadence alignment in replay ticks."
+    },
+    {
+      "value": 25,
+      "source": "ref/micropolis/src/sim/s_sim.c (DecTrafficMem)",
+      "meaning": "25 is the first traffic value that decays by subtracting 24."
+    },
+    {
+      "value": 201,
+      "source": "ref/micropolis/src/sim/s_sim.c (DecTrafficMem / DecROGMem)",
+      "meaning": "201 exercises >200 traffic decay and positive ROG clamp-to-200."
+    },
+    {
+      "value": -201,
+      "source": "ref/micropolis/src/sim/s_sim.c (DecROGMem)",
+      "meaning": "-201 exercises negative ROG clamp-to--200."
+    }
+  ],
   "actions": [
     { "tick": 0, "kind": "set-scalar", "field": "Scycle", "value": 9 },
     { "tick": 0, "kind": "set-scalar", "field": "NewPower", "value": 1 },

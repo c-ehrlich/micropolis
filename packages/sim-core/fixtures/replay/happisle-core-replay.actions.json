@@ -1,5 +1,22 @@
 {
   "version": 1,
+  "magicNumbers": [
+    {
+      "value": 4,
+      "source": "ref/micropolis/src/sim/s_sim.c (Simulate phase schedule)",
+      "meaning": "Scycle=4 aligns the first replay tick with phase-10 decay behavior."
+    },
+    {
+      "value": 201,
+      "source": "ref/micropolis/src/sim/s_sim.c (DecTrafficMem / DecROGMem)",
+      "meaning": "201 triggers >200 traffic decay and positive ROG clamp-to-200."
+    },
+    {
+      "value": -201,
+      "source": "ref/micropolis/src/sim/s_sim.c (DecROGMem)",
+      "meaning": "-201 triggers negative ROG clamp-to--200."
+    }
+  ],
   "actions": [
     { "tick": 0, "kind": "set-scalar", "field": "Scycle", "value": 4 },
     { "tick": 0, "kind": "set-scalar", "field": "NewPower", "value": 1 },

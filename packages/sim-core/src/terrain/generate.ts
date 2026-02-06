@@ -1,6 +1,12 @@
-import { randomSeedFromTime } from '../core/rng.ts';
+import { type MicropolisTimevalSource, randomSeedFromTime } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import {
+  doSimInit,
+  initWillStuff,
+  type InitWillStuffOptions,
+  type SimInitSystems,
+} from '../systems/init.ts';
 import { clearMap } from './clear.ts';
 import { doRivers } from './do-rivers.ts';
 import { getRandStart } from './get-rand-start.ts';
@@ -54,6 +60,18 @@ export interface TerrainGenOptions {
    * disabling or controlling reseeding.
    */
   reseedAfter?: TerrainReseedAfter;
+
+  /**
+   * Injected `gettimeofday` source for clock-based reseeding.
+   *
+   * Mirrors the `RandomlySeedRand()` call in `GenerateMap` from
+   * `ref/micropolis/src/sim/s_gen.c`, which delegates to
+   * `SeedRand(time.tv_usec ^ time.tv_sec ^ sim_rand())` in
+   * `ref/micropolis/src/sim/s_sim.c`.
+   *
+   * This is a sim-core testing hook; production callers can omit it.
+   */
+  randomSeedTimeSource?: MicropolisTimevalSource;
 }
 
 /**
@@ -143,21 +161,72 @@ export function generateMap(
     }
 
     // C: `RandomlySeedRand();` (only in non-early-return paths).
-    //
-    // sim-core adaptation:
-    // - We make reseeding controllable for deterministic tests.
-    // - For the 'clock' case today, we reuse sim-core's existing time-based seed
-    //   helper. A future plan item tightens this to match the C `gettimeofday()`
-    //   XOR formula more closely and provides a deterministic injection point.
+    // sim-core keeps this controllable for deterministic tests.
     const reseedAfter = options.reseedAfter ?? 'clock';
     if (reseedAfter !== false) {
       if (typeof reseedAfter === 'object') {
         rng.seed(reseedAfter.seed);
       } else {
-        randomSeedFromTime(context.rng);
+        randomSeedFromTime(context.rng, options.randomSeedTimeSource);
       }
     }
   } finally {
     context.store.commitTick();
   }
+}
+
+export interface ResetForNewCityFromSeedOptions extends TerrainGenOptions {
+  /**
+   * Optional `InitWillStuff` controls.
+   *
+   * Mirrors the `InitWillStuff()` call in `GenerateSomeCity` from
+   * `ref/micropolis/src/sim/s_gen.c` (1:1 ordering; core-only scope).
+   */
+  initWillStuff?: InitWillStuffOptions;
+
+  /**
+   * Optional subsystem overrides for `DoSimInit`.
+   *
+   * Mirrors `DoSimInit()` in `ref/micropolis/src/sim/s_gen.c` /
+   * `ref/micropolis/src/sim/s_sim.c` while allowing deterministic test stubs.
+   */
+  simInitSystems?: SimInitSystems;
+}
+
+/**
+ * Core-only new-city reset flow from a deterministic terrain seed.
+ *
+ * Mirrors the core part of `GenerateSomeCity(int r)` in
+ * `ref/micropolis/src/sim/s_gen.c`:
+ * 1. `GenerateMap(r)`
+ * 2. Reset core globals (`ScenarioID`, `CityTime`, `InitSimLoad`, `DoInitialEval`)
+ * 3. `InitWillStuff()`
+ * 4. `DoSimInit()`
+ *
+ * Intentional divergence:
+ * - UI/editor integration steps from C (`ResetMapState`, `ResetEditorState`,
+ *   `InvalidateEditors`, `InvalidateMaps`, `Eval`, `Kick`) are not in sim-core.
+ */
+export function resetForNewCityFromSeed(
+  state: SimState,
+  context: SimContext,
+  options: ResetForNewCityFromSeedOptions,
+): void {
+  generateMap(state, context, {
+    seed: options.seed,
+    treeLevel: options.treeLevel,
+    lakeLevel: options.lakeLevel,
+    curveLevel: options.curveLevel,
+    createIsland: options.createIsland,
+    reseedAfter: options.reseedAfter,
+    randomSeedTimeSource: options.randomSeedTimeSource,
+  });
+
+  state.ScenarioID = 0;
+  state.CityTime = 0;
+  state.InitSimLoad = 2;
+  state.DoInitialEval = 0;
+
+  initWillStuff(context, state, options.initWillStuff);
+  doSimInit(context, state, options.simInitSystems);
 }

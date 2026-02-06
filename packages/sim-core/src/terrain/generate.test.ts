@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Tile, World } from '../core/constants.ts';
 import { MicropolisRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
-import { generateMap } from './generate.ts';
+import { generateMap, resetForNewCityFromSeed } from './generate.ts';
 import { indexFor } from './helpers.ts';
 import { isTree } from './is-tree.ts';
 
@@ -21,6 +21,25 @@ const hasAnyTreeTile = (map: Uint16Array): boolean => {
     }
   }
   return false;
+};
+
+/**
+ * Predict the post-`RandomlySeedRand` seed for the flat-map pipeline:
+ * `SeedRand(seed); ClearMap(); GetRandStart(); SmoothRiver(); RandomlySeedRand();`
+ *
+ * C references:
+ * - `GenerateMap` in `ref/micropolis/src/sim/s_gen.c`
+ * - `RandomlySeedRand` in `ref/micropolis/src/sim/s_sim.c`
+ */
+const expectedClockReseedSeedForFlatMap = (
+  seed: number,
+  tv_sec: number,
+  tv_usec: number,
+): number => {
+  const rng = new MicropolisRng(seed);
+  rng.rand(World.WORLD_X - 80);
+  rng.rand(World.WORLD_Y - 67);
+  return (tv_usec ^ tv_sec ^ rng.next16()) >>> 0;
 };
 
 /**
@@ -240,6 +259,122 @@ describe('terrain/generateMap (GenerateMap pipeline)', () => {
     // Additional sanity: `next16()` is still 16-bit (0..65535).
     for (const value of actual) {
       expect(value & 0xffff).toBe(value);
+    }
+  });
+
+  it('uses injected timeval source for C-shape RandomlySeedRand in non-early paths', () => {
+    const seed = 123;
+    const tv_sec = 0x0102_0304;
+    const tv_usec = 0x0005_a6b7;
+    const timeSource = vi.fn(() => ({ tv_sec, tv_usec }));
+
+    const state = createSimState();
+    const context = createSimContext();
+    generateMap(state, context, {
+      seed,
+      treeLevel: 0,
+      lakeLevel: 0,
+      curveLevel: 0,
+      createIsland: 0,
+      reseedAfter: 'clock',
+      randomSeedTimeSource: timeSource,
+    });
+
+    expect(timeSource).toHaveBeenCalledOnce();
+
+    const expectedSeed = expectedClockReseedSeedForFlatMap(seed, tv_sec, tv_usec);
+    const expectedRng = new MicropolisRng(expectedSeed);
+    const expected = [expectedRng.next16(), expectedRng.next16(), expectedRng.next16()];
+    const actual = [context.rng.next16(), context.rng.next16(), context.rng.next16()];
+
+    expect(actual).toEqual(expected);
+  });
+
+  it('does not invoke clock reseeding on the early-return random-island path', () => {
+    const seed = findSeedThatTriggersRandomIsland();
+    const timeSource = vi.fn(() => ({ tv_sec: 0x11111111, tv_usec: 0x22222222 }));
+
+    const state = createSimState();
+    const context = createSimContext();
+    generateMap(state, context, {
+      seed,
+      treeLevel: -1,
+      lakeLevel: 0,
+      curveLevel: 0,
+      createIsland: -1,
+      reseedAfter: 'clock',
+      randomSeedTimeSource: timeSource,
+    });
+
+    expect(timeSource).not.toHaveBeenCalled();
+  });
+});
+
+describe('terrain/resetForNewCityFromSeed (GenerateSomeCity core subset)', () => {
+  it('runs generate -> core resets -> InitWillStuff -> DoSimInit in C order', () => {
+    const hooks = {
+      destroyAllSprites: vi.fn(),
+      doUpdateHeads: vi.fn(),
+      doAllGraphs: vi.fn(),
+    };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.ScenarioID = 7;
+    state.CityTime = 999;
+    state.InitSimLoad = 0;
+    state.DoInitialEval = 99;
+
+    const systemCalls: string[] = [];
+
+    resetForNewCityFromSeed(state, context, {
+      seed: 123,
+      treeLevel: 0,
+      lakeLevel: 0,
+      curveLevel: 0,
+      createIsland: 0,
+      reseedAfter: false,
+      initWillStuff: { seed: 456 },
+      simInitSystems: {
+        setValves: () => systemCalls.push('setValves'),
+        clearCensus: () => systemCalls.push('clearCensus'),
+        mapScan: () => systemCalls.push('mapScan'),
+        doPowerScan: () => systemCalls.push('doPowerScan'),
+        ptlScan: () => systemCalls.push('ptlScan'),
+        crimeScan: () => systemCalls.push('crimeScan'),
+        popDenScan: () => systemCalls.push('popDenScan'),
+        fireAnalysis: () => systemCalls.push('fireAnalysis'),
+      },
+    });
+
+    // `GenerateSomeCity` in C resets these before `InitWillStuff`.
+    expect(state.ScenarioID).toBe(0);
+    expect(state.CityTime).toBe(0);
+
+    // `DoSimInit` consumes InitSimLoad=2 and re-enables initial evaluation.
+    expect(state.InitSimLoad).toBe(0);
+    expect(state.DoInitialEval).toBe(1);
+
+    expect(hooks.destroyAllSprites).toHaveBeenCalledOnce();
+    expect(hooks.doUpdateHeads).toHaveBeenCalledOnce();
+    expect(hooks.doAllGraphs).toHaveBeenCalledOnce();
+
+    // One power scan happens in `InitSimMemory`, and another in the `DoSimInit` body.
+    expect(systemCalls).toEqual([
+      'doPowerScan',
+      'setValves',
+      'clearCensus',
+      'mapScan',
+      'doPowerScan',
+      'ptlScan',
+      'crimeScan',
+      'popDenScan',
+      'fireAnalysis',
+    ]);
+
+    const map = assertIsUint16Array(context.store.snapshot('map'));
+    for (let i = 0; i < map.length; i += 1) {
+      expect(map[i]).toBe(Tile.DIRT);
     }
   });
 });

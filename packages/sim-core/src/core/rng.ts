@@ -39,9 +39,54 @@ export function createRng(seed = 1): MicropolisRng {
   return new MicropolisRng(seed);
 }
 
-export function randomSeedFromTime(rng: MicropolisRng): number {
+/**
+ * `gettimeofday`-style timestamp payload used by `randomSeedFromTime`.
+ *
+ * Mirrors `struct timeval` consumed by `RandomlySeedRand()` in
+ * `ref/micropolis/src/sim/s_sim.c`.
+ */
+export interface MicropolisTimeval {
+  /**
+   * Seconds since Unix epoch (`time.tv_sec` in C).
+   */
+  tv_sec: number;
+  /**
+   * Microseconds within the current second (`time.tv_usec` in C).
+   */
+  tv_usec: number;
+}
+
+/**
+ * Injectable `gettimeofday` equivalent used for deterministic testing.
+ *
+ * Mirrors `gettimeofday(&time, NULL)` in `ref/micropolis/src/sim/s_sim.c`.
+ */
+export type MicropolisTimevalSource = () => MicropolisTimeval;
+
+const defaultTimevalSource: MicropolisTimevalSource = () => {
   const now = Date.now();
-  const seed = (now & 0xffff) ^ ((now >>> 16) & 0xffff) ^ rng.next16();
+  const tv_sec = Math.trunc(now / 1000);
+  const tv_usec = Math.trunc(now % 1000) * 1000;
+  return { tv_sec, tv_usec };
+};
+
+/**
+ * Time-based reseed helper for Micropolis core RNG.
+ *
+ * Mirrors `RandomlySeedRand()` in `ref/micropolis/src/sim/s_sim.c`:
+ * `SeedRand(time.tv_usec ^ time.tv_sec ^ sim_rand());`
+ *
+ * sim-core note:
+ * - JS does not expose native `gettimeofday`; the default source derives
+ *   `tv_sec/tv_usec` from `Date.now()`.
+ * - Tests can inject an exact `tv_sec/tv_usec` source for deterministic parity.
+ */
+export function randomSeedFromTime(
+  rng: MicropolisRng,
+  timeSource: MicropolisTimevalSource = defaultTimevalSource,
+): number {
+  const time = timeSource();
+  const seed = (Math.trunc(time.tv_usec) ^ Math.trunc(time.tv_sec) ^ rng.next16()) >>> 0;
   rng.seed(seed);
-  return seed >>> 0;
+  return seed;
 }

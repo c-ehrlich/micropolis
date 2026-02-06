@@ -72,7 +72,7 @@ Cover at least:
 - `UpdateHeads`-style first-run funds update (w_update.c `UpdateHeads`/`ReallyUpdateFunds`).
 - Megalinium rollover message -40 honoring message-port gating (w_update.c `updateDate` + s_msg.c `SendMes`).
 - Picture message requeue + expiry if/when `doMessage` parity is implemented (s_msg.c `doMessage`).
-- [ ] Extend e2e fixtures as needed once the behavior changes land, ensuring any magic numbers are tied to C sources in comments.
+- [x] Extend e2e fixtures as needed once the behavior changes land, ensuring any magic numbers are tied to C sources in comments.
 
 Notes
 Any intentional divergences from C must be explicitly documented in code with pointers to C sources. The zoning `simplified` traffic mode is one such opt-in divergence and is not the default parity path.

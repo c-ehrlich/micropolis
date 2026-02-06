@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MicropolisRng } from './rng.ts';
+import { MicropolisRng, randomSeedFromTime } from './rng.ts';
 
 describe('MicropolisRng', () => {
   it('produces the same sequence for the same seed', () => {
@@ -43,5 +43,34 @@ describe('MicropolisRng', () => {
     const values = Array.from({ length: 20 }, () => rng.rand(0));
 
     expect(values.every((value) => value === 0)).toBe(true);
+  });
+
+  it('randomSeedFromTime mirrors C RandomlySeedRand xor shape', () => {
+    const initialSeed = 0x1234_5678;
+    const tv_sec = 0x0bad_beef;
+    const tv_usec = 0x0007_a120;
+
+    const probe = new MicropolisRng(initialSeed);
+    const expectedSeed = (tv_usec ^ tv_sec ^ probe.next16()) >>> 0;
+
+    const rng = new MicropolisRng(initialSeed);
+    const actualSeed = randomSeedFromTime(rng, () => ({ tv_sec, tv_usec }));
+    expect(actualSeed).toBe(expectedSeed);
+
+    const expectedRng = new MicropolisRng(expectedSeed);
+    expect(rng.next16()).toBe(expectedRng.next16());
+    expect(rng.next16()).toBe(expectedRng.next16());
+  });
+
+  it('randomSeedFromTime uses the provided timeval source', () => {
+    const rng = new MicropolisRng(0x00c0ffee);
+    let calls = 0;
+    const source = () => {
+      calls += 1;
+      return { tv_sec: 123, tv_usec: 456789 };
+    };
+
+    randomSeedFromTime(rng, source);
+    expect(calls).toBe(1);
   });
 });

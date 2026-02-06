@@ -87,6 +87,18 @@ interface ReplaySetRogAction {
 type ReplayFixtureAction = ReplaySetScalarAction | ReplaySetTrafficAction | ReplaySetRogAction;
 
 /**
+ * C-source annotation for fixture "magic numbers".
+ *
+ * These notes document why specific constants appear in action logs and tie
+ * them to Micropolis C sources for parity auditability.
+ */
+interface ReplayMagicNumberNote {
+  value: number;
+  source: string;
+  meaning: string;
+}
+
+/**
  * On-disk replay action-log fixture shape.
  *
  * This file format is test-only and feeds both TS and C-oracle states.
@@ -94,6 +106,7 @@ type ReplayFixtureAction = ReplaySetScalarAction | ReplaySetTrafficAction | Repl
 interface ReplayActionLogFile {
   version: number;
   actions: ReplayFixtureAction[];
+  magicNumbers?: ReplayMagicNumberNote[];
 }
 
 /**
@@ -276,7 +289,54 @@ function readReplayActionLog(fileName: string): ReplayActionLogFile {
   if (!Array.isArray(parsed.actions)) {
     throw new Error(`invalid replay action-log fixture: ${file}`);
   }
-  return parsed as ReplayActionLogFile;
+  const actions = parsed.actions as ReplayFixtureAction[];
+
+  // Fixture guardrail: these threshold/clamp constants come directly from C and
+  // must stay documented in fixture metadata for parity maintenance:
+  // - `DecTrafficMem` in `ref/micropolis/src/sim/s_sim.c`: 24, 25, 200, 201
+  // - `DecROGMem` in `ref/micropolis/src/sim/s_sim.c`: 200, -200, +/-201 cases
+  const requiredMagic = new Set<number>();
+  for (const action of actions) {
+    if (action.kind !== 'set-trf-density' && action.kind !== 'set-rate-og-mem') {
+      continue;
+    }
+    const value = Math.trunc(action.value);
+    if (value === 24 || value === 25 || value === 200 || value === 201 || value === -201) {
+      requiredMagic.add(value);
+    }
+  }
+
+  if (requiredMagic.size > 0) {
+    if (!Array.isArray(parsed.magicNumbers)) {
+      throw new Error(
+        `replay fixture ${fileName} must include magicNumbers metadata for C threshold values`,
+      );
+    }
+    const documented = new Set<number>();
+    for (const note of parsed.magicNumbers) {
+      if (
+        typeof note.value !== 'number' ||
+        typeof note.source !== 'string' ||
+        typeof note.meaning !== 'string'
+      ) {
+        throw new Error(`invalid magicNumbers entry in ${fileName}`);
+      }
+      if (!note.source.includes('ref/micropolis/src/sim/')) {
+        throw new Error(`magicNumbers source must reference Micropolis C files in ${fileName}`);
+      }
+      documented.add(Math.trunc(note.value));
+    }
+
+    for (const value of requiredMagic) {
+      if (!documented.has(value)) {
+        throw new Error(
+          `fixture ${fileName} is missing C-magic-number annotation for value ${value}`,
+        );
+      }
+    }
+  }
+
+  return { ...parsed, actions } as ReplayActionLogFile;
 }
 
 /**
