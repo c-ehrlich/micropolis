@@ -15,7 +15,8 @@ This file tracks implementation status in the TypeScript port. Source of truth i
 
 - `ref/micropolis/spec/persistence/SPEC.md`:
   - `.cty` format read/write and metadata mapping are implemented in `packages/sim-core/src/io/cty.ts` and `packages/sim-core/src/io/cty-state.ts`.
-  - Scenario file loading (`snro.*`) and full C-style Save/Load orchestration are not yet implemented as public TS APIs.
+  - Public load/scenario orchestration APIs are implemented in `packages/sim-io/src/load.ts` (`loadFileLikeC`, `loadCityLikeC`, `loadScenarioLikeC`) plus `snro.*` scenario table/resource helpers in `packages/sim-io/src/scenarios.ts` and `packages/sim-io/src/node-files.ts`.
+  - C-style save orchestration parity (`saveFile`/`SaveCity`/`SaveCityAs`) is not yet implemented as public TS APIs.
 - `ref/micropolis/spec/ui/SPEC.md`:
   - UI-adjacent logic exists in sim-core (`tool-actions.ts`, `realtime.ts`, heads/message behavior in core systems).
   - Actual rendering/widgets/overlays/graphs/UI event-loop behavior are out of scope in sim-core and not implemented in `packages/sim-ui` (stub package).

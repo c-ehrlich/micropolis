@@ -1,5 +1,22 @@
 {
   "name": "@city/sim-io",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "pnpm -w tsc -p packages/sim-io/tsconfig.json --noEmit",
+    "lint": "pnpm -w eslint packages/sim-io/src packages/sim-io/vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root packages/sim-io",
+    "test-parity": "CITY_TEST_PARITY=1 pnpm -w vitest run --root packages/sim-io"
+  },
+  "dependencies": {
+    "@city/sim-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@city/micropolis-c-harness": "workspace:*",
+    "@types/node": "25.0.10"
+  }
 }

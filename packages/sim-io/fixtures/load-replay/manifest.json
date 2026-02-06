@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "defaultTicks": 8,
+  "defaultCheckpointCadence": [1, 4, 8],
+  "fixtures": [
+    {
+      "name": "about-city-load",
+      "kind": "city",
+      "file": "about.cty",
+      "seed": 12648430,
+      "expectedReplayHash": 700779352
+    },
+    {
+      "name": "scenario-san-francisco",
+      "kind": "scenario",
+      "scenarioId": 2,
+      "file": "snro.222",
+      "seed": 3405691582,
+      "expectedReplayHash": 1377662657
+    },
+    {
+      "name": "scenario-rio",
+      "kind": "scenario",
+      "scenarioId": 8,
+      "file": "snro.888",
+      "seed": 3735928559,
+      "expectedReplayHash": 2016196271
+    }
+  ]
+}
