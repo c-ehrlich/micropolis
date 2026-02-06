@@ -84,8 +84,8 @@ function applyDecodedCityToRuntime(state: SimState, context: SimContext, city: C
 }
 
 /**
- * Derive the city name using C `LoadCity` string-mutation semantics.
- * Mirrors `LoadCity` in `ref/micropolis/src/sim/s_fileio.c`:
+ * Derive the city name using C `LoadCity` / `SaveCityAs` string-mutation semantics.
+ * Mirrors `LoadCity` and `SaveCityAs` in `ref/micropolis/src/sim/s_fileio.c`:
  * 1. truncate at the last `.` in the full path string
  * 2. then take basename after `/` or `\\`
  */

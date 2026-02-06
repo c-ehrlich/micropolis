@@ -10,13 +10,13 @@ This file tracks implementation status in the TypeScript port. Source of truth i
 - `ref/micropolis/spec/terrain/SPEC.md` (non-UI terrain generation):
   - `GenerateMap` pipeline and terrain routines are implemented in `packages/sim-core/src/terrain/*.ts`.
   - Fixture parity and C-harness parity tests exist in `packages/sim-core/src/terrain/*.c-harness.test.ts` plus fixtures in `packages/sim-core/fixtures/terrain/`.
-
-## Partially Implemented
-
 - `ref/micropolis/spec/persistence/SPEC.md`:
   - `.cty` format read/write and metadata mapping are implemented in `packages/sim-core/src/io/cty.ts` and `packages/sim-core/src/io/cty-state.ts`.
   - Public load/scenario orchestration APIs are implemented in `packages/sim-io/src/load.ts` (`loadFileLikeC`, `loadCityLikeC`, `loadScenarioLikeC`) plus `snro.*` scenario table/resource helpers in `packages/sim-io/src/scenarios.ts` and `packages/sim-io/src/node-files.ts`.
-  - C-style save orchestration parity (`saveFile`/`SaveCity`/`SaveCityAs`) is not yet implemented as public TS APIs.
+  - Public save orchestration APIs are implemented in `packages/sim-io/src/save.ts` (`saveFileLikeC`, `saveCityLikeC`, `saveCityAsLikeC`) plus Node save-to-path wrappers in `packages/sim-io/src/node-files.ts`.
+
+## Partially Implemented
+
 - `ref/micropolis/spec/ui/SPEC.md`:
   - UI-adjacent logic exists in sim-core (`tool-actions.ts`, `realtime.ts`, heads/message behavior in core systems).
   - Actual rendering/widgets/overlays/graphs/UI event-loop behavior are out of scope in sim-core and not implemented in `packages/sim-ui` (stub package).
