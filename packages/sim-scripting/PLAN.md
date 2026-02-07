@@ -42,7 +42,7 @@ Use this exact loop:
     - types exist for success/error returns
     - unit test validates basic error/result mapping
 
-- [ ] `P0.3` Add command runtime kernel.
+- [x] `P0.3` Add command runtime kernel.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/runtime/script-runtime.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/runtime/script-runtime.test.ts`
   - Done when:
     - can register command by name and invoke by argv
@@ -275,3 +275,4 @@ Use this exact loop:
 ## Execution Log
 - [x] `2026-02-07` Completed `P0.1` by adding package scripts, `vitest.config.ts`, and a passing placeholder test in `src/index.test.ts`.
 - [x] `2026-02-07` Completed `P0.2` by adding Tcl-style runtime result codes, structured runtime errors, and unit tests for error/result mapping.
+- [x] `2026-02-07` Completed `P0.3` by adding `ScriptRuntime` command registration/invocation kernel and coverage for dispatch, unknown-command errors, and thrown-error normalization.
