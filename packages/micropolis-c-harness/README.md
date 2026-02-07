@@ -107,6 +107,11 @@ micropolis-core-oracle load-cty --state-dir ./tmp/state --cty-path ./city.cty
 cat ./city.cty | micropolis-core-oracle load-cty-bytes --state-dir ./tmp/state
 ```
 
+Failure behavior:
+
+- For invalid `.cty` payloads (for example unsupported byte lengths), both `load-cty` and
+  `load-cty-bytes` exit with status `1` and leave the existing `--state-dir` snapshot unchanged.
+
 State directory files:
 
 - `snapshot.json` (scalar metadata)
