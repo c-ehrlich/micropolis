@@ -44,7 +44,7 @@ Use this exact loop:
 - [x] `SugarNickName "<nick>"`
 - [x] `SugarShare`
 - [x] `SugarQuit`
-- [ ] `SugarActivate`
+- [x] `SugarActivate`
 - [ ] `SugarDeactivate`
 - [ ] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
 - [ ] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
@@ -142,3 +142,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 2 task `SugarNickName "<nick>"` by verifying/exporting `serializeSugarNickNameCommand` parity with `send_process('SugarNickName "' + QuoteTCL(nick) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarShare` by verifying/exporting `serializeSugarShareCommand` parity with `share()` -> `send_process('SugarShare\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarQuit` by verifying/exporting `serializeSugarQuitCommand` parity with `quit_process()` -> `send_process('SugarQuit\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarActivate` by verifying/exporting `serializeSugarActivateCommand` parity with `_focus_in_cb()` -> `send_process('SugarActivate\n')` from `ref/micropolis/micropolisactivity.py`.
