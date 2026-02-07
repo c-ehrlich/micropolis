@@ -42,7 +42,7 @@ Use this exact loop:
 - [x] Create `src/sugar/activity-bridge.ts` to serialize outbound commands with trailing `\n`:
 - [x] `SugarStartUp "<uri>"`
 - [x] `SugarNickName "<nick>"`
-- [ ] `SugarShare`
+- [x] `SugarShare`
 - [ ] `SugarQuit`
 - [ ] `SugarActivate`
 - [ ] `SugarDeactivate`
@@ -140,3 +140,4 @@ Use this exact loop:
 - [x] 2026-02-07: Added `src/sugar/activity-bridge.ts` to serialize Sugar outbound commands with trailing `\n` (startup, nickname, share/quit/focus, buddy add/del) including Micropolis-style buddy props/getter fallback ordering; added `src/sugar/activity-bridge.test.ts` for exact command output parity.
 - [x] 2026-02-07: Completed Phase 2 task `SugarStartUp "<uri>"` by verifying/exporting `serializeSugarStartUpCommand` parity with `send_process('SugarStartUp "' + QuoteTCL(uri) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarNickName "<nick>"` by verifying/exporting `serializeSugarNickNameCommand` parity with `send_process('SugarNickName "' + QuoteTCL(nick) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarShare` by verifying/exporting `serializeSugarShareCommand` parity with `share()` -> `send_process('SugarShare\n')` from `ref/micropolis/micropolisactivity.py`.
