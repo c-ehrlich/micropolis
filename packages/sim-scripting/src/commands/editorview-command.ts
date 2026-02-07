@@ -21,6 +21,15 @@ const DEFAULT_EDITOR_WINDOW_SIZE = 256;
 const DEFAULT_WORLD_WIDTH = 120;
 const DEFAULT_WORLD_HEIGHT = 100;
 const DEFAULT_EDITOR_TOOL_STATE = 7;
+const DEFAULT_EDITOR_VISIBLE = 0;
+const DEFAULT_EDITOR_IS_MAPPED = 1;
+const DEFAULT_EDITOR_AUTO_GOTO = 0;
+const DEFAULT_EDITOR_AUTO_GOING = 0;
+const DEFAULT_EDITOR_AUTO_GOAL = 0;
+const DEFAULT_EDITOR_AUTO_SPEED = 75;
+const DEFAULT_EDITOR_SHOW_ME = 1;
+const DEFAULT_EDITOR_SOUND = 1;
+const DEFAULT_EDITOR_SHOW_OVERLAY = 1;
 const CHALK_EDITOR_TOOL_STATE = 10;
 const ERASER_EDITOR_TOOL_STATE = 11;
 const LAST_EDITOR_TOOL_STATE = 18;
@@ -41,13 +50,16 @@ export interface EditorViewConfigureState {
 /**
  * Mutable state for one created editor view command.
  * Mirrors scripting-visible `SimView` fields used by `EditorCmdconfigure`,
- * `EditorCmdposition`, `EditorCmdsize`, `EditorCmdPan*`, and `EditorCmdTool*`
- * in `ref/micropolis/src/sim/w_editor.c`, plus pan/coordinate fields from
- * `ref/micropolis/src/sim/w_x.c` and `ref/micropolis/src/sim/w_tool.c`.
+ * `EditorCmdposition`, `EditorCmdsize`, `EditorCmdPan*`, `EditorCmdTool*`,
+ * and P2.3 visibility/auto/overlay commands in `ref/micropolis/src/sim/w_editor.c`,
+ * plus pan/coordinate fields from `ref/micropolis/src/sim/w_x.c` and
+ * `ref/micropolis/src/sim/w_tool.c`.
  * Difference from C: Tk/X11 pointers and rendering buffers are omitted.
  */
 export interface EditorViewState {
   commandName: string;
+  visible: number;
+  isMapped: number;
   wX: number;
   wY: number;
   wWidth: number;
@@ -73,7 +85,20 @@ export interface EditorViewState {
   toolXConst: number;
   toolYConst: number;
   toolState: number;
+  toolMode: number;
+  skips: number;
   skip: number;
+  autoGoto: number;
+  autoGoing: number;
+  autoXGoal: number;
+  autoYGoal: number;
+  autoSpeed: number;
+  showMe: number;
+  follow: EditorViewFollowSprite | null;
+  sound: number;
+  showOverlay: number;
+  overlayMode: number;
+  dynamicFilter: number;
   invalid: number;
   lastX: number;
   lastY: number;
@@ -86,6 +111,8 @@ export interface EditorViewState {
  * from `ref/micropolis/src/sim/w_x.c` and `ref/micropolis/src/sim/w_tk.c`.
  */
 export interface CreateEditorViewStateOptions {
+  visible?: number;
+  isMapped?: number;
   wX?: number;
   wY?: number;
   wWidth?: number;
@@ -103,11 +130,32 @@ export interface CreateEditorViewStateOptions {
   toolXConst?: number;
   toolYConst?: number;
   toolState?: number;
+  toolMode?: number;
+  skips?: number;
   skip?: number;
+  autoGoto?: number;
+  autoGoing?: number;
+  autoXGoal?: number;
+  autoYGoal?: number;
+  autoSpeed?: number;
+  showMe?: number;
+  follow?: EditorViewFollowSprite | null;
+  sound?: number;
+  showOverlay?: number;
+  overlayMode?: number;
+  dynamicFilter?: number;
   invalid?: number;
   lastX?: number;
   lastY?: number;
   configure?: Partial<EditorViewConfigureState>;
+}
+
+interface EditorViewFollowSprite {
+  name: string;
+  x: number;
+  y: number;
+  xHot: number;
+  yHot: number;
 }
 
 interface EditorViewToolEvent {
@@ -132,10 +180,16 @@ interface EditorViewToolHooks {
   onToolUp?: (viewState: EditorViewState, event: EditorViewToolEvent) => void;
 }
 
+interface EditorViewAutoHooks {
+  resolveFollowSprite?: (spriteName: string) => EditorViewFollowSprite | null;
+  onDidStopPan?: (viewState: EditorViewState) => void;
+}
+
 interface CreateEditorViewSubcommandEntriesOptions {
   kickState?: SimKickState;
   kickHooks?: SimKickHooks;
   toolHooks?: EditorViewToolHooks;
+  autoHooks?: EditorViewAutoHooks;
 }
 
 /**
@@ -243,6 +297,67 @@ function doEditorPanTo(viewState: EditorViewState, x: number, y: number): void {
  */
 function doEditorPanBy(viewState: EditorViewState, dx: number, dy: number): void {
   doEditorPanTo(viewState, viewState.panX + dx, viewState.panY + dy);
+}
+
+/**
+ * Simplified `setWandState` wrapper for scripting command handlers.
+ * Mirrors `setWandState(view, state)` in `ref/micropolis/src/sim/w_tool.c`.
+ * Difference from C: `DoUpdateHeads`/`DoSetWandState` UI hooks are not modeled here.
+ */
+function runEditorSetWandState(viewState: EditorViewState, state: number): void {
+  viewState.toolState = state;
+}
+
+/**
+ * Handles editor auto-pan and sprite-follow movement updates.
+ * Mirrors `HandleAutoGoto` in `ref/micropolis/src/sim/w_editor.c`.
+ * Difference from C: `NewMap` and `DidStopPan` side effects are exposed via optional hooks.
+ */
+function runEditorHandleAutoGoto(
+  viewState: EditorViewState,
+  autoHooks: EditorViewAutoHooks = {},
+): void {
+  if (viewState.follow !== null) {
+    const x = viewState.follow.x + viewState.follow.xHot;
+    const y = viewState.follow.y + viewState.follow.yHot;
+
+    if (x !== viewState.panX || y !== viewState.panY) {
+      doEditorPanTo(viewState, x, y);
+    }
+    return;
+  }
+
+  if (viewState.autoGoto === 0 || viewState.autoGoing === 0 || viewState.toolMode !== 0) {
+    return;
+  }
+
+  const speed = viewState.autoSpeed;
+  const sloth = viewState.autoGoing < 5 ? viewState.autoGoing / 5.0 : 1.0;
+  const dx = viewState.autoXGoal - viewState.panX;
+  const dy = viewState.autoYGoal - viewState.panY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance < speed * sloth) {
+    viewState.autoGoing = 0;
+    if (viewState.autoGoto === -1) {
+      viewState.autoGoto = 0;
+    }
+
+    doEditorPanTo(viewState, viewState.autoXGoal, viewState.autoYGoal);
+    autoHooks.onDidStopPan?.(viewState);
+    return;
+  }
+
+  const direction = Math.atan2(dy, dx);
+  let vx = Math.cos(direction) * speed;
+  let vy = Math.sin(direction) * speed;
+  vx *= sloth;
+  vy *= sloth;
+  vx += 0.5;
+  vy += 0.5;
+
+  doEditorPanBy(viewState, Math.trunc(vx), Math.trunc(vy));
+  viewState.autoGoing += 1;
 }
 
 /**
@@ -424,6 +539,8 @@ export function createEditorViewState(
 
   const viewState: EditorViewState = {
     commandName,
+    visible: options.visible ?? DEFAULT_EDITOR_VISIBLE,
+    isMapped: options.isMapped ?? DEFAULT_EDITOR_IS_MAPPED,
     wX: options.wX ?? 0,
     wY: options.wY ?? 0,
     wWidth,
@@ -449,7 +566,20 @@ export function createEditorViewState(
     toolXConst: options.toolXConst ?? -1,
     toolYConst: options.toolYConst ?? -1,
     toolState: options.toolState ?? DEFAULT_EDITOR_TOOL_STATE,
+    toolMode: options.toolMode ?? 0,
+    skips: options.skips ?? 0,
     skip: options.skip ?? 0,
+    autoGoto: options.autoGoto ?? DEFAULT_EDITOR_AUTO_GOTO,
+    autoGoing: options.autoGoing ?? DEFAULT_EDITOR_AUTO_GOING,
+    autoXGoal: options.autoXGoal ?? DEFAULT_EDITOR_AUTO_GOAL,
+    autoYGoal: options.autoYGoal ?? DEFAULT_EDITOR_AUTO_GOAL,
+    autoSpeed: options.autoSpeed ?? DEFAULT_EDITOR_AUTO_SPEED,
+    showMe: options.showMe ?? DEFAULT_EDITOR_SHOW_ME,
+    follow: options.follow ?? null,
+    sound: options.sound ?? DEFAULT_EDITOR_SOUND,
+    showOverlay: options.showOverlay ?? DEFAULT_EDITOR_SHOW_OVERLAY,
+    overlayMode: options.overlayMode ?? 0,
+    dynamicFilter: options.dynamicFilter ?? 0,
     invalid: options.invalid ?? 0,
     lastX: options.lastX ?? 0,
     lastY: options.lastY ?? 0,
@@ -466,16 +596,22 @@ export function createEditorViewState(
 }
 
 /**
- * Subcommand names registered for the P2.1/P2.2 editor view shell.
- * Mirrors `EDITOR_CMD(...)` registrations for `configure`, `position`, `size`,
- * `Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`,
- * and `DoTool` in `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`).
+ * Subcommand names registered for the P2.1/P2.2/P2.3 editor view shell.
+ * Mirrors `EDITOR_CMD(...)` registrations implemented here from
+ * `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`) for configure,
+ * pan/tool, visibility, and auto/overlay mode command families.
  */
 export const EDITOR_VIEW_SUBCOMMAND_NAMES = [
   'configure',
   'position',
   'size',
+  'AutoGoto',
+  'Sound',
+  'Skip',
+  'Update',
   'Pan',
+  'ToolState',
+  'ToolMode',
   'PanStart',
   'PanTo',
   'PanBy',
@@ -483,6 +619,15 @@ export const EDITOR_VIEW_SUBCOMMAND_NAMES = [
   'ToolDrag',
   'ToolUp',
   'DoTool',
+  'Visible',
+  'AutoGoing',
+  'AutoSpeed',
+  'AutoGoal',
+  'ShowMe',
+  'Follow',
+  'ShowOverlay',
+  'OverlayMode',
+  'DynamicFilter',
 ] as const;
 
 /**
@@ -845,6 +990,511 @@ function handleEditorViewSizeSubcommand(
 }
 
 /**
+ * Implements the `AutoGoto` editor-view subcommand.
+ * Mirrors `EditorCmdAutoGoto` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewAutoGotoSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} AutoGoto expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawValue = argv[2];
+    if (rawValue === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} AutoGoto missing flag argument`);
+    }
+
+    const parsedValue = parseTclInt32(rawValue);
+    if (parsedValue === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} AutoGoto expected an integer flag: ${rawValue}`,
+      );
+    }
+
+    viewState.autoGoto = parsedValue;
+    viewState.autoGoing = 0;
+    viewState.autoXGoal = 0;
+    viewState.autoYGoal = 0;
+  }
+
+  return makeScriptSuccess(String(viewState.autoGoto));
+}
+
+/**
+ * Implements the `Sound` editor-view subcommand.
+ * Mirrors `EditorCmdSound` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewSoundSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} Sound expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawValue = argv[2];
+    if (rawValue === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} Sound missing flag argument`);
+    }
+
+    const parsedValue = parseTclInt32(rawValue);
+    if (parsedValue === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} Sound expected an integer flag: ${rawValue}`,
+      );
+    }
+
+    viewState.sound = parsedValue;
+    viewState.autoGoing = 0;
+    viewState.autoXGoal = 0;
+    viewState.autoYGoal = 0;
+  }
+
+  return makeScriptSuccess(String(viewState.sound));
+}
+
+/**
+ * Implements the `Skip` editor-view subcommand.
+ * Mirrors `EditorCmdSkip` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewSkipSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} Skip expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawValue = argv[2];
+    if (rawValue === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} Skip missing skips argument`);
+    }
+
+    const parsedValue = parseTclInt32(rawValue);
+    if (parsedValue === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} Skip expected an integer skips value: ${rawValue}`,
+      );
+    }
+
+    viewState.skip = parsedValue;
+    viewState.skips = parsedValue;
+  }
+
+  return makeScriptSuccess(String(viewState.skips));
+}
+
+/**
+ * Implements the `Update` editor-view subcommand.
+ * Mirrors `EditorCmdUpdate` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewUpdateSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} Update expects argc 2, got ${argv.length}`,
+    );
+  }
+
+  viewState.skip = 0;
+  return makeScriptSuccess();
+}
+
+/**
+ * Implements the `ToolState` editor-view subcommand.
+ * Mirrors `EditorCmdToolState` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewToolStateSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} ToolState expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawState = argv[2];
+    if (rawState === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ToolState missing state argument`);
+    }
+
+    const parsedState = parseTclInt32(rawState);
+    if (parsedState === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} ToolState expected an integer state: ${rawState}`,
+      );
+    }
+
+    runEditorSetWandState(viewState, parsedState);
+  }
+
+  return makeScriptSuccess(String(viewState.toolState));
+}
+
+/**
+ * Implements the `ToolMode` editor-view subcommand.
+ * Mirrors `EditorCmdToolMode` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewToolModeSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} ToolMode expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawMode = argv[2];
+    if (rawMode === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ToolMode missing mode argument`);
+    }
+
+    const parsedMode = parseTclInt32(rawMode);
+    if (parsedMode === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} ToolMode expected an integer mode: ${rawMode}`,
+      );
+    }
+
+    viewState.toolMode = parsedMode;
+  }
+
+  return makeScriptSuccess(String(viewState.toolMode));
+}
+
+/**
+ * Implements the `Visible` editor-view subcommand.
+ * Mirrors `EditorCmdVisible` in `ref/micropolis/src/sim/w_editor.c`.
+ * Difference from C: `Tk_IsMapped(view->tkwin)` is represented by `isMapped` state.
+ */
+function handleEditorViewVisibleSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} Visible expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawVisible = argv[2];
+    if (rawVisible === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} Visible missing visible argument`);
+    }
+
+    const parsedVisible = parseTclInt32(rawVisible);
+    if (parsedVisible === null || parsedVisible < 0 || parsedVisible > 1) {
+      return makeInvalidInteger(
+        `${viewState.commandName} Visible expected an integer visible in range 0..1: ${rawVisible}`,
+      );
+    }
+
+    viewState.visible = parsedVisible !== 0 && viewState.isMapped !== 0 ? 1 : 0;
+  }
+
+  return makeScriptSuccess(String(viewState.visible));
+}
+
+/**
+ * Implements the `AutoGoing` editor-view subcommand.
+ * Mirrors `EditorCmdAutoGoing` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewAutoGoingSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} AutoGoing expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawFlag = argv[2];
+    if (rawFlag === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} AutoGoing missing flag argument`);
+    }
+
+    const parsedFlag = parseTclInt32(rawFlag);
+    if (parsedFlag === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} AutoGoing expected an integer flag: ${rawFlag}`,
+      );
+    }
+
+    viewState.autoGoing = parsedFlag;
+    if (viewState.autoGoto === -1) {
+      viewState.autoGoto = 0;
+    }
+  }
+
+  return makeScriptSuccess(String(viewState.autoGoing));
+}
+
+/**
+ * Implements the `AutoSpeed` editor-view subcommand.
+ * Mirrors `EditorCmdAutoSpeed` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewAutoSpeedSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} AutoSpeed expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawSpeed = argv[2];
+    if (rawSpeed === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} AutoSpeed missing speed argument`);
+    }
+
+    const parsedSpeed = parseTclInt32(rawSpeed);
+    if (parsedSpeed === null || parsedSpeed < 1) {
+      return makeInvalidInteger(
+        `${viewState.commandName} AutoSpeed expected an integer speed >= 1: ${rawSpeed}`,
+      );
+    }
+
+    viewState.autoSpeed = parsedSpeed;
+  }
+
+  return makeScriptSuccess(String(viewState.autoSpeed));
+}
+
+/**
+ * Implements the `AutoGoal` editor-view subcommand.
+ * Mirrors `EditorCmdAutoGoal` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewAutoGoalSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 4) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} AutoGoal expects argc 2 or 4, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 4) {
+    const rawX = argv[2];
+    const rawY = argv[3];
+    if (rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} AutoGoal missing x/y arguments`);
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${viewState.commandName} AutoGoal expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${viewState.commandName} AutoGoal expected an integer y: ${rawY}`);
+    }
+
+    viewState.autoXGoal = parsedX;
+    viewState.autoYGoal = parsedY;
+
+    const dx = viewState.panX - parsedX;
+    const dy = viewState.panY - parsedY;
+    viewState.autoGoing = dx * dx + dy * dy > 64 * 64 ? 1 : 0;
+    if (viewState.autoGoing !== 0 && viewState.autoGoto === 0) {
+      viewState.autoGoto = -1;
+    }
+  }
+
+  return makeScriptSuccess(`${viewState.autoXGoal} ${viewState.autoYGoal}`);
+}
+
+/**
+ * Builds the `Follow` editor-view subcommand handler.
+ * Mirrors `EditorCmdFollow` in `ref/micropolis/src/sim/w_editor.c`.
+ * Difference from C: sprite lookup is delegated to a typed resolver hook.
+ */
+function createEditorViewFollowSubcommandHandler(
+  autoHooks: EditorViewAutoHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 2 && argv.length !== 3) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} Follow expects argc 2 or 3, got ${argv.length}`,
+      );
+    }
+
+    if (argv.length === 3) {
+      const spriteName = argv[2];
+      if (spriteName === undefined) {
+        return makeInvalidArgCount(`${viewState.commandName} Follow missing sprite name`);
+      }
+
+      viewState.follow = null;
+      if (spriteName.length > 0) {
+        viewState.follow = autoHooks.resolveFollowSprite?.(spriteName) ?? null;
+      }
+
+      if (viewState.follow !== null) {
+        runEditorHandleAutoGoto(viewState, autoHooks);
+      }
+    }
+
+    return makeScriptSuccess(viewState.follow?.name ?? '');
+  };
+}
+
+/**
+ * Implements the `ShowMe` editor-view subcommand.
+ * Mirrors `EditorCmdShowMe` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewShowMeSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} ShowMe expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawFlag = argv[2];
+    if (rawFlag === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ShowMe missing flag argument`);
+    }
+
+    const parsedFlag = parseTclInt32(rawFlag);
+    if (parsedFlag === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} ShowMe expected an integer flag: ${rawFlag}`,
+      );
+    }
+
+    viewState.showMe = parsedFlag;
+  }
+
+  return makeScriptSuccess(String(viewState.showMe));
+}
+
+/**
+ * Implements the `ShowOverlay` editor-view subcommand.
+ * Mirrors `EditorCmdShowOverlay` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewShowOverlaySubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} ShowOverlay expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawFlag = argv[2];
+    if (rawFlag === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ShowOverlay missing flag argument`);
+    }
+
+    const parsedFlag = parseTclInt32(rawFlag);
+    if (parsedFlag === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} ShowOverlay expected an integer flag: ${rawFlag}`,
+      );
+    }
+
+    viewState.showOverlay = parsedFlag;
+  }
+
+  return makeScriptSuccess(String(viewState.showOverlay));
+}
+
+/**
+ * Implements the `OverlayMode` editor-view subcommand.
+ * Mirrors `EditorCmdOverlayMode` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewOverlayModeSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} OverlayMode expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawMode = argv[2];
+    if (rawMode === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} OverlayMode missing mode argument`);
+    }
+
+    const parsedMode = parseTclInt32(rawMode);
+    if (parsedMode === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} OverlayMode expected an integer mode: ${rawMode}`,
+      );
+    }
+
+    viewState.overlayMode = parsedMode;
+  }
+
+  return makeScriptSuccess(String(viewState.overlayMode));
+}
+
+/**
+ * Implements the `DynamicFilter` editor-view subcommand.
+ * Mirrors `EditorCmdDynamicFilter` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewDynamicFilterSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2 && argv.length !== 3) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} DynamicFilter expects argc 2 or 3, got ${argv.length}`,
+    );
+  }
+
+  if (argv.length === 3) {
+    const rawValue = argv[2];
+    if (rawValue === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} DynamicFilter missing value argument`);
+    }
+
+    const parsedValue = parseTclInt32(rawValue);
+    if (parsedValue === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} DynamicFilter expected an integer value: ${rawValue}`,
+      );
+    }
+
+    viewState.dynamicFilter = parsedValue;
+  }
+
+  return makeScriptSuccess(String(viewState.dynamicFilter));
+}
+
+/**
  * Builds the `Pan` subcommand handler.
  * Mirrors `EditorCmdPan` in `ref/micropolis/src/sim/w_editor.c`.
  */
@@ -1166,11 +1816,12 @@ function createEditorViewToolUpSubcommandHandler(
 
 /**
  * Builds the default subcommand entries for the editor-view shell.
- * Mirrors the P2.1/P2.2 `EDITOR_CMD(...)` registrations in
+ * Mirrors `EDITOR_CMD(...)` registrations implemented for P2.1/P2.2/P2.3 in
  * `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`) for configure,
- * position/size, pan, and tool command families.
+ * visibility/auto/overlay, and pan/tool command families.
  * Parity note: tool internals model command-facing coordinate/state behavior,
- * while detailed map-edit interpolation remains delegated to hook integration.
+ * while detailed map-edit interpolation and sprite-list ownership are delegated
+ * to hook integration.
  */
 export function createEditorViewSubcommandEntries(
   options: CreateEditorViewSubcommandEntriesOptions = {},
@@ -1178,12 +1829,19 @@ export function createEditorViewSubcommandEntries(
   const kickState = options.kickState ?? createSimKickState();
   const kickHooks = options.kickHooks ?? {};
   const toolHooks = options.toolHooks ?? {};
+  const autoHooks = options.autoHooks ?? {};
 
   return [
     ['configure', handleEditorViewConfigureSubcommand] as const,
     ['position', handleEditorViewPositionSubcommand] as const,
     ['size', handleEditorViewSizeSubcommand] as const,
+    ['AutoGoto', handleEditorViewAutoGotoSubcommand] as const,
+    ['Sound', handleEditorViewSoundSubcommand] as const,
+    ['Skip', handleEditorViewSkipSubcommand] as const,
+    ['Update', handleEditorViewUpdateSubcommand] as const,
     ['Pan', createEditorViewPanSubcommandHandler(kickState, kickHooks)] as const,
+    ['ToolState', handleEditorViewToolStateSubcommand] as const,
+    ['ToolMode', handleEditorViewToolModeSubcommand] as const,
     ['PanStart', handleEditorViewPanStartSubcommand] as const,
     ['PanTo', createEditorViewPanToSubcommandHandler(kickState, kickHooks)] as const,
     ['PanBy', createEditorViewPanBySubcommandHandler(kickState, kickHooks)] as const,
@@ -1197,6 +1855,15 @@ export function createEditorViewSubcommandEntries(
       createEditorViewToolDragSubcommandHandler(kickState, kickHooks, toolHooks),
     ] as const,
     ['ToolUp', createEditorViewToolUpSubcommandHandler(kickState, kickHooks, toolHooks)] as const,
+    ['Visible', handleEditorViewVisibleSubcommand] as const,
+    ['AutoGoing', handleEditorViewAutoGoingSubcommand] as const,
+    ['AutoSpeed', handleEditorViewAutoSpeedSubcommand] as const,
+    ['AutoGoal', handleEditorViewAutoGoalSubcommand] as const,
+    ['ShowMe', handleEditorViewShowMeSubcommand] as const,
+    ['Follow', createEditorViewFollowSubcommandHandler(autoHooks)] as const,
+    ['ShowOverlay', handleEditorViewShowOverlaySubcommand] as const,
+    ['OverlayMode', handleEditorViewOverlayModeSubcommand] as const,
+    ['DynamicFilter', handleEditorViewDynamicFilterSubcommand] as const,
   ];
 }
 
@@ -1219,9 +1886,9 @@ export function createEditorViewSubcommandTable(
 }
 
 /**
- * Default subcommand table for P2.1/P2.2 editor-view shell behavior.
+ * Default subcommand table for P2.1/P2.2/P2.3 editor-view shell behavior.
  * Mirrors `editor_command_init` registrations for configure/position/size plus
- * pan/tool command wrappers in `ref/micropolis/src/sim/w_editor.c`.
+ * auto/visibility and pan/tool command wrappers in `ref/micropolis/src/sim/w_editor.c`.
  */
 export const EDITOR_VIEW_SUBCOMMAND_TABLE = createEditorViewSubcommandTable(
   createEditorViewSubcommandEntries(),

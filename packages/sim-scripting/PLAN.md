@@ -135,7 +135,7 @@ Use this exact loop:
     - pan delta math and `Kick` behavior are tested
     - tile/view coordinate conversions are covered
 
-- [ ] `P2.3` Implement editor mode/visibility/auto commands.
+- [x] `P2.3` Implement editor mode/visibility/auto commands.
   - Commands: `AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`
   - Done when:
     - auto-go state transitions match expected C behavior
@@ -291,3 +291,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.10` by adding `sim` URL/browser/random/dollars utilities (`QuoteURL`, `OpenWebBrowser`, `Rand`, `Dollars`) with C-mapped byte-escaping and command-string behavior, signed-16-bit `Rand(short)` range parity, and configurable legacy `Dollars` literal-format compatibility mode.
 - [x] `2026-02-07` Completed `P2.1` by adding the `editorview` command-family shell (`configure`, `position`, `size`), including top-level view-command creation/registration, C-style argc + Tcl-integer parsing parity from `w_editor.c`/`w_tk.c`, and colocated unit coverage for set/get/error paths.
 - [x] `2026-02-07` Completed `P2.2` by adding `editorview` pan/tool subcommands (`Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`) with C-mapped pan clamp/delta logic from `w_editor.c`/`w_x.c`, command-level kick coalescing parity, and colocated tests covering kick behavior plus view/pixel and tile command coordinate semantics.
+- [x] `2026-02-07` Completed `P2.3` by adding `editorview` mode/visibility/auto commands (`AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`) with C-parity state transitions from `w_editor.c`/`w_x.c` and colocated tests covering auto-go threshold/flag behavior plus follow lookup/pan updates.

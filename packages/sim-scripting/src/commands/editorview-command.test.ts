@@ -312,6 +312,154 @@ describe('editorview widget command shell', () => {
     expect(kickState.updateDelayed).toBe(true);
   });
 
+  it('implements editor mode/visibility/auto commands with C parity state transitions', () => {
+    const viewState = createEditorViewState('.editor.main', {
+      isMapped: 0,
+      autoGoto: 0,
+      autoGoing: 0,
+      panX: 200,
+      panY: 300,
+    });
+    const didStopPanCalls: Array<readonly [number, number]> = [];
+    const subcommandTable = createEditorViewSubcommandTable(
+      createEditorViewSubcommandEntries({
+        autoHooks: {
+          resolveFollowSprite: (spriteName) => {
+            if (spriteName === 'heli') {
+              return {
+                name: 'heli',
+                x: 640,
+                y: 480,
+                xHot: 8,
+                yHot: 4,
+              };
+            }
+            return null;
+          },
+          onDidStopPan: (view) => {
+            didStopPanCalls.push([view.panX, view.panY] as const);
+          },
+        },
+      }),
+    );
+    const dispatcher = createEditorViewWidgetCommandDispatcher(viewState, subcommandTable);
+
+    expect(dispatcher(['.editor.main', 'AutoGoto'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(dispatcher(['.editor.main', 'AutoGoto', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    // `EditorCmdAutoGoal` in `w_editor.c` uses a 64-pixel radius
+    // (`(dx*dx)+(dy*dy) > (64*64)`) to decide whether auto-pan should run.
+    expect(dispatcher(['.editor.main', 'AutoGoal', '264', '300'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '264 300',
+    });
+    expect(viewState.autoGoing).toBe(0);
+
+    expect(dispatcher(['.editor.main', 'AutoGoto', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(dispatcher(['.editor.main', 'AutoGoal', '500', '300'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '500 300',
+    });
+    expect(viewState.autoGoing).toBe(1);
+    expect(viewState.autoGoto).toBe(-1);
+
+    expect(dispatcher(['.editor.main', 'AutoGoing', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(viewState.autoGoto).toBe(0);
+
+    expect(dispatcher(['.editor.main', 'AutoSpeed'])).toEqual({
+      code: ScriptResultCode.Ok,
+      // `InitNewView` in `w_x.c` sets `view->auto_speed = 75`.
+      value: '75',
+    });
+    expect(dispatcher(['.editor.main', 'AutoSpeed', '0x20'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '32',
+    });
+
+    expect(dispatcher(['.editor.main', 'Visible', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    viewState.isMapped = 1;
+    expect(dispatcher(['.editor.main', 'Visible', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    expect(dispatcher(['.editor.main', 'ToolState', '010'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '8',
+    });
+    expect(dispatcher(['.editor.main', 'ToolMode', '-1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-1',
+    });
+
+    expect(dispatcher(['.editor.main', 'Skip', '3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+    expect(viewState.skip).toBe(3);
+    expect(viewState.skips).toBe(3);
+    expect(dispatcher(['.editor.main', 'Update'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(viewState.skip).toBe(0);
+
+    viewState.autoGoing = 9;
+    viewState.autoXGoal = 77;
+    viewState.autoYGoal = 88;
+    expect(dispatcher(['.editor.main', 'Sound', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(viewState.autoGoing).toBe(0);
+    expect(viewState.autoXGoal).toBe(0);
+    expect(viewState.autoYGoal).toBe(0);
+
+    expect(dispatcher(['.editor.main', 'ShowMe', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(dispatcher(['.editor.main', 'ShowOverlay', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(dispatcher(['.editor.main', 'OverlayMode', '5'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '5',
+    });
+    expect(dispatcher(['.editor.main', 'DynamicFilter', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7',
+    });
+
+    expect(dispatcher(['.editor.main', 'Follow', 'missing'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(dispatcher(['.editor.main', 'Follow', 'heli'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'heli',
+    });
+    expect(viewState.panX).toBe(648);
+    expect(viewState.panY).toBe(484);
+    expect(didStopPanCalls).toHaveLength(0);
+  });
+
   it('returns typed failures for argc and integer parse errors in shell subcommands', () => {
     const viewState = createEditorViewState('.editor.main');
     const dispatcher = createEditorViewWidgetCommandDispatcher(viewState);
@@ -368,6 +516,30 @@ describe('editorview widget command shell', () => {
       code: ScriptResultCode.Error,
       errorCode: ScriptRuntimeErrorCode.InvalidInteger,
       message: '.editor.main ToolDown expected an integer y: bad',
+    });
+
+    expect(dispatcher(['.editor.main', 'AutoSpeed', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: '.editor.main AutoSpeed expected an integer speed >= 1: 0',
+    });
+
+    expect(dispatcher(['.editor.main', 'Visible', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: '.editor.main Visible expected an integer visible in range 0..1: 2',
+    });
+
+    expect(dispatcher(['.editor.main', 'AutoGoal', '4'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.editor.main AutoGoal expects argc 2 or 4, got 3',
+    });
+
+    expect(dispatcher(['.editor.main', 'Update', 'now'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.editor.main Update expects argc 2, got 3',
     });
   });
 
