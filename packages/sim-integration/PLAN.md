@@ -40,7 +40,7 @@ Use this exact loop:
 - [x] Create `src/sugar/quote-tcl.ts` implementing `QuoteTCL` parity (`"` -> `\\"` only).
 - [x] Add `src/sugar/quote-tcl.test.ts` for parity cases (quotes only; no backslash/braces escaping).
 - [x] Create `src/sugar/activity-bridge.ts` to serialize outbound commands with trailing `\n`:
-- [ ] `SugarStartUp "<uri>"`
+- [x] `SugarStartUp "<uri>"`
 - [ ] `SugarNickName "<nick>"`
 - [ ] `SugarShare`
 - [ ] `SugarQuit`
@@ -138,3 +138,4 @@ Use this exact loop:
 - [x] 2026-02-07: Added `src/sugar/quote-tcl.ts` with a 1:1 `QuoteTCL` parity implementation (`"` escaped to `\\"` only) and source-mapped JSDoc to `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Added `src/sugar/quote-tcl.test.ts` with Micropolis `QuoteTCL` parity coverage confirming quote-only escaping (no backslash/braces escaping).
 - [x] 2026-02-07: Added `src/sugar/activity-bridge.ts` to serialize Sugar outbound commands with trailing `\n` (startup, nickname, share/quit/focus, buddy add/del) including Micropolis-style buddy props/getter fallback ordering; added `src/sugar/activity-bridge.test.ts` for exact command output parity.
+- [x] 2026-02-07: Completed Phase 2 task `SugarStartUp "<uri>"` by verifying/exporting `serializeSugarStartUpCommand` parity with `send_process('SugarStartUp "' + QuoteTCL(uri) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
