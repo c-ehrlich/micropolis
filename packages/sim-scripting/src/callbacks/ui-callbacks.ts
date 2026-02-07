@@ -118,3 +118,83 @@ export function createUiCallbackDispatcher<
     return dispatchUiCallback(options, callbackName, callbackArgv);
   };
 }
+
+/**
+ * Dispatches the startup bootstrap callback with home/resource/host paths.
+ * Mirrors `sprintf("UIStartMicropolis {%s} {%s} {%s}", ...)` in
+ * `ref/micropolis/src/sim/w_tk.c`.
+ * Difference from C: argv values are passed directly through the dispatcher
+ * instead of Tcl string interpolation with braces.
+ */
+export function dispatchUiStartMicropolis(
+  dispatch: UiCallbackDispatcher,
+  homeDir: string,
+  resourceDir: string,
+  hostName: string,
+): ScriptRuntimeResult {
+  return dispatch('UIStartMicropolis', [homeDir, resourceDir, hostName]);
+}
+
+/**
+ * Dispatches the new-city lifecycle callback.
+ * Mirrors `Eval("UIPlayNewCity")` in `DoPlayNewCity`
+ * (`ref/micropolis/src/sim/w_stubs.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiPlayNewCity(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIPlayNewCity');
+}
+
+/**
+ * Dispatches the "really start game" lifecycle callback.
+ * Mirrors `Eval("UIReallyStartGame")` in `DoReallyStartGame`
+ * (`ref/micropolis/src/sim/w_stubs.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiReallyStartGame(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIReallyStartGame');
+}
+
+/**
+ * Dispatches the load-start lifecycle callback.
+ * Mirrors `Eval("UIStartLoad")` in `DoStartLoad`
+ * (`ref/micropolis/src/sim/w_stubs.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiStartLoad(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIStartLoad');
+}
+
+/**
+ * Dispatches the scenario-start lifecycle callback with C `%d` integer shape.
+ * Mirrors `sprintf("UIStartScenario %d", scenario)` in `DoStartScenario`
+ * (`ref/micropolis/src/sim/w_stubs.c`).
+ * Difference from C: the scenario comes from a JS number and is truncated
+ * toward zero before conversion to argv text.
+ */
+export function dispatchUiStartScenario(
+  dispatch: UiCallbackDispatcher,
+  scenario: number,
+): ScriptRuntimeResult {
+  return dispatch('UIStartScenario', [String(Math.trunc(scenario))]);
+}
+
+/**
+ * Dispatches the new-game lifecycle callback.
+ * Mirrors `Eval("UINewGame")` in `DoNewGame`
+ * (`ref/micropolis/src/sim/w_util.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiNewGame(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UINewGame');
+}
+
+/**
+ * Dispatches toolkit-shutdown lifecycle callback.
+ * Mirrors `Eval("catch {DoStopMicropolis}")` in `StopToolkit`
+ * (`ref/micropolis/src/sim/w_tk.c`), where Tcl then invokes `DoStopMicropolis`.
+ * Difference from C: `catch` error suppression is not modeled here.
+ */
+export function dispatchDoStopMicropolis(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('DoStopMicropolis');
+}

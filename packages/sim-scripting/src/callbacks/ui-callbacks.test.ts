@@ -6,7 +6,14 @@ import { ScriptRuntime } from '../runtime/script-runtime.ts';
 import { createScriptingState } from '../state/scripting-state.ts';
 import {
   createUiCallbackDispatcher,
+  dispatchDoStopMicropolis,
   dispatchUiCallback,
+  dispatchUiNewGame,
+  dispatchUiPlayNewCity,
+  dispatchUiReallyStartGame,
+  dispatchUiStartLoad,
+  dispatchUiStartMicropolis,
+  dispatchUiStartScenario,
   registerUiCallback,
   registerUiCallbacks,
 } from './ui-callbacks.ts';
@@ -77,5 +84,113 @@ describe('ui callback dispatcher and registration', () => {
       code: ScriptResultCode.Ok,
       value: 'Apr 1900|3|1900',
     });
+  });
+});
+
+describe('ui startup/lifecycle callback helpers', () => {
+  it('dispatches UIStartMicropolis with homedir/resourcedir/hostname argv order', () => {
+    const runtime = new ScriptRuntime();
+    let capturedArgv: readonly string[] = [];
+    runtime.registerCommand('::ui::startMicropolis', (argv) => {
+      capturedArgv = argv;
+      return makeScriptSuccess('ok');
+    });
+
+    const state = createScriptingState();
+    registerUiCallback(state, 'UIStartMicropolis', '::ui::startMicropolis');
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(
+      dispatchUiStartMicropolis(
+        dispatch,
+        '/Users/cje',
+        '/Users/cje/dev/city/ref/micropolis/res',
+        'host.local',
+      ),
+    ).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'ok',
+    });
+
+    expect(capturedArgv).toEqual([
+      '::ui::startMicropolis',
+      '/Users/cje',
+      '/Users/cje/dev/city/ref/micropolis/res',
+      'host.local',
+    ]);
+  });
+
+  it('dispatches lifecycle callbacks that take no argv values', () => {
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UIPlayNewCity', '::ui::playNewCity'],
+      ['UIReallyStartGame', '::ui::reallyStartGame'],
+      ['UIStartLoad', '::ui::startLoad'],
+      ['UINewGame', '::ui::newGame'],
+      ['DoStopMicropolis', '::ui::stopMicropolis'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiPlayNewCity(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::playNewCity',
+    });
+    expect(dispatchUiReallyStartGame(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::reallyStartGame',
+    });
+    expect(dispatchUiStartLoad(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::startLoad',
+    });
+    expect(dispatchUiNewGame(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::newGame',
+    });
+    expect(dispatchDoStopMicropolis(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::stopMicropolis',
+    });
+
+    expect(observedArgv).toEqual([
+      ['::ui::playNewCity'],
+      ['::ui::reallyStartGame'],
+      ['::ui::startLoad'],
+      ['::ui::newGame'],
+      ['::ui::stopMicropolis'],
+    ]);
+  });
+
+  it('formats UIStartScenario id like C sprintf with %d integer coercion', () => {
+    // `DoStartScenario` builds `UIStartScenario %d` in
+    // `ref/micropolis/src/sim/w_stubs.c`, so the emitted Tcl argument is a
+    // base-10 signed integer string.
+    const runtime = new ScriptRuntime();
+    let capturedArgv: readonly string[] = [];
+    runtime.registerCommand('UIStartScenario', (argv) => {
+      capturedArgv = argv;
+      return makeScriptSuccess(argv[1] ?? '');
+    });
+
+    const state = createScriptingState();
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiStartScenario(dispatch, 12.9)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '12',
+    });
+    expect(capturedArgv).toEqual(['UIStartScenario', '12']);
   });
 });
