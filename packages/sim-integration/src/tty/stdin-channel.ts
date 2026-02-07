@@ -41,6 +41,7 @@ export class StdinChannel {
   private readonly options: StdinChannelOptions;
   private readonly commandBuffer: TtyCommandBuffer;
 
+  private started = false;
   private gotPartial = false;
   private readsEnabled = true;
 
@@ -55,6 +56,11 @@ export class StdinChannel {
    * `ref/micropolis/src/sim/w_tk.c` (`if (sim_tty) printf("sim:\\n");`).
    */
   start(): void {
+    if (this.started) {
+      return;
+    }
+
+    this.started = true;
     if (this.options.isTty) {
       this.writeStdout(TTY_PROMPT);
     }

@@ -2,6 +2,31 @@ import { describe, expect, it } from 'vitest';
 
 import { StdinChannel } from './stdin-channel.ts';
 
+describe('StdinChannel startup prompt parity', () => {
+  it('emits the exact initial tty prompt when the channel starts', () => {
+    // Mirrors `tk_main` startup behavior in ref/micropolis/src/sim/w_tk.c:
+    // `if (sim_tty) printf("sim:\\n");`
+    const stdoutChunks: string[] = [];
+    const channel = new StdinChannel({
+      isTty: true,
+      evaluateCommand() {
+        return {
+          ok: true,
+          result: '',
+        };
+      },
+      onWriteStdout(chunk) {
+        stdoutChunks.push(chunk);
+      },
+    });
+
+    channel.start();
+    channel.start();
+
+    expect(stdoutChunks).toEqual(['sim:\n']);
+  });
+});
+
 describe('StdinChannel StdinProc EOF parity', () => {
   it('triggers exit callback on EOF with no partial command in tty mode', () => {
     // Mirrors `StdinProc` in ref/micropolis/src/sim/w_tk.c:
