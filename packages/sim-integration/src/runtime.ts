@@ -109,9 +109,37 @@ export interface IntegrationRuntime {
    * by swallowing typed parse errors instead of throwing.
    */
   handleOutputLine(line: string): void;
+  /**
+   * Emit the Sugar share command into the outbound bridge.
+   * Mirrors `share()` in `ref/micropolis/micropolisactivity.py`, which sends
+   * `SugarShare\n` after activity-level share handling.
+   * Parity note: this runtime only covers sim-process transport, so UI-level
+   * `Activity.share(self)` side effects are intentionally out of scope.
+   */
   share(): void;
+  /**
+   * Emit the Sugar focus-in activation command.
+   * Mirrors `_focus_in_cb()` in `ref/micropolis/micropolisactivity.py`, which
+   * writes `SugarActivate\n` to the sim process.
+   * Parity note: callback args (`window`, `event`) are intentionally omitted in
+   * this transport-level API.
+   */
   focusIn(): void;
+  /**
+   * Emit the Sugar focus-out deactivation command.
+   * Mirrors `_focus_out_cb()` in `ref/micropolis/micropolisactivity.py`, which
+   * writes `SugarDeactivate\n` to the sim process.
+   * Parity note: callback args (`window`, `event`) are intentionally omitted in
+   * this transport-level API.
+   */
   focusOut(): void;
+  /**
+   * Emit the Sugar quit command into the outbound bridge.
+   * Mirrors `quit_process()` in `ref/micropolis/micropolisactivity.py`, which
+   * sends `SugarQuit\n` before a delayed teardown.
+   * Parity note: this runtime emits only the command; the original sleep/GUI
+   * teardown ordering is intentionally left to callers.
+   */
   quit(): void;
   buddyAppeared(buddy: SugarBuddy): void;
   buddyDisappeared(buddy: SugarBuddy): void;

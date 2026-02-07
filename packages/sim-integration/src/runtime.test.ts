@@ -86,6 +86,50 @@ describe('integration runtime Sugar stdout handling', () => {
 });
 
 describe('integration runtime Sugar command bridge wiring', () => {
+  it('serializes share, focusIn, focusOut, and quit through the Sugar command hook', () => {
+    const sugarCommands: string[] = [];
+    const runtime = createIntegrationRuntime({
+      features: {
+        sugar: true,
+      },
+      hooks: {
+        onSugarCommand(command) {
+          sugarCommands.push(command);
+        },
+      },
+    });
+
+    runtime.share();
+    runtime.focusIn();
+    runtime.focusOut();
+    runtime.quit();
+
+    expect(sugarCommands).toEqual([
+      'SugarShare\n',
+      'SugarActivate\n',
+      'SugarDeactivate\n',
+      'SugarQuit\n',
+    ]);
+  });
+
+  it('keeps share, focusIn, focusOut, and quit as no-ops when Sugar integration is disabled', () => {
+    const sugarCommands: string[] = [];
+    const runtime = createIntegrationRuntime({
+      hooks: {
+        onSugarCommand(command) {
+          sugarCommands.push(command);
+        },
+      },
+    });
+
+    runtime.share();
+    runtime.focusIn();
+    runtime.focusOut();
+    runtime.quit();
+
+    expect(sugarCommands).toEqual([]);
+  });
+
   it('serializes lifecycle and buddy events through the Sugar command hook', () => {
     const sugarCommands: string[] = [];
     const runtime = createIntegrationRuntime({

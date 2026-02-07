@@ -101,7 +101,7 @@ Use this exact loop:
 - [x] Expose runtime API methods:
 - [x] `handleInputLine(line)`
 - [x] `handleOutputLine(line)`
-- [ ] `share()`, `focusIn()`, `focusOut()`, `quit()`
+- [x] `share()`, `focusIn()`, `focusOut()`, `quit()`
 - [ ] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
 - [ ] `listenTo(port)`, `hearFrom(fileSock)`
 - [ ] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
@@ -181,3 +181,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `Expose runtime API methods` by exposing `handleInputLine`, `handleOutputLine`, `share`/`focusIn`/`focusOut`/`quit`, `buddyAppeared`/`buddyDisappeared`, and `listenTo`/`hearFrom` on `IntegrationRuntime` in `src/runtime.ts`, matching Sugar (`ref/micropolis/micropolisactivity.py`), TTY (`ref/micropolis/src/sim/w_tk.c`), and NET (`ref/micropolis/src/sim/w_net.c`) integration entry points via parity-first adapter wiring.
 - [x] 2026-02-07: Completed Phase 7 task `handleInputLine(line)` by widening `IntegrationRuntime.handleInputLine` to accept `string | null` so EOF can be forwarded to `StdinChannel.consumeLine` with `StdinProc` parity (`ref/micropolis/src/sim/w_tk.c`), and added `src/runtime.test.ts` coverage for tty exit-on-EOF and non-tty read-disable behavior.
 - [x] 2026-02-07: Completed Phase 7 task `handleOutputLine(line)` by documenting/runtime-validating Sugar stdout dispatch parity in `src/runtime.ts` (`_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`: trim + `split(' ')` + `PlaySound(words[1])` strict failure semantics) while preserving safe-mode hardening via typed malformed-line suppression.
+- [x] 2026-02-07: Completed Phase 7 task `share()`, `focusIn()`, `focusOut()`, `quit()` by documenting lifecycle parity mappings in `src/runtime.ts` to `share`, `_focus_in_cb`, `_focus_out_cb`, and `quit_process` in `ref/micropolis/micropolisactivity.py` and adding focused runtime tests for exact command emission (`SugarShare`, `SugarActivate`, `SugarDeactivate`, `SugarQuit`) plus sugar-disabled no-op behavior in `src/runtime.test.ts`.
