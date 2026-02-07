@@ -79,7 +79,7 @@ Use this exact loop:
 
 ## Phase 5: NET UDP Hooks
 
-- [ ] Create `src/net/udp-hooks.ts` implementing `listenTo(port)` parity interface.
+- [x] Create `src/net/udp-hooks.ts` implementing `listenTo(port)` parity interface.
 - [ ] Implement `hearFrom(fileSock)` parsing with exact `file<sock>` prefix requirement.
 - [ ] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
 - [ ] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
@@ -167,3 +167,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 4 task `emit prompt exactly sim:\n after each command in tty mode` by adding `src/tty/stdin-channel.test.ts` coverage that validates `StdinChannel.consumeLine` emits the exact `sim:\n` prompt once per completed tty command, matching post-eval `printf("sim:\\n"); fflush(stdout);` in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `emit initial prompt exactly sim:\n when tty channel starts` by enforcing one-time startup prompt emission in `StdinChannel.start()` and adding `src/tty/stdin-channel.test.ts` coverage for exact `sim:\n` output parity with `if (sim_tty) printf("sim:\\n");` in `tk_main` from `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `Add src/tty/stdin-channel.test.ts for all branches above` by validating EOF tty/non-tty handling, partial-EOF continuation, result print gating (`(result != TCL_OK) || sim_tty`), and exact `sim:\n` startup/post-command prompts against `StdinProc` and `tk_main` in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 5 task `Create src/net/udp-hooks.ts implementing listenTo(port) parity interface` by adding `createUdpHookRuntime(...).listenTo(port)` as an adapter-backed parity port of `udp_listen` in `ref/micropolis/src/sim/w_net.c` (socket/setup/fcntl/open-file order, `SO_REUSEADDR`, and `0` return on setup failure), with focused tests in `src/net/udp-hooks.test.ts`.
