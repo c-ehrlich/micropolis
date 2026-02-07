@@ -92,7 +92,7 @@ Use this exact loop:
     - arg validation/ranges match C
     - speed accepts `0..7` and returns clamped speed
 
-- [ ] `P1.6` Implement city/game setup subcommands.
+- [x] `P1.6` Implement city/game setup subcommands.
   - C reference: `SimCmdCityName`, `SimCmdCityFileName`, `SimCmdGameLevel`, `SimCmdYear`, load/generate entries
   - Done when:
     - `CityName`, `CityFileName`, `GameLevel`, `Year` semantics match spec/C
@@ -284,3 +284,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.3` by porting `sim` read-only getter subcommands (`SIMCMD_GET_STR` + explicit getters), adding tile-center coordinate conversion parity for the required getter set, and covering formatted-return/argc-parity behavior in `sim-command` tests.
 - [x] `2026-02-07` Completed `P1.4` by adding session/redraw `sim` call and call+`Kick` subcommands (`SIMCMD_CALL`/`SIMCMD_CALL_KICK` parity), implementing `Kick` delayed-update coalescing hooks (`UpdateDelayed` behavior), and adding tests for side-effect order plus no-kick `Update`.
 - [x] `2026-02-07` Completed `P1.5` by adding `sim` speed/delay/skip/rest subcommands with C-parity argc/range validation (`SimCmdSpeed`/`Delay`/`Skips`/`Skip`/`NeedRest`), `setSpeed` clamp behavior (`0..7` input to `0..3` effective speed), `setSkips` reset semantics, and `Kick` sequencing coverage in `sim-command` tests.
+- [x] `2026-02-07` Completed `P1.6` by adding `sim` city/game setup subcommands (`CityName`, `CityFileName`, `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`, `LoadScenario`), including configurable legacy `CityFileName` allocation-bug parity mode and C-mapped validation/side-effect tests.

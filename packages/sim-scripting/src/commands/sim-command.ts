@@ -922,6 +922,436 @@ export function createSimSpeedDelayControlSubcommandEntries(
 }
 
 /**
+ * `sim` city/game setup subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for `CityName`, `CityFileName`,
+ * `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`,
+ * and `LoadScenario` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_CITY_GAME_SETUP_SUBCOMMAND_NAMES = [
+  'CityName',
+  'CityFileName',
+  'GameLevel',
+  'Year',
+  'GenerateNewCity',
+  'GenerateSomeCity',
+  'LoadCity',
+  'LoadScenario',
+] as const;
+
+/**
+ * Union of city/game setup subcommand names from `w_sim.c`.
+ */
+export type SimCityGameSetupSubcommandName = (typeof SIM_CITY_GAME_SETUP_SUBCOMMAND_NAMES)[number];
+
+/**
+ * Mutable backing state for city/game setup subcommands.
+ * Mirrors globals/functions touched by `SimCmdCityName`, `SimCmdCityFileName`,
+ * `SimCmdGameLevel`, and `SimCmdYear` in `ref/micropolis/src/sim/w_sim.c`,
+ * plus `SetGameLevelFunds`, `SetYear`, and `CurrentYear` in
+ * `ref/micropolis/src/sim/w_util.c`.
+ * Difference from C: process-global values are grouped into one typed object.
+ */
+export interface SimCityGameSetupState {
+  cityName: string;
+  cityFileName: string | null;
+  gameLevel: number;
+  totalFunds: number;
+  startingYear: number;
+  cityTime: number;
+}
+
+const SIM_CITY_GAME_SETUP_DEFAULT_STATE: SimCityGameSetupState = {
+  // Set by callbacks/startup scripts in C (`w_stubs.c`), so default is empty.
+  cityName: '',
+  // `sim.c` global default.
+  cityFileName: null,
+  // `StartupGameLevel` defaults to `0`; `sim_init` applies `SetGameLevelFunds(0)`.
+  gameLevel: 0,
+  // `SetGameLevelFunds(0)` in `w_util.c`.
+  totalFunds: 20000,
+  // `sim_init` default in `sim.c`.
+  startingYear: 1900,
+  // `sim_init` default in `sim.c`.
+  cityTime: 50,
+};
+
+/**
+ * Parity flags for city/game setup subcommands.
+ * Mirrors the `CityFileName` allocation bug in `SimCmdCityFileName`
+ * (`ref/micropolis/src/sim/w_sim.c`), where allocation uses `strlen(argv[0]) + 1`
+ * instead of `strlen(argv[2]) + 1`.
+ * Difference from C: legacy bug mode is deterministic and safe by truncating
+ * the copied value to the legacy buffer payload length.
+ */
+export interface SimCityGameSetupParityOptions {
+  legacyCityFileNameAllocationBug?: boolean;
+}
+
+/**
+ * Hook callbacks for city/game setup command side effects.
+ * Mirrors the C call-outs in `ref/micropolis/src/sim/w_sim.c`:
+ * `GenerateNewCity()`, `GenerateSomeCity(int)`, `LoadCity(char*)`,
+ * `LoadScenario(int)`, and `doTimeStuff()` inside `SetYear`.
+ */
+export interface SimCityGameSetupHooks {
+  onGenerateNewCity?: () => void;
+  onGenerateSomeCity?: (seed: number) => void;
+  onLoadCity?: (path: string) => void;
+  onLoadScenario?: (scenarioId: number) => void;
+  onDoTimeStuff?: () => void;
+}
+
+/**
+ * Constructor options for `createSimCityGameSetupSubcommandEntries`.
+ * Mirrors setup command wiring in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimCityGameSetupSubcommandEntriesOptions {
+  state?: SimCityGameSetupState;
+  hooks?: SimCityGameSetupHooks;
+  parity?: SimCityGameSetupParityOptions;
+}
+
+/**
+ * Creates mutable state for city/game setup subcommands.
+ * Mirrors relevant globals initialized in `ref/micropolis/src/sim/sim.c`
+ * and updated via `ref/micropolis/src/sim/w_util.c`.
+ * Difference from C: callers can override defaults per runtime/test.
+ */
+export function createSimCityGameSetupState(
+  initialValues: Partial<SimCityGameSetupState> = {},
+): SimCityGameSetupState {
+  return {
+    ...SIM_CITY_GAME_SETUP_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+function validateSimCityGameSetupAccessorArgCount(
+  argv: readonly string[],
+  name: 'CityName' | 'CityFileName' | 'GameLevel' | 'Year',
+): ScriptRuntimeResult | null {
+  if (argv.length === 2 || argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 2 or 3, got ${argv.length}`,
+    ),
+  );
+}
+
+function validateSimCityGameSetupStrictArgCount(
+  argv: readonly string[],
+  name: 'GenerateSomeCity' | 'LoadScenario' | 'LoadCity',
+): ScriptRuntimeResult | null {
+  if (argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 3, got ${argv.length}`,
+    ),
+  );
+}
+
+function parseSimCityGameSetupWriteInt(
+  argv: readonly string[],
+  name: 'GameLevel' | 'Year' | 'GenerateSomeCity' | 'LoadScenario',
+): number | ScriptRuntimeResult {
+  const rawValue = argv[2];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[2]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[2]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+function setCityNameParity(name: string): string {
+  return name.replace(/[^0-9A-Za-z]/g, '_');
+}
+
+function setCityFileNameParity(
+  argv: readonly string[],
+  nextValue: string,
+  parity: SimCityGameSetupParityOptions,
+): string {
+  if (!parity.legacyCityFileNameAllocationBug) {
+    return nextValue;
+  }
+
+  const legacyBufferPayloadLength = (argv[0] ?? '').length;
+  return nextValue.slice(0, legacyBufferPayloadLength);
+}
+
+function applySimSetGameLevelFundsParity(state: SimCityGameSetupState, level: number): void {
+  switch (level) {
+    case 0:
+      state.totalFunds = 20000;
+      state.gameLevel = 0;
+      break;
+    case 1:
+      state.totalFunds = 10000;
+      state.gameLevel = 1;
+      break;
+    case 2:
+      state.totalFunds = 5000;
+      state.gameLevel = 2;
+      break;
+    default:
+      state.totalFunds = 20000;
+      state.gameLevel = 0;
+      break;
+  }
+}
+
+function cIntDiv(a: number, b: number): number {
+  return Math.trunc(a / b);
+}
+
+function currentYearParity(state: SimCityGameSetupState): number {
+  return cIntDiv(state.cityTime, 48) + state.startingYear;
+}
+
+function applySimSetYearParity(
+  state: SimCityGameSetupState,
+  year: number,
+  hooks: SimCityGameSetupHooks,
+): void {
+  let clampedYear = year;
+  if (clampedYear < state.startingYear) {
+    clampedYear = state.startingYear;
+  }
+
+  const yearDelta = clampedYear - state.startingYear - cIntDiv(state.cityTime, 48);
+  state.cityTime += yearDelta * 48;
+  hooks.onDoTimeStuff?.();
+}
+
+function createSimCityNameSubcommandHandler(state: SimCityGameSetupState): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupAccessorArgCount(argv, 'CityName');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const rawName = argv[2];
+      if (rawName === undefined) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidArgCount,
+            'sim CityName missing string argument at argv[2]',
+          ),
+        );
+      }
+      state.cityName = setCityNameParity(rawName);
+    }
+
+    return makeScriptSuccess(state.cityName);
+  };
+}
+
+function createSimCityFileNameSubcommandHandler(
+  state: SimCityGameSetupState,
+  parity: SimCityGameSetupParityOptions,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupAccessorArgCount(argv, 'CityFileName');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const rawPath = argv[2];
+      if (rawPath === undefined) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidArgCount,
+            'sim CityFileName missing string argument at argv[2]',
+          ),
+        );
+      }
+
+      state.cityFileName = null;
+      if (rawPath.length > 0) {
+        state.cityFileName = setCityFileNameParity(argv, rawPath, parity);
+      }
+    }
+
+    return makeScriptSuccess(state.cityFileName ?? '');
+  };
+}
+
+function createSimGameLevelSubcommandHandler(state: SimCityGameSetupState): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupAccessorArgCount(argv, 'GameLevel');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimCityGameSetupWriteInt(argv, 'GameLevel');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0 || parsedValue > 2) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim GameLevel expected an integer in range 0..2 at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      applySimSetGameLevelFundsParity(state, parsedValue);
+    }
+
+    return makeScriptSuccess(String(state.gameLevel));
+  };
+}
+
+function createSimYearSubcommandHandler(
+  state: SimCityGameSetupState,
+  hooks: SimCityGameSetupHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupAccessorArgCount(argv, 'Year');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimCityGameSetupWriteInt(argv, 'Year');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+
+      applySimSetYearParity(state, parsedValue, hooks);
+    }
+
+    return makeScriptSuccess(String(currentYearParity(state)));
+  };
+}
+
+function createSimGenerateNewCitySubcommandHandler(
+  hooks: SimCityGameSetupHooks,
+): SimSubcommandHandler {
+  return () => {
+    hooks.onGenerateNewCity?.();
+    return makeScriptSuccess();
+  };
+}
+
+function createSimGenerateSomeCitySubcommandHandler(
+  hooks: SimCityGameSetupHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupStrictArgCount(argv, 'GenerateSomeCity');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    const parsedValue = parseSimCityGameSetupWriteInt(argv, 'GenerateSomeCity');
+    if (typeof parsedValue !== 'number') {
+      return parsedValue;
+    }
+
+    hooks.onGenerateSomeCity?.(parsedValue);
+    return makeScriptSuccess();
+  };
+}
+
+function createSimLoadCitySubcommandHandler(hooks: SimCityGameSetupHooks): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupStrictArgCount(argv, 'LoadCity');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    const path = argv[2];
+    if (path === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim LoadCity missing string argument at argv[2]',
+        ),
+      );
+    }
+
+    hooks.onLoadCity?.(path);
+    return makeScriptSuccess();
+  };
+}
+
+function createSimLoadScenarioSubcommandHandler(
+  hooks: SimCityGameSetupHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimCityGameSetupStrictArgCount(argv, 'LoadScenario');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    const parsedValue = parseSimCityGameSetupWriteInt(argv, 'LoadScenario');
+    if (typeof parsedValue !== 'number') {
+      return parsedValue;
+    }
+
+    hooks.onLoadScenario?.(parsedValue);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds city/game setup `sim` subcommand entries.
+ * Mirrors `SimCmdCityName`, `SimCmdCityFileName`, `SimCmdGameLevel`,
+ * `SimCmdYear`, and load/generate macro commands in
+ * `ref/micropolis/src/sim/w_sim.c`, plus `SetGameLevelFunds` and year math in
+ * `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: `GenerateNewCity` intentionally skips argc checks because its C
+ * `SIMCMD_CALL` macro expansion does the same.
+ */
+export function createSimCityGameSetupSubcommandEntries(
+  options: CreateSimCityGameSetupSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimCityGameSetupState();
+  const hooks = options.hooks ?? {};
+  const parity = options.parity ?? {};
+
+  return [
+    ['CityName', createSimCityNameSubcommandHandler(state)] as const,
+    ['CityFileName', createSimCityFileNameSubcommandHandler(state, parity)] as const,
+    ['GameLevel', createSimGameLevelSubcommandHandler(state)] as const,
+    ['Year', createSimYearSubcommandHandler(state, hooks)] as const,
+    ['GenerateNewCity', createSimGenerateNewCitySubcommandHandler(hooks)] as const,
+    ['GenerateSomeCity', createSimGenerateSomeCitySubcommandHandler(hooks)] as const,
+    ['LoadCity', createSimLoadCitySubcommandHandler(hooks)] as const,
+    ['LoadScenario', createSimLoadScenarioSubcommandHandler(hooks)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -950,6 +1380,8 @@ const DEFAULT_SIM_KICK_STATE = createSimKickState();
  * - session/redraw control (`SIMCMD_CALL`, `SIMCMD_CALL_KICK`, `SimCmdUpdate`)
  * - speed/delay/skip/rest controls (`SimCmdSpeed`, `SimCmdDelay`,
  *   `SimCmdSkips`, `SimCmdSkip`, `SimCmdNeedRest`)
+ * - city/game setup commands (`SimCmdCityName`, `SimCmdCityFileName`,
+ *   `SimCmdGameLevel`, `SimCmdYear`, and load/generate entries)
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  */
@@ -960,6 +1392,7 @@ export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable
   ...createSimSpeedDelayControlSubcommandEntries({
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
+  ...createSimCityGameSetupSubcommandEntries(),
   ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
   ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
 ]);

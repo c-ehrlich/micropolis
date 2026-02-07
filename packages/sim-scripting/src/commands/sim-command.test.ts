@@ -6,6 +6,8 @@ import { ScriptRuntime } from '../runtime/script-runtime.ts';
 import {
   createSimAccessorIntState,
   createSimAccessorIntSubcommandEntries,
+  createSimCityGameSetupState,
+  createSimCityGameSetupSubcommandEntries,
   createSimCommandDispatcher,
   createSimKickState,
   createSimReadOnlyGetterState,
@@ -438,6 +440,203 @@ describe('sim speed/delay/skip/rest control subcommands', () => {
     expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
       code: ScriptResultCode.Ok,
       value: '3',
+    });
+  });
+});
+
+describe('sim city/game setup subcommands', () => {
+  it('matches C get/set semantics for city name, file name, game level, and year', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimCityGameSetupState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimCityGameSetupSubcommandEntries({ state })),
+    );
+
+    // `sim_init` in `sim.c` sets `StartingYear=1900` and `CityTime=50`;
+    // `CurrentYear()` in `w_util.c` computes `(CityTime / 48) + StartingYear`.
+    expect(runtime.invoke(['sim', 'Year'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1901',
+    });
+    expect(runtime.invoke(['sim', 'CityName'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'CityFileName'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `setCityName` in `w_util.c` converts non-alnum bytes to `_`.
+    expect(runtime.invoke(['sim', 'CityName', 'New City!'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'New_City_',
+    });
+
+    expect(runtime.invoke(['sim', 'CityFileName', '/tmp/newcity.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '/tmp/newcity.cty',
+    });
+    expect(runtime.invoke(['sim', 'CityFileName', ''])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // `SetGameLevelFunds` in `w_util.c` maps levels to funds:
+    // level 0 => 20000, level 1 => 10000, level 2 => 5000.
+    expect(runtime.invoke(['sim', 'GameLevel', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+    expect(state.totalFunds).toBe(5000);
+
+    // `SetYear` in `w_util.c` clamps below `StartingYear`.
+    expect(runtime.invoke(['sim', 'Year', '1890'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1900',
+    });
+    expect(runtime.invoke(['sim', 'Year', '1930'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1930',
+    });
+  });
+
+  it('routes load/generate entries through C-parity call signatures', () => {
+    const runtime = new ScriptRuntime();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimCityGameSetupSubcommandEntries({
+          hooks: {
+            onGenerateNewCity: () => {
+              events.push('generate:new');
+            },
+            onGenerateSomeCity: (seed) => {
+              events.push(`generate:seed:${seed}`);
+            },
+            onLoadCity: (path) => {
+              events.push(`load:city:${path}`);
+            },
+            onLoadScenario: (scenarioId) => {
+              events.push(`load:scenario:${scenarioId}`);
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(GenerateNewCity)` in `w_sim.c` does not validate argc.
+    expect(runtime.invoke(['sim', 'GenerateNewCity', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', '42'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'LoadCity', '/tmp/city.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'LoadScenario', '3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(events).toEqual([
+      'generate:new',
+      'generate:seed:42',
+      'load:city:/tmp/city.cty',
+      'load:scenario:3',
+    ]);
+  });
+
+  it('supports configurable legacy `CityFileName` allocation bug behavior', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimCityGameSetupSubcommandEntries({
+          parity: {
+            // `SimCmdCityFileName` allocates `strlen(argv[0]) + 1` in `w_sim.c`.
+            legacyCityFileNameAllocationBug: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'CityFileName', '/tmp/long-name.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '/tm',
+    });
+  });
+
+  it('enforces C-parity argc/integer/range validation for setup handlers', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimCityGameSetupSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'CityName', 'a', 'b'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim CityName expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel', '3'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GameLevel expected an integer in range 0..2 at argv[2]: 3',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GameLevel expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'Year', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Year expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim GenerateSomeCity expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GenerateSomeCity expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'LoadCity'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim LoadCity expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'LoadScenario', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim LoadScenario expected a 32-bit integer at argv[2]: oops',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'GameLevel'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
     });
   });
 });
