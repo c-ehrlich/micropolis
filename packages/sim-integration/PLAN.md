@@ -48,7 +48,7 @@ Use this exact loop:
 - [x] `SugarDeactivate`
 - [x] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
 - [x] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
-- [ ] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
+- [x] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
 - [ ] Checkpoint: all Sugar outbound tests pass.
 
 ## Phase 3: Sugar Stdout Protocol (`PlaySound`)
@@ -146,3 +146,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 2 task `SugarDeactivate` by verifying/exporting `serializeSugarDeactivateCommand` parity with `_focus_out_cb()` -> `send_process('SugarDeactivate\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyAddCommand` emits `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_appeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyDelCommand` emits `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_disappeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `Add src/sugar/activity-bridge.test.ts covering exact string output and buddy fallback field ordering` by validating exact outbound command strings (including `\n` and `QuoteTCL` quoting) and full getter-fallback call ordering parity against `ref/micropolis/micropolisactivity.py`.
