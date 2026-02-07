@@ -107,7 +107,7 @@ Use this exact loop:
 - [x] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
 - [x] sugar-only
 - [x] tty-only
-- [ ] net-only
+- [x] net-only
 - [ ] sugar+tty+net
 - [ ] Checkpoint: integration tests pass with deterministic event logs.
 
@@ -188,3 +188,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `Add src/runtime.integration.test.ts for mixed-feature scenarios` by adding `src/runtime.integration.test.ts` coverage for sugar-only, tty-only, net-only, and sugar+tty+net runtime paths with deterministic cross-feature event logs aligned to `micropolisactivity.py`, `w_tk.c`, and `w_net.c` parity behavior.
 - [x] 2026-02-07: Checked Phase 7 task `sugar-only` by verifying the `records deterministic sugar-only events` integration scenario in `src/runtime.integration.test.ts`, covering Sugar stdout `PlaySound` dispatch and Sugar command emission parity boundaries from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 7 task `tty-only` by validating the `records deterministic tty-only events` scenario in `src/runtime.integration.test.ts` (startup/post-command `sim:\n` prompts, multiline `Tcl_AssembleCmd`-style input completion, and EOF `sim_exit(0)` parity from `ref/micropolis/src/sim/w_tk.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic tty-only events"`.
+- [x] 2026-02-07: Checked Phase 7 task `net-only` by validating the `records deterministic net-only events` scenario in `src/runtime.integration.test.ts`, including `udp_listen` strict bind-port quirk and `udp_hear` packet command formatting parity (`HandlePacket <sock> {<ip>} {%3d }`) against `ref/micropolis/src/sim/w_net.c`, via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic net-only events"`.
