@@ -68,7 +68,7 @@ Use this exact loop:
     - `sim <Subcommand>` dispatch works
     - unknown subcommand error matches expected shape
 
-- [ ] `P1.2` Implement accessor read/write subcommands.
+- [x] `P1.2` Implement accessor read/write subcommands.
   - C reference: `SIMCMD_ACCESS_INT(...)` entries in `w_sim.c`
   - Done when:
     - each accessor supports get and set
@@ -280,3 +280,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P0.5` by adding `createSimScriptingRuntime` bootstrap entrypoint, exporting it from package index, and covering base command registration hook flow with bootstrap tests.
 - [x] `2026-02-07` Completed `P1.1` by adding `sim` command registration/dispatch helpers, a case-sensitive subcommand table scaffold, and tests for dispatch plus typed missing/unknown-subcommand failures.
 - [x] `2026-02-07` Repaired `P1.1` by adding `createSimSubcommandTable` with C-style duplicate overwrite semantics (`HASHED_CMD`/`Tcl_CreateHashEntry`) and coverage that validates last-registration-wins dispatch.
+- [x] `2026-02-07` Completed `P1.2` by porting all `SIMCMD_ACCESS_INT(...)` `sim` subcommands with C-defaulted backing state, read/write accessor behavior, and tests for get/set plus argc and integer-parse failure paths.
