@@ -3,6 +3,7 @@ export * from './commands/dateview-command.ts';
 export * from './commands/editorview-command.ts';
 export * from './commands/graphview-command.ts';
 export * from './commands/mapview-command.ts';
+export * from './commands/piemenu-command.ts';
 export * from './commands/sim-command.ts';
 export * from './commands/sprite-command.ts';
 export * from './runtime/errors.ts';

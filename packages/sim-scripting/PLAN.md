@@ -176,7 +176,7 @@ Use this exact loop:
     - `Init` pixel bounds checks are enforced
 
 ## Phase 4: `piemenu` and `interval`
-- [ ] `P4.1` Implement `piemenu` state model and command shell.
+- [x] `P4.1` Implement `piemenu` state model and command shell.
   - Commands: `configure`, `add`, `delete`, `entryconfigure`, `index`
   - Done when:
     - entry creation/deletion/configuration state is covered by tests
@@ -298,3 +298,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P3.2` by adding the `dateview` command family and typed date state (`configure`, `position`, `size`, `Visible`, `Reset`, `Set`) with C-parity validation from `w_date.c`, including month/year range checks and redraw scheduling hooks on `Reset`/`Set`.
 - [x] `2026-02-07` Completed `P3.3` by adding the `sprite` top-level factory command (`sprite <name> <type>`) plus per-sprite case-sensitive subcommand dispatch scaffolding from `w_sprite.c`, with Tcl-style type parsing and strict `1..OBJN-1` (`1..8`) validation parity.
 - [x] `2026-02-07` Completed `P3.4` by porting all `sprite` field accessors and `Init`/`Explode` subcommands from `w_sprite.c`, including Tcl-style integer parsing, `WORLD_X/Y` pixel-bound checks (`0..1919`, `0..1599`), type-specific `InitSprite` defaults, and `ExplodeSprite` frame/message parity coverage.
+- [x] `2026-02-07` Completed `P4.1` by adding `piemenu` state + command shell (`configure`, `add`, `delete`, `entryconfigure`, `index`) with C-mapped defaults/option parsing from `w_piem.c` and colocated state-transition/index-resolution tests.
