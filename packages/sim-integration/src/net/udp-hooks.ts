@@ -6,7 +6,7 @@ import type { UdpHooks } from '../types.ts';
  * data packet, `EINTR` retry, `EWOULDBLOCK` stop, or other error return.
  */
 type UdpReceiveResult =
-  | { kind: 'packet' }
+  | { kind: 'packet'; sourceIp: string; bytes: ReadonlyArray<number> }
   | { kind: 'eintr' }
   | { kind: 'wouldBlock' }
   | { kind: 'error' };
@@ -39,7 +39,7 @@ export interface UdpListenPlatform {
  */
 export interface CreateUdpHookRuntimeOptions {
   platform: UdpListenPlatform;
-  hooks?: Pick<UdpHooks, 'onError'>;
+  hooks?: Pick<UdpHooks, 'onError' | 'onPacketCommand'>;
 }
 
 /**
@@ -66,6 +66,7 @@ export interface UdpHookRuntime {
 export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpHookRuntime {
   const { platform } = options;
   const onError = options.hooks?.onError;
+  const onPacketCommand = options.hooks?.onPacketCommand;
 
   let netListenPort = 0;
   let netListenSocket = 0;
@@ -109,7 +110,14 @@ export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpH
       while (true) {
         const receiveResult = platform.recvFrom(sock);
 
-        if (receiveResult.kind === 'packet' || receiveResult.kind === 'eintr') {
+        if (receiveResult.kind === 'packet') {
+          onPacketCommand?.(
+            formatHandlePacketCommand(sock, receiveResult.sourceIp, receiveResult.bytes),
+          );
+          continue;
+        }
+
+        if (receiveResult.kind === 'eintr') {
           continue;
         }
 
@@ -131,6 +139,21 @@ export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpH
   function reportHearFailure(message: string): void {
     onError?.(new Error(message), 'hear');
   }
+}
+
+/**
+ * Format one UDP packet callback command.
+ * Mirrors `udp_hear` in `ref/micropolis/src/sim/w_net.c` where received
+ * packets execute `Eval("HandlePacket <sock> {<ip>} {<bytes>}")`.
+ * Parity note: this step emits the same Tcl command shape; byte width/trailing
+ * spacing quirks from C `"%3d "` are handled as a separate task.
+ */
+function formatHandlePacketCommand(
+  sock: number,
+  sourceIp: string,
+  bytes: ReadonlyArray<number>,
+): string {
+  return `HandlePacket ${sock} {${sourceIp}} {${bytes.join(' ')}}`;
 }
 
 const INT32_MAX = 2_147_483_647;

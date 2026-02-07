@@ -151,6 +151,10 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
         recvFrom(sock) {
           recvCalls.push(sock);
           const next = sequence.shift() ?? 'wouldBlock';
+          if (next === 'packet') {
+            return { kind: 'packet', sourceIp: '127.0.0.1', bytes: [1] };
+          }
+
           return { kind: next };
         },
       }),
@@ -162,6 +166,32 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
 
     expect(recvCalls).toEqual([9, 9, 9, 9]);
     expect(sequence).toEqual([]);
+  });
+
+  it('emits HandlePacket callback command with sock/ip/byte list shape', () => {
+    const packetCommands: string[] = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onPacketCommand(command) {
+          packetCommands.push(command);
+        },
+      },
+      platform: createPlatform({
+        recvFrom() {
+          if (packetCommands.length === 0) {
+            return { kind: 'packet', sourceIp: '10.1.2.3', bytes: [0, 16, 255] };
+          }
+
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Mirrors `udp_hear` command assembly shape in ref/micropolis/src/sim/w_net.c
+    // and ref/micropolis/spec/integration/SPEC.md.
+    runtime.hearFrom('file37');
+
+    expect(packetCommands).toEqual(['HandlePacket 37 {10.1.2.3} {0 16 255}']);
   });
 
   it('reports recvfrom error on non-EINTR and non-EWOULDBLOCK failure', () => {
