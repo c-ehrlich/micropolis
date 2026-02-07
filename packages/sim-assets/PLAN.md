@@ -70,7 +70,7 @@ Verification:
 ## Phase 2: Canonical Manifest Generation
 
 ### P2.1 Add generator script
-- [ ] Create `packages/sim-assets/scripts/gen-assets-manifest.mjs`.
+- [x] Create `packages/sim-assets/scripts/gen-assets-manifest.mjs`.
 - [ ] Scan canonical inputs under `ref/micropolis/{res,images,manual}`.
 - [ ] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
 
@@ -181,3 +181,4 @@ Verification:
 - [x] 2026-02-07: Completed P1.2 task to add `vitest` config for `sim-assets` by creating `packages/sim-assets/vitest.config.ts`.
 - [x] 2026-02-07: Completed P1.2 task to add `test` script in `packages/sim-assets/package.json`.
 - [x] 2026-02-07: Completed P1.2 smoke-test task by adding `src/index.test.ts`; verified with `pnpm -C packages/sim-assets test`.
+- [x] 2026-02-07: Completed P2.1 task to create `packages/sim-assets/scripts/gen-assets-manifest.mjs`; generator now scans canonical `ref/micropolis/{res,images,manual}` and emits deterministic `src/generated/assets-manifest.ts`.
