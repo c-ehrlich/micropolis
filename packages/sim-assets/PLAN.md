@@ -127,7 +127,7 @@ Verification:
 
 ### P4.2 Implement conversion script
 - [x] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
-- [ ] Convert required XPM assets to PNG.
+- [x] Convert required XPM assets to PNG.
 - [ ] Keep conversion deterministic and idempotent.
 
 Verification:
@@ -198,3 +198,4 @@ Verification:
 - [x] 2026-02-07: Completed P4.1 output-directory convention task by defining `packages/sim-assets/generated-images/` as the derived PNG destination in `src/derived-images.ts`, documenting it in `packages/sim-assets/README.md`, and adding the committed directory placeholder.
 - [x] 2026-02-07: Completed P4.1 manifest-mapping task by defining `DERIVED_IMAGE_PATH_MANIFEST` in `packages/sim-assets/src/derived-images.ts` to map canonical `ref/micropolis/images/*.xpm` source paths to deterministic derived PNG output paths under `packages/sim-assets/generated-images/images/*.png`, with contract coverage in `packages/sim-assets/src/derived-images.test.ts`.
 - [x] 2026-02-07: Completed P4.2 script-addition task by creating `packages/sim-assets/scripts/export-derived-images.mjs` with deterministic canonical `ref/micropolis/images/*.xpm` to derived PNG export plumbing under `packages/sim-assets/generated-images/images/*.png`.
+- [x] 2026-02-07: Completed P4.2 conversion task by running `pnpm -C packages/sim-assets export-derived-images`, exporting required canonical `ref/micropolis/images/*.xpm` assets to `packages/sim-assets/generated-images/images/*.png` (340 PNGs written, 1 empty-source XPM skipped).
