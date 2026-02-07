@@ -15,6 +15,42 @@ export interface SugarStdoutLine {
 }
 
 /**
+ * Error code emitted by safe-mode Sugar stdout parsing hardening.
+ * Mirrors the malformed `PlaySound` source condition in
+ * `ref/micropolis/micropolisactivity.py` where `words[1]` can be missing.
+ * Parity note: this explicit code is intentionally different from Python's
+ * untyped `IndexError` to support non-fatal safe-mode handling.
+ */
+export type SugarStdoutProtocolErrorCode = 'PLAY_SOUND_MISSING_ARGUMENT';
+
+/**
+ * Typed malformed-line error for safe-mode Sugar stdout handling.
+ * Mirrors `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`:
+ * the legacy strict path fails when `PlaySound` directly indexes `words[1]`.
+ * Parity note: strict mode still throws `RangeError('list index out of range')`
+ * for fatal parity, while safe mode intentionally returns this typed error
+ * object so callers can continue processing subsequent lines.
+ */
+export class SugarStdoutMalformedLineError extends Error {
+  readonly code: SugarStdoutProtocolErrorCode;
+  readonly command: string;
+  readonly words: readonly string[];
+
+  constructor(
+    code: SugarStdoutProtocolErrorCode,
+    command: string,
+    words: string[],
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SugarStdoutMalformedLineError';
+    this.code = code;
+    this.command = command;
+    this.words = [...words];
+  }
+}
+
+/**
  * Parse one stdout line using Micropolis Sugar parity tokenization.
  * Mirrors `line.strip().split(' ')` in
  * `ref/micropolis/micropolisactivity.py` as a 1:1 tokenization port:
@@ -56,13 +92,14 @@ export function splitSugarStdoutWords(line: string): string[] {
  * where `PlaySound` dispatch directly indexes `words[1]`.
  * Parity note: in `strict` mode, missing token throws a JS `RangeError` with
  * Python-style `IndexError` text (`list index out of range`) so malformed
- * input still surfaces as a fatal parsing failure; non-`PlaySound` lines and
- * non-strict missing-arg cases return `undefined`.
+ * input still surfaces as a fatal parsing failure; in `safe` mode the same
+ * malformed line returns a typed `SugarStdoutMalformedLineError` so processing
+ * can continue without killing the caller loop.
  */
 export function getPlaySoundToken(
   stdoutLine: SugarStdoutLine,
   mode: ParityMode,
-): string | undefined {
+): string | SugarStdoutMalformedLineError | undefined {
   if (stdoutLine.command !== 'PlaySound') {
     return undefined;
   }
@@ -76,5 +113,10 @@ export function getPlaySoundToken(
     throw new RangeError('list index out of range');
   }
 
-  return undefined;
+  return new SugarStdoutMalformedLineError(
+    'PLAY_SOUND_MISSING_ARGUMENT',
+    stdoutLine.command,
+    stdoutLine.words,
+    'PlaySound missing required argument at words[1]',
+  );
 }

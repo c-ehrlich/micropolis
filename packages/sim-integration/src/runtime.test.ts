@@ -64,4 +64,23 @@ describe('integration runtime Sugar stdout handling', () => {
     runtime.handleOutputLine('PlaySound Bulldozer');
     expect(soundTokens).toEqual(['Bulldozer']);
   });
+
+  it('keeps processing after malformed PlaySound in safe mode', () => {
+    const soundTokens: string[] = [];
+    const runtime = createIntegrationRuntime({
+      mode: 'safe',
+      features: {
+        sugar: true,
+      },
+      hooks: {
+        onSoundToken(soundName) {
+          soundTokens.push(soundName);
+        },
+      },
+    });
+
+    expect(() => runtime.handleOutputLine('PlaySound')).not.toThrow();
+    runtime.handleOutputLine('PlaySound Siren');
+    expect(soundTokens).toEqual(['Siren']);
+  });
 });

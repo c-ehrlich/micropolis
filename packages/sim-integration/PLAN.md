@@ -55,7 +55,7 @@ Use this exact loop:
 
 - [x] Create `src/sugar/stdout-protocol.ts` for line parsing using explicit `split(' ')` parity.
 - [x] Implement strict-mode behavior for malformed `PlaySound` lines (missing arg should surface parity failure behavior).
-- [ ] Implement safe-mode behavior for malformed lines (return typed error; do not kill processing).
+- [x] Implement safe-mode behavior for malformed lines (return typed error; do not kill processing).
 - [ ] Add `src/sugar/stdout-protocol.test.ts` covering:
 - [ ] normal `PlaySound Name`
 - [ ] repeated spaces creating empty tokens
@@ -151,3 +151,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 3 task `Implement strict-mode behavior for malformed PlaySound lines` by adding `getPlaySoundToken` in `src/sugar/stdout-protocol.ts` so strict mode throws on missing `words[1]`, matching the parity failure surface described for `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py` and `ref/micropolis/spec/integration/SPEC.md`.
 - [x] 2026-02-07: Repaired strict-mode `PlaySound` malformed-line parity by changing the thrown strict error to `RangeError('list index out of range')`, preserving fatal failure semantics while matching Python `IndexError` text from `self.play_sound(words[1])` in `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Repaired strict-mode `PlaySound` parity surfacing in `src/runtime.ts` by routing `handleOutputLine` through `parseSugarStdoutLine` + `getPlaySoundToken`, so malformed `PlaySound` lines throw through runtime handling like `_stdout_thread_function` does in `ref/micropolis/micropolisactivity.py`; added `src/runtime.test.ts` coverage for strict malformed-line failure and valid token dispatch.
+- [x] 2026-02-07: Implemented safe-mode malformed `PlaySound` handling by returning typed `SugarStdoutMalformedLineError` (`PLAY_SOUND_MISSING_ARGUMENT`) from `getPlaySoundToken` instead of throwing, and updated runtime handling/tests so malformed lines are non-fatal and later stdout lines continue processing.
