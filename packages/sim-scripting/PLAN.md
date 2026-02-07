@@ -152,7 +152,7 @@ Use this exact loop:
     - `ViewAt` returns current placeholder behavior
 
 ## Phase 3: `graphview`, `dateview`, `sprite`
-- [ ] `P3.1` Implement `graphview` commands and state.
+- [x] `P3.1` Implement `graphview` commands and state.
   - Commands: `configure`, `position`, `size`, `Visible`, `Range`, `Mask`
   - Done when:
     - `Range` restricted to `10|120`
@@ -294,3 +294,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P2.3` by adding `editorview` mode/visibility/auto commands (`AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`) with C-parity state transitions from `w_editor.c`/`w_x.c` and colocated tests covering auto-go threshold/flag behavior plus follow lookup/pan updates.
 - [x] `2026-02-07` Completed `P2.4` by adding the `mapview` command-family shell (`configure`, `position`, `size`), including top-level `mapview pathName ?options?` command creation/registration, Tcl-style integer parsing and argc parity for `MapCmdposition`/`MapCmdsize`, and colocated tests covering configure/set/get, case-sensitive unknown-subcommand errors, and default map-size initialization from `MAP_W/MAP_H`.
 - [x] `2026-02-07` Completed `P2.5` by adding `mapview` pan/track/state/visibility subcommands (`MapState`, `ShowEditors`, `PanStart`, `PanTo`, `Visible`, `ViewAt`) with C-parity `*3/16` hit-box and `*16/3` pan-delta integer math from `w_map.c`, `Kick()` sequencing for `MapState`/`PanTo`, and placeholder `ViewAt` behavior coverage.
+- [x] `2026-02-07` Completed `P3.1` by adding the `graphview` command family and typed graph state (`configure`, `position`, `size`, `Visible`, `Range`, `Mask`) with C-parity validation from `w_graph.c`, including `Range` (`10|120`) and `Mask` (`0..63`) constraints plus `NewGraph` redraw-flag side effects.
