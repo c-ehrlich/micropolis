@@ -66,7 +66,7 @@ Use this exact loop:
 ## Phase 4: TTY Command Buffer + Channel
 
 - [x] Create `src/tty/command-buffer.ts` to assemble multiline commands (`Tcl_AssembleCmd` equivalent behavior target).
-- [ ] Add `src/tty/command-buffer.test.ts` for continuation and completion behavior.
+- [x] Add `src/tty/command-buffer.test.ts` for continuation and completion behavior.
 - [ ] Create `src/tty/stdin-channel.ts` implementing `StdinProc` parity:
 - [ ] EOF + no partial + tty => trigger exit callback
 - [ ] EOF + no partial + non-tty => disable further reads
@@ -158,3 +158,4 @@ Use this exact loop:
 - [x] 2026-02-07: Checked Phase 3 task `missing argument behavior in strict and safe modes` by confirming strict mode throws `RangeError('list index out of range')` (Python `IndexError` parity for `words[1]`) and safe mode returns `SugarStdoutMalformedLineError('PLAY_SOUND_MISSING_ARGUMENT')` non-fatally in `src/sugar/stdout-protocol.ts` and `src/runtime.ts`, mirroring/parity-hardening `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 3 task `Ensure sound hook receives lowercased sound name for wav mapping parity` by confirming `createIntegrationRuntime(...).handleOutputLine('PlaySound Bulldozer')` delivers `bulldozer` to `onSoundToken`, matching `play_sound(name.lower() + '.wav')` behavior in `ref/micropolis/micropolisactivity.py`; validated with `packages/sim-integration/src/runtime.test.ts` and `packages/sim-integration/src/sugar/stdout-protocol.test.ts`.
 - [x] 2026-02-07: Completed Phase 4 task `Create src/tty/command-buffer.ts` by adding `TtyCommandBuffer.assemble(string)` as a parity-first port of `Tcl_AssembleCmd` command assembly (`ref/micropolis/src/tcl/tclassem.c`) with Tcl word parsing/backslash continuation behavior derived from `TclWordEnd`/`QuoteEnd`/`VarNameEnd`/`Tcl_Backslash` (`ref/micropolis/src/tcl/tclparse.c`) for `StdinProc` multiline input handling in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `Add src/tty/command-buffer.test.ts for continuation and completion behavior` by adding parity tests for brace and backslash-newline continuations plus zero-length forced completion, matching `Tcl_AssembleCmd` command assembly behavior in `ref/micropolis/src/tcl/tclassem.c` and `StdinProc` usage in `ref/micropolis/src/sim/w_tk.c`.
