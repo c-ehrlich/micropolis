@@ -72,7 +72,7 @@ Use this exact loop:
 - [x] EOF + no partial + non-tty => disable further reads
 - [x] EOF + partial => treat as empty line and continue
 - [x] print result when `(result != ok) || sim_tty`
-- [ ] emit prompt exactly `sim:\n` after each command in tty mode
+- [x] emit prompt exactly `sim:\n` after each command in tty mode
 - [ ] emit initial prompt exactly `sim:\n` when tty channel starts
 - [ ] Add `src/tty/stdin-channel.test.ts` for all branches above.
 - [ ] Checkpoint: tty tests pass with deterministic prompt transcript snapshots.
@@ -164,3 +164,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 4 task `EOF + no partial + non-tty => disable further reads` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` in non-tty mode calls the read-disable hook, flips `isReadEnabled()` false, and ignores subsequent input, matching `Tk_DeleteFileHandler(0)` behavior in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `EOF + partial => treat as empty line and continue` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` after a partial line evaluates the buffered command (forced completion via empty input) instead of exiting/disabling reads, matching `line[0] = 0;` + `Tcl_AssembleCmd(buffer, line)` + eval flow in `StdinProc` from `ref/micropolis/src/sim/w_tk.c` and empty-string forced completion semantics in `ref/micropolis/src/tcl/tclassem.c`.
 - [x] 2026-02-07: Completed Phase 4 task `print result when (result != ok) || sim_tty` by validating `StdinChannel.consumeLine` result-output gating against `StdinProc` in `ref/micropolis/src/sim/w_tk.c` (`if (*tk_mainInterp->result != 0) { if ((result != TCL_OK) || sim_tty) printf("%s\\n", tk_mainInterp->result); }`) via non-tty success suppression, non-tty error printing, and tty success printing tests in `src/tty/stdin-channel.test.ts`.
+- [x] 2026-02-07: Completed Phase 4 task `emit prompt exactly sim:\n after each command in tty mode` by adding `src/tty/stdin-channel.test.ts` coverage that validates `StdinChannel.consumeLine` emits the exact `sim:\n` prompt once per completed tty command, matching post-eval `printf("sim:\\n"); fflush(stdout);` in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.

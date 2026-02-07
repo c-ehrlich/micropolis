@@ -164,4 +164,28 @@ describe('StdinChannel StdinProc result printing parity', () => {
 
     expect(stdoutChunks).toContain('command output\n');
   });
+
+  it('emits the exact tty prompt after each completed command', () => {
+    // Mirrors `StdinProc` in ref/micropolis/src/sim/w_tk.c:
+    // `if (sim_tty) { printf("sim:\\n"); fflush(stdout); }`
+    // after every successful `Tcl_RecordAndEval` command completion.
+    const stdoutChunks: string[] = [];
+    const channel = new StdinChannel({
+      isTty: true,
+      evaluateCommand() {
+        return {
+          ok: true,
+          result: '',
+        };
+      },
+      onWriteStdout(chunk) {
+        stdoutChunks.push(chunk);
+      },
+    });
+
+    channel.consumeLine('puts one\n');
+    channel.consumeLine('puts two\n');
+
+    expect(stdoutChunks).toEqual(['sim:\n', 'sim:\n']);
+  });
 });
