@@ -98,7 +98,7 @@ Use this exact loop:
 ## Phase 7: Runtime Orchestration
 
 - [x] Wire Sugar, TTY, and NET modules into `createIntegrationRuntime`.
-- [ ] Expose runtime API methods:
+- [x] Expose runtime API methods:
 - [ ] `handleInputLine(line)`
 - [ ] `handleOutputLine(line)`
 - [ ] `share()`, `focusIn()`, `focusOut()`, `quit()`
@@ -178,3 +178,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-udp.ts for UDP socket abstraction` by adding `createNodeUdpPlatform` in `src/adapters/node-udp.ts` as a Node `dgram` adapter for the `UdpListenPlatform` contract from `src/net/udp-hooks.ts`, mapping `udp_listen`/`udp_hear` responsibilities from `ref/micropolis/src/sim/w_net.c` (socket creation, reuse-address intent, bind-any, nonblocking-flag tracking, and EINTR/EWOULDBLOCK/error receive outcomes via a polling queue abstraction).
 - [x] 2026-02-07: Completed Phase 6 task `Add adapter tests with fakes/mocks only (no real network required)` by adding `src/adapters/node-process.test.ts` (fake stdin/stdout stream wiring tests) and `src/adapters/node-udp.test.ts` (mocked `node:dgram` + fake socket tests for socket setup, bind normalization, recv outcome mapping, and teardown) with no real network usage, aligned to adapter parity boundaries from `ref/micropolis/micropolisactivity.py` and `ref/micropolis/src/sim/w_net.c`.
 - [x] 2026-02-07: Completed Phase 7 task `Wire Sugar, TTY, and NET modules into createIntegrationRuntime` by wiring Sugar command methods to `src/sugar/activity-bridge.ts` serializers, routing TTY input through `StdinChannel` (`ref/micropolis/src/sim/w_tk.c` parity), and delegating NET methods to `createUdpHookRuntime` with adapter-provided `udpPlatform`; added runtime orchestration tests in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `Expose runtime API methods` by exposing `handleInputLine`, `handleOutputLine`, `share`/`focusIn`/`focusOut`/`quit`, `buddyAppeared`/`buddyDisappeared`, and `listenTo`/`hearFrom` on `IntegrationRuntime` in `src/runtime.ts`, matching Sugar (`ref/micropolis/micropolisactivity.py`), TTY (`ref/micropolis/src/sim/w_tk.c`), and NET (`ref/micropolis/src/sim/w_net.c`) integration entry points via parity-first adapter wiring.
