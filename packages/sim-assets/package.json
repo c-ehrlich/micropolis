@@ -1,5 +1,13 @@
 {
   "name": "@city/sim-assets",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "pnpm -w tsc -p packages/sim-assets/tsconfig.json --noEmit",
+    "lint": "pnpm -w eslint packages/sim-assets/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
 }
