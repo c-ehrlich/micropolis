@@ -23,7 +23,10 @@ Scope
 - MapScan slice iteration skeleton + dispatch hooks.
 - Realtime sprite/object systems (train/ship/copter/tornado/monster, etc.).
 
-Core simulation systems are not yet implemented; they are the focus of this plan.
+Status update (2026-02-07):
+- The systems in this plan are implemented and covered in
+  `packages/sim-core/PLAN-SYSTEMS-CHECKLIST.md` (all items checked).
+- Keep this file as the architecture/coverage reference; use the checklist file for completion tracking.
 
 ---
 

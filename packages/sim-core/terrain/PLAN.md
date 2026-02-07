@@ -381,6 +381,9 @@ Options (`opts`) should include the generator knobs:
     - `ref/micropolis/src/sim/w_sim.c` (command exposure / integration surface)
 
 ## Next Steps
-1) Implement exact `RandomlySeedRand` parity (`tv_usec ^ tv_sec ^ sim_rand`) with deterministic injection hooks.
-2) Add a core-only `resetForNewCityFromSeed` helper for non-UI new-city orchestration.
-3) Keep extending C-oracle replay parity to cover terrain + core orchestration together.
+This plan is complete for its defined terrain-port scope (all units above are checked).
+
+Follow-on work:
+1) Keep extending replay parity checkpoints that include terrain generation + core orchestration paths.
+2) Add/refresh terrain fixtures when behavior changes land, keeping fixture comments tied to `ref/micropolis/src/sim/s_gen.c`.
+3) Keep `RandomlySeedRand` notes in sync with `packages/sim-core/src/core/rng.ts` (`Date.now()` default + injectable `tv_sec/tv_usec` source for deterministic parity tests).

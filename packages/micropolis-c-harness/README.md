@@ -69,6 +69,10 @@ Implemented ops:
   - `ref/micropolis/src/sim/w_con.c` (compiled directly for tool/connectivity parity)
 - Binary output (generated): `packages/micropolis-c-harness/build/core/micropolis-core-oracle`
 - TS wrapper: `@city/micropolis-c-harness/core-parity`
+  - Includes non-throwing `.cty` load failure probes:
+    `runCoreOracleLoadCtyFailureProbe` and `runCoreOracleLoadCtyBytesFailureProbe`.
+    These return `{ exitStatus, signal, stderr }` command details plus pre/post
+    `save-cty` bytes so callers can assert failed-load parity and unchanged state.
 
 ### Build
 

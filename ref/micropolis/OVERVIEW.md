@@ -3,9 +3,9 @@
 Status note: this checklist tracks the TypeScript port status in this repository (code is source of truth).
 
 - [x] Core simulation (`spec/core/SPEC.md`)
-- [ ] UI/rendering/tools/sprites (`spec/ui/SPEC.md`)
+- [ ] UI/rendering/tools/sprites (`spec/ui/SPEC.md`) (core has UI-adjacent hooks/heads logic; `packages/sim-ui` remains a stub)
 - [x] Terrain generation (`spec/terrain/SPEC.md`) (non-UI `GenerateMap` pipeline in `packages/sim-core/src/terrain`)
-- [ ] Persistence & scenarios (`spec/persistence/SPEC.md`)
+- [x] Persistence & scenarios (`spec/persistence/SPEC.md`) (`packages/sim-core` `.cty` + `packages/sim-io` load/save/scenario orchestration and parity tests)
 - [ ] Resources/assets (`spec/resources/SPEC.md`)
 - [ ] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`)
 - [ ] Platform integration (Sugar, networking) (`spec/integration/SPEC.md`)

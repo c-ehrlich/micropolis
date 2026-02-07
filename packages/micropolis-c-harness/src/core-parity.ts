@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -299,6 +299,32 @@ export interface CoreOracleLoadCtyBytesOptions {
 }
 
 /**
+ * Non-throwing command result for one oracle CLI invocation.
+ *
+ * Mirrors process-level status and signal semantics of the
+ * `micropolis-core-oracle` binary in `packages/micropolis-c-harness/core/core_oracle.c`.
+ */
+export interface CoreOracleCommandResult {
+  exitStatus: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: Uint8Array;
+  stderr: string;
+}
+
+/**
+ * Failure-probe payload for `.cty` load commands.
+ *
+ * Mirrors `loadFile` failure flow in `ref/micropolis/src/sim/s_fileio.c` as exposed
+ * by oracle `load-cty`/`load-cty-bytes` commands: callers can assert command status
+ * and verify state stability by comparing pre/post `save-cty` bytes.
+ */
+export interface CoreOracleLoadCtyFailureProbeResult {
+  command: CoreOracleCommandResult;
+  beforeSaveCty: Uint8Array;
+  afterSaveCty: Uint8Array;
+}
+
+/**
  * Input payload for oracle `.cty` save-byte extraction.
  * Mirrors the `saveFile` runtime inputs in `ref/micropolis/src/sim/s_fileio.c`:
  * scalar state + histories + misc + map buffers.
@@ -583,11 +609,42 @@ export function decodeCoreI16LE(bytes: Uint8Array): Int16Array {
  * This wraps the CLI contract implemented in `core/core_oracle.c`.
  */
 function runCoreOracle(args: readonly string[], options?: { stdinBytes?: Uint8Array }): Buffer {
-  const bin = ensureCoreOracle();
-  if (options?.stdinBytes !== undefined) {
-    return execFileSync(bin, [...args], { input: options.stdinBytes });
+  const result = runCoreOracleResult(args, options);
+  if (result.signal !== null) {
+    throw new Error(`core oracle command terminated by signal ${result.signal}`);
   }
-  return execFileSync(bin, [...args]);
+  if (result.exitStatus !== 0) {
+    const stderrText = result.stderr.trim();
+    const stderrSuffix = stderrText.length > 0 ? `: ${stderrText}` : '';
+    throw new Error(`core oracle command exited with status ${result.exitStatus}${stderrSuffix}`);
+  }
+  return Buffer.from(result.stdout);
+}
+
+/**
+ * Executes one oracle CLI command and returns process result details.
+ *
+ * Mirrors command execution behavior in `packages/micropolis-c-harness/core/core_oracle.c`
+ * without throwing on non-zero exit status, so parity tests can assert failures directly.
+ */
+function runCoreOracleResult(
+  args: readonly string[],
+  options?: { stdinBytes?: Uint8Array },
+): CoreOracleCommandResult {
+  const bin = ensureCoreOracle();
+  const result = spawnSync(bin, [...args], {
+    input: options?.stdinBytes,
+  });
+  if (result.error !== undefined) {
+    throw result.error;
+  }
+
+  return {
+    exitStatus: result.status,
+    signal: result.signal,
+    stdout: new Uint8Array(result.stdout),
+    stderr: result.stderr.toString('utf8'),
+  };
 }
 
 /**
@@ -1268,6 +1325,52 @@ export function runCoreOracleLoadCtyBytes(options: CoreOracleLoadCtyBytesOptions
     writeCoreOracleState(stateDir, options.state);
     runCoreOracle(['load-cty-bytes', '--state-dir', stateDir], { stdinBytes: options.ctyBytes });
     return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs `load-cty --cty-path` as a non-throwing failure probe.
+ *
+ * Mirrors failed `loadFile` behavior in `ref/micropolis/src/sim/s_fileio.c`: when the
+ * oracle command fails, `core_oracle.c` returns status `1` before `SaveStateDir`, so
+ * `beforeSaveCty` and `afterSaveCty` should remain identical.
+ */
+export function runCoreOracleLoadCtyFailureProbe(
+  options: CoreOracleLoadCtyOptions,
+): CoreOracleLoadCtyFailureProbeResult {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    const beforeSaveCty = new Uint8Array(runCoreOracle(['save-cty', '--state-dir', stateDir]));
+    const command = runCoreOracleResult([
+      'load-cty',
+      '--state-dir',
+      stateDir,
+      '--cty-path',
+      options.ctyPath,
+    ]);
+    const afterSaveCty = new Uint8Array(runCoreOracle(['save-cty', '--state-dir', stateDir]));
+    return { command, beforeSaveCty, afterSaveCty };
+  });
+}
+
+/**
+ * Runs `load-cty-bytes` as a non-throwing failure probe.
+ *
+ * Mirrors `_load_file` + `loadFile` error handling in
+ * `ref/micropolis/src/sim/s_fileio.c` through `core_oracle.c` stdin command routing.
+ * Failure status/signal/stderr are returned alongside pre/post `save-cty` bytes.
+ */
+export function runCoreOracleLoadCtyBytesFailureProbe(
+  options: CoreOracleLoadCtyBytesOptions,
+): CoreOracleLoadCtyFailureProbeResult {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, options.state);
+    const beforeSaveCty = new Uint8Array(runCoreOracle(['save-cty', '--state-dir', stateDir]));
+    const command = runCoreOracleResult(['load-cty-bytes', '--state-dir', stateDir], {
+      stdinBytes: options.ctyBytes,
+    });
+    const afterSaveCty = new Uint8Array(runCoreOracle(['save-cty', '--state-dir', stateDir]));
+    return { command, beforeSaveCty, afterSaveCty };
   });
 }
 
