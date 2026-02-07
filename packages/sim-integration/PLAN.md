@@ -106,7 +106,7 @@ Use this exact loop:
 - [x] `listenTo(port)`, `hearFrom(fileSock)`
 - [x] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
 - [x] sugar-only
-- [ ] tty-only
+- [x] tty-only
 - [ ] net-only
 - [ ] sugar+tty+net
 - [ ] Checkpoint: integration tests pass with deterministic event logs.
@@ -187,3 +187,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `listenTo(port)`, `hearFrom(fileSock)` by finalizing runtime API parity docs in `src/runtime.ts` (mapping to `SimCmdListenTo`/`SimCmdHearFrom` in `ref/micropolis/src/sim/w_sim.c` and `udp_listen`/`udp_hear` in `ref/micropolis/src/sim/w_net.c`) while preserving adapter-gated no-op/failure semantics validated by NET runtime wiring tests in `src/runtime.test.ts`.
 - [x] 2026-02-07: Completed Phase 7 task `Add src/runtime.integration.test.ts for mixed-feature scenarios` by adding `src/runtime.integration.test.ts` coverage for sugar-only, tty-only, net-only, and sugar+tty+net runtime paths with deterministic cross-feature event logs aligned to `micropolisactivity.py`, `w_tk.c`, and `w_net.c` parity behavior.
 - [x] 2026-02-07: Checked Phase 7 task `sugar-only` by verifying the `records deterministic sugar-only events` integration scenario in `src/runtime.integration.test.ts`, covering Sugar stdout `PlaySound` dispatch and Sugar command emission parity boundaries from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 7 task `tty-only` by validating the `records deterministic tty-only events` scenario in `src/runtime.integration.test.ts` (startup/post-command `sim:\n` prompts, multiline `Tcl_AssembleCmd`-style input completion, and EOF `sim_exit(0)` parity from `ref/micropolis/src/sim/w_tk.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic tty-only events"`.
