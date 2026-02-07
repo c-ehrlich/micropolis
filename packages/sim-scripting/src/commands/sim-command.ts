@@ -1,4 +1,8 @@
 import {
+  resolveSimScriptingFeatureFlags,
+  type SimScriptingFeatureFlags,
+} from '../feature-flags.ts';
+import {
   makeScriptFailure,
   makeScriptSuccess,
   ScriptRuntimeError,
@@ -3092,6 +3096,69 @@ export function createSimSubcommandTable(
 const DEFAULT_SIM_KICK_STATE = createSimKickState();
 
 /**
+ * Constructor options for `createSimDefaultSubcommandEntries`.
+ * Mirrors optional registration slices in `sim_command_init` from
+ * `ref/micropolis/src/sim/w_sim.c`:
+ * - `CAM`-guarded `sim` entries (for example `JustCam`)
+ * - `NET`-guarded networking entries (`ListenTo`, `HearFrom`)
+ * Difference from C: source-delta extras are grouped behind `legacyExtras`
+ * and optional entry arrays are injected explicitly.
+ */
+export interface CreateSimDefaultSubcommandEntriesOptions {
+  featureFlags?: SimScriptingFeatureFlags;
+  camSubcommandEntries?: readonly SimSubcommandEntry[];
+  netSubcommandEntries?: readonly SimSubcommandEntry[];
+  legacyExtraSubcommandEntries?: readonly SimSubcommandEntry[];
+}
+
+/**
+ * Builds the default ordered `sim` subcommand entry list with feature gating.
+ * Mirrors `sim_command_init` in `ref/micropolis/src/sim/w_sim.c`, where
+ * optional entries are registered only when `CAM`/`NET` are compiled in.
+ * Difference from C: optional slices are runtime-flagged (`CAM`, `NET`,
+ * `legacyExtras`) instead of compile-time preprocessor branches.
+ */
+export function createSimDefaultSubcommandEntries(
+  options: CreateSimDefaultSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const featureFlags = resolveSimScriptingFeatureFlags(options.featureFlags);
+
+  const entries: SimSubcommandEntry[] = [
+    ...createSimSessionControlSubcommandEntries({
+      kickState: DEFAULT_SIM_KICK_STATE,
+    }),
+    ...createSimSpeedDelayControlSubcommandEntries({
+      kickState: DEFAULT_SIM_KICK_STATE,
+    }),
+    ...createSimBudgetOptionsSubcommandEntries({
+      kickState: DEFAULT_SIM_KICK_STATE,
+    }),
+    ...createSimMapDynamicOverlayMiscSubcommandEntries({
+      kickState: DEFAULT_SIM_KICK_STATE,
+    }),
+    ...createSimDisastersSpriteGoalUtilitySubcommandEntries(),
+    ...createSimUrlBrowserRandomDollarsUtilitySubcommandEntries(),
+    ...createSimCityGameSetupSubcommandEntries(),
+    ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
+    ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
+  ];
+
+  if (featureFlags.CAM) {
+    entries.push(...(options.camSubcommandEntries ?? []));
+  }
+
+  if (featureFlags.NET) {
+    entries.push(...(options.netSubcommandEntries ?? []));
+  }
+
+  if (featureFlags.legacyExtras) {
+    entries.push(...(options.legacyExtraSubcommandEntries ?? []));
+  }
+
+  return entries;
+}
+
+/**
  * Default `sim` subcommand table.
  * Mirrors `sim_command_init` registration slices from
  * `ref/micropolis/src/sim/w_sim.c` for:
@@ -3106,26 +3173,12 @@ const DEFAULT_SIM_KICK_STATE = createSimKickState();
  *   `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`)
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
+ * Parity note: optional feature slices (`CAM`, `NET`, `legacyExtras`) default
+ * to disabled and must be added through `createSimDefaultSubcommandEntries`.
  */
-export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable([
-  ...createSimSessionControlSubcommandEntries({
-    kickState: DEFAULT_SIM_KICK_STATE,
-  }),
-  ...createSimSpeedDelayControlSubcommandEntries({
-    kickState: DEFAULT_SIM_KICK_STATE,
-  }),
-  ...createSimBudgetOptionsSubcommandEntries({
-    kickState: DEFAULT_SIM_KICK_STATE,
-  }),
-  ...createSimMapDynamicOverlayMiscSubcommandEntries({
-    kickState: DEFAULT_SIM_KICK_STATE,
-  }),
-  ...createSimDisastersSpriteGoalUtilitySubcommandEntries(),
-  ...createSimUrlBrowserRandomDollarsUtilitySubcommandEntries(),
-  ...createSimCityGameSetupSubcommandEntries(),
-  ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
-  ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
-]);
+export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable(
+  createSimDefaultSubcommandEntries(),
+);
 
 /**
  * Creates the `sim` top-level command dispatcher.

@@ -1,4 +1,5 @@
 export * from './bootstrap/create-sim-scripting-runtime.ts';
+export * from './bootstrap/register-default-commands.ts';
 export * from './callbacks/ui-callbacks.ts';
 export * from './commands/dateview-command.ts';
 export * from './commands/editorview-command.ts';
@@ -8,6 +9,7 @@ export * from './commands/mapview-command.ts';
 export * from './commands/piemenu-command.ts';
 export * from './commands/sim-command.ts';
 export * from './commands/sprite-command.ts';
+export * from './feature-flags.ts';
 export * from './runtime/errors.ts';
 export * from './runtime/result-code.ts';
 export * from './runtime/script-runtime.ts';

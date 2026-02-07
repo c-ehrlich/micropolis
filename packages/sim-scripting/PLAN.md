@@ -223,7 +223,7 @@ Use this exact loop:
     - wildcard tool callback mapping is covered by tests
 
 ## Phase 6: Optional features and source deltas
-- [ ] `P6.1` Add feature flags for `CAM`, `NET`, and `legacyExtras`.
+- [x] `P6.1` Add feature flags for `CAM`, `NET`, and `legacyExtras`.
   - Done when:
     - command registration is controlled by flags
 
@@ -288,6 +288,7 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.
 - [x] `2026-02-07` Completed `P1.8` by adding `sim` map/dynamic/overlay misc subcommands (`FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`, `ResetDynamic`) with C-parity arg/range/map-bounds checks, dynamic-map flag updates, and `Kick` coalescing coverage.
 - [x] `2026-02-07` Completed `P1.9` by adding disaster creator and sprite-goal utility `sim` subcommands (`MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`, `MakeMeltdown`, `FireBomb`, `MonsterGoal`, `HelicopterGoal`, `MonsterDirection`) with C-style call/no-argc behavior, GOD/COP lookup-create-lookup parity flow, and direction range/error-path coverage.
+- [x] `2026-02-07` Completed `P6.1` by adding runtime feature flags (`CAM`, `NET`, `legacyExtras`), flag-gated default command registration plumbing, and tests that verify optional command slices register only when enabled.
 - [x] `2026-02-07` Completed `P1.10` by adding `sim` URL/browser/random/dollars utilities (`QuoteURL`, `OpenWebBrowser`, `Rand`, `Dollars`) with C-mapped byte-escaping and command-string behavior, signed-16-bit `Rand(short)` range parity, and configurable legacy `Dollars` literal-format compatibility mode.
 - [x] `2026-02-07` Completed `P2.1` by adding the `editorview` command-family shell (`configure`, `position`, `size`), including top-level view-command creation/registration, C-style argc + Tcl-integer parsing parity from `w_editor.c`/`w_tk.c`, and colocated unit coverage for set/get/error paths.
 - [x] `2026-02-07` Completed `P2.2` by adding `editorview` pan/tool subcommands (`Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`) with C-mapped pan clamp/delta logic from `w_editor.c`/`w_x.c`, command-level kick coalescing parity, and colocated tests covering kick behavior plus view/pixel and tile command coordinate semantics.

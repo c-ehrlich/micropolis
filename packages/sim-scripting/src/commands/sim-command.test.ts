@@ -11,6 +11,7 @@ import {
   createSimCityGameSetupState,
   createSimCityGameSetupSubcommandEntries,
   createSimCommandDispatcher,
+  createSimDefaultSubcommandEntries,
   createSimDisastersSpriteGoalUtilityState,
   createSimDisastersSpriteGoalUtilitySubcommandEntries,
   createSimKickState,
@@ -90,6 +91,41 @@ describe('sim command dispatcher', () => {
       code: ScriptResultCode.Ok,
       value: 'second',
     });
+  });
+});
+
+describe('sim default subcommand entries', () => {
+  it('keeps CAM, NET, and legacy extras unregistered when feature flags are disabled', () => {
+    // Mirrors `sim_command_init` in `w_sim.c`, where `#ifdef CAM` / `#ifdef NET`
+    // blocks are skipped when those build flags are absent.
+    const entries = createSimDefaultSubcommandEntries({
+      camSubcommandEntries: [['JustCam', () => makeScriptSuccess('cam')]],
+      netSubcommandEntries: [['ListenTo', () => makeScriptSuccess('net')]],
+      legacyExtraSubcommandEntries: [['HeatSteps', () => makeScriptSuccess('legacy')]],
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('JustCam')).toBe(false);
+    expect(table.has('ListenTo')).toBe(false);
+    expect(table.has('HeatSteps')).toBe(false);
+  });
+
+  it('registers CAM, NET, and legacy extras only when their flags are enabled', () => {
+    const entries = createSimDefaultSubcommandEntries({
+      featureFlags: {
+        CAM: true,
+        NET: true,
+        legacyExtras: true,
+      },
+      camSubcommandEntries: [['JustCam', () => makeScriptSuccess('cam')]],
+      netSubcommandEntries: [['ListenTo', () => makeScriptSuccess('net')]],
+      legacyExtraSubcommandEntries: [['HeatSteps', () => makeScriptSuccess('legacy')]],
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('JustCam')).toBe(true);
+    expect(table.has('ListenTo')).toBe(true);
+    expect(table.has('HeatSteps')).toBe(true);
   });
 });
 
