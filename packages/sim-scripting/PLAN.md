@@ -140,7 +140,7 @@ Use this exact loop:
   - Done when:
     - auto-go state transitions match expected C behavior
 
-- [ ] `P2.4` Add `mapview` command family shell (`configure/position/size`).
+- [x] `P2.4` Add `mapview` command family shell (`configure/position/size`).
   - C reference: `w_map.c`
   - Done when:
     - parse/set/get behavior tested
@@ -292,3 +292,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P2.1` by adding the `editorview` command-family shell (`configure`, `position`, `size`), including top-level view-command creation/registration, C-style argc + Tcl-integer parsing parity from `w_editor.c`/`w_tk.c`, and colocated unit coverage for set/get/error paths.
 - [x] `2026-02-07` Completed `P2.2` by adding `editorview` pan/tool subcommands (`Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`) with C-mapped pan clamp/delta logic from `w_editor.c`/`w_x.c`, command-level kick coalescing parity, and colocated tests covering kick behavior plus view/pixel and tile command coordinate semantics.
 - [x] `2026-02-07` Completed `P2.3` by adding `editorview` mode/visibility/auto commands (`AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`) with C-parity state transitions from `w_editor.c`/`w_x.c` and colocated tests covering auto-go threshold/flag behavior plus follow lookup/pan updates.
+- [x] `2026-02-07` Completed `P2.4` by adding the `mapview` command-family shell (`configure`, `position`, `size`), including top-level `mapview pathName ?options?` command creation/registration, Tcl-style integer parsing and argc parity for `MapCmdposition`/`MapCmdsize`, and colocated tests covering configure/set/get, case-sensitive unknown-subcommand errors, and default map-size initialization from `MAP_W/MAP_H`.
