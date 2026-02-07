@@ -207,7 +207,7 @@ Use this exact loop:
   - Done when:
     - success/failure callback emission is deterministic
 
-- [ ] `P5.4` Implement status/budget/evaluation callbacks.
+- [x] `P5.4` Implement status/budget/evaluation callbacks.
   - Procedures: `UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`
   - Done when:
     - all callback argument orders match spec
@@ -304,3 +304,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P5.1` by adding `src/callbacks/ui-callbacks.ts` with callback registration/override helpers plus a runtime-backed callback dispatcher (`name -> reference -> invoke`) and colocated tests that cover direct-name dispatch parity and last-registration-wins remapping behavior.
 - [x] `2026-02-07` Completed `P5.2` by adding startup/lifecycle callback helpers (`UIStartMicropolis`, `UIPlayNewCity`, `UIReallyStartGame`, `UIStartLoad`, `UIStartScenario`, `UINewGame`, `DoStopMicropolis`) with C-mapped argument shaping from `w_tk.c`/`w_stubs.c`/`w_util.c` and colocated invocation-contract tests.
 - [x] `2026-02-07` Completed `P5.3` by adding file I/O callback helpers (`UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`) mapped to `s_fileio.c` `Eval`/`sprintf` flows, with deterministic success/failure callback-name emission and message-argv parity tests.
+- [x] `2026-02-07` Completed `P5.4` by adding status/budget/evaluation callback helpers (`UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`) with C-mapped `%d`/bitfield coercion parity from `w_update.c`/`w_util.c`/`w_budget.c`/`w_eval.c` and colocated argv-order tests.

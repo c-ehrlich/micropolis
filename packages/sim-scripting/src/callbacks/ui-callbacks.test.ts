@@ -13,6 +13,19 @@ import {
   dispatchUiDidntLoadCity,
   dispatchUiDidntSaveCity,
   dispatchUiDidSaveCity,
+  dispatchUiSetBudget,
+  dispatchUiSetBudgetValues,
+  dispatchUiSetCityName,
+  dispatchUiSetDate,
+  dispatchUiSetDemand,
+  dispatchUiSetEvaluation,
+  dispatchUiSetFunds,
+  dispatchUiSetGameLevel,
+  dispatchUiSetMapState,
+  dispatchUiSetOptions,
+  dispatchUiSetSpeed,
+  dispatchUiShowBudgetAndWait,
+  dispatchUiUpdateBudget,
   dispatchUiNewGame,
   dispatchUiPlayNewCity,
   dispatchUiReallyStartGame,
@@ -286,6 +299,161 @@ describe('ui file i/o callback helpers', () => {
     expect(observedArgv).toEqual([
       ['::ui::didntSaveCity', 'Unable to save city.'],
       ['::ui::didntLoadCity', 'Unable to load city.'],
+    ]);
+  });
+});
+
+describe('ui status/budget/evaluation callback helpers', () => {
+  it('dispatches simulation status callbacks with C argument shaping and order', () => {
+    // Mirrors `UISet*` emissions in `ref/micropolis/src/sim/w_update.c` and
+    // `ref/micropolis/src/sim/w_util.c`, including `(int)(valve/100)` demand
+    // scaling and bitfield expansion in `UpdateOptionsMenu`.
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UISetFunds', '::ui::setFunds'],
+      ['UISetDate', '::ui::setDate'],
+      ['UISetDemand', '::ui::setDemand'],
+      ['UISetOptions', '::ui::setOptions'],
+      ['UISetSpeed', '::ui::setSpeed'],
+      ['UISetGameLevel', '::ui::setGameLevel'],
+      ['UISetCityName', '::ui::setCityName'],
+      ['UISetMapState', '::ui::setMapState'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    dispatchUiSetFunds(dispatch, 'Funds: $1,234');
+    dispatchUiSetDate(dispatch, 'Apr 2050', 3.9, 2050.2);
+    dispatchUiSetDemand(dispatch, 1299, -2501, 3000);
+    dispatchUiSetOptions(dispatch, 213.8);
+    dispatchUiSetSpeed(dispatch, 3.7);
+    dispatchUiSetGameLevel(dispatch, 2.9);
+    dispatchUiSetCityName(dispatch, 'Mega City');
+    dispatchUiSetMapState(dispatch, '.map0', 14.1);
+
+    expect(observedArgv).toEqual([
+      ['::ui::setFunds', 'Funds: $1,234'],
+      ['::ui::setDate', 'Apr 2050', '3', '2050'],
+      ['::ui::setDemand', '12', '-25', '30'],
+      ['::ui::setOptions', '1', '0', '1', '0', '1', '0', '1', '1'],
+      ['::ui::setSpeed', '3'],
+      ['::ui::setGameLevel', '2'],
+      ['::ui::setCityName', 'Mega City'],
+      ['::ui::setMapState', '.map0', '14'],
+    ]);
+  });
+
+  it('dispatches budget and evaluation callbacks with C callback argv order', () => {
+    // Mirrors callback order from `SetBudget`, `SetBudgetValues`, and
+    // `SetEvaluation` in `ref/micropolis/src/sim/w_budget.c` and `w_eval.c`.
+    // "Magic" percent values are C-style `(int)(percent * 100)` outputs.
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UIShowBudgetAndWait', '::ui::showBudgetAndWait'],
+      ['UIUpdateBudget', '::ui::updateBudget'],
+      ['UISetBudget', '::ui::setBudget'],
+      ['UISetBudgetValues', '::ui::setBudgetValues'],
+      ['UISetEvaluation', '::ui::setEvaluation'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    dispatchUiShowBudgetAndWait(dispatch);
+    dispatchUiUpdateBudget(dispatch);
+    dispatchUiSetBudget(dispatch, '$200', '$100', '$300', '$150', 9.8);
+    dispatchUiSetBudgetValues(
+      dispatch,
+      '$75',
+      '$100',
+      75.9,
+      '$43',
+      '$90',
+      48.2,
+      '$22',
+      '$80',
+      27.9,
+    );
+    dispatchUiSetEvaluation(
+      dispatch,
+      '1',
+      '500',
+      'Crime',
+      'Pollution',
+      'Traffic',
+      'Taxes',
+      '120',
+      '90',
+      '80',
+      '20',
+      '12345',
+      '50',
+      '$999,000',
+      'City',
+      'Easy',
+      '42%',
+      '58%',
+      'Mayor Report',
+    );
+
+    expect(observedArgv).toEqual([
+      ['::ui::showBudgetAndWait'],
+      ['::ui::updateBudget'],
+      ['::ui::setBudget', '$200', '$100', '$300', '$150', '9'],
+      [
+        '::ui::setBudgetValues',
+        '$75',
+        '$100',
+        '75',
+        '$43',
+        '$90',
+        '48',
+        '$22',
+        '$80',
+        '27',
+      ],
+      [
+        '::ui::setEvaluation',
+        '1',
+        '500',
+        'Crime',
+        'Pollution',
+        'Traffic',
+        'Taxes',
+        '120',
+        '90',
+        '80',
+        '20',
+        '12345',
+        '50',
+        '$999,000',
+        'City',
+        'Easy',
+        '42%',
+        '58%',
+        'Mayor Report',
+      ],
     ]);
   });
 });
