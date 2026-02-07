@@ -4,6 +4,7 @@ export * from './commands/editorview-command.ts';
 export * from './commands/graphview-command.ts';
 export * from './commands/mapview-command.ts';
 export * from './commands/sim-command.ts';
+export * from './commands/sprite-command.ts';
 export * from './runtime/errors.ts';
 export * from './runtime/result-code.ts';
 export * from './runtime/script-runtime.ts';
