@@ -300,6 +300,111 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
       { message: 'HearFrom expects file<sock>', phase: 'hear' },
     ]);
   });
+
+  it('accepts signed decimal socket tokens after file prefix', () => {
+    const recvCalls: Array<{ sock: number; addrLength: number | undefined }> = [];
+    const runtime = createUdpHookRuntime({
+      platform: createPlatform({
+        recvFrom(sock, addrLength) {
+          recvCalls.push({ sock, addrLength });
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Mirrors `SimCmdHearFrom` integer parsing of `argv[2] + 4` via
+    // `Tcl_GetInt` in ref/micropolis/src/sim/w_sim.c.
+    runtime.hearFrom('file+7');
+    runtime.hearFrom('file-42');
+    runtime.hearFrom('file0009');
+
+    expect(recvCalls).toEqual([
+      { sock: 7, addrLength: undefined },
+      { sock: -42, addrLength: undefined },
+      { sock: 9, addrLength: undefined },
+    ]);
+  });
+
+  it('rejects socket tokens outside 32-bit signed integer range', () => {
+    const recvCalls: number[] = [];
+    const hearErrors: Array<{ message: string; phase: 'listen' | 'hear' }> = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onError(error, phase) {
+          hearErrors.push({ message: error.message, phase });
+        },
+      },
+      platform: createPlatform({
+        recvFrom(sock) {
+          recvCalls.push(sock);
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Mirrors C `int` socket range expectations around `Tcl_GetInt` in
+    // `SimCmdHearFrom`; values above 2147483647 or below -2147483648 fail.
+    runtime.hearFrom('file2147483648');
+    runtime.hearFrom('file-2147483649');
+
+    expect(recvCalls).toEqual([]);
+    expect(hearErrors).toEqual([
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+    ]);
+  });
+
+  it('formats empty packets as empty byte body braces', () => {
+    const packetCommands: string[] = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onPacketCommand(command) {
+          packetCommands.push(command);
+        },
+      },
+      platform: createPlatform({
+        recvFrom() {
+          if (packetCommands.length === 0) {
+            return { kind: 'packet', sourceIp: '172.16.0.5', bytes: [] };
+          }
+
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Mirrors `udp_hear` command build in ref/micropolis/src/sim/w_net.c:
+    // when len==0, the `%3d ` loop is skipped and command ends with `{}`.
+    runtime.hearFrom('file8');
+
+    expect(packetCommands).toEqual(['HandlePacket 8 {172.16.0.5} {}']);
+  });
+
+  it('keeps exact C `%3d ` width and trailing spaces for each byte', () => {
+    const packetCommands: string[] = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onPacketCommand(command) {
+          packetCommands.push(command);
+        },
+      },
+      platform: createPlatform({
+        recvFrom() {
+          if (packetCommands.length === 0) {
+            return { kind: 'packet', sourceIp: '192.0.2.4', bytes: [1, 12, 123] };
+          }
+
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Exact parity target from `sprintf(cp, "%3d ", buf[i]); cp += 4;` in
+    // ref/micropolis/src/sim/w_net.c.
+    runtime.hearFrom('file88');
+
+    expect(packetCommands).toEqual(['HandlePacket 88 {192.0.2.4} {  1  12 123 }']);
+  });
 });
 
 function createPlatform(overrides: Partial<UdpListenPlatform>): UdpListenPlatform {

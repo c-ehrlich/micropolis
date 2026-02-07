@@ -85,7 +85,7 @@ Use this exact loop:
 - [x] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
 - [x] Format each byte as `%3d ` equivalent (fixed width + trailing space).
 - [x] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
-- [ ] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
+- [x] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
 - [ ] Checkpoint: UDP tests pass for strict and safe modes.
 
 ## Phase 6: Node Adapters
@@ -173,3 +173,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 5 task `Emit callback string exactly: HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}` by surfacing packet recv results through `hooks.onPacketCommand` in `createUdpHookRuntime(...).hearFrom(fileSock)` and emitting `HandlePacket ${sock} {${ip}} {${bytes}}` command-shape strings mirroring `sprintf(cmd, "HandlePacket %d {%s} {", ...)` + `Eval(cmd)` flow in `ref/micropolis/src/sim/w_net.c`; added focused callback-shape coverage in `src/net/udp-hooks.test.ts`.
 - [x] 2026-02-07: Completed Phase 5 task `Format each byte as %3d equivalent (fixed width + trailing space)` by updating UDP packet command formatting in `src/net/udp-hooks.ts` to emit each byte as `%3d ` (right-aligned width 3 plus trailing space), matching the `for` loop `sprintf(cp, "%3d ", buf[i]); cp += 4;` behavior in `ref/micropolis/src/sim/w_net.c`; updated `src/net/udp-hooks.test.ts` expectation for exact spacing parity.
 - [x] 2026-02-07: Completed Phase 5 task `Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling)` by adding parity-mode wiring to `createUdpHookRuntime` in `src/net/udp-hooks.ts`: strict mode now preserves `udp_listen` no-`htons` port quirk and leaves `udp_hear` recv address length uninitialized-equivalent (`undefined` adapter input), while safe mode normalizes listen ports to unsigned 16-bit and passes initialized `sockaddr_in` length (`16`) per robust behavior noted in `ref/micropolis/spec/integration/SPEC.md`; added focused strict/safe coverage in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Add src/net/udp-hooks.test.ts for parser and formatter exactness` by extending `src/net/udp-hooks.test.ts` with exact `SimCmdHearFrom` parser coverage (signed `file<sock>` integers and 32-bit bounds) and exact `udp_hear` formatter coverage (`len==0` produces `{}` and `%3d ` width/trailing spacing for each byte) mapped to `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
