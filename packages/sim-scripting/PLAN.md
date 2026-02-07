@@ -181,7 +181,7 @@ Use this exact loop:
   - Done when:
     - entry creation/deletion/configuration state is covered by tests
 
-- [ ] `P4.2` Implement `piemenu` activation/invocation/posting commands.
+- [x] `P4.2` Implement `piemenu` activation/invocation/posting commands.
   - Commands: `activate`, `invoke`, `show`, `pending`, `defer`, `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`
   - Done when:
     - index parsing modes (`active`, `last`, `none`, `@x,y`, label match) are tested
@@ -299,3 +299,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P3.3` by adding the `sprite` top-level factory command (`sprite <name> <type>`) plus per-sprite case-sensitive subcommand dispatch scaffolding from `w_sprite.c`, with Tcl-style type parsing and strict `1..OBJN-1` (`1..8`) validation parity.
 - [x] `2026-02-07` Completed `P3.4` by porting all `sprite` field accessors and `Init`/`Explode` subcommands from `w_sprite.c`, including Tcl-style integer parsing, `WORLD_X/Y` pixel-bound checks (`0..1919`, `0..1599`), type-specific `InitSprite` defaults, and `ExplodeSprite` frame/message parity coverage.
 - [x] `2026-02-07` Completed `P4.1` by adding `piemenu` state + command shell (`configure`, `add`, `delete`, `entryconfigure`, `index`) with C-mapped defaults/option parsing from `w_piem.c` and colocated state-transition/index-resolution tests.
+- [x] `2026-02-07` Completed `P4.2` by implementing `piemenu` activation/invocation/posting subcommands (`activate`, `invoke`, `show`, `pending`, `defer`, `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`) with C-mapped `w_piem.c` state transitions, `CalcPieMenuItem`-style cursor delta math for `@x,y` indexing, and colocated parity tests for posting flow, script hooks, and distance/direction rounding.

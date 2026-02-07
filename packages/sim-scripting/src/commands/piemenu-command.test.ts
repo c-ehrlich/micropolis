@@ -284,6 +284,172 @@ describe('piemenu widget command shell', () => {
     });
   });
 
+  it('implements activation/invocation/posting commands from PieMenuWidgetCmd', () => {
+    const menuState = createPieMenuState('.pie.main', {
+      entries: [
+        {
+          type: 'command',
+          label: 'Road',
+          command: 'DoRoad 7',
+          preview: 'PreviewRoad',
+          piemenu: null,
+          bitmap: null,
+          font: null,
+          background: null,
+          activeBackground: null,
+          xOffset: 0,
+          yOffset: 0,
+        },
+      ],
+    });
+    const scriptCalls: string[] = [];
+    const subcommands = createPieMenuSubcommandTable(
+      createPieMenuSubcommandEntries({
+        hooks: {
+          runEntryScript: (_menu, scriptText, source) => {
+            scriptCalls.push(`${source}:${scriptText}`);
+            return makeScriptSuccess(`${source}:${scriptText}`);
+          },
+          resolveIndexAtCoordinates: (_menu, x, y) => {
+            if (x === 3 && y === -4) {
+              return 0;
+            }
+            return -1;
+          },
+        },
+      }),
+    );
+    const dispatcher = createPieMenuWidgetCommandDispatcher(menuState, subcommands);
+
+    expect(dispatcher(['.pie.main', 'pending'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `post` uses `Tcl_GetInt` in `w_piem.c`, so octal and hex are accepted.
+    expect(dispatcher(['.pie.main', 'post', '020', '0x10'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.group).toBe('default');
+    expect(menuState.rootX).toBe(16);
+    expect(menuState.rootY).toBe(16);
+    expect(menuState.popupPending).toBe(true);
+
+    expect(dispatcher(['.pie.main', 'pending'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    expect(dispatcher(['.pie.main', 'defer'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.popupPending).toBe(true);
+
+    expect(dispatcher(['.pie.main', 'show'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.mapped).toBe(true);
+    expect(menuState.popupPending).toBe(false);
+
+    menuState.popupPending = true;
+    menuState.mapped = false;
+    expect(dispatcher(['.pie.main', 'activate', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'preview:PreviewRoad',
+    });
+    expect(menuState.active).toBe(0);
+    expect(menuState.popupPending).toBe(true);
+    expect(dispatcher(['.pie.main', 'activate', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(dispatcher(['.pie.main', 'invoke', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'invoke:DoRoad 7',
+    });
+    expect(scriptCalls).toEqual(['preview:PreviewRoad', 'invoke:DoRoad 7']);
+
+    menuState.rootX = 0;
+    menuState.rootY = 0;
+    expect(dispatcher(['.pie.main', 'index', '@3,-4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `CalcPieMenuItem` stores `dx = (x-root_x)+1` and `dy = (root_y-y)-1` in
+    // `ref/micropolis/src/sim/w_piem.c`, so `@3,-4` from root `(0,0)` yields
+    // `dx=4`, `dy=3`, then `distance` rounds `sqrt(25)+0.499` to `5`.
+    expect(dispatcher(['.pie.main', 'distance'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '5',
+    });
+    // `direction` in C is `(int)(RAD_TO_DEG(atan2(dy, dx)) + 0.499)`.
+    expect(dispatcher(['.pie.main', 'direction'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '37',
+    });
+
+    expect(dispatcher(['.pie.main', 'grab', '.main'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.grabbedWindow).toBe('.main');
+
+    expect(dispatcher(['.pie.main', 'ungrab', '.main'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.grabbedWindow).toBeNull();
+
+    menuState.postedSubmenu = '.pie.sub';
+    expect(dispatcher(['.pie.main', 'unpost'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(menuState.mapped).toBe(false);
+    expect(menuState.active).toBe(-1);
+    expect(menuState.postedSubmenu).toBeNull();
+  });
+
+  it('runs invoke/preview scripts through runtime in createPieMenuCommandDispatcher', () => {
+    const runtime = new ScriptRuntime();
+    runtime.registerCommand('DoRoad', (argv) => makeScriptSuccess(`invoke:${argv[1] ?? ''}`));
+    runtime.registerCommand('PreviewRoad', (argv) => makeScriptSuccess(`preview:${argv[1] ?? ''}`));
+    runtime.registerCommand('piemenu', createPieMenuCommandDispatcher({ runtime }));
+
+    expect(runtime.invoke(['piemenu', '.pie.main'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '.pie.main',
+    });
+    expect(
+      runtime.invoke([
+        '.pie.main',
+        'add',
+        'command',
+        '-label',
+        'Road',
+        '-command',
+        'DoRoad 7',
+        '-preview',
+        'PreviewRoad 9',
+      ]),
+    ).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['.pie.main', 'activate', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'preview:9',
+    });
+    expect(runtime.invoke(['.pie.main', 'invoke', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'invoke:7',
+    });
+  });
+
   it('returns typed failures for argc/parse/option errors in pie menu commands', () => {
     const menuState = createPieMenuState('.pie.main');
     const dispatcher = createPieMenuWidgetCommandDispatcher(menuState);
@@ -328,6 +494,49 @@ describe('piemenu widget command shell', () => {
       code: ScriptResultCode.Error,
       errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
       message: '.pie.main index expects argc 3, got 2',
+    });
+  });
+
+  it('returns typed failures for P4.2 activation/posting command errors', () => {
+    const menuState = createPieMenuState('.pie.main');
+    const subcommands = createPieMenuSubcommandTable(
+      createPieMenuSubcommandEntries({
+        hooks: {
+          resolveWindow: (_menu, windowName) => windowName !== '.bad',
+        },
+      }),
+    );
+    const dispatcher = createPieMenuWidgetCommandDispatcher(menuState, subcommands);
+
+    expect(dispatcher(['.pie.main', 'activate'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.pie.main activate expects argc 3, got 2',
+    });
+    expect(dispatcher(['.pie.main', 'show', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.pie.main show expects argc 2, got 3',
+    });
+    expect(dispatcher(['.pie.main', 'post', 'x', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: '.pie.main post expected an integer x: x',
+    });
+    expect(dispatcher(['.pie.main', 'grab', '.bad'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.pie.main grab requires a resolvable window',
+    });
+    expect(dispatcher(['.pie.main', 'ungrab', '.bad'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.pie.main ungrab requires a resolvable window',
+    });
+    expect(dispatcher(['.pie.main', 'distance', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: '.pie.main distance expects argc 2, got 3',
     });
   });
 

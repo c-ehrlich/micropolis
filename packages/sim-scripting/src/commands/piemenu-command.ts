@@ -4,7 +4,7 @@ import {
   ScriptRuntimeError,
   ScriptRuntimeErrorCode,
 } from '../runtime/errors.ts';
-import type { ScriptRuntimeResult } from '../runtime/result-code.ts';
+import { ScriptResultCode, type ScriptRuntimeResult } from '../runtime/result-code.ts';
 import type { ScriptCommandHandler, ScriptRuntime } from '../runtime/script-runtime.ts';
 import { WidgetRegistry } from '../state/widget-registry.ts';
 
@@ -128,8 +128,9 @@ export interface PieMenuEntryState {
 /**
  * Mutable state for one created pie-menu command.
  * Mirrors script-visible portions of `PieMenu` in `ref/micropolis/src/sim/w_piem.c`
- * that are required by P4.1 subcommands (`configure`, `add`, `delete`,
- * `entryconfigure`, `index`).
+ * that are required by Phase 4 subcommands (`activate`, `show`, `pending`,
+ * `defer`, `configure`, `add`, `delete`, `entryconfigure`, `index`, `invoke`,
+ * `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`).
  * Difference from C: Tk window/event handles and drawing caches are not modeled.
  */
 export interface PieMenuState {
@@ -138,6 +139,16 @@ export interface PieMenuState {
   active: number;
   popupPending: boolean;
   resizePending: boolean;
+  mapped: boolean;
+  group: string | null;
+  rootX: number;
+  rootY: number;
+  centerX: number;
+  centerY: number;
+  dx: number;
+  dy: number;
+  postedSubmenu: string | null;
+  grabbedWindow: string | null;
   configure: PieMenuConfigureState;
 }
 
@@ -151,17 +162,35 @@ export interface CreatePieMenuStateOptions {
   active?: number;
   popupPending?: boolean;
   resizePending?: boolean;
+  mapped?: boolean;
+  group?: string | null;
+  rootX?: number;
+  rootY?: number;
+  centerX?: number;
+  centerY?: number;
+  dx?: number;
+  dy?: number;
+  postedSubmenu?: string | null;
+  grabbedWindow?: string | null;
   configure?: Partial<PieMenuConfigureState>;
 }
 
 /**
  * Hook callbacks used by pie-menu subcommands.
- * Mirrors C helper calls adjacent to `GetPieMenuIndex` in
+ * Mirrors helper/eval/window lookups used by `PieMenuWidgetCmd`,
+ * `GetPieMenuIndex`, and `ActivatePieMenuEntry` in
  * `ref/micropolis/src/sim/w_piem.c`.
- * Difference from C: `@x,y` hit-testing can be injected for deterministic tests.
+ * Difference from C: `@x,y` hit-testing, script eval, and window resolution
+ * are injectable for deterministic tests.
  */
 export interface PieMenuSubcommandHooks {
   resolveIndexAtCoordinates?: (menuState: PieMenuState, x: number, y: number) => number;
+  runEntryScript?: (
+    menuState: PieMenuState,
+    scriptText: string,
+    source: 'preview' | 'invoke',
+  ) => ScriptRuntimeResult;
+  resolveWindow?: (menuState: PieMenuState, windowName: string) => boolean;
 }
 
 /**
@@ -174,16 +203,27 @@ export interface CreatePieMenuSubcommandEntriesOptions {
 }
 
 /**
- * Subcommand names registered for P4.1 pie-menu shell behavior.
- * Mirrors this P4.1 subset from `PieMenuWidgetCmd` in
+ * Subcommand names registered for Phase 4 pie-menu shell behavior.
+ * Mirrors the scripted `PieMenuWidgetCmd` command set in
  * `ref/micropolis/src/sim/w_piem.c`.
  */
 export const PIE_MENU_SUBCOMMAND_NAMES = [
+  'activate',
+  'show',
+  'pending',
+  'defer',
   'configure',
   'add',
   'delete',
   'entryconfigure',
   'index',
+  'invoke',
+  'post',
+  'unpost',
+  'grab',
+  'ungrab',
+  'distance',
+  'direction',
 ] as const;
 
 /**
@@ -862,6 +902,143 @@ function clampResolvedIndex(value: number, maxLength: number): number {
 }
 
 /**
+ * Updates cursor delta tracking from root-window coordinates.
+ * Mirrors `CalcPieMenuItem` assignment of `menu->dx`/`menu->dy`
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function setPieMenuCursorDeltaFromRootCoordinates(
+  menuState: PieMenuState,
+  rootX: number,
+  rootY: number,
+): void {
+  menuState.dx = rootX - menuState.rootX + 1;
+  menuState.dy = menuState.rootY - rootY - 1;
+}
+
+/**
+ * Executes preview/invoke script text through injected hooks.
+ * Mirrors `Tcl_GlobalEval` call sites in `ActivatePieMenuEntry` and
+ * `PieMenuWidgetCmd invoke` (`ref/micropolis/src/sim/w_piem.c`).
+ * Difference from C: script execution is delegated via hook callbacks.
+ */
+function runPieMenuEntryScript(
+  menuState: PieMenuState,
+  scriptText: string,
+  source: 'preview' | 'invoke',
+  hooks: PieMenuSubcommandHooks,
+): ScriptRuntimeResult {
+  if (scriptText.length === 0) {
+    return makeScriptSuccess('');
+  }
+
+  return hooks.runEntryScript?.(menuState, scriptText, source) ?? makeScriptSuccess('');
+}
+
+/**
+ * Applies active-entry transitions and optional preview execution.
+ * Mirrors `ActivatePieMenuEntry(menuPtr, index, preview)` in
+ * `ref/micropolis/src/sim/w_piem.c`.
+ */
+function activatePieMenuEntry(
+  menuState: PieMenuState,
+  index: number,
+  preview: boolean,
+  hooks: PieMenuSubcommandHooks,
+): ScriptRuntimeResult {
+  menuState.active = index;
+  menuState.configure.active = index;
+
+  if (index < 0 || !preview) {
+    return makeScriptSuccess('');
+  }
+
+  const entry = menuState.entries[index];
+  if (entry === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(ScriptRuntimeErrorCode.Internal, `bad menu entry index "${index}"`),
+    );
+  }
+
+  if (entry.preview === null) {
+    return makeScriptSuccess('');
+  }
+
+  return runPieMenuEntryScript(menuState, entry.preview, 'preview', hooks);
+}
+
+/**
+ * Immediately maps a posted pie menu and clears popup-pending state.
+ * Mirrors `NowPopupPieMenu`/`PopupPieMenu` in
+ * `ref/micropolis/src/sim/w_piem.c`.
+ */
+function popupPieMenuNow(menuState: PieMenuState): void {
+  menuState.popupPending = false;
+  if (menuState.mapped) {
+    return;
+  }
+
+  menuState.mapped = true;
+}
+
+/**
+ * Schedules a deferred popup if the menu is not already mapped.
+ * Mirrors `EventuallyPopupPieMenu` (`POPUP_PENDING` + timer scheduling)
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: timer handles are represented as a boolean flag only.
+ */
+function schedulePieMenuPopup(menuState: PieMenuState): void {
+  menuState.popupPending = false;
+  if (menuState.mapped) {
+    return;
+  }
+
+  menuState.popupPending = true;
+}
+
+/**
+ * Re-schedules pending popup work.
+ * Mirrors `DeferPopupPieMenu` in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function deferPieMenuPopup(menuState: PieMenuState): void {
+  if (!menuState.popupPending) {
+    return;
+  }
+
+  schedulePieMenuPopup(menuState);
+}
+
+/**
+ * Unposts any currently tracked submenu entry.
+ * Mirrors `UnpostSubPieMenu` in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function unpostPieMenuSubmenu(menuState: PieMenuState): void {
+  menuState.postedSubmenu = null;
+}
+
+/**
+ * Rounds floating-point values using C `(int)(value + 0.499)` semantics.
+ * Mirrors `distance`/`direction` casts in `PieMenuWidgetCmd`
+ * (`ref/micropolis/src/sim/w_piem.c`).
+ */
+function roundCIntFromFloat(raw: number): number {
+  return Math.trunc(raw + 0.499);
+}
+
+/**
+ * Resolves a Tk-style window name before `grab`/`ungrab`.
+ * Mirrors `Tk_NameToWindow` validation in `PieMenuWidgetCmd`
+ * (`ref/micropolis/src/sim/w_piem.c`).
+ * Difference from C: resolution is injected as a boolean hook.
+ */
+function resolvePieMenuWindow(
+  menuState: PieMenuState,
+  windowName: string,
+  hooks: PieMenuSubcommandHooks,
+): boolean {
+  return hooks.resolveWindow?.(menuState, windowName) ?? true;
+}
+
+/**
  * Resolves an index token to a numeric pie-menu entry index.
  * Mirrors `GetPieMenuIndex` in `ref/micropolis/src/sim/w_piem.c`.
  * Parity note: numeric parsing only starts when the first character is a digit,
@@ -887,6 +1064,7 @@ export function resolvePieMenuIndex(
   const coordinateIndex = parseAtCoordinateIndex(indexToken);
   if (coordinateIndex !== null) {
     const [x, y] = coordinateIndex;
+    setPieMenuCursorDeltaFromRootCoordinates(menuState, x, y);
     const resolvedRaw = hooks.resolveIndexAtCoordinates?.(menuState, x, y) ?? -1;
     return clampResolvedIndex(resolvedRaw, menuState.entries.length);
   }
@@ -913,6 +1091,89 @@ export function resolvePieMenuIndex(
   return makeScriptFailure(
     new ScriptRuntimeError(ScriptRuntimeErrorCode.Internal, `bad menu entry index "${indexToken}"`),
   );
+}
+
+/**
+ * Implements the `activate` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` activate branch plus `DeferPopupPieMenu`
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function createPieMenuActivateSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    const indexToken = argv[2];
+    if (argv.length !== 3 || indexToken === undefined) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} activate expects argc 3, got ${argv.length}`,
+      );
+    }
+
+    const indexOrError = resolvePieMenuIndex(menuState, indexToken, hooks);
+    if (typeof indexOrError !== 'number') {
+      return indexOrError;
+    }
+
+    if (menuState.active === indexOrError) {
+      return makeScriptSuccess('');
+    }
+
+    const activateResult = activatePieMenuEntry(menuState, indexOrError, true, hooks);
+    deferPieMenuPopup(menuState);
+    return activateResult;
+  };
+}
+
+/**
+ * Implements the `show` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` `show` branch calling `NowPopupPieMenu`
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function handlePieMenuShowSubcommand(
+  menuState: PieMenuState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(`${menuState.commandName} show expects argc 2, got ${argv.length}`);
+  }
+
+  popupPieMenuNow(menuState);
+  return makeScriptSuccess('');
+}
+
+/**
+ * Implements the `pending` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` `pending` branch returning
+ * `(flags & POPUP_PENDING) ? 1 : 0` from `ref/micropolis/src/sim/w_piem.c`.
+ */
+function handlePieMenuPendingSubcommand(
+  menuState: PieMenuState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(
+      `${menuState.commandName} pending expects argc 2, got ${argv.length}`,
+    );
+  }
+
+  return makeScriptSuccess(menuState.popupPending ? '1' : '0');
+}
+
+/**
+ * Implements the `defer` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` `defer` branch calling `DeferPopupPieMenu`
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function handlePieMenuDeferSubcommand(
+  menuState: PieMenuState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(`${menuState.commandName} defer expects argc 2, got ${argv.length}`);
+  }
+
+  deferPieMenuPopup(menuState);
+  return makeScriptSuccess('');
 }
 
 function handlePieMenuConfigureSubcommand(
@@ -1121,9 +1382,227 @@ function createPieMenuIndexSubcommandHandler(
 }
 
 /**
+ * Implements the `invoke` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` invoke branch (index resolution +
+ * optional `Tcl_GlobalEval(mePtr->command)`) in
+ * `ref/micropolis/src/sim/w_piem.c`.
+ */
+function createPieMenuInvokeSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    const indexToken = argv[2];
+    if (argv.length !== 3 || indexToken === undefined) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} invoke expects argc 3, got ${argv.length}`,
+      );
+    }
+
+    const indexOrError = resolvePieMenuIndex(menuState, indexToken, hooks);
+    if (typeof indexOrError !== 'number') {
+      return indexOrError;
+    }
+
+    if (indexOrError < 0) {
+      return makeScriptSuccess('');
+    }
+
+    const entry = menuState.entries[indexOrError];
+    if (entry === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.Internal,
+          `bad menu entry index "${indexToken}"`,
+        ),
+      );
+    }
+
+    if (entry.command === null) {
+      return makeScriptSuccess('');
+    }
+
+    return runPieMenuEntryScript(menuState, entry.command, 'invoke', hooks);
+  };
+}
+
+/**
+ * Implements the `post` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` post branch in `ref/micropolis/src/sim/w_piem.c`,
+ * including group defaulting, root-position updates, deferred popup scheduling,
+ * and active-entry reset for newly mapped menus.
+ * Difference from C: screen clamping, event sharing, and Tk/X11 window motion
+ * are represented as state-only transitions.
+ */
+function createPieMenuPostSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    const rawX = argv[2];
+    const rawY = argv[3];
+    const rawGroup = argv[4];
+    if ((argv.length !== 4 && argv.length !== 5) || rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} post expects argc 4 or 5, got ${argv.length}`,
+      );
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${menuState.commandName} post expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${menuState.commandName} post expected an integer y: ${rawY}`);
+    }
+
+    const group = rawGroup ?? 'default';
+    const adjustedX = parsedX - menuState.centerX;
+    const adjustedY = parsedY - menuState.centerY;
+    menuState.rootX = adjustedX + menuState.centerX;
+    menuState.rootY = adjustedY + menuState.centerY;
+
+    let postResult: ScriptRuntimeResult = makeScriptSuccess('');
+    if (!menuState.mapped) {
+      schedulePieMenuPopup(menuState);
+      postResult = activatePieMenuEntry(menuState, -1, true, hooks);
+    }
+
+    menuState.group = group;
+    return postResult;
+  };
+}
+
+/**
+ * Implements the `unpost` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` unpost branch (cancel pending popup, unmap,
+ * deactivate entry, unpost submenu) in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function createPieMenuUnpostSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 2) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} unpost expects argc 2, got ${argv.length}`,
+      );
+    }
+
+    menuState.popupPending = false;
+    menuState.mapped = false;
+    const deactivateResult = activatePieMenuEntry(menuState, -1, false, hooks);
+    if (deactivateResult.code !== ScriptResultCode.Ok) {
+      return deactivateResult;
+    }
+
+    unpostPieMenuSubmenu(menuState);
+    return makeScriptSuccess('');
+  };
+}
+
+/**
+ * Implements the `grab` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` grab branch (`Tk_NameToWindow` + `XGrabPointer`)
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: X11 grab result codes are not modeled; resolved window
+ * name is stored in pie-menu state.
+ */
+function createPieMenuGrabSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    const windowName = argv[2];
+    if (argv.length !== 3 || windowName === undefined || windowName.length === 0) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} grab expects argc 3, got ${argv.length}`,
+      );
+    }
+    if (!resolvePieMenuWindow(menuState, windowName, hooks)) {
+      return makeInvalidArgCount(`${menuState.commandName} grab requires a resolvable window`);
+    }
+
+    menuState.grabbedWindow = windowName;
+    return makeScriptSuccess('');
+  };
+}
+
+/**
+ * Implements the `ungrab` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` ungrab branch (`Tk_NameToWindow` + `XUngrabPointer`)
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: pointer ungrab is represented as local state clearing.
+ */
+function createPieMenuUngrabSubcommandHandler(
+  hooks: PieMenuSubcommandHooks,
+): PieMenuSubcommandHandler {
+  return (menuState: PieMenuState, argv: readonly string[]): ScriptRuntimeResult => {
+    const windowName = argv[2];
+    if (argv.length !== 3 || windowName === undefined || windowName.length === 0) {
+      return makeInvalidArgCount(
+        `${menuState.commandName} ungrab expects argc 3, got ${argv.length}`,
+      );
+    }
+    if (!resolvePieMenuWindow(menuState, windowName, hooks)) {
+      return makeInvalidArgCount(`${menuState.commandName} ungrab requires a resolvable window`);
+    }
+
+    menuState.grabbedWindow = null;
+    return makeScriptSuccess('');
+  };
+}
+
+/**
+ * Implements the `distance` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` distance math:
+ * `(int)(sqrt(dx*dx + dy*dy) + 0.499)` in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function handlePieMenuDistanceSubcommand(
+  menuState: PieMenuState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(
+      `${menuState.commandName} distance expects argc 2, got ${argv.length}`,
+    );
+  }
+
+  const distance = roundCIntFromFloat(
+    Math.sqrt(menuState.dx * menuState.dx + menuState.dy * menuState.dy),
+  );
+  return makeScriptSuccess(String(distance));
+}
+
+/**
+ * Implements the `direction` pie-menu subcommand.
+ * Mirrors `PieMenuWidgetCmd` direction math:
+ * `(int)(RAD_TO_DEG(atan2(dy, dx)) + 0.499)` with wrap-to-`[0,360)`
+ * in `ref/micropolis/src/sim/w_piem.c`.
+ */
+function handlePieMenuDirectionSubcommand(
+  menuState: PieMenuState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 2) {
+    return makeInvalidArgCount(
+      `${menuState.commandName} direction expects argc 2, got ${argv.length}`,
+    );
+  }
+
+  let direction = roundCIntFromFloat(
+    (Math.atan2(menuState.dy, menuState.dx) * 360) / (Math.PI * 2),
+  );
+  if (direction < 0) {
+    direction += 360;
+  }
+  return makeScriptSuccess(String(direction));
+}
+
+/**
  * Creates one pie-menu state object with Micropolis defaults.
  * Mirrors `Tk_PieMenuCmd` field initialization and `ConfigurePieMenu` defaulting
  * in `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: modeled fields are limited to script-visible state and
+ * command-observable tracking flags.
  */
 export function createPieMenuState(
   commandName: string,
@@ -1138,6 +1617,16 @@ export function createPieMenuState(
     active,
     popupPending: options.popupPending ?? false,
     resizePending: options.resizePending ?? false,
+    mapped: options.mapped ?? false,
+    group: options.group ?? null,
+    rootX: options.rootX ?? 0,
+    rootY: options.rootY ?? 0,
+    centerX: options.centerX ?? 0,
+    centerY: options.centerY ?? 0,
+    dx: options.dx ?? 0,
+    dy: options.dy ?? 0,
+    postedSubmenu: options.postedSubmenu ?? null,
+    grabbedWindow: options.grabbedWindow ?? null,
     configure: {
       activeBackground: options.configure?.activeBackground ?? DEFAULT_PIE_MENU_ACTIVE_BACKGROUND,
       activeBorderWidth:
@@ -1164,9 +1653,11 @@ export function createPieMenuState(
 }
 
 /**
- * Builds pie-menu subcommand entries for the P4.1 command set.
- * Mirrors `PieMenuWidgetCmd` branches for `configure`, `add`, `delete`,
- * `entryconfigure`, and `index` in `ref/micropolis/src/sim/w_piem.c`.
+ * Builds pie-menu subcommand entries for the Phase 4 command set.
+ * Mirrors `PieMenuWidgetCmd` branches for `activate`, `show`, `pending`,
+ * `defer`, `configure`, `add`, `delete`, `entryconfigure`, `index`, `invoke`,
+ * `post`, `unpost`, `grab`, `ungrab`, `distance`, and `direction` in
+ * `ref/micropolis/src/sim/w_piem.c`.
  */
 export function createPieMenuSubcommandEntries(
   options: CreatePieMenuSubcommandEntriesOptions = {},
@@ -1174,11 +1665,22 @@ export function createPieMenuSubcommandEntries(
   const hooks = options.hooks ?? {};
 
   return [
+    ['activate', createPieMenuActivateSubcommandHandler(hooks)] as const,
+    ['show', handlePieMenuShowSubcommand] as const,
+    ['pending', handlePieMenuPendingSubcommand] as const,
+    ['defer', handlePieMenuDeferSubcommand] as const,
     ['configure', handlePieMenuConfigureSubcommand] as const,
     ['add', createPieMenuAddSubcommandHandler()] as const,
     ['delete', createPieMenuDeleteSubcommandHandler(hooks)] as const,
     ['entryconfigure', createPieMenuEntryConfigureSubcommandHandler(hooks)] as const,
     ['index', createPieMenuIndexSubcommandHandler(hooks)] as const,
+    ['invoke', createPieMenuInvokeSubcommandHandler(hooks)] as const,
+    ['post', createPieMenuPostSubcommandHandler(hooks)] as const,
+    ['unpost', createPieMenuUnpostSubcommandHandler(hooks)] as const,
+    ['grab', createPieMenuGrabSubcommandHandler(hooks)] as const,
+    ['ungrab', createPieMenuUngrabSubcommandHandler(hooks)] as const,
+    ['distance', handlePieMenuDistanceSubcommand] as const,
+    ['direction', handlePieMenuDirectionSubcommand] as const,
   ];
 }
 
@@ -1200,8 +1702,8 @@ export function createPieMenuSubcommandTable(
 }
 
 /**
- * Default subcommand table for P4.1 pie-menu shell behavior.
- * Mirrors this task's subcommand subset from `PieMenuWidgetCmd`
+ * Default subcommand table for Phase 4 pie-menu shell behavior.
+ * Mirrors the scripted subcommand set from `PieMenuWidgetCmd`
  * in `ref/micropolis/src/sim/w_piem.c`.
  */
 export const PIE_MENU_SUBCOMMAND_TABLE = createPieMenuSubcommandTable(
@@ -1244,12 +1746,48 @@ export function createPieMenuWidgetCommandDispatcher(
  * Constructor options for `createPieMenuCommandDispatcher`.
  * Mirrors state/command wiring in `Tk_PieMenuCmd` and `PieMenuWidgetCmd`
  * from `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: optional hooks allow tests to override index-hit testing,
+ * script evaluation, and window name resolution.
  */
 export interface CreatePieMenuCommandDispatcherOptions {
   runtime: ScriptRuntime;
   widgets?: WidgetRegistry<PieMenuState>;
   createMenuState?: (commandName: string) => PieMenuState;
   subcommands?: PieMenuSubcommandTable;
+  hooks?: PieMenuSubcommandHooks;
+}
+
+/**
+ * Splits command script text into argv tokens for runtime dispatch.
+ * Mirrors command-string evaluation entrypoints in `Tcl_GlobalEval` call sites
+ * from `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: this is whitespace tokenization only, not full Tcl parsing.
+ */
+function tokenizePieMenuScript(scriptText: string): readonly string[] {
+  const trimmed = scriptText.trim();
+  if (trimmed.length === 0) {
+    return [];
+  }
+
+  return trimmed.split(/\s+/);
+}
+
+/**
+ * Executes pie-menu preview/invoke script text through `ScriptRuntime`.
+ * Mirrors `Tcl_GlobalEval` in `ActivatePieMenuEntry` and invoke handling
+ * from `ref/micropolis/src/sim/w_piem.c`.
+ * Difference from C: script parsing uses `tokenizePieMenuScript`.
+ */
+function runPieMenuScriptInRuntime(
+  runtime: ScriptRuntime,
+  scriptText: string,
+): ScriptRuntimeResult {
+  const scriptArgv = tokenizePieMenuScript(scriptText);
+  if (scriptArgv.length === 0) {
+    return makeScriptSuccess('');
+  }
+
+  return runtime.invoke(scriptArgv);
 }
 
 /**
@@ -1257,6 +1795,8 @@ export interface CreatePieMenuCommandDispatcherOptions {
  * Mirrors `Tk_PieMenuCmd` creation flow for `piemenu pathName ?options?`
  * in `ref/micropolis/src/sim/w_piem.c`.
  * Parity note: Tk windowing side effects are omitted; script-visible state is preserved.
+ * Difference from C: script text execution uses a whitespace tokenizer by default,
+ * and full Tcl parsing can be injected via `hooks.runEntryScript`.
  */
 export function createPieMenuCommandDispatcher(
   options: CreatePieMenuCommandDispatcherOptions,
@@ -1264,7 +1804,18 @@ export function createPieMenuCommandDispatcher(
   const widgets = options.widgets ?? new WidgetRegistry<PieMenuState>();
   const createMenuState =
     options.createMenuState ?? ((commandName: string) => createPieMenuState(commandName));
-  const subcommands = options.subcommands ?? PIE_MENU_SUBCOMMAND_TABLE;
+  const hooks: PieMenuSubcommandHooks = {
+    runEntryScript: (_menuState, scriptText) =>
+      runPieMenuScriptInRuntime(options.runtime, scriptText),
+    ...options.hooks,
+  };
+  const subcommands =
+    options.subcommands ??
+    createPieMenuSubcommandTable(
+      createPieMenuSubcommandEntries({
+        hooks,
+      }),
+    );
 
   return (argv: readonly string[]): ScriptRuntimeResult => {
     const commandName = argv[1];
