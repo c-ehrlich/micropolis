@@ -130,7 +130,7 @@ describe('integration runtime Sugar command bridge wiring', () => {
     expect(sugarCommands).toEqual([]);
   });
 
-  it('serializes lifecycle and buddy events through the Sugar command hook', () => {
+  it('serializes buddy appeared/disappeared events through the Sugar command hook', () => {
     const sugarCommands: string[] = [];
     const runtime = createIntegrationRuntime({
       features: {
@@ -143,10 +143,6 @@ describe('integration runtime Sugar command bridge wiring', () => {
       },
     });
 
-    runtime.share();
-    runtime.focusIn();
-    runtime.focusOut();
-    runtime.quit();
     runtime.buddyAppeared({
       key: 'k-1',
       nick: 'n-1',
@@ -161,13 +157,62 @@ describe('integration runtime Sugar command bridge wiring', () => {
     });
 
     expect(sugarCommands).toEqual([
-      'SugarShare\n',
-      'SugarActivate\n',
-      'SugarDeactivate\n',
-      'SugarQuit\n',
       'SugarBuddyAdd "k-1" "n-1" "#00A0FF,#F0F0F0" "10.0.0.1"\n',
       'SugarBuddyDel "k-2" "n-2" "#FF0000,#FFFFFF" "10.0.0.2"\n',
     ]);
+  });
+
+  it('forwards legacy buddy props objects with Micropolis field precedence parity', () => {
+    const sugarCommands: string[] = [];
+    const runtime = createIntegrationRuntime({
+      features: {
+        sugar: true,
+      },
+      hooks: {
+        onSugarCommand(command) {
+          sugarCommands.push(command);
+        },
+      },
+    });
+
+    runtime.buddyAppeared({
+      props: {
+        key: 'props-key',
+        nick: 'props-nick',
+        color: 'props-color',
+        ip4_address: 'props-address',
+      },
+    });
+
+    expect(sugarCommands).toEqual([
+      'SugarBuddyAdd "props-key" "props-nick" "props-color" "props-address"\n',
+    ]);
+  });
+
+  it('keeps buddy appeared/disappeared as no-ops when Sugar integration is disabled', () => {
+    const sugarCommands: string[] = [];
+    const runtime = createIntegrationRuntime({
+      hooks: {
+        onSugarCommand(command) {
+          sugarCommands.push(command);
+        },
+      },
+    });
+
+    runtime.buddyAppeared({
+      key: 'k-1',
+      nick: 'n-1',
+      color: '#00A0FF,#F0F0F0',
+      address: '10.0.0.1',
+    });
+    runtime.buddyDisappeared({
+      key: 'k-2',
+      nick: 'n-2',
+      color: '#FF0000,#FFFFFF',
+      address: '10.0.0.2',
+    });
+
+    expect(sugarCommands).toEqual([]);
   });
 });
 

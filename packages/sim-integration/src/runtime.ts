@@ -141,8 +141,22 @@ export interface IntegrationRuntime {
    * teardown ordering is intentionally left to callers.
    */
   quit(): void;
-  buddyAppeared(buddy: SugarBuddy): void;
-  buddyDisappeared(buddy: SugarBuddy): void;
+  /**
+   * Emit the Sugar buddy-appeared command into the outbound bridge.
+   * Mirrors `_buddy_appeared_cb` in `ref/micropolis/micropolisactivity.py`,
+   * which sends `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"\n`.
+   * Parity note: accepts normalized `SugarBuddy` or legacy Sugar buddy objects;
+   * field extraction/precedence parity is delegated to activity-bridge helpers.
+   */
+  buddyAppeared(buddy: SugarBuddy | unknown): void;
+  /**
+   * Emit the Sugar buddy-disappeared command into the outbound bridge.
+   * Mirrors `_buddy_disappeared_cb` in `ref/micropolis/micropolisactivity.py`,
+   * which sends `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"\n`.
+   * Parity note: accepts normalized `SugarBuddy` or legacy Sugar buddy objects;
+   * field extraction/precedence parity is delegated to activity-bridge helpers.
+   */
+  buddyDisappeared(buddy: SugarBuddy | unknown): void;
   listenTo(port: number): number;
   hearFrom(fileSock: string): void;
 }

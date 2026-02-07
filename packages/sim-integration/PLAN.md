@@ -102,7 +102,7 @@ Use this exact loop:
 - [x] `handleInputLine(line)`
 - [x] `handleOutputLine(line)`
 - [x] `share()`, `focusIn()`, `focusOut()`, `quit()`
-- [ ] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
+- [x] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
 - [ ] `listenTo(port)`, `hearFrom(fileSock)`
 - [ ] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
 - [ ] sugar-only
@@ -182,3 +182,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `handleInputLine(line)` by widening `IntegrationRuntime.handleInputLine` to accept `string | null` so EOF can be forwarded to `StdinChannel.consumeLine` with `StdinProc` parity (`ref/micropolis/src/sim/w_tk.c`), and added `src/runtime.test.ts` coverage for tty exit-on-EOF and non-tty read-disable behavior.
 - [x] 2026-02-07: Completed Phase 7 task `handleOutputLine(line)` by documenting/runtime-validating Sugar stdout dispatch parity in `src/runtime.ts` (`_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`: trim + `split(' ')` + `PlaySound(words[1])` strict failure semantics) while preserving safe-mode hardening via typed malformed-line suppression.
 - [x] 2026-02-07: Completed Phase 7 task `share()`, `focusIn()`, `focusOut()`, `quit()` by documenting lifecycle parity mappings in `src/runtime.ts` to `share`, `_focus_in_cb`, `_focus_out_cb`, and `quit_process` in `ref/micropolis/micropolisactivity.py` and adding focused runtime tests for exact command emission (`SugarShare`, `SugarActivate`, `SugarDeactivate`, `SugarQuit`) plus sugar-disabled no-op behavior in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `buddyAppeared(buddy)`, `buddyDisappeared(buddy)` by adding Micropolis-mapped runtime API JSDoc in `src/runtime.ts` (mapping to `_buddy_appeared_cb` / `_buddy_disappeared_cb` in `ref/micropolis/micropolisactivity.py`) and adding focused runtime tests in `src/runtime.test.ts` for Sugar command emission (`SugarBuddyAdd`/`SugarBuddyDel`), sugar-disabled no-op behavior, and legacy `buddy.props` forwarding parity.
