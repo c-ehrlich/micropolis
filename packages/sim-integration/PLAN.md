@@ -100,7 +100,7 @@ Use this exact loop:
 - [x] Wire Sugar, TTY, and NET modules into `createIntegrationRuntime`.
 - [x] Expose runtime API methods:
 - [x] `handleInputLine(line)`
-- [ ] `handleOutputLine(line)`
+- [x] `handleOutputLine(line)`
 - [ ] `share()`, `focusIn()`, `focusOut()`, `quit()`
 - [ ] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
 - [ ] `listenTo(port)`, `hearFrom(fileSock)`
@@ -180,3 +180,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `Wire Sugar, TTY, and NET modules into createIntegrationRuntime` by wiring Sugar command methods to `src/sugar/activity-bridge.ts` serializers, routing TTY input through `StdinChannel` (`ref/micropolis/src/sim/w_tk.c` parity), and delegating NET methods to `createUdpHookRuntime` with adapter-provided `udpPlatform`; added runtime orchestration tests in `src/runtime.test.ts`.
 - [x] 2026-02-07: Completed Phase 7 task `Expose runtime API methods` by exposing `handleInputLine`, `handleOutputLine`, `share`/`focusIn`/`focusOut`/`quit`, `buddyAppeared`/`buddyDisappeared`, and `listenTo`/`hearFrom` on `IntegrationRuntime` in `src/runtime.ts`, matching Sugar (`ref/micropolis/micropolisactivity.py`), TTY (`ref/micropolis/src/sim/w_tk.c`), and NET (`ref/micropolis/src/sim/w_net.c`) integration entry points via parity-first adapter wiring.
 - [x] 2026-02-07: Completed Phase 7 task `handleInputLine(line)` by widening `IntegrationRuntime.handleInputLine` to accept `string | null` so EOF can be forwarded to `StdinChannel.consumeLine` with `StdinProc` parity (`ref/micropolis/src/sim/w_tk.c`), and added `src/runtime.test.ts` coverage for tty exit-on-EOF and non-tty read-disable behavior.
+- [x] 2026-02-07: Completed Phase 7 task `handleOutputLine(line)` by documenting/runtime-validating Sugar stdout dispatch parity in `src/runtime.ts` (`_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`: trim + `split(' ')` + `PlaySound(words[1])` strict failure semantics) while preserving safe-mode hardening via typed malformed-line suppression.

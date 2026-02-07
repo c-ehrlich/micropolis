@@ -100,6 +100,14 @@ export interface IntegrationRuntime {
    * Tk file-handler callbacks.
    */
   handleInputLine(line: string | null): TtyEvaluatorResult | undefined;
+  /**
+   * Feed one stdout line from the Sugar bridge into command dispatch.
+   * Mirrors `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`:
+   * trim, explicit-space split, `PlaySound` dispatch, and strict fatal behavior
+   * for missing `words[1]`.
+   * Parity note: `safe` mode intentionally hardens malformed `PlaySound` lines
+   * by swallowing typed parse errors instead of throwing.
+   */
   handleOutputLine(line: string): void;
   share(): void;
   focusIn(): void;
