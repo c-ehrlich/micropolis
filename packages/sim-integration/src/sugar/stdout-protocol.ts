@@ -54,9 +54,10 @@ export function splitSugarStdoutWords(line: string): string[] {
  * Extract `PlaySound` argument token with Micropolis strict-parity failure mode.
  * Mirrors `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`,
  * where `PlaySound` dispatch directly indexes `words[1]`.
- * Parity note: in `strict` mode, missing token throws (Python `IndexError`
- * equivalent), which surfaces fatal parsing behavior; non-`PlaySound` lines
- * and non-strict missing-arg cases return `undefined`.
+ * Parity note: in `strict` mode, missing token throws a JS `RangeError` with
+ * Python-style `IndexError` text (`list index out of range`) so malformed
+ * input still surfaces as a fatal parsing failure; non-`PlaySound` lines and
+ * non-strict missing-arg cases return `undefined`.
  */
 export function getPlaySoundToken(
   stdoutLine: SugarStdoutLine,
@@ -72,7 +73,7 @@ export function getPlaySoundToken(
   }
 
   if (mode === 'strict') {
-    throw new RangeError('Malformed PlaySound line: missing words[1] token');
+    throw new RangeError('list index out of range');
   }
 
   return undefined;
