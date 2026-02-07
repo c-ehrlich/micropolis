@@ -110,7 +110,7 @@ Verification:
 - [ ] Tile and sprite tests pass.
 
 ### P3.4 Build help catalog implementation
-- [ ] Implement `help-docs` inventory builders (help ids, manual html ids, missing/extra sets).
+- [x] Implement `help-docs` inventory builders (help ids, manual html ids, missing/extra sets).
 - [ ] Add `help-docs.test.ts` with deterministic missing/extra assertions.
 
 Verification:
@@ -193,3 +193,4 @@ Verification:
 - [x] 2026-02-07: Completed P3.2 fixture-parity test task by adding `packages/sim-assets/src/string-table.test.ts` with canonical assertions for `ref/micropolis/res/stri.202/.219/.301/.356` and `GetIndString`-aligned 1-based lookup behavior.
 - [x] 2026-02-07: Completed P3.3 tile-parity task by adding `packages/sim-assets/src/tiles.test.ts` to read canonical `ref/micropolis/images/{tiles.xpm,tilesbw.xpm,tilessm.xpm}` headers and assert parsed header metadata parity.
 - [x] 2026-02-07: Completed P3.3 sprite-parity task by adding `packages/sim-assets/src/sprites.test.ts` to discover canonical `ref/micropolis/images/obj*-*.xpm` files and verify generated sprite frame manifests plus C-derived frame-count parity.
+- [x] 2026-02-07: Completed P3.4 help-doc inventory builder task by implementing `packages/sim-assets/src/help-docs.ts` builders for help IDs, manual HTML IDs, and missing/extra parity sets, and extending `packages/sim-assets/scripts/gen-assets-manifest.mjs` / `src/generated/assets-manifest.ts` to emit canonical `help.tcl` help IDs.

@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +15,7 @@ const SOURCE_ROOTS = {
   images: path.join(MICROPOLIS_ROOT, 'images'),
   manual: path.join(MICROPOLIS_ROOT, 'manual'),
 };
+const HELP_TCL_HELP_ID_REGEX = /^\s*Help\s+([^\s{]+)\s+\{/;
 
 const compareAscii = (left, right) => {
   if (left < right) {
@@ -153,6 +154,9 @@ export function createAssetsManifest() {
     .filter((entry) => entry.path.endsWith('.html') && !entry.path.includes('/'))
     .map((entry) => entry.path.slice(0, -'.html'.length))
     .sort((left, right) => compareAscii(left, right));
+  const helpTclPath = path.join(SOURCE_ROOTS.res, 'help.tcl');
+  const helpTclSource = readFileSync(helpTclPath, 'utf8');
+  const helpIds = createHelpIdsFromHelpTcl(helpTclSource);
 
   return {
     generatedBy: '@city/sim-assets/scripts/gen-assets-manifest.mjs',
@@ -165,9 +169,38 @@ export function createAssetsManifest() {
     parity: {
       cResourceFiles: resourceFiles,
       spriteFrames,
+      helpIds,
       manualHtmlIds,
     },
   };
+}
+
+/**
+ * Extract unique `Help <id>` names from canonical `help.tcl`.
+ * Mirrors `Help` command registrations in `ref/micropolis/res/help.tcl` and
+ * `proc Help` message keys in `ref/micropolis/res/micropolis.tcl`.
+ * Parity notes: IDs are kept in first-seen order and de-duplicated for stable,
+ * deterministic TypeScript manifest output.
+ */
+function createHelpIdsFromHelpTcl(helpTclSource) {
+  const seen = new Set();
+  const helpIds = [];
+
+  for (const line of helpTclSource.split('\n')) {
+    const match = HELP_TCL_HELP_ID_REGEX.exec(line);
+    if (!match) {
+      continue;
+    }
+
+    const id = match[1];
+    if (!id || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    helpIds.push(id);
+  }
+
+  return helpIds;
 }
 
 /**
