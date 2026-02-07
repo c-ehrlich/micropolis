@@ -108,7 +108,7 @@ Use this exact loop:
 - [x] sugar-only
 - [x] tty-only
 - [x] net-only
-- [ ] sugar+tty+net
+- [x] sugar+tty+net
 - [ ] Checkpoint: integration tests pass with deterministic event logs.
 
 ## Phase 8: Cross-Package Contract
@@ -189,3 +189,4 @@ Use this exact loop:
 - [x] 2026-02-07: Checked Phase 7 task `sugar-only` by verifying the `records deterministic sugar-only events` integration scenario in `src/runtime.integration.test.ts`, covering Sugar stdout `PlaySound` dispatch and Sugar command emission parity boundaries from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 7 task `tty-only` by validating the `records deterministic tty-only events` scenario in `src/runtime.integration.test.ts` (startup/post-command `sim:\n` prompts, multiline `Tcl_AssembleCmd`-style input completion, and EOF `sim_exit(0)` parity from `ref/micropolis/src/sim/w_tk.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic tty-only events"`.
 - [x] 2026-02-07: Checked Phase 7 task `net-only` by validating the `records deterministic net-only events` scenario in `src/runtime.integration.test.ts`, including `udp_listen` strict bind-port quirk and `udp_hear` packet command formatting parity (`HandlePacket <sock> {<ip>} {%3d }`) against `ref/micropolis/src/sim/w_net.c`, via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic net-only events"`.
+- [x] 2026-02-07: Checked Phase 7 task `sugar+tty+net` by validating the `records deterministic sugar+tty+net events` scenario in `src/runtime.integration.test.ts`, covering combined Sugar stdout/command dispatch (`ref/micropolis/micropolisactivity.py`), TTY prompt/eval/EOF behavior (`ref/micropolis/src/sim/w_tk.c`), and NET listen/hear packet formatting (`ref/micropolis/src/sim/w_net.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic sugar+tty+net events"`.
