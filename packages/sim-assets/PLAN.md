@@ -72,7 +72,7 @@ Verification:
 ### P2.1 Add generator script
 - [x] Create `packages/sim-assets/scripts/gen-assets-manifest.mjs`.
 - [x] Scan canonical inputs under `ref/micropolis/{res,images,manual}`.
-- [ ] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
+- [x] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
 
 Verification:
 - [ ] Generator runs successfully.
@@ -183,3 +183,4 @@ Verification:
 - [x] 2026-02-07: Completed P1.2 smoke-test task by adding `src/index.test.ts`; verified with `pnpm -C packages/sim-assets test`.
 - [x] 2026-02-07: Completed P2.1 task to create `packages/sim-assets/scripts/gen-assets-manifest.mjs`; generator now scans canonical `ref/micropolis/{res,images,manual}` and emits deterministic `src/generated/assets-manifest.ts`.
 - [x] 2026-02-07: Completed P2.1 canonical-input scan task by implementing explicit `scanCanonicalInputs()` traversal of `ref/micropolis/{res,images,manual}` in `scripts/gen-assets-manifest.mjs`.
+- [x] 2026-02-07: Completed P2.1 deterministic-generation task by regenerating `packages/sim-assets/src/generated/assets-manifest.ts` with stable ordering from canonical `ref/micropolis/{res,images,manual}` inputs.
