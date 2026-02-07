@@ -1,5 +1,18 @@
 {
   "name": "@city/sim-scripting",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "pnpm -w tsc -p packages/sim-scripting/tsconfig.json --noEmit",
+    "lint": "pnpm -w eslint packages/sim-scripting/src packages/sim-scripting/vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root packages/sim-scripting",
+    "test-parity": "CITY_TEST_PARITY=1 pnpm -w vitest run --root packages/sim-scripting"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.10"
+  }
 }
