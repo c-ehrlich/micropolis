@@ -86,7 +86,7 @@ Use this exact loop:
     - call-only commands trigger hook
     - call+kick commands also schedule delayed update
 
-- [ ] `P1.5` Implement speed/delay/skip/rest controls.
+- [x] `P1.5` Implement speed/delay/skip/rest controls.
   - C reference: `SimCmdSpeed`, `SimCmdDelay`, `SimCmdSkips`, `SimCmdSkip`, `SimCmdNeedRest`
   - Done when:
     - arg validation/ranges match C
@@ -283,3 +283,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.2` by porting all `SIMCMD_ACCESS_INT(...)` `sim` subcommands with C-defaulted backing state, read/write accessor behavior, and tests for get/set plus argc and integer-parse failure paths.
 - [x] `2026-02-07` Completed `P1.3` by porting `sim` read-only getter subcommands (`SIMCMD_GET_STR` + explicit getters), adding tile-center coordinate conversion parity for the required getter set, and covering formatted-return/argc-parity behavior in `sim-command` tests.
 - [x] `2026-02-07` Completed `P1.4` by adding session/redraw `sim` call and call+`Kick` subcommands (`SIMCMD_CALL`/`SIMCMD_CALL_KICK` parity), implementing `Kick` delayed-update coalescing hooks (`UpdateDelayed` behavior), and adding tests for side-effect order plus no-kick `Update`.
+- [x] `2026-02-07` Completed `P1.5` by adding `sim` speed/delay/skip/rest subcommands with C-parity argc/range validation (`SimCmdSpeed`/`Delay`/`Skips`/`Skip`/`NeedRest`), `setSpeed` clamp behavior (`0..7` input to `0..3` effective speed), `setSkips` reset semantics, and `Kick` sequencing coverage in `sim-command` tests.

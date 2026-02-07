@@ -11,6 +11,8 @@ import {
   createSimReadOnlyGetterState,
   createSimReadOnlyGetterSubcommandEntries,
   createSimSessionControlSubcommandEntries,
+  createSimSpeedDelayControlState,
+  createSimSpeedDelayControlSubcommandEntries,
   createSimSubcommandTable,
   registerSimCommand,
 } from './sim-command.ts';
@@ -282,6 +284,161 @@ describe('sim session control/redraw subcommands', () => {
     expect(updates).toEqual(['update', 'update']);
     expect(kicks).toEqual([]);
     expect(delayedUpdates).toEqual([]);
+  });
+});
+
+describe('sim speed/delay/skip/rest control subcommands', () => {
+  it('applies C-parity speed clamp/setters and kick behavior for speed, skips, and delay', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimSpeedDelayControlState();
+    const kickState = createSimKickState();
+    const kickEvents: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSpeedDelayControlSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              kickEvents.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              kickEvents.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `sim.c` initializes `sim_delay` to `50`, and `sim_init` + `setSpeed(0)`
+    // produces effective speed `0` (`sim.c` / `w_util.c`).
+    expect(runtime.invoke(['sim', 'Delay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '50',
+    });
+    expect(runtime.invoke(['sim', 'Speed'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `SimCmdSpeed` accepts `0..7`, then `setSpeed` clamps to `0..3`.
+    expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+    expect(state.simMetaSpeed).toBe(3);
+    expect(state.simSpeed).toBe(3);
+
+    // `SimCmdSkips` calls `setSkips`, which always resets `sim_skip` to `0`.
+    expect(runtime.invoke(['sim', 'Skip', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(runtime.invoke(['sim', 'Skips', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'Skip'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    expect(runtime.invoke(['sim', 'Delay', '12'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '12',
+    });
+    expect(runtime.invoke(['sim', 'NeedRest', '-2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-2',
+    });
+
+    // `SimCmdSpeed`, `SimCmdSkips`, and `SimCmdDelay` call `Kick()`; `Skip` and
+    // `NeedRest` do not. Delayed scheduling coalesces after first kick.
+    expect(kickEvents).toEqual(['kick', 'schedule', 'kick', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('returns effective speed 0 when paused, matching `setSpeed` pause semantics', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimSpeedDelayControlState({
+      // `sim.c` pause globals are interpreted by `setSpeed` in `w_util.c`.
+      simPaused: true,
+      simPausedSpeed: 3,
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimSpeedDelayControlSubcommandEntries({ state })),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(state.simMetaSpeed).toBe(2);
+    expect(state.simPausedSpeed).toBe(2);
+    expect(state.simSpeed).toBe(0);
+  });
+
+  it('enforces C-parity argc and range validation rules for speed/delay/skip/rest controls', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimSpeedDelayControlSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Speed expected an integer in range 0..7 at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Speed', '8'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Speed expected an integer in range 0..7 at argv[2]: 8',
+    });
+    expect(runtime.invoke(['sim', 'Skips', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Skips expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Skip', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Skip expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Delay', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Delay expected a non-negative integer at argv[2]: -1',
+    });
+
+    // `SimCmdNeedRest` only does `Tcl_GetInt`, so negatives are valid.
+    expect(runtime.invoke(['sim', 'NeedRest', '-9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-9',
+    });
+
+    expect(runtime.invoke(['sim', 'Delay', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Delay expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'NeedRest', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim NeedRest expected a 32-bit integer at argv[2]: abc',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
   });
 });
 

@@ -553,6 +553,375 @@ export function createSimSessionControlSubcommandEntries(
 }
 
 /**
+ * `sim` speed/delay/skip/rest subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for `Speed`, `Skips`, `Skip`,
+ * `Delay`, and `NeedRest` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_SPEED_DELAY_CONTROL_SUBCOMMAND_NAMES = [
+  'Speed',
+  'Skips',
+  'Skip',
+  'Delay',
+  'NeedRest',
+] as const;
+
+/**
+ * Union of speed/delay/skip/rest control subcommand names from `w_sim.c`.
+ */
+export type SimSpeedDelayControlSubcommandName =
+  (typeof SIM_SPEED_DELAY_CONTROL_SUBCOMMAND_NAMES)[number];
+
+/**
+ * Mutable backing state for speed/delay/skip/rest controls.
+ * Mirrors globals touched by `SimCmdSpeed`, `SimCmdSkips`, `SimCmdSkip`,
+ * `SimCmdDelay`, and `SimCmdNeedRest` in `ref/micropolis/src/sim/w_sim.c`,
+ * plus `setSpeed` / `setSkips` in `ref/micropolis/src/sim/w_util.c`.
+ * Difference from C: timer/UI side effects from `setSpeed` are modeled only as
+ * state transitions; callback wiring is handled separately.
+ */
+export interface SimSpeedDelayControlState {
+  simMetaSpeed: number;
+  simSpeed: number;
+  simPaused: boolean;
+  simPausedSpeed: number;
+  simDelay: number;
+  simSkips: number;
+  simSkip: number;
+  needRest: number;
+}
+
+const SIM_SPEED_DELAY_CONTROL_DEFAULT_STATE: SimSpeedDelayControlState = {
+  // `sim_init` in `sim.c` calls `setSpeed(0)`, leaving effective speed at 0.
+  simMetaSpeed: 0,
+  simSpeed: 0,
+  // Pause globals from `sim.c`.
+  simPaused: false,
+  simPausedSpeed: 3,
+  // `sim.c` default globals.
+  simDelay: 50,
+  simSkips: 0,
+  simSkip: 0,
+  // `w_tk.c` global default.
+  needRest: 0,
+};
+
+/**
+ * Constructor options for speed/delay/skip/rest subcommands.
+ * Mirrors command wiring around `SimCmdSpeed/Delay/Skips/Skip/NeedRest` in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface CreateSimSpeedDelayControlSubcommandEntriesOptions {
+  state?: SimSpeedDelayControlState;
+  kickState?: SimKickState;
+  kickHooks?: SimKickHooks;
+}
+
+/**
+ * Creates mutable state used by speed/delay/skip/rest controls.
+ * Mirrors relevant C globals initialized in:
+ * - `ref/micropolis/src/sim/sim.c` (`sim_delay`, `sim_skips`, `sim_skip`)
+ * - `ref/micropolis/src/sim/w_tk.c` (`NeedRest`)
+ * - `ref/micropolis/src/sim/w_util.c` (`setSpeed` effective/meta speed behavior)
+ * Difference from C: defaults are grouped into one testable state object.
+ */
+export function createSimSpeedDelayControlState(
+  initialValues: Partial<SimSpeedDelayControlState> = {},
+): SimSpeedDelayControlState {
+  return {
+    ...SIM_SPEED_DELAY_CONTROL_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+/**
+ * Validates C-parity argc for speed/delay/skip/rest controls.
+ * Mirrors `if ((argc != 2) && (argc != 3)) return TCL_ERROR;` in
+ * `SimCmdSpeed`, `SimCmdSkips`, `SimCmdSkip`, `SimCmdDelay`, and `SimCmdNeedRest`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+function validateSimSpeedDelayControlArgCount(
+  argv: readonly string[],
+  name: SimSpeedDelayControlSubcommandName,
+): ScriptRuntimeResult | null {
+  if (argv.length === 2 || argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 2 or 3, got ${argv.length}`,
+    ),
+  );
+}
+
+/**
+ * Parses a write-argument integer for speed/delay/skip/rest controls.
+ * Mirrors `Tcl_GetInt(interp, argv[2], &value)` usage in command setters in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ */
+function parseSimSpeedDelayControlWriteArg(
+  argv: readonly string[],
+  name: SimSpeedDelayControlSubcommandName,
+): number | ScriptRuntimeResult {
+  const rawValue = argv[2];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[2]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[2]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+/**
+ * Applies `setSpeed` parity state transitions.
+ * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`:
+ * clamp to `0..3`, update meta speed, and map to effective speed `0` if paused.
+ */
+function applySimSetSpeedParity(state: SimSpeedDelayControlState, speed: number): void {
+  let clampedSpeed = speed;
+  if (clampedSpeed < 0) {
+    clampedSpeed = 0;
+  } else if (clampedSpeed > 3) {
+    clampedSpeed = 3;
+  }
+
+  state.simMetaSpeed = clampedSpeed;
+  if (state.simPaused) {
+    state.simPausedSpeed = clampedSpeed;
+    clampedSpeed = 0;
+  }
+
+  state.simSpeed = clampedSpeed;
+}
+
+/**
+ * Applies `setSkips` parity state transitions.
+ * Mirrors `setSkips(int)` in `ref/micropolis/src/sim/w_util.c`:
+ * set `sim_skips` and reset `sim_skip` to `0`.
+ */
+function applySimSetSkipsParity(state: SimSpeedDelayControlState, skips: number): void {
+  state.simSkips = skips;
+  state.simSkip = 0;
+}
+
+/**
+ * Creates one `SimCmdSpeed`-equivalent handler.
+ * Mirrors `SimCmdSpeed` in `ref/micropolis/src/sim/w_sim.c`:
+ * accept setter value `0..7`, apply `setSpeed` clamping behavior, call `Kick`,
+ * and return effective `SimSpeed`.
+ */
+function createSimSpeedSubcommandHandler(
+  state: SimSpeedDelayControlState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimSpeedDelayControlArgCount(argv, 'Speed');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimSpeedDelayControlWriteArg(argv, 'Speed');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0 || parsedValue > 7) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim Speed expected an integer in range 0..7 at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      applySimSetSpeedParity(state, parsedValue);
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(String(state.simSpeed));
+  };
+}
+
+/**
+ * Creates one `SimCmdSkips`-equivalent handler.
+ * Mirrors `SimCmdSkips` in `ref/micropolis/src/sim/w_sim.c`:
+ * enforce non-negative input, call `setSkips`, then `Kick`, and return
+ * `sim_skips`.
+ */
+function createSimSkipsSubcommandHandler(
+  state: SimSpeedDelayControlState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimSpeedDelayControlArgCount(argv, 'Skips');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimSpeedDelayControlWriteArg(argv, 'Skips');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim Skips expected a non-negative integer at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      applySimSetSkipsParity(state, parsedValue);
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(String(state.simSkips));
+  };
+}
+
+/**
+ * Creates one `SimCmdSkip`-equivalent handler.
+ * Mirrors `SimCmdSkip` in `ref/micropolis/src/sim/w_sim.c`:
+ * enforce non-negative input, write/read `sim_skip`, and do not call `Kick`.
+ */
+function createSimSkipSubcommandHandler(state: SimSpeedDelayControlState): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimSpeedDelayControlArgCount(argv, 'Skip');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimSpeedDelayControlWriteArg(argv, 'Skip');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim Skip expected a non-negative integer at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      state.simSkip = parsedValue;
+    }
+
+    return makeScriptSuccess(String(state.simSkip));
+  };
+}
+
+/**
+ * Creates one `SimCmdDelay`-equivalent handler.
+ * Mirrors `SimCmdDelay` in `ref/micropolis/src/sim/w_sim.c`:
+ * enforce non-negative input, write/read `sim_delay`, and call `Kick` on set.
+ */
+function createSimDelaySubcommandHandler(
+  state: SimSpeedDelayControlState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimSpeedDelayControlArgCount(argv, 'Delay');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimSpeedDelayControlWriteArg(argv, 'Delay');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim Delay expected a non-negative integer at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      state.simDelay = parsedValue;
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(String(state.simDelay));
+  };
+}
+
+/**
+ * Creates one `SimCmdNeedRest`-equivalent handler.
+ * Mirrors `SimCmdNeedRest` in `ref/micropolis/src/sim/w_sim.c`:
+ * parse any Tcl integer (including negatives), write/read `NeedRest`,
+ * and do not call `Kick`.
+ */
+function createSimNeedRestSubcommandHandler(
+  state: SimSpeedDelayControlState,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimSpeedDelayControlArgCount(argv, 'NeedRest');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimSpeedDelayControlWriteArg(argv, 'NeedRest');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+
+      state.needRest = parsedValue;
+    }
+
+    return makeScriptSuccess(String(state.needRest));
+  };
+}
+
+/**
+ * Builds speed/delay/skip/rest `sim` subcommand entries.
+ * Mirrors `SimCmdSpeed`, `SimCmdSkips`, `SimCmdSkip`, `SimCmdDelay`, and
+ * `SimCmdNeedRest` in `ref/micropolis/src/sim/w_sim.c`, plus `setSpeed` and
+ * `setSkips` behavior in `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: `Speed` accepts `0..7` at parse time but returns clamped
+ * effective speed (`0..3`) after `setSpeed`.
+ */
+export function createSimSpeedDelayControlSubcommandEntries(
+  options: CreateSimSpeedDelayControlSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimSpeedDelayControlState();
+  const kickState = options.kickState ?? createSimKickState();
+  const kickHooks = options.kickHooks ?? {};
+
+  return [
+    ['Speed', createSimSpeedSubcommandHandler(state, kickState, kickHooks)] as const,
+    ['Skips', createSimSkipsSubcommandHandler(state, kickState, kickHooks)] as const,
+    ['Skip', createSimSkipSubcommandHandler(state)] as const,
+    ['Delay', createSimDelaySubcommandHandler(state, kickState, kickHooks)] as const,
+    ['NeedRest', createSimNeedRestSubcommandHandler(state)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -572,16 +941,25 @@ export function createSimSubcommandTable(
   return table;
 }
 
+const DEFAULT_SIM_KICK_STATE = createSimKickState();
+
 /**
  * Default `sim` subcommand table.
  * Mirrors `sim_command_init` registration slices from
  * `ref/micropolis/src/sim/w_sim.c` for:
  * - session/redraw control (`SIMCMD_CALL`, `SIMCMD_CALL_KICK`, `SimCmdUpdate`)
+ * - speed/delay/skip/rest controls (`SimCmdSpeed`, `SimCmdDelay`,
+ *   `SimCmdSkips`, `SimCmdSkip`, `SimCmdNeedRest`)
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  */
 export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable([
-  ...createSimSessionControlSubcommandEntries(),
+  ...createSimSessionControlSubcommandEntries({
+    kickState: DEFAULT_SIM_KICK_STATE,
+  }),
+  ...createSimSpeedDelayControlSubcommandEntries({
+    kickState: DEFAULT_SIM_KICK_STATE,
+  }),
   ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
   ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
 ]);
