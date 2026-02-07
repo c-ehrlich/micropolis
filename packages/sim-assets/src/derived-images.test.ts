@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { DERIVED_IMAGES_OUTPUT_DIR } from './derived-images.ts';
+import {
+  canonicalSourcePathToDerivedPngPath,
+  DERIVED_IMAGE_PATH_MANIFEST,
+  DERIVED_IMAGES_OUTPUT_DIR,
+} from './derived-images.ts';
+import { ASSETS_MANIFEST } from './generated/assets-manifest.ts';
 
 describe('derived image output convention', () => {
   it('pins a stable repository-relative output directory', () => {
@@ -17,5 +22,22 @@ describe('derived image output convention', () => {
     const outputDir = path.join(repoRoot, DERIVED_IMAGES_OUTPUT_DIR);
 
     expect(existsSync(outputDir)).toBe(true);
+  });
+
+  it('defines canonical source path to derived png mapping for every canonical xpm image', () => {
+    const canonicalXpmPaths = ASSETS_MANIFEST.files.images
+      .map((imageFile) => `${ASSETS_MANIFEST.sourceRoots.images}/${imageFile.path}`)
+      .filter((canonicalPath) => canonicalPath.endsWith('.xpm'));
+
+    expect(DERIVED_IMAGE_PATH_MANIFEST).toHaveLength(canonicalXpmPaths.length);
+    expect(DERIVED_IMAGE_PATH_MANIFEST.map((entry) => entry.canonicalSourcePath)).toEqual(
+      canonicalXpmPaths,
+    );
+  });
+
+  it('maps canonical xpm paths into package-local png overlay outputs', () => {
+    expect(canonicalSourcePathToDerivedPngPath('ref/micropolis/images/airport.xpm')).toBe(
+      'packages/sim-assets/generated-images/images/airport.png',
+    );
   });
 });
