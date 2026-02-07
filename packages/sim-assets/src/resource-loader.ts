@@ -5,6 +5,16 @@ import type { ResourceRoots } from './resource-roots.ts';
 const resourcePayloadCache = new Map<string, Uint8Array>();
 
 /**
+ * Structured error code for Micropolis resource-loader failures.
+ * Mirrors the missing-file error branch in `GetResource` from
+ * `ref/micropolis/src/sim/w_resrc.c` where load failures are surfaced via
+ * stderr logging and `NULL` return; TypeScript adapts this into a stable code.
+ */
+export enum ResourceLoaderErrorCode {
+  MissingResourceFile = 'MISSING_RESOURCE_FILE',
+}
+
+/**
  * Four-character resource type token consumed by Micropolis resource loaders.
  * Mirrors `char *name` usage in `GetResource` from `ref/micropolis/src/sim/w_resrc.c`
  * (1:1 width requirement modeled as a template-literal type).
@@ -19,6 +29,30 @@ export type ResourceTypeCode = `${string}${string}${string}${string}`;
 export interface ResourceIdentifier {
   readonly type: ResourceTypeCode;
   readonly id: number;
+}
+
+/**
+ * Typed missing-resource error for deterministic handling by callers/tests.
+ * Mirrors the `GetResource` missing-file branch in
+ * `ref/micropolis/src/sim/w_resrc.c` (`Can't find resource file ...`, then fail).
+ * Parity notes: C returns `NULL`; this TypeScript port throws a structured error
+ * so consumers can reliably branch on `code`, `type`, `id`, and `resourcePath`.
+ */
+export class ResourceFileNotFoundError extends Error {
+  readonly code = ResourceLoaderErrorCode.MissingResourceFile;
+  readonly type: ResourceTypeCode;
+  readonly id: number;
+  readonly resourcePath: string;
+
+  constructor(identifier: ResourceIdentifier, resourcePath: string) {
+    super(
+      `Missing Micropolis resource file: ${identifier.type}.${identifier.id} (${resourcePath})`,
+    );
+    this.name = 'ResourceFileNotFoundError';
+    this.type = identifier.type;
+    this.id = identifier.id;
+    this.resourcePath = resourcePath;
+  }
 }
 
 /**
@@ -63,7 +97,18 @@ export async function readResourceFile(
     return cachedPayload;
   }
 
-  const payload = await readFile(formatResourcePath(roots, identifier));
+  const resourcePath = formatResourcePath(roots, identifier);
+  let payload: Uint8Array;
+  try {
+    payload = await readFile(resourcePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new ResourceFileNotFoundError(identifier, resourcePath);
+    }
+    throw error;
+  }
+
   resourcePayloadCache.set(cacheKey, payload);
   return payload;
 }

@@ -90,7 +90,7 @@ Verification:
 ### P3.1 Implement file-backed resource loader
 - [x] Extend `resource-loader.ts` with filesystem read API (full-file read).
 - [x] Cache payload by `(type,id)` key to mirror C lifetime cache semantics.
-- [ ] Return deterministic error shape for missing resource files.
+- [x] Return deterministic error shape for missing resource files.
 
 Verification:
 - [ ] Add `resource-loader.test.ts` with cache hit/miss and missing-file assertions.
@@ -188,3 +188,4 @@ Verification:
 - [x] 2026-02-07: Completed P2.2 invariant-assertion task by tightening `scripts/verify-assets-parity.mjs` to enforce the exact known-missing literal Tcl bitmap set (`micropolisl`, `splashscreen`) alongside locked asset invariants.
 - [x] 2026-02-07: Completed P3.1 task to extend `packages/sim-assets/src/resource-loader.ts` with a filesystem full-file read API via exported `readResourceFile()` mapped to `GetResource` load semantics in `ref/micropolis/src/sim/w_resrc.c`.
 - [x] 2026-02-07: Completed P3.1 cache task by adding module-lifetime payload caching in `packages/sim-assets/src/resource-loader.ts` keyed by `(type,id)` to mirror `GetResource` resource identity semantics in `ref/micropolis/src/sim/w_resrc.c`.
+- [x] 2026-02-07: Completed P3.1 missing-resource error-shape task by adding deterministic `ResourceFileNotFoundError` metadata for missing files in `packages/sim-assets/src/resource-loader.ts` and parity tests in `packages/sim-assets/src/resource-loader.test.ts`.
