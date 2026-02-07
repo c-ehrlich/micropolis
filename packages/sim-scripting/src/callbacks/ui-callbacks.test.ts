@@ -8,9 +8,15 @@ import {
   createUiCallbackDispatcher,
   dispatchDoStopMicropolis,
   dispatchUiCallback,
+  dispatchUiDidLoadCity,
+  dispatchUiDidLoadScenario,
+  dispatchUiDidntLoadCity,
+  dispatchUiDidntSaveCity,
+  dispatchUiDidSaveCity,
   dispatchUiNewGame,
   dispatchUiPlayNewCity,
   dispatchUiReallyStartGame,
+  dispatchUiSaveCityAs,
   dispatchUiStartLoad,
   dispatchUiStartMicropolis,
   dispatchUiStartScenario,
@@ -192,5 +198,94 @@ describe('ui startup/lifecycle callback helpers', () => {
       value: '12',
     });
     expect(capturedArgv).toEqual(['UIStartScenario', '12']);
+  });
+});
+
+describe('ui file i/o callback helpers', () => {
+  it('dispatches save/load/scenario success callbacks with deterministic callback names', () => {
+    // Mirrors success-side `Eval("UISaveCityAs")`, `Eval("UIDidSaveCity")`,
+    // `Eval("UIDidLoadCity")`, and `Eval("UIDidLoadScenario")` in
+    // `ref/micropolis/src/sim/s_fileio.c`.
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UISaveCityAs', '::ui::saveCityAs'],
+      ['UIDidSaveCity', '::ui::didSaveCity'],
+      ['UIDidLoadCity', '::ui::didLoadCity'],
+      ['UIDidLoadScenario', '::ui::didLoadScenario'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiSaveCityAs(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::saveCityAs',
+    });
+    expect(dispatchUiDidSaveCity(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didSaveCity',
+    });
+    expect(dispatchUiDidLoadCity(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didLoadCity',
+    });
+    expect(dispatchUiDidLoadScenario(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didLoadScenario',
+    });
+
+    expect(observedArgv).toEqual([
+      ['::ui::saveCityAs'],
+      ['::ui::didSaveCity'],
+      ['::ui::didLoadCity'],
+      ['::ui::didLoadScenario'],
+    ]);
+  });
+
+  it('dispatches save/load failure callbacks with one message argument', () => {
+    // Mirrors failure-side `sprintf(... "{%s}")` + `Eval(buf)` in
+    // `DidntSaveCity` and `DidntLoadCity` at `ref/micropolis/src/sim/s_fileio.c`.
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UIDidntSaveCity', '::ui::didntSaveCity'],
+      ['UIDidntLoadCity', '::ui::didntLoadCity'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiDidntSaveCity(dispatch, 'Unable to save city.')).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didntSaveCity',
+    });
+    expect(dispatchUiDidntLoadCity(dispatch, 'Unable to load city.')).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didntLoadCity',
+    });
+
+    expect(observedArgv).toEqual([
+      ['::ui::didntSaveCity', 'Unable to save city.'],
+      ['::ui::didntLoadCity', 'Unable to load city.'],
+    ]);
   });
 });

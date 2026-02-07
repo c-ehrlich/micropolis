@@ -202,7 +202,7 @@ Use this exact loop:
   - Done when:
     - invocation contracts and argument passing are tested
 
-- [ ] `P5.3` Implement file I/O callbacks.
+- [x] `P5.3` Implement file I/O callbacks.
   - Procedures: `UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`
   - Done when:
     - success/failure callback emission is deterministic
@@ -303,3 +303,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P4.3` by adding the `interval` command family (`configure`, `get`, `set`, `reset`) with C-mapped defaults and option handling from `w_inter.c`/`w_tk.c`, including `SetInterval`-parity min/max swap + directional clamp logic, disabled-state `set` no-op behavior, and colocated tests covering reset/tick-sign normalization/error paths.
 - [x] `2026-02-07` Completed `P5.1` by adding `src/callbacks/ui-callbacks.ts` with callback registration/override helpers plus a runtime-backed callback dispatcher (`name -> reference -> invoke`) and colocated tests that cover direct-name dispatch parity and last-registration-wins remapping behavior.
 - [x] `2026-02-07` Completed `P5.2` by adding startup/lifecycle callback helpers (`UIStartMicropolis`, `UIPlayNewCity`, `UIReallyStartGame`, `UIStartLoad`, `UIStartScenario`, `UINewGame`, `DoStopMicropolis`) with C-mapped argument shaping from `w_tk.c`/`w_stubs.c`/`w_util.c` and colocated invocation-contract tests.
+- [x] `2026-02-07` Completed `P5.3` by adding file I/O callback helpers (`UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`) mapped to `s_fileio.c` `Eval`/`sprintf` flows, with deterministic success/failure callback-name emission and message-argv parity tests.

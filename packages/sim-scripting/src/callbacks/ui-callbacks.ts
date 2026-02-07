@@ -198,3 +198,71 @@ export function dispatchUiNewGame(dispatch: UiCallbackDispatcher): ScriptRuntime
 export function dispatchDoStopMicropolis(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
   return dispatch('DoStopMicropolis');
 }
+
+/**
+ * Dispatches the save-as prompt callback.
+ * Mirrors `Eval("UISaveCityAs")` in `DoSaveCityAs`
+ * (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiSaveCityAs(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UISaveCityAs');
+}
+
+/**
+ * Dispatches the save-success callback.
+ * Mirrors `Eval("UIDidSaveCity")` in `DidSaveCity`
+ * (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiDidSaveCity(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIDidSaveCity');
+}
+
+/**
+ * Dispatches the save-failure callback with one message argument.
+ * Mirrors `sprintf("UIDidntSaveCity {%s}", msg)` + `Eval(buf)` in
+ * `DidntSaveCity` (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: message transport is argv-based and does not depend on
+ * Tcl brace interpolation.
+ */
+export function dispatchUiDidntSaveCity(
+  dispatch: UiCallbackDispatcher,
+  message: string,
+): ScriptRuntimeResult {
+  return dispatch('UIDidntSaveCity', [message]);
+}
+
+/**
+ * Dispatches the load-success callback.
+ * Mirrors `Eval("UIDidLoadCity")` in `DidLoadCity`
+ * (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiDidLoadCity(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIDidLoadCity');
+}
+
+/**
+ * Dispatches the load-failure callback with one message argument.
+ * Mirrors `sprintf("UIDidntLoadCity {%s}", msg)` + `Eval(buf)` in
+ * `DidntLoadCity` (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: message transport is argv-based and does not depend on
+ * Tcl brace interpolation.
+ */
+export function dispatchUiDidntLoadCity(
+  dispatch: UiCallbackDispatcher,
+  message: string,
+): ScriptRuntimeResult {
+  return dispatch('UIDidntLoadCity', [message]);
+}
+
+/**
+ * Dispatches the scenario-load completion callback.
+ * Mirrors `Eval("UIDidLoadScenario")` in `DidLoadScenario`
+ * (`ref/micropolis/src/sim/s_fileio.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiDidLoadScenario(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIDidLoadScenario');
+}
