@@ -126,7 +126,7 @@ Verification:
 - [ ] Contract documented in package README.
 
 ### P4.2 Implement conversion script
-- [ ] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
+- [x] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
 - [ ] Convert required XPM assets to PNG.
 - [ ] Keep conversion deterministic and idempotent.
 
@@ -197,3 +197,4 @@ Verification:
 - [x] 2026-02-07: Completed P3.4 deterministic help-doc parity test task by adding `packages/sim-assets/src/help-docs.test.ts` with fixed canonical missing/extra assertions derived from `ref/micropolis/res/help.tcl` vs `ref/micropolis/manual/*.html`.
 - [x] 2026-02-07: Completed P4.1 output-directory convention task by defining `packages/sim-assets/generated-images/` as the derived PNG destination in `src/derived-images.ts`, documenting it in `packages/sim-assets/README.md`, and adding the committed directory placeholder.
 - [x] 2026-02-07: Completed P4.1 manifest-mapping task by defining `DERIVED_IMAGE_PATH_MANIFEST` in `packages/sim-assets/src/derived-images.ts` to map canonical `ref/micropolis/images/*.xpm` source paths to deterministic derived PNG output paths under `packages/sim-assets/generated-images/images/*.png`, with contract coverage in `packages/sim-assets/src/derived-images.test.ts`.
+- [x] 2026-02-07: Completed P4.2 script-addition task by creating `packages/sim-assets/scripts/export-derived-images.mjs` with deterministic canonical `ref/micropolis/images/*.xpm` to derived PNG export plumbing under `packages/sim-assets/generated-images/images/*.png`.
