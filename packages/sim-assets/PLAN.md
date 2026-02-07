@@ -128,7 +128,7 @@ Verification:
 ### P4.2 Implement conversion script
 - [x] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
 - [x] Convert required XPM assets to PNG.
-- [ ] Keep conversion deterministic and idempotent.
+- [x] Keep conversion deterministic and idempotent.
 
 Verification:
 - [ ] Export script runs cleanly.
@@ -199,3 +199,4 @@ Verification:
 - [x] 2026-02-07: Completed P4.1 manifest-mapping task by defining `DERIVED_IMAGE_PATH_MANIFEST` in `packages/sim-assets/src/derived-images.ts` to map canonical `ref/micropolis/images/*.xpm` source paths to deterministic derived PNG output paths under `packages/sim-assets/generated-images/images/*.png`, with contract coverage in `packages/sim-assets/src/derived-images.test.ts`.
 - [x] 2026-02-07: Completed P4.2 script-addition task by creating `packages/sim-assets/scripts/export-derived-images.mjs` with deterministic canonical `ref/micropolis/images/*.xpm` to derived PNG export plumbing under `packages/sim-assets/generated-images/images/*.png`.
 - [x] 2026-02-07: Completed P4.2 conversion task by running `pnpm -C packages/sim-assets export-derived-images`, exporting required canonical `ref/micropolis/images/*.xpm` assets to `packages/sim-assets/generated-images/images/*.png` (340 PNGs written, 1 empty-source XPM skipped).
+- [x] 2026-02-07: Completed P4.2 determinism/idempotence task by parameterizing `scripts/export-derived-images.mjs` path roots for isolated runs and adding `scripts/export-derived-images.test.ts` assertions for stable ASCII ordering, repeat-run no-op writes, and deterministic PNG bytes from identical XPM input.

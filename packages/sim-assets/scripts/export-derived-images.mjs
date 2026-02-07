@@ -73,23 +73,35 @@ function toRepoRelativePosixPath(absolutePath) {
  * identity), with a TypeScript-only overlay path in
  * `packages/sim-assets/generated-images/images/*.png`.
  */
-export function listCanonicalXpmExports() {
-  const names = readdirSync(MICROPOLIS_IMAGES_DIR, { withFileTypes: true })
+export function listCanonicalXpmExports({
+  sourceImagesDir = MICROPOLIS_IMAGES_DIR,
+  outputImagesDir = DERIVED_IMAGES_DIR,
+  canonicalImagesPrefix = MICROPOLIS_IMAGES_PREFIX,
+  derivedImagesPrefix = DERIVED_IMAGES_PREFIX,
+} = {}) {
+  const normalizedCanonicalPrefix = canonicalImagesPrefix.endsWith('/')
+    ? canonicalImagesPrefix
+    : `${canonicalImagesPrefix}/`;
+  const normalizedDerivedPrefix = derivedImagesPrefix.endsWith('/')
+    ? derivedImagesPrefix
+    : `${derivedImagesPrefix}/`;
+
+  const names = readdirSync(sourceImagesDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.xpm'))
     .map((entry) => entry.name)
     .sort((left, right) => compareAscii(left, right));
 
   return names.map((fileName) => {
-    const canonicalSourcePath = `${MICROPOLIS_IMAGES_PREFIX}${fileName}`;
-    const derivedPngPath = `${DERIVED_IMAGES_PREFIX}${fileName.slice(0, -'.xpm'.length)}.png`;
+    const canonicalSourcePath = `${normalizedCanonicalPrefix}${fileName}`;
+    const derivedPngPath = `${normalizedDerivedPrefix}${fileName.slice(0, -'.xpm'.length)}.png`;
 
     return {
       fileName,
       canonicalSourcePath,
-      sourceAbsolutePath: path.join(MICROPOLIS_IMAGES_DIR, fileName),
-      sourceByteSize: statSync(path.join(MICROPOLIS_IMAGES_DIR, fileName)).size,
+      sourceAbsolutePath: path.join(sourceImagesDir, fileName),
+      sourceByteSize: statSync(path.join(sourceImagesDir, fileName)).size,
       derivedPngPath,
-      outputAbsolutePath: path.join(DERIVED_IMAGES_DIR, `${fileName.slice(0, -'.xpm'.length)}.png`),
+      outputAbsolutePath: path.join(outputImagesDir, `${fileName.slice(0, -'.xpm'.length)}.png`),
     };
   });
 }
@@ -444,20 +456,28 @@ function listExistingDerivedPngPaths(absoluteDir, relativePrefix = '') {
  * Canonical Micropolis identities stay anchored in `ref/micropolis/images`; this
  * cleanup only affects TypeScript-generated overlay artifacts.
  */
-function removeStaleDerivedPngs(expectedDerivedPaths, dryRun) {
-  const derivedImagesDirExists =
-    statSync(DERIVED_IMAGES_DIR, { throwIfNoEntry: false }) !== undefined;
+function removeStaleDerivedPngs(
+  expectedDerivedPaths,
+  dryRun,
+  { outputImagesDir = DERIVED_IMAGES_DIR, derivedImagesPrefix = DERIVED_IMAGES_PREFIX } = {},
+) {
+  const normalizedDerivedPrefix = derivedImagesPrefix.endsWith('/')
+    ? derivedImagesPrefix
+    : `${derivedImagesPrefix}/`;
+  const derivedImagesDirExists = statSync(outputImagesDir, { throwIfNoEntry: false }) !== undefined;
   if (!derivedImagesDirExists) {
     return 0;
   }
 
-  const staleRelativePaths = listExistingDerivedPngPaths(DERIVED_IMAGES_DIR)
-    .filter((relativePath) => !expectedDerivedPaths.has(`${DERIVED_IMAGES_PREFIX}${relativePath}`))
+  const staleRelativePaths = listExistingDerivedPngPaths(outputImagesDir)
+    .filter(
+      (relativePath) => !expectedDerivedPaths.has(`${normalizedDerivedPrefix}${relativePath}`),
+    )
     .sort((left, right) => compareAscii(left, right));
 
   if (!dryRun) {
     for (const staleRelativePath of staleRelativePaths) {
-      rmSync(path.join(DERIVED_IMAGES_DIR, staleRelativePath));
+      rmSync(path.join(outputImagesDir, staleRelativePath));
     }
   }
 
@@ -475,8 +495,19 @@ function removeStaleDerivedPngs(expectedDerivedPaths, dryRun) {
  *   emits optional derived PNG overlays under
  *   `packages/sim-assets/generated-images/images/*.png`.
  */
-export function exportDerivedImages({ dryRun = false } = {}) {
-  const xpmExports = listCanonicalXpmExports();
+export function exportDerivedImages({
+  dryRun = false,
+  sourceImagesDir = MICROPOLIS_IMAGES_DIR,
+  outputImagesDir = DERIVED_IMAGES_DIR,
+  canonicalImagesPrefix = MICROPOLIS_IMAGES_PREFIX,
+  derivedImagesPrefix = DERIVED_IMAGES_PREFIX,
+} = {}) {
+  const xpmExports = listCanonicalXpmExports({
+    sourceImagesDir,
+    outputImagesDir,
+    canonicalImagesPrefix,
+    derivedImagesPrefix,
+  });
   const expectedDerivedPaths = new Set();
 
   let written = 0;
@@ -512,7 +543,10 @@ export function exportDerivedImages({ dryRun = false } = {}) {
     }
   }
 
-  const removed = removeStaleDerivedPngs(expectedDerivedPaths, dryRun);
+  const removed = removeStaleDerivedPngs(expectedDerivedPaths, dryRun, {
+    outputImagesDir,
+    derivedImagesPrefix,
+  });
 
   return {
     total: xpmExports.length,
