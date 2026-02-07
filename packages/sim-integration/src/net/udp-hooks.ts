@@ -145,15 +145,20 @@ export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpH
  * Format one UDP packet callback command.
  * Mirrors `udp_hear` in `ref/micropolis/src/sim/w_net.c` where received
  * packets execute `Eval("HandlePacket <sock> {<ip>} {<bytes>}")`.
- * Parity note: this step emits the same Tcl command shape; byte width/trailing
- * spacing quirks from C `"%3d "` are handled as a separate task.
+ * Parity note: byte formatting is a direct `%3d ` parity port from the C loop
+ * (`sprintf(cp, "%3d ", buf[i]); cp += 4;`) including fixed width and trailing
+ * space for each byte.
  */
 function formatHandlePacketCommand(
   sock: number,
   sourceIp: string,
   bytes: ReadonlyArray<number>,
 ): string {
-  return `HandlePacket ${sock} {${sourceIp}} {${bytes.join(' ')}}`;
+  return `HandlePacket ${sock} {${sourceIp}} {${formatUdpPacketBytes(bytes)}}`;
+}
+
+function formatUdpPacketBytes(bytes: ReadonlyArray<number>): string {
+  return bytes.map((byte) => `${byte.toString().padStart(3, ' ')} `).join('');
 }
 
 const INT32_MAX = 2_147_483_647;

@@ -83,7 +83,7 @@ Use this exact loop:
 - [x] Implement `hearFrom(fileSock)` parsing with exact `file<sock>` prefix requirement.
 - [x] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
 - [x] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
-- [ ] Format each byte as `%3d ` equivalent (fixed width + trailing space).
+- [x] Format each byte as `%3d ` equivalent (fixed width + trailing space).
 - [ ] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
 - [ ] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
 - [ ] Checkpoint: UDP tests pass for strict and safe modes.
@@ -171,3 +171,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 5 task `Implement hearFrom(fileSock) parsing with exact file<sock> prefix requirement` by adding `createUdpHookRuntime(...).hearFrom(fileSock)` parsing that mirrors `SimCmdHearFrom` char-by-char `file` prefix checks and integer parsing of `argv[2] + 4` from `ref/micropolis/src/sim/w_sim.c`, then forwarding parsed sockets to the UDP hear adapter with hear-phase error reporting on malformed tokens.
 - [x] 2026-02-07: Completed Phase 5 task `Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK)` by porting `udp_hear` loop control from `ref/micropolis/src/sim/w_net.c` into `createUdpHookRuntime(...).hearFrom(fileSock)` using adapter-driven receive results (`eintr` retry, `wouldBlock` stop, other errors report `recvfrom` and return), with focused parity tests in `src/net/udp-hooks.test.ts`.
 - [x] 2026-02-07: Completed Phase 5 task `Emit callback string exactly: HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}` by surfacing packet recv results through `hooks.onPacketCommand` in `createUdpHookRuntime(...).hearFrom(fileSock)` and emitting `HandlePacket ${sock} {${ip}} {${bytes}}` command-shape strings mirroring `sprintf(cmd, "HandlePacket %d {%s} {", ...)` + `Eval(cmd)` flow in `ref/micropolis/src/sim/w_net.c`; added focused callback-shape coverage in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Format each byte as %3d equivalent (fixed width + trailing space)` by updating UDP packet command formatting in `src/net/udp-hooks.ts` to emit each byte as `%3d ` (right-aligned width 3 plus trailing space), matching the `for` loop `sprintf(cp, "%3d ", buf[i]); cp += 4;` behavior in `ref/micropolis/src/sim/w_net.c`; updated `src/net/udp-hooks.test.ts` expectation for exact spacing parity.

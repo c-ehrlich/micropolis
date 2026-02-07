@@ -168,7 +168,7 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
     expect(sequence).toEqual([]);
   });
 
-  it('emits HandlePacket callback command with sock/ip/byte list shape', () => {
+  it('emits HandlePacket callback command with C %3d byte formatting parity', () => {
     const packetCommands: string[] = [];
     const runtime = createUdpHookRuntime({
       hooks: {
@@ -191,7 +191,7 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
     // and ref/micropolis/spec/integration/SPEC.md.
     runtime.hearFrom('file37');
 
-    expect(packetCommands).toEqual(['HandlePacket 37 {10.1.2.3} {0 16 255}']);
+    expect(packetCommands).toEqual(['HandlePacket 37 {10.1.2.3} {  0  16 255 }']);
   });
 
   it('reports recvfrom error on non-EINTR and non-EWOULDBLOCK failure', () => {
