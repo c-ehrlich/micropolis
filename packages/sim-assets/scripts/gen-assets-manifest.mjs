@@ -76,6 +76,23 @@ export function createFileEntries(rootDir) {
 }
 
 /**
+ * Scan canonical Micropolis asset roots under `ref/micropolis/{res,images,manual}`.
+ * Mirrors the same canonical input locations used by C/Tcl runtime loading in:
+ * - `ref/micropolis/src/sim/w_resrc.c` (resource files under `res/`)
+ * - `ref/micropolis/src/sim/g_setup.c` (sprite/image XPM files under `images/`)
+ * - `ref/micropolis/res/micropolis.tcl` (manual/help HTML docs under `manual/`)
+ * This is a parity-preserving scan of source files; TypeScript adds deterministic
+ * ordering metadata only and does not alter canonical file identities.
+ */
+export function scanCanonicalInputs() {
+  return {
+    res: createFileEntries(SOURCE_ROOTS.res),
+    images: createFileEntries(SOURCE_ROOTS.images),
+    manual: createFileEntries(SOURCE_ROOTS.manual),
+  };
+}
+
+/**
  * Build the canonical assets manifest from Micropolis source directories.
  * Mirrors resource naming and sprite/manual identities from:
  * - `ref/micropolis/src/sim/w_resrc.c` (`%c%c%c%c.%d` resource files)
@@ -84,11 +101,7 @@ export function createFileEntries(rootDir) {
  * (TypeScript manifest groups and sorts these identities deterministically).
  */
 export function createAssetsManifest() {
-  const fileManifest = {
-    res: createFileEntries(SOURCE_ROOTS.res),
-    images: createFileEntries(SOURCE_ROOTS.images),
-    manual: createFileEntries(SOURCE_ROOTS.manual),
-  };
+  const fileManifest = scanCanonicalInputs();
 
   const resourceFiles = fileManifest.res
     .filter((entry) => !entry.path.includes('/'))
