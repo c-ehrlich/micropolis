@@ -5,6 +5,7 @@ import {
   resolveSimUiToolAssetHelper,
   resolveSimUiToolHelpDocId,
   resolveSimUiToolHelpHtmlFileName,
+  resolveSimUiToolIconAssetLookup,
   resolveSimUiToolIconBitmapName,
   resolveSimUiToolSoundFileName,
   resolveSimUiToolSoundToken,
@@ -60,6 +61,34 @@ describe('sim-ui helper parity', () => {
     expect(resolveSimUiToolHelpHtmlFileName(8)).toBe('Editor.ToolRail.html');
   });
 
+  it('resolves canonical icon asset keys with optional derived png overlays', () => {
+    // `rail` is entry index 8 in `EditorPalletImages` from
+    // `ref/micropolis/res/micropolis.tcl`; `ExclusivePallet` loads it via
+    // `@images/icrail.xpm` or `@images/icrailhi.xpm`.
+    expect(resolveSimUiToolIconAssetLookup(8)).toEqual({
+      toolState: 8,
+      highlighted: false,
+      iconBitmapName: 'icrail',
+      canonicalAssetKey: 'ref/micropolis/images/icrail.xpm',
+      derivedPngPath: 'packages/sim-assets/generated-images/images/icrail.png',
+    });
+
+    expect(resolveSimUiToolIconAssetLookup(8, { highlighted: true })).toEqual({
+      toolState: 8,
+      highlighted: true,
+      iconBitmapName: 'icrailhi',
+      canonicalAssetKey: 'ref/micropolis/images/icrailhi.xpm',
+      derivedPngPath: 'packages/sim-assets/generated-images/images/icrailhi.png',
+    });
+
+    expect(resolveSimUiToolIconAssetLookup(8, { includeDerivedPngPathLookup: false })).toEqual({
+      toolState: 8,
+      highlighted: false,
+      iconBitmapName: 'icrail',
+      canonicalAssetKey: 'ref/micropolis/images/icrail.xpm',
+    });
+  });
+
   it('returns undefined for out-of-range tool states including networkState', () => {
     // `networkState` is `18` in `ref/micropolis/src/sim/headers/sim.h`, but
     // there is no matching icon entry in `EditorPalletImages`.
@@ -68,6 +97,7 @@ describe('sim-ui helper parity', () => {
     expect(resolveSimUiToolStringResource(18)).toBeUndefined();
     expect(resolveSimUiToolSoundToken(18)).toBeUndefined();
     expect(resolveSimUiToolHelpDocId(18)).toBeUndefined();
+    expect(resolveSimUiToolIconAssetLookup(18)).toBeUndefined();
     expect(resolveSimUiToolAssetHelper(-1)).toBeUndefined();
     expect(resolveSimUiToolAssetHelper(2.5)).toBeUndefined();
   });

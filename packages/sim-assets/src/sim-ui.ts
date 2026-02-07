@@ -1,3 +1,8 @@
+import {
+  type CanonicalImageIdentityKey,
+  getDerivedImagePathManifestEntry,
+  toCanonicalImageIdentityKey,
+} from './derived-images.ts';
 import { formatHelpHtmlFileName } from './help-docs.ts';
 import { LEGACY_RESOURCE_TYPE_STRI } from './legacy.ts';
 import { normalizeSoundToken } from './sounds.ts';
@@ -82,6 +87,32 @@ export interface SimUiToolAssetHelper {
   readonly helpHtmlFileName: string;
 }
 
+/**
+ * Resolved image-key metadata for one editor tool icon bitmap.
+ * Source mapping: icon names come from `EditorPalletImages` and are loaded as
+ * `@images/ic${name}.xpm` / `@images/ic${name}hi.xpm` by `ExclusivePallet` in
+ * `ref/micropolis/res/micropolis.tcl`.
+ * Parity notes: canonical `.xpm` identity is always returned (C/Tcl parity);
+ * derived PNG path is an optional TypeScript-only overlay.
+ */
+export interface SimUiToolIconAssetLookup {
+  readonly toolState: number;
+  readonly highlighted: boolean;
+  readonly iconBitmapName: string;
+  readonly canonicalAssetKey: CanonicalImageIdentityKey;
+  readonly derivedPngPath?: string;
+}
+
+/**
+ * Optional lookup configuration for tool icon asset resolution.
+ * Mirrors Micropolis icon identity from `micropolis.tcl` while allowing
+ * TypeScript callers to opt into/out of derived PNG overlay metadata.
+ */
+export interface SimUiToolIconAssetLookupOptions {
+  readonly highlighted?: boolean;
+  readonly includeDerivedPngPathLookup?: boolean;
+}
+
 const SIM_UI_TOOL_ASSET_HELPERS: readonly SimUiToolAssetHelper[] = Object.freeze(
   SIM_UI_TOOL_PALETTE_SOURCE.map((entry, toolState) => {
     const normalizedSoundToken = normalizeSoundToken(entry.soundToken);
@@ -144,6 +175,53 @@ export function resolveSimUiToolIconBitmapName(
   }
 
   return highlighted ? helper.highlightedIconBitmapName : helper.iconBitmapName;
+}
+
+/**
+ * Resolve canonical image identity for a tool icon with optional PNG overlay.
+ * Source mapping:
+ * - icon naming: `ExclusivePallet ... ic $EditorPalletImages` in
+ *   `ref/micropolis/res/micropolis.tcl`
+ * - canonical image identity: `@images/*.xpm` lookups in Micropolis Tcl/C
+ *   (`micropolis.tcl`, `ref/micropolis/src/sim/g_setup.c`).
+ * Parity notes: C/Tcl uses canonical XPM identity only; this helper keeps that
+ * canonical key and optionally attaches a derived PNG path for TypeScript
+ * runtime ergonomics.
+ */
+export function resolveSimUiToolIconAssetLookup(
+  toolState: number,
+  options: SimUiToolIconAssetLookupOptions = {},
+): SimUiToolIconAssetLookup | undefined {
+  const highlighted = options.highlighted ?? false;
+  const includeDerivedPngPathLookup = options.includeDerivedPngPathLookup ?? true;
+  const iconBitmapName = resolveSimUiToolIconBitmapName(toolState, highlighted);
+  if (iconBitmapName === undefined) {
+    return undefined;
+  }
+
+  const canonicalAssetKey = toCanonicalImageIdentityKey(
+    `ref/micropolis/images/${iconBitmapName}.xpm`,
+  );
+  const lookup: SimUiToolIconAssetLookup = {
+    toolState,
+    highlighted,
+    iconBitmapName,
+    canonicalAssetKey,
+  };
+
+  if (!includeDerivedPngPathLookup) {
+    return lookup;
+  }
+
+  const derivedPngPath = getDerivedImagePathManifestEntry(canonicalAssetKey)?.derivedPngPath;
+  if (derivedPngPath === undefined) {
+    return lookup;
+  }
+
+  return {
+    ...lookup,
+    derivedPngPath,
+  };
 }
 
 /**

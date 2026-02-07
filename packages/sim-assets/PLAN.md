@@ -151,7 +151,7 @@ Verification:
 
 ### P5.2 `sim-ui` integration
 - [x] Export helpers for tool icons, string resources, sound token mapping, and help docs.
-- [ ] Support canonical asset key + optional derived PNG path lookup.
+- [x] Support canonical asset key + optional derived PNG path lookup.
 
 Verification:
 - [ ] `sim-ui` typecheck passes with helper usage.
@@ -204,3 +204,4 @@ Verification:
 - [x] 2026-02-07: Completed P4.3 overlay-optional task by making derived PNG paths optional in `packages/sim-assets/src/derived-images.ts` and adding `packages/sim-assets/src/derived-images.test.ts` coverage that canonical IDs/maps remain identical with overlays enabled or omitted.
 - [x] 2026-02-07: Completed P5.1 helper-export task by extending `packages/sim-assets/src/legacy.ts` with C-parity scenario/resource resolution exports (`normalizeLegacyScenarioId`, `resolveLegacyScenarioResourceId`, `resolveLegacyScenarioResourceName`, and typed `stri`/`snro` identifier helpers) and added parity tests in `packages/sim-assets/src/legacy.test.ts`.
 - [x] 2026-02-07: Completed P5.2 helper-export task by adding `packages/sim-assets/src/sim-ui.ts` exports for editor tool icon bitmaps, `stri.356` string-resource references, tool sound token/file mappings, and tool help-doc id/html helpers, with parity tests in `packages/sim-assets/src/sim-ui.test.ts`.
+- [x] 2026-02-07: Completed P5.2 canonical-key/derived-overlay task by adding `resolveSimUiToolIconAssetLookup` in `packages/sim-assets/src/sim-ui.ts` to return canonical `ref/micropolis/images/*.xpm` tool icon keys with optional derived PNG path lookup, plus coverage in `packages/sim-assets/src/sim-ui.test.ts`.
