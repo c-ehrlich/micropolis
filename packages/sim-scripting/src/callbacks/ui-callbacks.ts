@@ -61,6 +61,23 @@ function toCBudgetPercentString(value: number): string {
 }
 
 /**
+ * Formats packet bytes like `udp_hear` before Tcl `Eval`.
+ * Mirrors `sprintf(cp, "%3d ", buf[i])` in `ref/micropolis/src/sim/w_net.c`,
+ * where each payload element is an unsigned byte emitted as right-aligned
+ * width-3 decimal with a trailing space.
+ * Difference from C: non-byte numeric inputs are normalized to `unsigned char`
+ * shape (`(int)value & 0xff`) before formatting.
+ */
+function formatHandlePacketBytes(bytes: readonly number[]): string {
+  let formattedBytes = '';
+  for (const value of bytes) {
+    const normalizedByte = Math.trunc(value) & 255;
+    formattedBytes += `${String(normalizedByte).padStart(3, ' ')} `;
+  }
+  return formattedBytes;
+}
+
+/**
  * Resolves one callback name to its mapped callback reference.
  * Mirrors direct-name callback lookup in Micropolis `Eval("UI...")` emitters
  * from `ref/micropolis/src/sim/w_tk.c` and peers.
@@ -885,4 +902,24 @@ export function dispatchUiStopSound(
  */
 export function dispatchUiSoundOff(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
   return dispatch('UISoundOff');
+}
+
+/**
+ * Dispatches one networking packet callback from UDP hear processing.
+ * Mirrors `sprintf("HandlePacket %d {%s} {", ...)` + byte loop + `Eval(cmd)`
+ * in `udp_hear` (`ref/micropolis/src/sim/w_net.c`).
+ * Parity note: payload bytes are passed as one Tcl-list-like string argument
+ * formatted with `%3d ` spacing semantics.
+ */
+export function dispatchHandlePacket(
+  dispatch: UiCallbackDispatcher,
+  socket: number,
+  ipAddress: string,
+  bytes: readonly number[],
+): ScriptRuntimeResult {
+  return dispatch('HandlePacket', [
+    toCIntegerString(socket),
+    ipAddress,
+    formatHandlePacketBytes(bytes),
+  ]);
 }

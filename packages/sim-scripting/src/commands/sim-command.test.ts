@@ -17,6 +17,7 @@ import {
   createSimKickState,
   createSimMapDynamicOverlayMiscState,
   createSimMapDynamicOverlayMiscSubcommandEntries,
+  createSimNetworkingSubcommandEntries,
   createSimReadOnlyGetterState,
   createSimReadOnlyGetterSubcommandEntries,
   createSimSessionControlSubcommandEntries,
@@ -1606,6 +1607,112 @@ describe('sim URL/browser/random/dollars utility subcommands', () => {
       expect(parsedRand).toBeGreaterThanOrEqual(0);
       expect(parsedRand).toBeLessThanOrEqual(65535);
     }
+  });
+});
+
+describe('sim optional networking subcommands', () => {
+  it('implements `ListenTo` and `HearFrom` with NET callback hook flow', () => {
+    const runtime = new ScriptRuntime();
+    const listenedPorts: number[] = [];
+    const heardSockets: number[] = [];
+    const handledPackets: Array<{ socket: number; ipAddress: string; bytes: number[] }> = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimNetworkingSubcommandEntries({
+          hooks: {
+            onListenTo: (port) => {
+              listenedPorts.push(port);
+              return 42.9;
+            },
+            onHearFrom: (socket) => {
+              heardSockets.push(socket);
+              return [
+                { ipAddress: '127.0.0.1', bytes: [0, 1, 255] },
+                { ipAddress: '10.0.0.2', bytes: [9, 8] },
+              ];
+            },
+            onHandlePacket: (socket, ipAddress, bytes) => {
+              handledPackets.push({ socket, ipAddress, bytes: [...bytes] });
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'ListenTo', '3210'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '42',
+    });
+    // `SimCmdHearFrom` in `w_sim.c` requires `argv[2]` to start with lowercase
+    // `"file"` and parses the suffix with `Tcl_GetInt`.
+    expect(runtime.invoke(['sim', 'HearFrom', 'file42'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(listenedPorts).toEqual([3210]);
+    expect(heardSockets).toEqual([42]);
+    expect(handledPackets).toEqual([
+      { socket: 42, ipAddress: '127.0.0.1', bytes: [0, 1, 255] },
+      { socket: 42, ipAddress: '10.0.0.2', bytes: [9, 8] },
+    ]);
+  });
+
+  it('enforces `ListenTo` and `HearFrom` argc/integer parsing rules from `w_sim.c`', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime, createSimSubcommandTable(createSimNetworkingSubcommandEntries()));
+
+    expect(runtime.invoke(['sim', 'ListenTo'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim ListenTo expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'ListenTo', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim ListenTo expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim HearFrom expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom', 'File9'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HearFrom expected argv[2] in form file<int>: File9',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom', 'file9x'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HearFrom expected argv[2] in form file<int>: file9x',
+    });
+  });
+
+  it('is included in default `sim` entries when NET feature is enabled', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDefaultSubcommandEntries({
+          featureFlags: {
+            NET: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'ListenTo', '123'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    // `SimCmdHearFrom` accepts `file<sock>` where `<sock>` uses `Tcl_GetInt`
+    // parsing, including leading-zero numeric forms from C.
+    expect(runtime.invoke(['sim', 'HearFrom', 'file017'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
   });
 });
 

@@ -136,4 +136,23 @@ describe('createDefaultSimScriptingBaseCommandRegistrar', () => {
       value: '512 512',
     });
   });
+
+  it('registers built-in sim networking subcommands by default when NET is enabled', () => {
+    const bundle = createSimScriptingRuntime({
+      registerBaseCommands: createDefaultSimScriptingBaseCommandRegistrar({
+        featureFlags: {
+          NET: true,
+        },
+      }),
+    });
+
+    expect(bundle.runtime.invoke(['sim', 'ListenTo', '4242'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(bundle.runtime.invoke(['sim', 'HearFrom', 'file0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+  });
 });

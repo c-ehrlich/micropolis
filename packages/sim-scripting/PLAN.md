@@ -232,7 +232,7 @@ Use this exact loop:
   - Done when:
     - documented subcommands are supported in feature-on mode
 
-- [ ] `P6.3` Implement optional networking commands and `HandlePacket`.
+- [x] `P6.3` Implement optional networking commands and `HandlePacket`.
   - C reference: `w_net.c`
   - Done when:
     - `sim ListenTo`, `sim HearFrom`, and packet callback contract are tested
@@ -310,3 +310,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P5.5` by adding message/notice/autogoto callback helpers (`UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`) with C-mapped `%d` argument coercion from `s_msg.c`/`w_tool.c`/`w_util.c`, optional Tcl-parity callback args, and colocated tests covering picture/text callback flow plus tile-to-pixel autogoto conversion parity.
 - [x] `2026-02-07` Completed `P5.6` by adding tool/sound callback helpers (`UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`), implementing wildcard callback remap resolution (`UIDidTool*`) with exact-match precedence, and adding colocated parity tests for callback argv shape.
 - [x] `2026-02-07` Completed `P6.2` by adding the optional `camview` command family (`configure`, `position`, `size`, `Visible`, `StoreColor`, `NewCam`, `DeleteCam`, `RandomizeCam`, `ConfigCam`, `FindCam`, `FindSomeCam`) with CAM-flag-gated default registration, C-mapped `w_cam.c`/`g_cam.c` parsing and camera-list semantics, and colocated unit coverage for lifecycle/error/parity behavior.
+- [x] `2026-02-07` Completed `P6.3` by adding optional NET `sim` subcommands (`ListenTo`, `HearFrom`) with `w_sim.c` arg/`file<sock>` parsing parity, default NET-enabled registration wiring, `HandlePacket` callback dispatch formatting parity from `w_net.c` (`%3d ` byte list), and colocated tests for command and packet-callback contracts.

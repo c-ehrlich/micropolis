@@ -8,6 +8,7 @@ import {
   createUiCallbackDispatcher,
   dispatchDoPendTool,
   dispatchDoStopMicropolis,
+  dispatchHandlePacket,
   dispatchUiAutoGoto,
   dispatchUiCallback,
   dispatchUiDidLoadCity,
@@ -698,5 +699,29 @@ describe('ui tool/pan/disaster/sound callback helpers', () => {
       ['::ui::stopSound', '1'],
       ['::ui::soundOff'],
     ]);
+  });
+});
+
+describe('ui networking callback helpers', () => {
+  it('dispatches `HandlePacket` using `udp_hear` socket/ip/byte-list argv shape', () => {
+    // Mirrors `sprintf("HandlePacket %d {%s} {", ...)` + `%3d ` byte formatting
+    // in `ref/micropolis/src/sim/w_net.c`.
+    const runtime = new ScriptRuntime();
+    let capturedArgv: readonly string[] = [];
+    runtime.registerCommand('::ui::handlePacket', (argv) => {
+      capturedArgv = argv;
+      return makeScriptSuccess(argv.slice(1).join('|'));
+    });
+
+    const state = createScriptingState({
+      callbackEntries: [['HandlePacket', '::ui::handlePacket']],
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchHandlePacket(dispatch, 7.9, '10.0.0.44', [0, 1, 255])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7|10.0.0.44|  0   1 255 ',
+    });
+    expect(capturedArgv).toEqual(['::ui::handlePacket', '7', '10.0.0.44', '  0   1 255 ']);
   });
 });

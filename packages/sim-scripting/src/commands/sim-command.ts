@@ -3074,6 +3074,146 @@ export function createSimUrlBrowserRandomDollarsUtilitySubcommandEntries(
 }
 
 /**
+ * One UDP packet emitted by `udp_hear` while handling `sim HearFrom`.
+ * Mirrors packet fields used by `sprintf("HandlePacket %d {%s} {...}")` in
+ * `ref/micropolis/src/sim/w_net.c`: source IP text and payload bytes.
+ * Difference from C: packet payload is represented as typed readonly numbers.
+ */
+export interface SimNetworkingPacket {
+  readonly ipAddress: string;
+  readonly bytes: readonly number[];
+}
+
+/**
+ * Hook callbacks for optional networking `sim` subcommands.
+ * Mirrors `SimCmdListenTo` / `SimCmdHearFrom` in `ref/micropolis/src/sim/w_sim.c`
+ * and `udp_listen` / `udp_hear` in `ref/micropolis/src/sim/w_net.c`.
+ * Difference from C: socket and callback side effects are injected by hooks.
+ */
+export interface SimNetworkingHooks {
+  onListenTo?: (port: number) => number;
+  onHearFrom?: (socket: number) => readonly SimNetworkingPacket[] | void;
+  onHandlePacket?: (socket: number, ipAddress: string, bytes: readonly number[]) => void;
+}
+
+/**
+ * Constructor options for `createSimNetworkingSubcommandEntries`.
+ * Mirrors optional `NET` command registration in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimNetworkingSubcommandEntriesOptions {
+  hooks?: SimNetworkingHooks;
+}
+
+function createSimListenToSubcommandHandler(hooks: SimNetworkingHooks): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim ListenTo expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const rawPort = argv[2];
+    if (rawPort === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim ListenTo missing integer argument at argv[2]',
+        ),
+      );
+    }
+
+    const parsedPort = parseTclInt32(rawPort);
+    if (parsedPort === null) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim ListenTo expected a 32-bit integer at argv[2]: ${rawPort}`,
+        ),
+      );
+    }
+
+    const socket = hooks.onListenTo?.(parsedPort) ?? 0;
+    return makeScriptSuccess(String(Math.trunc(socket)));
+  };
+}
+
+function parseSimHearFromSocketArg(rawSocket: string): number | null {
+  if (
+    rawSocket[0] !== 'f' ||
+    rawSocket[1] !== 'i' ||
+    rawSocket[2] !== 'l' ||
+    rawSocket[3] !== 'e'
+  ) {
+    return null;
+  }
+
+  return parseTclInt32(rawSocket.slice(4));
+}
+
+function createSimHearFromSubcommandHandler(hooks: SimNetworkingHooks): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim HearFrom expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const rawSocket = argv[2];
+    if (rawSocket === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim HearFrom missing file socket argument at argv[2]',
+        ),
+      );
+    }
+
+    const socket = parseSimHearFromSocketArg(rawSocket);
+    if (socket === null) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim HearFrom expected argv[2] in form file<int>: ${rawSocket}`,
+        ),
+      );
+    }
+
+    const packets = hooks.onHearFrom?.(socket) ?? [];
+    for (const packet of packets) {
+      hooks.onHandlePacket?.(socket, packet.ipAddress, packet.bytes);
+    }
+
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds optional networking `sim` subcommand entries (`ListenTo`, `HearFrom`).
+ * Mirrors `SimCmdListenTo` / `SimCmdHearFrom` in
+ * `ref/micropolis/src/sim/w_sim.c` and packet callback emission from
+ * `udp_hear` in `ref/micropolis/src/sim/w_net.c`.
+ * Parity note: `HearFrom` requires `argv[2]` to begin with lowercase `file`
+ * followed by a Tcl-style 32-bit integer socket id.
+ */
+export function createSimNetworkingSubcommandEntries(
+  options: CreateSimNetworkingSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const hooks = options.hooks ?? {};
+
+  return [
+    ['ListenTo', createSimListenToSubcommandHandler(hooks)] as const,
+    ['HearFrom', createSimHearFromSubcommandHandler(hooks)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -3148,7 +3288,7 @@ export function createSimDefaultSubcommandEntries(
   }
 
   if (featureFlags.NET) {
-    entries.push(...(options.netSubcommandEntries ?? []));
+    entries.push(...(options.netSubcommandEntries ?? createSimNetworkingSubcommandEntries()));
   }
 
   if (featureFlags.legacyExtras) {
@@ -3171,10 +3311,12 @@ export function createSimDefaultSubcommandEntries(
  *   `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`, `SimCmdMonsterDirection`)
  * - URL/browser/random/dollars utilities (`SimCmdQuoteURL`,
  *   `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`)
+ * - optional networking utilities (`SimCmdListenTo`, `SimCmdHearFrom`)
+ *   via `createSimNetworkingSubcommandEntries` when `NET` is enabled
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  * Parity note: optional feature slices (`CAM`, `NET`, `legacyExtras`) default
- * to disabled and must be added through `createSimDefaultSubcommandEntries`.
+ * to disabled and are enabled through `createSimDefaultSubcommandEntries`.
  */
 export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable(
   createSimDefaultSubcommandEntries(),

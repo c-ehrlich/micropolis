@@ -81,8 +81,8 @@ export interface CreateDefaultSimScriptingBaseCommandRegistrarOptions<
  * `ref/micropolis/src/sim/w_tk.c` (`sim`, map/editor, graph/date, sprite,
  * optional `camview`, `piemenu`, `interval`) and `sim_command_init` optional
  * `CAM`/`NET` blocks in `ref/micropolis/src/sim/w_sim.c`.
- * Difference from C: optional command slices are injected via callbacks and
- * enabled by runtime flags (`CAM`, `NET`, `legacyExtras`).
+ * Difference from C: optional command slices are runtime-flagged (`CAM`, `NET`,
+ * `legacyExtras`) and can be overridden via injected providers.
  */
 export function createDefaultSimScriptingBaseCommandRegistrar<
   TSim = unknown,
