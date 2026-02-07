@@ -68,7 +68,7 @@ Use this exact loop:
 - [x] Create `src/tty/command-buffer.ts` to assemble multiline commands (`Tcl_AssembleCmd` equivalent behavior target).
 - [x] Add `src/tty/command-buffer.test.ts` for continuation and completion behavior.
 - [x] Create `src/tty/stdin-channel.ts` implementing `StdinProc` parity:
-- [ ] EOF + no partial + tty => trigger exit callback
+- [x] EOF + no partial + tty => trigger exit callback
 - [ ] EOF + no partial + non-tty => disable further reads
 - [ ] EOF + partial => treat as empty line and continue
 - [ ] print result when `(result != ok) || sim_tty`
@@ -160,3 +160,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 4 task `Create src/tty/command-buffer.ts` by adding `TtyCommandBuffer.assemble(string)` as a parity-first port of `Tcl_AssembleCmd` command assembly (`ref/micropolis/src/tcl/tclassem.c`) with Tcl word parsing/backslash continuation behavior derived from `TclWordEnd`/`QuoteEnd`/`VarNameEnd`/`Tcl_Backslash` (`ref/micropolis/src/tcl/tclparse.c`) for `StdinProc` multiline input handling in `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `Add src/tty/command-buffer.test.ts for continuation and completion behavior` by adding parity tests for brace and backslash-newline continuations plus zero-length forced completion, matching `Tcl_AssembleCmd` command assembly behavior in `ref/micropolis/src/tcl/tclassem.c` and `StdinProc` usage in `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `Create src/tty/stdin-channel.ts implementing StdinProc parity` by adding `StdinChannel` + `TTY_PROMPT` in `packages/sim-integration/src/tty/stdin-channel.ts` to mirror `ref/micropolis/src/sim/w_tk.c` `StdinProc`/startup semantics (EOF handling with `gotPartial`, tty vs non-tty read shutdown, `Tcl_AssembleCmd`-style buffering, `(result != TCL_OK) || sim_tty` result printing, and exact `sim:\n` prompt emission).
+- [x] 2026-02-07: Completed Phase 4 task `EOF + no partial + tty => trigger exit callback` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` calls `onExit(0)` when `isTty` is true and no partial command is buffered, matching `if (!gotPartial && sim_tty) sim_exit(0);` in `ref/micropolis/src/sim/w_tk.c`.
