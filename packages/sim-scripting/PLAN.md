@@ -227,7 +227,7 @@ Use this exact loop:
   - Done when:
     - command registration is controlled by flags
 
-- [ ] `P6.2` Implement optional `camview` command family.
+- [x] `P6.2` Implement optional `camview` command family.
   - C reference: `w_cam.c`
   - Done when:
     - documented subcommands are supported in feature-on mode
@@ -309,3 +309,4 @@ Use this exact loop:
 - [x] `2026-02-07` Repaired `P5.4` by updating `UISetBudgetValues` percent coercion to accept C-style `0..1` funding ratios (`(int)(ratio * 100)` parity from `w_budget.c`) while keeping `0..100` caller compatibility, and adding callback tests for ratio-input argv output ordering.
 - [x] `2026-02-07` Completed `P5.5` by adding message/notice/autogoto callback helpers (`UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`) with C-mapped `%d` argument coercion from `s_msg.c`/`w_tool.c`/`w_util.c`, optional Tcl-parity callback args, and colocated tests covering picture/text callback flow plus tile-to-pixel autogoto conversion parity.
 - [x] `2026-02-07` Completed `P5.6` by adding tool/sound callback helpers (`UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`), implementing wildcard callback remap resolution (`UIDidTool*`) with exact-match precedence, and adding colocated parity tests for callback argv shape.
+- [x] `2026-02-07` Completed `P6.2` by adding the optional `camview` command family (`configure`, `position`, `size`, `Visible`, `StoreColor`, `NewCam`, `DeleteCam`, `RandomizeCam`, `ConfigCam`, `FindCam`, `FindSomeCam`) with CAM-flag-gated default registration, C-mapped `w_cam.c`/`g_cam.c` parsing and camera-list semantics, and colocated unit coverage for lifecycle/error/parity behavior.

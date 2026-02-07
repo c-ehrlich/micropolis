@@ -115,4 +115,25 @@ describe('createDefaultSimScriptingBaseCommandRegistrar', () => {
       value: 'cam-command',
     });
   });
+
+  it('registers built-in camview command by default when CAM is enabled', () => {
+    const bundle = createSimScriptingRuntime({
+      registerBaseCommands: createDefaultSimScriptingBaseCommandRegistrar({
+        featureFlags: {
+          CAM: true,
+        },
+      }),
+    });
+
+    expect(bundle.runtime.invoke(['camview', '.cam.main'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '.cam.main',
+    });
+
+    // `InitNewCam` calls `DoResizeCam(scam, 512, 512)` in `w_cam.c`.
+    expect(bundle.runtime.invoke(['.cam.main', 'size'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '512 512',
+    });
+  });
 });

@@ -1,3 +1,4 @@
+import { registerCamViewCommand } from '../commands/camview-command.ts';
 import { registerDateViewCommand } from '../commands/dateview-command.ts';
 import { registerEditorViewCommand } from '../commands/editorview-command.ts';
 import { registerGraphViewCommand } from '../commands/graphview-command.ts';
@@ -126,7 +127,11 @@ export function createDefaultSimScriptingBaseCommandRegistrar<
     registerSpriteCommand(bundle.runtime);
 
     if (featureFlags.CAM) {
-      options.registerCamCommand?.(bundle);
+      if (options.registerCamCommand === undefined) {
+        registerCamViewCommand(bundle.runtime);
+      } else {
+        options.registerCamCommand(bundle);
+      }
     }
 
     registerPieMenuCommand(bundle.runtime);

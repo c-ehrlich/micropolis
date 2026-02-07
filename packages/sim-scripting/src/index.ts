@@ -1,6 +1,7 @@
 export * from './bootstrap/create-sim-scripting-runtime.ts';
 export * from './bootstrap/register-default-commands.ts';
 export * from './callbacks/ui-callbacks.ts';
+export * from './commands/camview-command.ts';
 export * from './commands/dateview-command.ts';
 export * from './commands/editorview-command.ts';
 export * from './commands/graphview-command.ts';
