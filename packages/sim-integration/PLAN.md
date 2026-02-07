@@ -91,7 +91,7 @@ Use this exact loop:
 ## Phase 6: Node Adapters
 
 - [x] Create `src/adapters/node-process.ts` for stdin/stdout wiring abstractions.
-- [ ] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
+- [x] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
 - [ ] Add adapter tests with fakes/mocks only (no real network required).
 - [ ] Checkpoint: adapter tests pass and no direct Node dependency leaks outside adapters.
 
@@ -175,3 +175,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 5 task `Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling)` by adding parity-mode wiring to `createUdpHookRuntime` in `src/net/udp-hooks.ts`: strict mode now preserves `udp_listen` no-`htons` port quirk and leaves `udp_hear` recv address length uninitialized-equivalent (`undefined` adapter input), while safe mode normalizes listen ports to unsigned 16-bit and passes initialized `sockaddr_in` length (`16`) per robust behavior noted in `ref/micropolis/spec/integration/SPEC.md`; added focused strict/safe coverage in `src/net/udp-hooks.test.ts`.
 - [x] 2026-02-07: Completed Phase 5 task `Add src/net/udp-hooks.test.ts for parser and formatter exactness` by extending `src/net/udp-hooks.test.ts` with exact `SimCmdHearFrom` parser coverage (signed `file<sock>` integers and 32-bit bounds) and exact `udp_hear` formatter coverage (`len==0` produces `{}` and `%3d ` width/trailing spacing for each byte) mapped to `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
 - [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-process.ts for stdin/stdout wiring abstractions` by adding `createNodeProcessIoAdapter` with adapter contracts for stdin writes and stdout line subscription in `src/adapters/node-process.ts`, mirroring Sugar transport behavior from `ref/micropolis/micropolisactivity.py` (`send_process` and `_stdout_thread_function`) while keeping parsing behavior in protocol modules.
+- [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-udp.ts for UDP socket abstraction` by adding `createNodeUdpPlatform` in `src/adapters/node-udp.ts` as a Node `dgram` adapter for the `UdpListenPlatform` contract from `src/net/udp-hooks.ts`, mapping `udp_listen`/`udp_hear` responsibilities from `ref/micropolis/src/sim/w_net.c` (socket creation, reuse-address intent, bind-any, nonblocking-flag tracking, and EINTR/EWOULDBLOCK/error receive outcomes via a polling queue abstraction).
