@@ -104,7 +104,7 @@ Verification:
 
 ### P3.3 Harden tile and sprite parity
 - [x] Add `tiles.test.ts` reading actual XPM headers from canonical assets.
-- [ ] Add `sprites.test.ts` verifying frame manifests against discovered `obj*-*.xpm` files.
+- [x] Add `sprites.test.ts` verifying frame manifests against discovered `obj*-*.xpm` files.
 
 Verification:
 - [ ] Tile and sprite tests pass.
@@ -192,3 +192,4 @@ Verification:
 - [x] 2026-02-07: Completed P3.2 parser/lookup-documentation task by updating `packages/sim-assets/src/string-table.ts` JSDoc with explicit `GetIndString` source mapping and parity notes for newline-delimited parsing and 1-based lookup miss handling.
 - [x] 2026-02-07: Completed P3.2 fixture-parity test task by adding `packages/sim-assets/src/string-table.test.ts` with canonical assertions for `ref/micropolis/res/stri.202/.219/.301/.356` and `GetIndString`-aligned 1-based lookup behavior.
 - [x] 2026-02-07: Completed P3.3 tile-parity task by adding `packages/sim-assets/src/tiles.test.ts` to read canonical `ref/micropolis/images/{tiles.xpm,tilesbw.xpm,tilessm.xpm}` headers and assert parsed header metadata parity.
+- [x] 2026-02-07: Completed P3.3 sprite-parity task by adding `packages/sim-assets/src/sprites.test.ts` to discover canonical `ref/micropolis/images/obj*-*.xpm` files and verify generated sprite frame manifests plus C-derived frame-count parity.
