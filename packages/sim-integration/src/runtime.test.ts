@@ -31,3 +31,37 @@ describe('integration runtime scaffold defaults', () => {
     });
   });
 });
+
+describe('integration runtime Sugar stdout handling', () => {
+  it('surfaces strict-mode malformed PlaySound parity failure', () => {
+    // Mirrors micropolisactivity.py `_stdout_thread_function` behavior where
+    // `play_sound(words[1])` on "PlaySound" raises IndexError and aborts loop.
+    const runtime = createIntegrationRuntime({
+      mode: 'strict',
+      features: {
+        sugar: true,
+      },
+    });
+
+    expect(() => runtime.handleOutputLine('PlaySound')).toThrowError(
+      new RangeError('list index out of range'),
+    );
+  });
+
+  it('passes through valid PlaySound token to the sound hook', () => {
+    const soundTokens: string[] = [];
+    const runtime = createIntegrationRuntime({
+      features: {
+        sugar: true,
+      },
+      hooks: {
+        onSoundToken(soundName) {
+          soundTokens.push(soundName);
+        },
+      },
+    });
+
+    runtime.handleOutputLine('PlaySound Bulldozer');
+    expect(soundTokens).toEqual(['Bulldozer']);
+  });
+});

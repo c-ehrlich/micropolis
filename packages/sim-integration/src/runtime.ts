@@ -6,6 +6,7 @@ import type {
   TtyEvaluatorResult,
   UdpHooks,
 } from './types.ts';
+import { getPlaySoundToken, parseSugarStdoutLine } from './sugar/stdout-protocol.ts';
 
 /**
  * Default parity mode for integration runtime behavior.
@@ -107,8 +108,17 @@ export function createIntegrationRuntime(
         return;
       }
 
-      void line;
-      void hooks;
+      const stdoutLine = parseSugarStdoutLine(line);
+      if (stdoutLine === undefined) {
+        return;
+      }
+
+      const soundToken = getPlaySoundToken(stdoutLine, mode);
+      if (soundToken === undefined) {
+        return;
+      }
+
+      hooks?.onSoundToken?.(soundToken);
     },
     share() {
       if (!features.sugar) {
