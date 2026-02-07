@@ -48,7 +48,7 @@ Use this exact loop:
     - can register command by name and invoke by argv
     - unknown command returns error
 
-- [ ] `P0.4` Add scripting bridge state and registries.
+- [x] `P0.4` Add scripting bridge state and registries.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/state/scripting-state.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/state/view-registry.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/state/sprite-registry.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/state/widget-registry.ts`
   - Done when:
     - state shape supports sim/view/widget/sprite/callback references
@@ -276,3 +276,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P0.1` by adding package scripts, `vitest.config.ts`, and a passing placeholder test in `src/index.test.ts`.
 - [x] `2026-02-07` Completed `P0.2` by adding Tcl-style runtime result codes, structured runtime errors, and unit tests for error/result mapping.
 - [x] `2026-02-07` Completed `P0.3` by adding `ScriptRuntime` command registration/invocation kernel and coverage for dispatch, unknown-command errors, and thrown-error normalization.
+- [x] `2026-02-07` Completed `P0.4` by adding typed scripting bridge state plus view/sprite/widget registries with duplicate-safe add/get/remove coverage.
