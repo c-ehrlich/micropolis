@@ -60,7 +60,7 @@ Use this exact loop:
 - [x] normal `PlaySound Name`
 - [x] repeated spaces creating empty tokens
 - [x] missing argument behavior in strict and safe modes
-- [ ] Ensure sound hook receives lowercased sound name for wav mapping parity.
+- [x] Ensure sound hook receives lowercased sound name for wav mapping parity.
 - [ ] Checkpoint: stdout protocol tests pass in both modes.
 
 ## Phase 4: TTY Command Buffer + Channel
@@ -156,3 +156,4 @@ Use this exact loop:
 - [x] 2026-02-07: Checked Phase 3 task `normal PlaySound Name` after verifying `parseSugarStdoutLine('PlaySound Bulldozer')` and `getPlaySoundToken(..., 'strict')` parity with `_stdout_thread_function` (`words = line.strip().split(' ')`; `self.play_sound(words[1])`) in `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 3 task `repeated spaces creating empty tokens` after verifying `parseSugarStdoutLine('PlaySound   Bulldozer')` preserves explicit-space empty tokens (`['PlaySound', '', '', 'Bulldozer']`) and `getPlaySoundToken(..., 'strict')` returns `words[1] === ''`, matching `line.strip().split(' ')` parity in `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 3 task `missing argument behavior in strict and safe modes` by confirming strict mode throws `RangeError('list index out of range')` (Python `IndexError` parity for `words[1]`) and safe mode returns `SugarStdoutMalformedLineError('PLAY_SOUND_MISSING_ARGUMENT')` non-fatally in `src/sugar/stdout-protocol.ts` and `src/runtime.ts`, mirroring/parity-hardening `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `Ensure sound hook receives lowercased sound name for wav mapping parity` by confirming `createIntegrationRuntime(...).handleOutputLine('PlaySound Bulldozer')` delivers `bulldozer` to `onSoundToken`, matching `play_sound(name.lower() + '.wav')` behavior in `ref/micropolis/micropolisactivity.py`; validated with `packages/sim-integration/src/runtime.test.ts` and `packages/sim-integration/src/sugar/stdout-protocol.test.ts`.
