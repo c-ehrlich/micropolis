@@ -104,7 +104,7 @@ Use this exact loop:
 - [x] `share()`, `focusIn()`, `focusOut()`, `quit()`
 - [x] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
 - [x] `listenTo(port)`, `hearFrom(fileSock)`
-- [ ] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
+- [x] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
 - [ ] sugar-only
 - [ ] tty-only
 - [ ] net-only
@@ -131,6 +131,7 @@ Use this exact loop:
 - [ ] `pnpm format`
 
 ## Execution Log
+
 - [x] 2026-02-07: Implemented `src/types.ts` with parity-mode, feature-flag, Sugar buddy, TTY evaluator result, and UDP hook type contracts; added source-linked JSDoc to Micropolis integration files.
 - [x] 2026-02-07: Added `src/runtime.ts` with `createIntegrationRuntime(options)` scaffold, strict-default mode and feature normalization, plus feature-gated Sugar/TTY/NET no-op runtime methods for phased wiring.
 - [x] 2026-02-07: Updated `src/index.ts` to export the integration runtime and integration type surface as the package public API.
@@ -184,3 +185,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 7 task `share()`, `focusIn()`, `focusOut()`, `quit()` by documenting lifecycle parity mappings in `src/runtime.ts` to `share`, `_focus_in_cb`, `_focus_out_cb`, and `quit_process` in `ref/micropolis/micropolisactivity.py` and adding focused runtime tests for exact command emission (`SugarShare`, `SugarActivate`, `SugarDeactivate`, `SugarQuit`) plus sugar-disabled no-op behavior in `src/runtime.test.ts`.
 - [x] 2026-02-07: Completed Phase 7 task `buddyAppeared(buddy)`, `buddyDisappeared(buddy)` by adding Micropolis-mapped runtime API JSDoc in `src/runtime.ts` (mapping to `_buddy_appeared_cb` / `_buddy_disappeared_cb` in `ref/micropolis/micropolisactivity.py`) and adding focused runtime tests in `src/runtime.test.ts` for Sugar command emission (`SugarBuddyAdd`/`SugarBuddyDel`), sugar-disabled no-op behavior, and legacy `buddy.props` forwarding parity.
 - [x] 2026-02-07: Completed Phase 7 task `listenTo(port)`, `hearFrom(fileSock)` by finalizing runtime API parity docs in `src/runtime.ts` (mapping to `SimCmdListenTo`/`SimCmdHearFrom` in `ref/micropolis/src/sim/w_sim.c` and `udp_listen`/`udp_hear` in `ref/micropolis/src/sim/w_net.c`) while preserving adapter-gated no-op/failure semantics validated by NET runtime wiring tests in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `Add src/runtime.integration.test.ts for mixed-feature scenarios` by adding `src/runtime.integration.test.ts` coverage for sugar-only, tty-only, net-only, and sugar+tty+net runtime paths with deterministic cross-feature event logs aligned to `micropolisactivity.py`, `w_tk.c`, and `w_net.c` parity behavior.
