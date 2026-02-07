@@ -31,6 +31,9 @@ describe('createUdpHookRuntime listenTo parity', () => {
         makeOpenFile(sock, readable, writable) {
           calls.push(`open-file ${sock} ${readable} ${writable}`);
         },
+        hearSocket(sock) {
+          calls.push(`hear ${sock}`);
+        },
       },
     });
 
@@ -115,6 +118,56 @@ describe('createUdpHookRuntime listenTo parity', () => {
   });
 });
 
+describe('createUdpHookRuntime hearFrom parsing parity', () => {
+  it('parses file<sock> and forwards the socket to hearSocket', () => {
+    const heardSockets: number[] = [];
+    const runtime = createUdpHookRuntime({
+      platform: createPlatform({
+        hearSocket(sock) {
+          heardSockets.push(sock);
+        },
+      }),
+    });
+
+    // Mirrors `SimCmdHearFrom` in ref/micropolis/src/sim/w_sim.c:
+    // `argv[2]` must begin with `file`, then parse int from `argv[2] + 4`.
+    runtime.hearFrom('file27');
+
+    expect(heardSockets).toEqual([27]);
+  });
+
+  it('requires exact lowercase file prefix and reports hear-phase errors otherwise', () => {
+    const heardSockets: number[] = [];
+    const hearErrors: Array<{ message: string; phase: 'listen' | 'hear' }> = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onError(error, phase) {
+          hearErrors.push({ message: error.message, phase });
+        },
+      },
+      platform: createPlatform({
+        hearSocket(sock) {
+          heardSockets.push(sock);
+        },
+      }),
+    });
+
+    // `SimCmdHearFrom` hard-checks `f`, `i`, `l`, `e` at indices 0..3.
+    runtime.hearFrom('File27');
+    runtime.hearFrom('socket27');
+    runtime.hearFrom('file');
+    runtime.hearFrom('file27suffix');
+
+    expect(heardSockets).toEqual([]);
+    expect(hearErrors).toEqual([
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+      { message: 'HearFrom expects file<sock>', phase: 'hear' },
+    ]);
+  });
+});
+
 function createPlatform(overrides: Partial<UdpListenPlatform>): UdpListenPlatform {
   return {
     nonBlockingFlag: 4,
@@ -124,6 +177,7 @@ function createPlatform(overrides: Partial<UdpListenPlatform>): UdpListenPlatfor
     getFileStatusFlags: () => 0,
     setFileStatusFlags: () => true,
     makeOpenFile: () => undefined,
+    hearSocket: () => undefined,
     ...overrides,
   };
 }
