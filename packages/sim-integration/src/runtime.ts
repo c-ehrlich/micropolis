@@ -1,3 +1,18 @@
+import { createUdpHookRuntime, type UdpListenPlatform } from './net/udp-hooks.ts';
+import {
+  serializeSugarActivateCommand,
+  serializeSugarBuddyAddCommand,
+  serializeSugarBuddyDelCommand,
+  serializeSugarDeactivateCommand,
+  serializeSugarQuitCommand,
+  serializeSugarShareCommand,
+} from './sugar/activity-bridge.ts';
+import {
+  getPlaySoundToken,
+  parseSugarStdoutLine,
+  SugarStdoutMalformedLineError,
+} from './sugar/stdout-protocol.ts';
+import { StdinChannel } from './tty/stdin-channel.ts';
 import type {
   IntegrationFeatureFlagOptions,
   IntegrationFeatureFlags,
@@ -6,11 +21,6 @@ import type {
   TtyEvaluatorResult,
   UdpHooks,
 } from './types.ts';
-import {
-  SugarStdoutMalformedLineError,
-  getPlaySoundToken,
-  parseSugarStdoutLine,
-} from './sugar/stdout-protocol.ts';
 
 /**
  * Default parity mode for integration runtime behavior.
@@ -33,9 +43,9 @@ export const DEFAULT_INTEGRATION_FEATURE_FLAGS: IntegrationFeatureFlags = {
 };
 
 /**
- * Hooks exposed for upcoming subsystem wiring.
+ * Hooks consumed by the integration runtime orchestration.
  * Mirrors Sugar command transport (`micropolisactivity.py`), TTY evaluation
- * (`ref/micropolis/src/sim/w_tk.c`), and UDP callbacks
+ * (`ref/micropolis/src/sim/w_tk.c`), and UDP callbacks/setup
  * (`ref/micropolis/src/sim/w_net.c`). This is a TypeScript adapter surface,
  * not a direct 1:1 C struct.
  */
@@ -43,7 +53,23 @@ export interface IntegrationRuntimeHooks {
   onSugarCommand?: (command: string) => void;
   onSoundToken?: (soundName: string) => void;
   evaluateTtyCommand?: (command: string) => TtyEvaluatorResult;
+  tty?: IntegrationRuntimeTtyHooks;
   udp?: UdpHooks;
+  udpPlatform?: UdpListenPlatform;
+}
+
+/**
+ * Optional TTY channel hooks consumed by runtime orchestration.
+ * Mirrors stdin loop side effects in `ref/micropolis/src/sim/w_tk.c`
+ * (`StdinProc` stdout writes, exit behavior, and read-disable branch).
+ * Parity note: this is intentionally adapter-based in TypeScript instead of
+ * directly invoking Tk file-handler APIs.
+ */
+export interface IntegrationRuntimeTtyHooks {
+  isTty?: boolean;
+  onWriteStdout?: (chunk: string) => void;
+  onExit?: (exitCode: number) => void;
+  onDisableReads?: () => void;
 }
 
 /**
@@ -61,9 +87,8 @@ export interface IntegrationRuntimeOptions {
 /**
  * Runtime API surface for integration orchestration.
  * Mirrors the external integration entry points spread across
- * `micropolisactivity.py`, `w_tk.c`, and `w_net.c`. This skeleton is
- * intentionally different for now: methods are feature-gated no-ops until
- * subsystem modules are wired in later phases.
+ * `micropolisactivity.py`, `w_tk.c`, and `w_net.c`, with adapter-driven
+ * boundaries for transport and platform-specific IO.
  */
 export interface IntegrationRuntime {
   readonly mode: ParityMode;
@@ -81,12 +106,13 @@ export interface IntegrationRuntime {
 }
 
 /**
- * Create an integration runtime scaffold with normalized defaults.
+ * Create the integration runtime with feature-gated Sugar/TTY/NET wiring.
  * Mirrors integration startup branching in `ref/micropolis/src/sim/sim.c`
- * and no-op command availability expectations in
- * `ref/micropolis/spec/integration/SPEC.md`. This implementation is
- * intentionally different from C today: all feature paths are stubbed no-ops
- * until dedicated Sugar/TTY/NET modules are connected.
+ * and routes commands/events through parity ports from
+ * `ref/micropolis/micropolisactivity.py`, `ref/micropolis/src/sim/w_tk.c`,
+ * and `ref/micropolis/src/sim/w_net.c`.
+ * Parity note: unlike C globals, TypeScript wiring is adapter-based and NET
+ * hooks require an explicit `udpPlatform` implementation.
  */
 export function createIntegrationRuntime(
   options: IntegrationRuntimeOptions = {},
@@ -94,18 +120,44 @@ export function createIntegrationRuntime(
   const mode = options.mode ?? DEFAULT_PARITY_MODE;
   const features = normalizeFeatureFlags(options.features);
   const hooks = options.hooks;
+  let lastTtyEvaluation: TtyEvaluatorResult | undefined;
+
+  const ttyChannel = features.tty
+    ? new StdinChannel({
+        isTty: hooks?.tty?.isTty ?? false,
+        evaluateCommand(command) {
+          const evaluation =
+            hooks?.evaluateTtyCommand?.(command) ?? createDefaultTtyEvaluatorResult();
+          lastTtyEvaluation = evaluation;
+          return evaluation;
+        },
+        onWriteStdout: hooks?.tty?.onWriteStdout,
+        onExit: hooks?.tty?.onExit,
+        onDisableReads: hooks?.tty?.onDisableReads,
+      })
+    : undefined;
+  ttyChannel?.start();
+
+  const udpRuntime =
+    features.net && hooks?.udpPlatform !== undefined
+      ? createUdpHookRuntime({
+          mode,
+          platform: hooks.udpPlatform,
+          hooks: hooks.udp,
+        })
+      : undefined;
 
   return {
     mode,
     features,
     handleInputLine(line) {
-      if (!features.tty) {
+      if (!features.tty || ttyChannel === undefined) {
         return undefined;
       }
 
-      void line;
-      void hooks;
-      return undefined;
+      lastTtyEvaluation = undefined;
+      ttyChannel.consumeLine(line);
+      return lastTtyEvaluation;
     },
     handleOutputLine(line) {
       if (!features.sugar) {
@@ -133,61 +185,56 @@ export function createIntegrationRuntime(
         return;
       }
 
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarShareCommand());
     },
     focusIn() {
       if (!features.sugar) {
         return;
       }
 
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarActivateCommand());
     },
     focusOut() {
       if (!features.sugar) {
         return;
       }
 
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarDeactivateCommand());
     },
     quit() {
       if (!features.sugar) {
         return;
       }
 
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarQuitCommand());
     },
     buddyAppeared(buddy) {
       if (!features.sugar) {
         return;
       }
 
-      void buddy;
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarBuddyAddCommand(buddy));
     },
     buddyDisappeared(buddy) {
       if (!features.sugar) {
         return;
       }
 
-      void buddy;
-      void hooks;
+      hooks?.onSugarCommand?.(serializeSugarBuddyDelCommand(buddy));
     },
     listenTo(port) {
-      if (!features.net) {
+      if (!features.net || udpRuntime === undefined) {
         return 0;
       }
 
-      void port;
-      void hooks;
-      return 0;
+      return udpRuntime.listenTo(port);
     },
     hearFrom(fileSock) {
-      if (!features.net) {
+      if (!features.net || udpRuntime === undefined) {
         return;
       }
 
-      void fileSock;
-      void hooks;
+      udpRuntime.hearFrom(fileSock);
     },
   };
 }
@@ -199,5 +246,12 @@ function normalizeFeatureFlags(
     sugar: options?.sugar ?? DEFAULT_INTEGRATION_FEATURE_FLAGS.sugar,
     tty: options?.tty ?? DEFAULT_INTEGRATION_FEATURE_FLAGS.tty,
     net: options?.net ?? DEFAULT_INTEGRATION_FEATURE_FLAGS.net,
+  };
+}
+
+function createDefaultTtyEvaluatorResult(): TtyEvaluatorResult {
+  return {
+    ok: true,
+    result: '',
   };
 }
