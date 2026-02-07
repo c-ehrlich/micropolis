@@ -1,4 +1,5 @@
 export * from './bootstrap/create-sim-scripting-runtime.ts';
+export * from './callbacks/ui-callbacks.ts';
 export * from './commands/dateview-command.ts';
 export * from './commands/editorview-command.ts';
 export * from './commands/graphview-command.ts';
