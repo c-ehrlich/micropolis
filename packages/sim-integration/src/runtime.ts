@@ -157,7 +157,23 @@ export interface IntegrationRuntime {
    * field extraction/precedence parity is delegated to activity-bridge helpers.
    */
   buddyDisappeared(buddy: SugarBuddy | unknown): void;
+  /**
+   * Open/listen on one UDP socket for NET packet intake.
+   * Mirrors `sim ListenTo` in `ref/micropolis/src/sim/w_sim.c`, which forwards
+   * to `udp_listen(port)` in `ref/micropolis/src/sim/w_net.c` and returns the
+   * socket descriptor (or `0` on setup failure).
+   * Parity note: returns `0` when NET wiring is disabled or no UDP platform
+   * adapter is provided, preserving Micropolis-style failure semantics.
+   */
   listenTo(port: number): number;
+  /**
+   * Drain pending packets for a Tcl `file<sock>` token.
+   * Mirrors `sim HearFrom file<sock>` in `ref/micropolis/src/sim/w_sim.c`,
+   * which validates the `file` prefix and dispatches to `udp_hear(sock)` in
+   * `ref/micropolis/src/sim/w_net.c`.
+   * Parity note: this is a no-op when NET wiring is disabled or no UDP
+   * platform adapter is provided.
+   */
   hearFrom(fileSock: string): void;
 }
 

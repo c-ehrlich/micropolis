@@ -412,6 +412,53 @@ describe('integration runtime NET module wiring', () => {
     expect(runtime.listenTo(5000)).toBe(0);
     expect(() => runtime.hearFrom('file5')).not.toThrow();
   });
+
+  it('keeps NET runtime methods disabled when the net feature flag is off', () => {
+    let platformWasCalled = false;
+    const runtime = createIntegrationRuntime({
+      features: {
+        net: false,
+      },
+      hooks: {
+        udpPlatform: {
+          nonBlockingFlag: 4,
+          createSocket() {
+            platformWasCalled = true;
+            return 99;
+          },
+          setReuseAddress() {
+            platformWasCalled = true;
+            return true;
+          },
+          bindAny() {
+            platformWasCalled = true;
+            return true;
+          },
+          getFileStatusFlags() {
+            platformWasCalled = true;
+            return 0;
+          },
+          setFileStatusFlags() {
+            platformWasCalled = true;
+            return true;
+          },
+          makeOpenFile() {
+            platformWasCalled = true;
+          },
+          recvFrom() {
+            platformWasCalled = true;
+            return { kind: 'wouldBlock' };
+          },
+        },
+      },
+    });
+
+    // Mirrors `SimCmdListenTo`/`udp_listen` failure-style return behavior:
+    // if NET is not active in this runtime, `listenTo` returns 0 and no IO runs.
+    expect(runtime.listenTo(6000)).toBe(0);
+    expect(() => runtime.hearFrom('file99')).not.toThrow();
+    expect(platformWasCalled).toBe(false);
+  });
 });
 
 function expectedStrictBindPort(port: number): number {
