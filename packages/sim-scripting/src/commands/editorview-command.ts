@@ -7,11 +7,23 @@ import {
 import type { ScriptRuntimeResult } from '../runtime/result-code.ts';
 import type { ScriptCommandHandler, ScriptRuntime } from '../runtime/script-runtime.ts';
 import { ViewRegistry } from '../state/view-registry.ts';
+import {
+  createSimKickState,
+  runSimKick,
+  type SimKickHooks,
+  type SimKickState,
+} from './sim-command.ts';
 
 const TCL_INT32_MIN = -2147483648n;
 const TCL_INT32_MAX = 2147483647n;
 const DEFAULT_EDITOR_VIEW_FONT = '-Adobe-Helvetica-Bold-R-Normal-*-140-*';
 const DEFAULT_EDITOR_WINDOW_SIZE = 256;
+const DEFAULT_WORLD_WIDTH = 120;
+const DEFAULT_WORLD_HEIGHT = 100;
+const DEFAULT_EDITOR_TOOL_STATE = 7;
+const CHALK_EDITOR_TOOL_STATE = 10;
+const ERASER_EDITOR_TOOL_STATE = 11;
+const LAST_EDITOR_TOOL_STATE = 18;
 
 /**
  * Mutable `editorview` configure fields.
@@ -28,9 +40,11 @@ export interface EditorViewConfigureState {
 
 /**
  * Mutable state for one created editor view command.
- * Mirrors `SimView` fields used by `EditorCmdposition`, `EditorCmdsize`, and
- * `EditorCmdconfigure` in `ref/micropolis/src/sim/w_editor.c`.
- * Difference from C: state is decoupled from Tk/X11 objects and stores only scripting-facing fields.
+ * Mirrors scripting-visible `SimView` fields used by `EditorCmdconfigure`,
+ * `EditorCmdposition`, `EditorCmdsize`, `EditorCmdPan*`, and `EditorCmdTool*`
+ * in `ref/micropolis/src/sim/w_editor.c`, plus pan/coordinate fields from
+ * `ref/micropolis/src/sim/w_x.c` and `ref/micropolis/src/sim/w_tool.c`.
+ * Difference from C: Tk/X11 pointers and rendering buffers are omitted.
  */
 export interface EditorViewState {
   commandName: string;
@@ -38,6 +52,31 @@ export interface EditorViewState {
   wY: number;
   wWidth: number;
   wHeight: number;
+  worldWidth: number;
+  worldHeight: number;
+  iWidth: number;
+  iHeight: number;
+  mWidth: number;
+  mHeight: number;
+  panX: number;
+  panY: number;
+  tileX: number;
+  tileY: number;
+  tileWidth: number;
+  tileHeight: number;
+  screenX: number;
+  screenY: number;
+  screenWidth: number;
+  screenHeight: number;
+  toolX: number;
+  toolY: number;
+  toolXConst: number;
+  toolYConst: number;
+  toolState: number;
+  skip: number;
+  invalid: number;
+  lastX: number;
+  lastY: number;
   configure: EditorViewConfigureState;
 }
 
@@ -51,7 +90,318 @@ export interface CreateEditorViewStateOptions {
   wY?: number;
   wWidth?: number;
   wHeight?: number;
+  worldWidth?: number;
+  worldHeight?: number;
+  iWidth?: number;
+  iHeight?: number;
+  mWidth?: number;
+  mHeight?: number;
+  panX?: number;
+  panY?: number;
+  toolX?: number;
+  toolY?: number;
+  toolXConst?: number;
+  toolYConst?: number;
+  toolState?: number;
+  skip?: number;
+  invalid?: number;
+  lastX?: number;
+  lastY?: number;
   configure?: Partial<EditorViewConfigureState>;
+}
+
+interface EditorViewToolEvent {
+  viewX: number;
+  viewY: number;
+  pixelX: number;
+  pixelY: number;
+}
+
+interface EditorViewDoToolEvent {
+  tool: number;
+  tileX: number;
+  tileY: number;
+  pixelX: number;
+  pixelY: number;
+}
+
+interface EditorViewToolHooks {
+  onDoTool?: (viewState: EditorViewState, event: EditorViewDoToolEvent) => void;
+  onToolDown?: (viewState: EditorViewState, event: EditorViewToolEvent) => void;
+  onToolDrag?: (viewState: EditorViewState, event: EditorViewToolEvent) => void;
+  onToolUp?: (viewState: EditorViewState, event: EditorViewToolEvent) => void;
+}
+
+interface CreateEditorViewSubcommandEntriesOptions {
+  kickState?: SimKickState;
+  kickHooks?: SimKickHooks;
+  toolHooks?: EditorViewToolHooks;
+}
+
+/**
+ * C-style editor memory-span growth used by `DoResizeView` for editor classes.
+ * Mirrors `view->m_width/m_height` updates in `ref/micropolis/src/sim/w_x.c`:
+ * `(w + 31) & (~15)` and `(h + 31) & (~15)`.
+ */
+function toEditorMemorySpan(windowSpan: number): number {
+  return (windowSpan + 31) & ~15;
+}
+
+/**
+ * Recomputes tile/screen bounds from the current pan and window dimensions.
+ * Mirrors `DoAdjustPan` in `ref/micropolis/src/sim/w_x.c`.
+ * Difference from C: redraw/scroll-copy side effects are not modeled; only state fields are updated.
+ */
+function doAdjustEditorPan(viewState: EditorViewState): void {
+  const halfWidth = viewState.wWidth >> 1;
+  const halfHeight = viewState.wHeight >> 1;
+  const panX = viewState.panX;
+  const panY = viewState.panY;
+
+  let tileX = (panX - halfWidth) >> 4;
+  let tileY = (panY - halfHeight) >> 4;
+
+  if (tileX < 0) {
+    tileX = 0;
+  }
+  if (tileY < 0) {
+    tileY = 0;
+  }
+
+  let tileWidth = (15 + panX + halfWidth) >> 4;
+  let tileHeight = (15 + panY + halfHeight) >> 4;
+
+  const idealTileWidth = viewState.iWidth >> 4;
+  const idealTileHeight = viewState.iHeight >> 4;
+  if (tileWidth > idealTileWidth) {
+    tileWidth = idealTileWidth;
+  }
+  if (tileHeight > idealTileHeight) {
+    tileHeight = idealTileHeight;
+  }
+
+  tileWidth -= tileX;
+  tileHeight -= tileY;
+
+  const memoryTileWidth = viewState.mWidth >> 4;
+  const memoryTileHeight = viewState.mHeight >> 4;
+  if (tileWidth > memoryTileWidth) {
+    tileWidth = memoryTileWidth;
+  }
+  if (tileHeight > memoryTileHeight) {
+    tileHeight = memoryTileHeight;
+  }
+
+  if (tileWidth < 0) {
+    tileWidth = 0;
+  }
+  if (tileHeight < 0) {
+    tileHeight = 0;
+  }
+
+  viewState.tileX = tileX;
+  viewState.tileY = tileY;
+  viewState.tileWidth = tileWidth;
+  viewState.tileHeight = tileHeight;
+  viewState.screenX = halfWidth - panX + (tileX << 4);
+  viewState.screenY = halfHeight - panY + (tileY << 4);
+  viewState.screenWidth = tileWidth << 4;
+  viewState.screenHeight = tileHeight << 4;
+  viewState.invalid = 1;
+}
+
+/**
+ * Implements `DoPanTo` clamp/update behavior for editor views.
+ * Mirrors `DoPanTo` in `ref/micropolis/src/sim/w_x.c`.
+ */
+function doEditorPanTo(viewState: EditorViewState, x: number, y: number): void {
+  let clampedX = x;
+  let clampedY = y;
+  if (clampedX < 0) {
+    clampedX = 0;
+  }
+  if (clampedY < 0) {
+    clampedY = 0;
+  }
+  if (clampedX > viewState.iWidth) {
+    clampedX = viewState.iWidth - 1;
+  }
+  if (clampedY > viewState.iHeight) {
+    clampedY = viewState.iHeight - 1;
+  }
+
+  if (viewState.panX !== clampedX || viewState.panY !== clampedY) {
+    viewState.panX = clampedX;
+    viewState.panY = clampedY;
+    doAdjustEditorPan(viewState);
+  }
+}
+
+/**
+ * Implements `DoPanBy` pixel-delta behavior.
+ * Mirrors `DoPanBy` in `ref/micropolis/src/sim/w_x.c`.
+ */
+function doEditorPanBy(viewState: EditorViewState, dx: number, dy: number): void {
+  doEditorPanTo(viewState, viewState.panX + dx, viewState.panY + dy);
+}
+
+/**
+ * Converts view-local coordinates to clamped pixel coordinates.
+ * Mirrors `ViewToPixelCoords` in `ref/micropolis/src/sim/w_x.c`.
+ */
+function viewToPixelCoords(
+  viewState: EditorViewState,
+  viewX: number,
+  viewY: number,
+): EditorViewToolEvent {
+  let pixelX = viewState.panX - ((viewState.wWidth >> 1) - viewX);
+  let pixelY = viewState.panY - ((viewState.wHeight >> 1) - viewY);
+
+  const worldMaxX = (viewState.worldWidth << 4) - 1;
+  const worldMaxY = (viewState.worldHeight << 4) - 1;
+  if (pixelX < 0) {
+    pixelX = 0;
+  }
+  if (pixelY < 0) {
+    pixelY = 0;
+  }
+  if (pixelX >= worldMaxX + 1) {
+    pixelX = worldMaxX;
+  }
+  if (pixelY >= worldMaxY + 1) {
+    pixelY = worldMaxY;
+  }
+
+  const minTilePixelX = viewState.tileX << 4;
+  const minTilePixelY = viewState.tileY << 4;
+  const maxTilePixelX = ((viewState.tileX + viewState.tileWidth) << 4) - 1;
+  const maxTilePixelY = ((viewState.tileY + viewState.tileHeight) << 4) - 1;
+
+  if (pixelX < minTilePixelX) {
+    pixelX = minTilePixelX;
+  }
+  if (pixelY < minTilePixelY) {
+    pixelY = minTilePixelY;
+  }
+  if (pixelX >= (viewState.tileX + viewState.tileWidth) << 4) {
+    pixelX = maxTilePixelX;
+  }
+  if (pixelY >= (viewState.tileY + viewState.tileHeight) << 4) {
+    pixelY = maxTilePixelY;
+  }
+
+  if (viewState.toolXConst !== -1) {
+    pixelX = (viewState.toolXConst << 4) + 8;
+  }
+  if (viewState.toolYConst !== -1) {
+    pixelY = (viewState.toolYConst << 4) + 8;
+  }
+
+  return {
+    viewX,
+    viewY,
+    pixelX,
+    pixelY,
+  };
+}
+
+/**
+ * Simplified `DoTool` state effects used by script command wrappers.
+ * Mirrors the command-facing flow in `EditorCmdDoTool` (`w_editor.c`) and
+ * reset side effects in `DoTool` (`w_tool.c`).
+ * Difference from C: map edits/sound/messages are delegated to optional hooks.
+ */
+function runEditorDoTool(
+  viewState: EditorViewState,
+  tool: number,
+  tileX: number,
+  tileY: number,
+  toolHooks: EditorViewToolHooks,
+): void {
+  toolHooks.onDoTool?.(viewState, {
+    tool,
+    tileX,
+    tileY,
+    pixelX: tileX << 4,
+    pixelY: tileY << 4,
+  });
+
+  viewState.skip = 0;
+}
+
+/**
+ * Simplified `ToolDown` effects for script command wrappers.
+ * Mirrors `ToolDown` in `ref/micropolis/src/sim/w_tool.c`.
+ * Difference from C: actual tool execution is delegated to optional hooks.
+ */
+function runEditorToolDown(
+  viewState: EditorViewState,
+  viewX: number,
+  viewY: number,
+  toolHooks: EditorViewToolHooks,
+): void {
+  const event = viewToPixelCoords(viewState, viewX, viewY);
+  viewState.lastX = event.pixelX;
+  viewState.lastY = event.pixelY;
+  viewState.skip = 0;
+  viewState.invalid = 1;
+  toolHooks.onToolDown?.(viewState, event);
+}
+
+/**
+ * Simplified `ToolDrag` effects for script command wrappers.
+ * Mirrors coordinate conversion and `last_x/last_y` updates in
+ * `ToolDrag` from `ref/micropolis/src/sim/w_tool.c`.
+ * Difference from C: intermediate interpolation path edits are omitted.
+ */
+function runEditorToolDrag(
+  viewState: EditorViewState,
+  viewX: number,
+  viewY: number,
+  toolHooks: EditorViewToolHooks,
+): void {
+  const event = viewToPixelCoords(viewState, viewX, viewY);
+  viewState.toolX = event.pixelX;
+  viewState.toolY = event.pixelY;
+  toolHooks.onToolDrag?.(viewState, event);
+
+  if (
+    viewState.toolState === CHALK_EDITOR_TOOL_STATE ||
+    viewState.toolState === ERASER_EDITOR_TOOL_STATE
+  ) {
+    viewState.lastX = event.pixelX;
+    viewState.lastY = event.pixelY;
+  } else {
+    const tileX = event.pixelX >> 4;
+    const tileY = event.pixelY >> 4;
+    const lastTileX = viewState.lastX >> 4;
+    const lastTileY = viewState.lastY >> 4;
+
+    if (tileX === lastTileX && tileY === lastTileY) {
+      return;
+    }
+
+    viewState.lastX = (tileX << 4) + 8;
+    viewState.lastY = (tileY << 4) + 8;
+  }
+
+  viewState.skip = 0;
+  viewState.invalid = 1;
+}
+
+/**
+ * `ToolUp` simply reuses drag behavior with the release coordinates.
+ * Mirrors `ToolUp` calling `ToolDrag` in `ref/micropolis/src/sim/w_tool.c`.
+ */
+function runEditorToolUp(
+  viewState: EditorViewState,
+  viewX: number,
+  viewY: number,
+  toolHooks: EditorViewToolHooks,
+): void {
+  const event = viewToPixelCoords(viewState, viewX, viewY);
+  toolHooks.onToolUp?.(viewState, event);
+  runEditorToolDrag(viewState, viewX, viewY, toolHooks);
 }
 
 /**
@@ -65,12 +415,44 @@ export function createEditorViewState(
   commandName: string,
   options: CreateEditorViewStateOptions = {},
 ): EditorViewState {
-  return {
+  const wWidth = options.wWidth ?? DEFAULT_EDITOR_WINDOW_SIZE;
+  const wHeight = options.wHeight ?? DEFAULT_EDITOR_WINDOW_SIZE;
+  const worldWidth = options.worldWidth ?? DEFAULT_WORLD_WIDTH;
+  const worldHeight = options.worldHeight ?? DEFAULT_WORLD_HEIGHT;
+  const iWidth = options.iWidth ?? worldWidth << 4;
+  const iHeight = options.iHeight ?? worldHeight << 4;
+
+  const viewState: EditorViewState = {
     commandName,
     wX: options.wX ?? 0,
     wY: options.wY ?? 0,
-    wWidth: options.wWidth ?? DEFAULT_EDITOR_WINDOW_SIZE,
-    wHeight: options.wHeight ?? DEFAULT_EDITOR_WINDOW_SIZE,
+    wWidth,
+    wHeight,
+    worldWidth,
+    worldHeight,
+    iWidth,
+    iHeight,
+    mWidth: options.mWidth ?? toEditorMemorySpan(wWidth),
+    mHeight: options.mHeight ?? toEditorMemorySpan(wHeight),
+    panX: options.panX ?? wWidth >> 1,
+    panY: options.panY ?? wHeight >> 1,
+    tileX: 0,
+    tileY: 0,
+    tileWidth: 0,
+    tileHeight: 0,
+    screenX: 0,
+    screenY: 0,
+    screenWidth: 0,
+    screenHeight: 0,
+    toolX: options.toolX ?? 0,
+    toolY: options.toolY ?? 0,
+    toolXConst: options.toolXConst ?? -1,
+    toolYConst: options.toolYConst ?? -1,
+    toolState: options.toolState ?? DEFAULT_EDITOR_TOOL_STATE,
+    skip: options.skip ?? 0,
+    invalid: options.invalid ?? 0,
+    lastX: options.lastX ?? 0,
+    lastY: options.lastY ?? 0,
     configure: {
       font: options.configure?.font ?? DEFAULT_EDITOR_VIEW_FONT,
       messageVar: options.configure?.messageVar ?? null,
@@ -78,14 +460,30 @@ export function createEditorViewState(
       height: options.configure?.height ?? 0,
     },
   };
+
+  doAdjustEditorPan(viewState);
+  return viewState;
 }
 
 /**
- * Subcommand names registered for the P2.1 editor view shell.
- * Mirrors `EDITOR_CMD(configure)`, `EDITOR_CMD(position)`, and `EDITOR_CMD(size)`
- * in `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`).
+ * Subcommand names registered for the P2.1/P2.2 editor view shell.
+ * Mirrors `EDITOR_CMD(...)` registrations for `configure`, `position`, `size`,
+ * `Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`,
+ * and `DoTool` in `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`).
  */
-export const EDITOR_VIEW_SUBCOMMAND_NAMES = ['configure', 'position', 'size'] as const;
+export const EDITOR_VIEW_SUBCOMMAND_NAMES = [
+  'configure',
+  'position',
+  'size',
+  'Pan',
+  'PanStart',
+  'PanTo',
+  'PanBy',
+  'ToolDown',
+  'ToolDrag',
+  'ToolUp',
+  'DoTool',
+] as const;
 
 /**
  * Union of supported editor view shell subcommands.
@@ -447,15 +845,358 @@ function handleEditorViewSizeSubcommand(
 }
 
 /**
- * Builds the default subcommand entries for the editor-view shell.
- * Mirrors the first three `EDITOR_CMD(...)` registrations in
- * `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`).
+ * Builds the `Pan` subcommand handler.
+ * Mirrors `EditorCmdPan` in `ref/micropolis/src/sim/w_editor.c`.
  */
-export function createEditorViewSubcommandEntries(): readonly EditorViewSubcommandEntry[] {
+function createEditorViewPanSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 2 && argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} Pan expects argc 2 or 4, got ${argv.length}`,
+      );
+    }
+
+    if (argv.length === 4) {
+      const rawX = argv[2];
+      const rawY = argv[3];
+      if (rawX === undefined || rawY === undefined) {
+        return makeInvalidArgCount(`${viewState.commandName} Pan missing x/y arguments`);
+      }
+
+      const parsedX = parseTclInt32(rawX);
+      if (parsedX === null) {
+        return makeInvalidInteger(`${viewState.commandName} Pan expected an integer x: ${rawX}`);
+      }
+
+      const parsedY = parseTclInt32(rawY);
+      if (parsedY === null) {
+        return makeInvalidInteger(`${viewState.commandName} Pan expected an integer y: ${rawY}`);
+      }
+
+      doEditorPanTo(viewState, parsedX, parsedY);
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(`${viewState.panX} ${viewState.panY}`);
+  };
+}
+
+/**
+ * Builds the `PanStart` subcommand handler.
+ * Mirrors `EditorCmdPanStart` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function handleEditorViewPanStartSubcommand(
+  viewState: EditorViewState,
+  argv: readonly string[],
+): ScriptRuntimeResult {
+  if (argv.length !== 4) {
+    return makeInvalidArgCount(
+      `${viewState.commandName} PanStart expects argc 4, got ${argv.length}`,
+    );
+  }
+
+  const rawX = argv[2];
+  const rawY = argv[3];
+  if (rawX === undefined || rawY === undefined) {
+    return makeInvalidArgCount(`${viewState.commandName} PanStart missing x/y arguments`);
+  }
+
+  const parsedX = parseTclInt32(rawX);
+  if (parsedX === null) {
+    return makeInvalidInteger(`${viewState.commandName} PanStart expected an integer x: ${rawX}`);
+  }
+
+  const parsedY = parseTclInt32(rawY);
+  if (parsedY === null) {
+    return makeInvalidInteger(`${viewState.commandName} PanStart expected an integer y: ${rawY}`);
+  }
+
+  viewState.lastX = parsedX;
+  viewState.lastY = parsedY;
+  return makeScriptSuccess();
+}
+
+/**
+ * Builds the `PanTo` subcommand handler.
+ * Mirrors `EditorCmdPanTo` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewPanToSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} PanTo expects argc 4, got ${argv.length}`,
+      );
+    }
+
+    const rawX = argv[2];
+    const rawY = argv[3];
+    if (rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} PanTo missing x/y arguments`);
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${viewState.commandName} PanTo expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${viewState.commandName} PanTo expected an integer y: ${rawY}`);
+    }
+
+    const dx = viewState.toolXConst === -1 ? viewState.lastX - parsedX : 0;
+    const dy = viewState.toolYConst === -1 ? viewState.lastY - parsedY : 0;
+    if (dx !== 0 || dy !== 0) {
+      viewState.lastX = parsedX;
+      viewState.lastY = parsedY;
+      doEditorPanBy(viewState, dx, dy);
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the `PanBy` subcommand handler.
+ * Mirrors `EditorCmdPanBy` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewPanBySubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} PanBy expects argc 4, got ${argv.length}`,
+      );
+    }
+
+    const rawDx = argv[2];
+    const rawDy = argv[3];
+    if (rawDx === undefined || rawDy === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} PanBy missing dx/dy arguments`);
+    }
+
+    const parsedDx = parseTclInt32(rawDx);
+    if (parsedDx === null) {
+      return makeInvalidInteger(`${viewState.commandName} PanBy expected an integer dx: ${rawDx}`);
+    }
+
+    const parsedDy = parseTclInt32(rawDy);
+    if (parsedDy === null) {
+      return makeInvalidInteger(`${viewState.commandName} PanBy expected an integer dy: ${rawDy}`);
+    }
+
+    doEditorPanBy(viewState, parsedDx, parsedDy);
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the `DoTool` subcommand handler.
+ * Mirrors `EditorCmdDoTool` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewDoToolSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+  toolHooks: EditorViewToolHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 5) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} DoTool expects argc 5, got ${argv.length}`,
+      );
+    }
+
+    const rawTool = argv[2];
+    const rawTileX = argv[3];
+    const rawTileY = argv[4];
+    if (rawTool === undefined || rawTileX === undefined || rawTileY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} DoTool missing tool/tile arguments`);
+    }
+
+    const parsedTool = parseTclInt32(rawTool);
+    if (parsedTool === null || parsedTool < 0 || parsedTool > LAST_EDITOR_TOOL_STATE) {
+      return makeInvalidInteger(
+        `${viewState.commandName} DoTool expected an integer tool in range 0..${LAST_EDITOR_TOOL_STATE}: ${rawTool}`,
+      );
+    }
+
+    const parsedTileX = parseTclInt32(rawTileX);
+    if (parsedTileX === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} DoTool expected an integer tileX: ${rawTileX}`,
+      );
+    }
+
+    const parsedTileY = parseTclInt32(rawTileY);
+    if (parsedTileY === null) {
+      return makeInvalidInteger(
+        `${viewState.commandName} DoTool expected an integer tileY: ${rawTileY}`,
+      );
+    }
+
+    runEditorDoTool(viewState, parsedTool, parsedTileX, parsedTileY, toolHooks);
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the `ToolDown` subcommand handler.
+ * Mirrors `EditorCmdToolDown` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewToolDownSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+  toolHooks: EditorViewToolHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} ToolDown expects argc 4, got ${argv.length}`,
+      );
+    }
+
+    const rawX = argv[2];
+    const rawY = argv[3];
+    if (rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ToolDown missing x/y arguments`);
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolDown expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolDown expected an integer y: ${rawY}`);
+    }
+
+    runEditorToolDown(viewState, parsedX, parsedY, toolHooks);
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the `ToolDrag` subcommand handler.
+ * Mirrors `EditorCmdToolDrag` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewToolDragSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+  toolHooks: EditorViewToolHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} ToolDrag expects argc 4, got ${argv.length}`,
+      );
+    }
+
+    const rawX = argv[2];
+    const rawY = argv[3];
+    if (rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ToolDrag missing x/y arguments`);
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolDrag expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolDrag expected an integer y: ${rawY}`);
+    }
+
+    runEditorToolDrag(viewState, parsedX, parsedY, toolHooks);
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the `ToolUp` subcommand handler.
+ * Mirrors `EditorCmdToolUp` in `ref/micropolis/src/sim/w_editor.c`.
+ */
+function createEditorViewToolUpSubcommandHandler(
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+  toolHooks: EditorViewToolHooks,
+): EditorViewSubcommandHandler {
+  return (viewState: EditorViewState, argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeInvalidArgCount(
+        `${viewState.commandName} ToolUp expects argc 4, got ${argv.length}`,
+      );
+    }
+
+    const rawX = argv[2];
+    const rawY = argv[3];
+    if (rawX === undefined || rawY === undefined) {
+      return makeInvalidArgCount(`${viewState.commandName} ToolUp missing x/y arguments`);
+    }
+
+    const parsedX = parseTclInt32(rawX);
+    if (parsedX === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolUp expected an integer x: ${rawX}`);
+    }
+
+    const parsedY = parseTclInt32(rawY);
+    if (parsedY === null) {
+      return makeInvalidInteger(`${viewState.commandName} ToolUp expected an integer y: ${rawY}`);
+    }
+
+    runEditorToolUp(viewState, parsedX, parsedY, toolHooks);
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds the default subcommand entries for the editor-view shell.
+ * Mirrors the P2.1/P2.2 `EDITOR_CMD(...)` registrations in
+ * `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`) for configure,
+ * position/size, pan, and tool command families.
+ * Parity note: tool internals model command-facing coordinate/state behavior,
+ * while detailed map-edit interpolation remains delegated to hook integration.
+ */
+export function createEditorViewSubcommandEntries(
+  options: CreateEditorViewSubcommandEntriesOptions = {},
+): readonly EditorViewSubcommandEntry[] {
+  const kickState = options.kickState ?? createSimKickState();
+  const kickHooks = options.kickHooks ?? {};
+  const toolHooks = options.toolHooks ?? {};
+
   return [
     ['configure', handleEditorViewConfigureSubcommand] as const,
     ['position', handleEditorViewPositionSubcommand] as const,
     ['size', handleEditorViewSizeSubcommand] as const,
+    ['Pan', createEditorViewPanSubcommandHandler(kickState, kickHooks)] as const,
+    ['PanStart', handleEditorViewPanStartSubcommand] as const,
+    ['PanTo', createEditorViewPanToSubcommandHandler(kickState, kickHooks)] as const,
+    ['PanBy', createEditorViewPanBySubcommandHandler(kickState, kickHooks)] as const,
+    ['DoTool', createEditorViewDoToolSubcommandHandler(kickState, kickHooks, toolHooks)] as const,
+    [
+      'ToolDown',
+      createEditorViewToolDownSubcommandHandler(kickState, kickHooks, toolHooks),
+    ] as const,
+    [
+      'ToolDrag',
+      createEditorViewToolDragSubcommandHandler(kickState, kickHooks, toolHooks),
+    ] as const,
+    ['ToolUp', createEditorViewToolUpSubcommandHandler(kickState, kickHooks, toolHooks)] as const,
   ];
 }
 
@@ -478,9 +1219,9 @@ export function createEditorViewSubcommandTable(
 }
 
 /**
- * Default subcommand table for P2.1 editor-view shell behavior.
- * Mirrors `editor_command_init` registration for `configure`, `position`, and `size`
- * in `ref/micropolis/src/sim/w_editor.c`.
+ * Default subcommand table for P2.1/P2.2 editor-view shell behavior.
+ * Mirrors `editor_command_init` registrations for configure/position/size plus
+ * pan/tool command wrappers in `ref/micropolis/src/sim/w_editor.c`.
  */
 export const EDITOR_VIEW_SUBCOMMAND_TABLE = createEditorViewSubcommandTable(
   createEditorViewSubcommandEntries(),
