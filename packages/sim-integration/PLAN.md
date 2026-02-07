@@ -59,7 +59,7 @@ Use this exact loop:
 - [x] Add `src/sugar/stdout-protocol.test.ts` covering:
 - [x] normal `PlaySound Name`
 - [x] repeated spaces creating empty tokens
-- [ ] missing argument behavior in strict and safe modes
+- [x] missing argument behavior in strict and safe modes
 - [ ] Ensure sound hook receives lowercased sound name for wav mapping parity.
 - [ ] Checkpoint: stdout protocol tests pass in both modes.
 
@@ -155,3 +155,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 3 task `Add src/sugar/stdout-protocol.test.ts covering` by adding parity tests for normal `PlaySound Name`, explicit-space empty-token behavior, strict/safe missing-argument handling, and lowercase sound-hook delivery parity with `play_sound(name.lower() + '.wav')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 3 task `normal PlaySound Name` after verifying `parseSugarStdoutLine('PlaySound Bulldozer')` and `getPlaySoundToken(..., 'strict')` parity with `_stdout_thread_function` (`words = line.strip().split(' ')`; `self.play_sound(words[1])`) in `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Checked Phase 3 task `repeated spaces creating empty tokens` after verifying `parseSugarStdoutLine('PlaySound   Bulldozer')` preserves explicit-space empty tokens (`['PlaySound', '', '', 'Bulldozer']`) and `getPlaySoundToken(..., 'strict')` returns `words[1] === ''`, matching `line.strip().split(' ')` parity in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `missing argument behavior in strict and safe modes` by confirming strict mode throws `RangeError('list index out of range')` (Python `IndexError` parity for `words[1]`) and safe mode returns `SugarStdoutMalformedLineError('PLAY_SOUND_MISSING_ARGUMENT')` non-fatally in `src/sugar/stdout-protocol.ts` and `src/runtime.ts`, mirroring/parity-hardening `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`.
