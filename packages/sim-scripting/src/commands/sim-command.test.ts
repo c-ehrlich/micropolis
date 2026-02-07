@@ -11,6 +11,8 @@ import {
   createSimCityGameSetupState,
   createSimCityGameSetupSubcommandEntries,
   createSimCommandDispatcher,
+  createSimDisastersSpriteGoalUtilityState,
+  createSimDisastersSpriteGoalUtilitySubcommandEntries,
   createSimKickState,
   createSimMapDynamicOverlayMiscState,
   createSimMapDynamicOverlayMiscSubcommandEntries,
@@ -1094,6 +1096,298 @@ describe('sim map/dynamic/overlay misc subcommands', () => {
     expect(runtime.invoke(['sim', 'DynamicData', '0'])).toEqual({
       code: ScriptResultCode.Ok,
       value: '0',
+    });
+  });
+});
+
+describe('sim disasters/sprite-goal utility subcommands', () => {
+  it('routes disaster creators through `SIMCMD_CALL`-style hooks and ignores argc', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+          hooks: {
+            onMakeFire: () => {
+              events.push('MakeFire');
+            },
+            onMakeFlood: () => {
+              events.push('MakeFlood');
+            },
+            onMakeTornado: () => {
+              events.push('MakeTornado');
+            },
+            onMakeEarthquake: () => {
+              events.push('MakeEarthquake');
+            },
+            onMakeMonster: () => {
+              events.push('MakeMonster');
+              state.godSprite = {
+                destX: 0,
+                destY: 0,
+                control: -1,
+                count: 0,
+              };
+            },
+            onMakeMeltdown: () => {
+              events.push('MakeMeltdown');
+            },
+            onFireBomb: () => {
+              events.push('FireBomb');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(proc)` in `w_sim.c` does not validate argc.
+    expect(runtime.invoke(['sim', 'MakeFire', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeFlood'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeTornado', 'x', 'y'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeEarthquake', 'x', 'y'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeMonster', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeMeltdown', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'FireBomb', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(events).toEqual([
+      'MakeFire',
+      'MakeFlood',
+      'MakeTornado',
+      'MakeEarthquake',
+      'MakeMonster',
+      'MakeMeltdown',
+      'FireBomb',
+    ]);
+    expect(state.godSprite).not.toBeNull();
+  });
+
+  it('matches GOD/COP sprite lookup-create flow for `MonsterGoal` and `HelicopterGoal`', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+          hooks: {
+            onMakeMonster: () => {
+              events.push('MakeMonster');
+              state.godSprite = {
+                destX: 111,
+                destY: 222,
+                control: -1,
+                count: 0,
+              };
+            },
+            onGenerateCopter: (x, y) => {
+              // Mirrors `GenerateCopter(x, y)` call in `SimCmdHelicopterGoal`
+              // from `w_sim.c`, which is only invoked when COP is missing.
+              events.push(`GenerateCopter:${x},${y}`);
+              state.copSprite = {
+                destX: 333,
+                destY: 444,
+                control: -1,
+                count: 0,
+              };
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SimCmdMonsterGoal` in `w_sim.c` runs:
+    // GetSprite(GOD) -> MakeMonster() -> GetSprite(GOD) -> write goal fields.
+    expect(runtime.invoke(['sim', 'MonsterGoal', '321', '654'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite).toEqual({
+      destX: 321,
+      destY: 654,
+      // Magic values are from `SimCmdMonsterGoal` in `w_sim.c`.
+      control: -2,
+      count: -1,
+    });
+
+    // Existing GOD sprite path should skip make/create call.
+    expect(runtime.invoke(['sim', 'MonsterGoal', '111', '222'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(events).toEqual(['MakeMonster']);
+    expect(state.godSprite).toEqual({
+      destX: 111,
+      destY: 222,
+      control: -2,
+      count: -1,
+    });
+
+    // `SimCmdHelicopterGoal` uses:
+    // GetSprite(COP) -> GenerateCopter(x,y) -> GetSprite(COP) -> set dest.
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '70', '80'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(events).toEqual(['MakeMonster', 'GenerateCopter:70,80']);
+    expect(state.copSprite).toEqual({
+      destX: 70,
+      destY: 80,
+      control: -1,
+      count: 0,
+    });
+  });
+
+  it('enforces `MonsterDirection` range and uses C-parity monster creation fallback', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+        }),
+      ),
+    );
+
+    // With no hook, this adapter auto-creates GOD sprite state so command
+    // parity stays deterministic for the C flow:
+    // GetSprite(GOD) -> MakeMonster() -> GetSprite(GOD) -> set control.
+    expect(runtime.invoke(['sim', 'MonsterDirection', '-1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite?.control).toBe(-1);
+    expect(runtime.invoke(['sim', 'MonsterDirection', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite?.control).toBe(7);
+
+    expect(runtime.invoke(['sim', 'MonsterDirection', '-2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected direction in range -1..7 at argv[2]: -2',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '8'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected direction in range -1..7 at argv[2]: 8',
+    });
+  });
+
+  it('returns a typed internal error when create callbacks fail to provide sprites', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          hooks: {
+            onMakeMonster: () => {
+              // Intentionally leaves state without GOD sprite.
+            },
+            onGenerateCopter: () => {
+              // Intentionally leaves state without COP sprite.
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'MonsterGoal', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim MonsterGoal could not create a GOD sprite',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim MonsterDirection could not create a GOD sprite',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '3', '4'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim HelicopterGoal could not create a COP sprite',
+    });
+  });
+
+  it('enforces C-parity argc and integer validation for sprite-goal utilities', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimDisastersSpriteGoalUtilitySubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'MonsterGoal', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MonsterGoal expects argc 4, got 3',
+    });
+    expect(runtime.invoke(['sim', 'MonsterGoal', 'a', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterGoal expected a 32-bit integer at argv[2]: a',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '1', 'b'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HelicopterGoal expected a 32-bit integer at argv[3]: b',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MonsterDirection expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', 'c'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected a 32-bit integer at argv[2]: c',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'MakeEarthquake'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MonsterGoal', '12', '34'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '56', '78'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
     });
   });
 });

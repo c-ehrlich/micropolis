@@ -2262,6 +2262,462 @@ export function createSimMapDynamicOverlayMiscSubcommandEntries(
 }
 
 /**
+ * `sim` disasters/sprite-goal utility subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for:
+ * `MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`,
+ * `MakeMeltdown`, `FireBomb`, `MonsterGoal`, `HelicopterGoal`, and
+ * `MonsterDirection` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_DISASTERS_SPRITE_GOAL_UTILITY_SUBCOMMAND_NAMES = [
+  'MakeFire',
+  'MakeFlood',
+  'MakeTornado',
+  'MakeEarthquake',
+  'MakeMonster',
+  'MakeMeltdown',
+  'FireBomb',
+  'MonsterGoal',
+  'HelicopterGoal',
+  'MonsterDirection',
+] as const;
+
+/**
+ * Union of disasters/sprite-goal utility subcommand names from `w_sim.c`.
+ */
+export type SimDisastersSpriteGoalUtilitySubcommandName =
+  (typeof SIM_DISASTERS_SPRITE_GOAL_UTILITY_SUBCOMMAND_NAMES)[number];
+
+type SimDisasterCreatorSubcommandName =
+  | 'MakeFire'
+  | 'MakeFlood'
+  | 'MakeTornado'
+  | 'MakeEarthquake'
+  | 'MakeMonster'
+  | 'MakeMeltdown'
+  | 'FireBomb';
+
+/**
+ * Minimal mutable sprite fields used by goal utilities.
+ * Mirrors fields assigned in `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`, and
+ * `SimCmdMonsterDirection` in `ref/micropolis/src/sim/w_sim.c`:
+ * `dest_x`, `dest_y`, `control`, and `count`.
+ * Difference from C: field names are camel-cased and scoped to this command
+ * adapter instead of writing directly to `SimSprite`.
+ */
+export interface SimDisasterSpriteGoalUtilitySprite {
+  destX: number;
+  destY: number;
+  control: number;
+  count: number;
+}
+
+/**
+ * Mutable backing state for disasters/sprite-goal utility subcommands.
+ * Mirrors `GetSprite(GOD)` / `GetSprite(COP)` read paths in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: GOD/COP lookup targets are injected as typed nullable
+ * references instead of process-global sprite arrays.
+ */
+export interface SimDisastersSpriteGoalUtilityState {
+  godSprite: SimDisasterSpriteGoalUtilitySprite | null;
+  copSprite: SimDisasterSpriteGoalUtilitySprite | null;
+}
+
+const SIM_DISASTERS_SPRITE_GOAL_UTILITY_DEFAULT_STATE: SimDisastersSpriteGoalUtilityState = {
+  godSprite: null,
+  copSprite: null,
+};
+
+/**
+ * Hook callbacks for disasters/sprite-goal utility side effects.
+ * Mirrors the C calls made by these handlers in `ref/micropolis/src/sim/w_sim.c`:
+ * disaster creators, `MakeMonster()`, and `GenerateCopter(x, y)`.
+ * Difference from C: side effects are injected callbacks so tests/runtime can
+ * provide engine integration explicitly.
+ */
+export interface SimDisastersSpriteGoalUtilityHooks {
+  onMakeFire?: () => void;
+  onMakeFlood?: () => void;
+  onMakeTornado?: () => void;
+  onMakeEarthquake?: () => void;
+  onMakeMonster?: () => void;
+  onMakeMeltdown?: () => void;
+  onFireBomb?: () => void;
+  onGenerateCopter?: (x: number, y: number) => void;
+}
+
+/**
+ * Constructor options for `createSimDisastersSpriteGoalUtilitySubcommandEntries`.
+ * Mirrors command wiring for disaster/sprite-goal utilities in
+ * `sim_command_init` (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimDisastersSpriteGoalUtilitySubcommandEntriesOptions {
+  state?: SimDisastersSpriteGoalUtilityState;
+  hooks?: SimDisastersSpriteGoalUtilityHooks;
+}
+
+/**
+ * Creates mutable state for disasters/sprite-goal utility subcommands.
+ * Mirrors nullable `GetSprite(...)` lookup behavior in `ref/micropolis/src/sim/w_sprite.c`
+ * and command consumers in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: callers may override GOD/COP sprite refs per runtime/test.
+ */
+export function createSimDisastersSpriteGoalUtilityState(
+  initialValues: Partial<SimDisastersSpriteGoalUtilityState> = {},
+): SimDisastersSpriteGoalUtilityState {
+  return {
+    ...SIM_DISASTERS_SPRITE_GOAL_UTILITY_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+/**
+ * Creates default goal-related sprite fields.
+ * Mirrors field defaults initialized by `InitSprite` in
+ * `ref/micropolis/src/sim/w_sprite.c` for `dest_x`, `dest_y`, `control`,
+ * and `count`.
+ * Difference from C: only the fields touched by `SimCmd*Goal` utilities are
+ * modeled here.
+ */
+function createDefaultDisasterSpriteGoalUtilitySprite(): SimDisasterSpriteGoalUtilitySprite {
+  return {
+    // `InitSprite` defaults in `w_sprite.c`.
+    destX: 0,
+    destY: 0,
+    control: -1,
+    count: 0,
+  };
+}
+
+/**
+ * Parses one Tcl integer argument for disaster/sprite-goal utilities.
+ * Mirrors `Tcl_GetInt` usage in `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`,
+ * and `SimCmdMonsterDirection` in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function parseSimDisasterSpriteGoalIntArg(
+  argv: readonly string[],
+  name: SimDisastersSpriteGoalUtilitySubcommandName,
+  argIndex: number,
+): number | ScriptRuntimeResult {
+  const rawValue = argv[argIndex];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[${argIndex}]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[${argIndex}]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+/**
+ * Executes `MakeMonster` side effect for goal utilities.
+ * Mirrors `MakeMonster()` calls from `SimCmdMonsterGoal` and
+ * `SimCmdMonsterDirection` in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: when no hook is provided, a deterministic default GOD
+ * sprite is created locally to keep command parity testable.
+ */
+function runSimMakeMonsterParity(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+): void {
+  hooks.onMakeMonster?.();
+  if (hooks.onMakeMonster === undefined && state.godSprite === null) {
+    state.godSprite = createDefaultDisasterSpriteGoalUtilitySprite();
+  }
+}
+
+/**
+ * Executes `GenerateCopter` side effect for `HelicopterGoal`.
+ * Mirrors `GenerateCopter(x, y)` usage in `SimCmdHelicopterGoal`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ * Difference from C: when no hook is provided, a deterministic default COP
+ * sprite is created locally to keep command parity testable.
+ */
+function runSimGenerateCopterParity(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+  x: number,
+  y: number,
+): void {
+  hooks.onGenerateCopter?.(x, y);
+  if (hooks.onGenerateCopter === undefined && state.copSprite === null) {
+    state.copSprite = createDefaultDisasterSpriteGoalUtilitySprite();
+  }
+}
+
+/**
+ * Resolves a GOD sprite using C parity lookup/create flow.
+ * Mirrors:
+ * `GetSprite(GOD)` -> `MakeMonster()` -> `GetSprite(GOD)` in
+ * `SimCmdMonsterGoal` / `SimCmdMonsterDirection`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+function ensureSimGodSprite(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+  callerName: 'MonsterGoal' | 'MonsterDirection',
+): SimDisasterSpriteGoalUtilitySprite | ScriptRuntimeResult {
+  if (state.godSprite !== null) {
+    return state.godSprite;
+  }
+
+  runSimMakeMonsterParity(state, hooks);
+  if (state.godSprite === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.Internal,
+        `sim ${callerName} could not create a GOD sprite`,
+      ),
+    );
+  }
+
+  return state.godSprite;
+}
+
+/**
+ * Resolves a COP sprite using C parity lookup/create flow.
+ * Mirrors:
+ * `GetSprite(COP)` -> `GenerateCopter(x, y)` -> `GetSprite(COP)` in
+ * `SimCmdHelicopterGoal` (`ref/micropolis/src/sim/w_sim.c`).
+ */
+function ensureSimCopSprite(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+  x: number,
+  y: number,
+): SimDisasterSpriteGoalUtilitySprite | ScriptRuntimeResult {
+  if (state.copSprite !== null) {
+    return state.copSprite;
+  }
+
+  runSimGenerateCopterParity(state, hooks, x, y);
+  if (state.copSprite === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.Internal,
+        'sim HelicopterGoal could not create a COP sprite',
+      ),
+    );
+  }
+
+  return state.copSprite;
+}
+
+/**
+ * Creates one disaster-creator handler using `SIMCMD_CALL` parity.
+ * Mirrors `SIMCMD_CALL(...)` expansions for disaster creators and `FireBomb`
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: argc is intentionally ignored.
+ */
+function createSimDisasterCreatorSubcommandHandler(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+  name: SimDisasterCreatorSubcommandName,
+): SimSubcommandHandler {
+  return () => {
+    if (name === 'MakeFire') {
+      hooks.onMakeFire?.();
+    } else if (name === 'MakeFlood') {
+      hooks.onMakeFlood?.();
+    } else if (name === 'MakeTornado') {
+      hooks.onMakeTornado?.();
+    } else if (name === 'MakeEarthquake') {
+      hooks.onMakeEarthquake?.();
+    } else if (name === 'MakeMonster') {
+      runSimMakeMonsterParity(state, hooks);
+    } else if (name === 'MakeMeltdown') {
+      hooks.onMakeMeltdown?.();
+    } else {
+      hooks.onFireBomb?.();
+    }
+
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Creates one `SimCmdMonsterGoal`-equivalent handler.
+ * Mirrors `SimCmdMonsterGoal` in `ref/micropolis/src/sim/w_sim.c`:
+ * parse pixel coords, resolve GOD sprite via lookup/create flow, then set
+ * `dest_x`, `dest_y`, `control=-2`, and `count=-1`.
+ */
+function createSimMonsterGoalSubcommandHandler(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim MonsterGoal expects argc 4, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedX = parseSimDisasterSpriteGoalIntArg(argv, 'MonsterGoal', 2);
+    if (typeof parsedX !== 'number') {
+      return parsedX;
+    }
+
+    const parsedY = parseSimDisasterSpriteGoalIntArg(argv, 'MonsterGoal', 3);
+    if (typeof parsedY !== 'number') {
+      return parsedY;
+    }
+
+    const sprite = ensureSimGodSprite(state, hooks, 'MonsterGoal');
+    if ('code' in sprite) {
+      return sprite;
+    }
+
+    sprite.destX = parsedX;
+    sprite.destY = parsedY;
+    sprite.control = -2;
+    sprite.count = -1;
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Creates one `SimCmdHelicopterGoal`-equivalent handler.
+ * Mirrors `SimCmdHelicopterGoal` in `ref/micropolis/src/sim/w_sim.c`:
+ * parse pixel coords, resolve COP sprite via lookup/create flow, then set
+ * `dest_x` and `dest_y`.
+ */
+function createSimHelicopterGoalSubcommandHandler(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim HelicopterGoal expects argc 4, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedX = parseSimDisasterSpriteGoalIntArg(argv, 'HelicopterGoal', 2);
+    if (typeof parsedX !== 'number') {
+      return parsedX;
+    }
+
+    const parsedY = parseSimDisasterSpriteGoalIntArg(argv, 'HelicopterGoal', 3);
+    if (typeof parsedY !== 'number') {
+      return parsedY;
+    }
+
+    const sprite = ensureSimCopSprite(state, hooks, parsedX, parsedY);
+    if ('code' in sprite) {
+      return sprite;
+    }
+
+    sprite.destX = parsedX;
+    sprite.destY = parsedY;
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Creates one `SimCmdMonsterDirection`-equivalent handler.
+ * Mirrors `SimCmdMonsterDirection` in `ref/micropolis/src/sim/w_sim.c`:
+ * parse direction, enforce range `-1..7`, resolve GOD sprite via lookup/create
+ * flow, and assign `control`.
+ */
+function createSimMonsterDirectionSubcommandHandler(
+  state: SimDisastersSpriteGoalUtilityState,
+  hooks: SimDisastersSpriteGoalUtilityHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim MonsterDirection expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedDirection = parseSimDisasterSpriteGoalIntArg(argv, 'MonsterDirection', 2);
+    if (typeof parsedDirection !== 'number') {
+      return parsedDirection;
+    }
+    if (parsedDirection < -1 || parsedDirection > 7) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim MonsterDirection expected direction in range -1..7 at argv[2]: ${parsedDirection}`,
+        ),
+      );
+    }
+
+    const sprite = ensureSimGodSprite(state, hooks, 'MonsterDirection');
+    if ('code' in sprite) {
+      return sprite;
+    }
+
+    sprite.control = parsedDirection;
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds disasters/sprite-goal utility `sim` subcommand entries.
+ * Mirrors disaster creator call commands (`SIMCMD_CALL`) plus
+ * `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`, and `SimCmdMonsterDirection`
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: creator handlers intentionally skip argc validation because the
+ * C macro form does the same; sprite-goal handlers enforce explicit argc/range
+ * checks and follow `GetSprite` -> create -> `GetSprite` flow.
+ */
+export function createSimDisastersSpriteGoalUtilitySubcommandEntries(
+  options: CreateSimDisastersSpriteGoalUtilitySubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimDisastersSpriteGoalUtilityState();
+  const hooks = options.hooks ?? {};
+
+  return [
+    ['MakeFire', createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeFire')] as const,
+    ['MakeFlood', createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeFlood')] as const,
+    [
+      'MakeTornado',
+      createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeTornado'),
+    ] as const,
+    [
+      'MakeEarthquake',
+      createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeEarthquake'),
+    ] as const,
+    [
+      'MakeMonster',
+      createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeMonster'),
+    ] as const,
+    [
+      'MakeMeltdown',
+      createSimDisasterCreatorSubcommandHandler(state, hooks, 'MakeMeltdown'),
+    ] as const,
+    ['FireBomb', createSimDisasterCreatorSubcommandHandler(state, hooks, 'FireBomb')] as const,
+    ['MonsterGoal', createSimMonsterGoalSubcommandHandler(state, hooks)] as const,
+    ['HelicopterGoal', createSimHelicopterGoalSubcommandHandler(state, hooks)] as const,
+    ['MonsterDirection', createSimMonsterDirectionSubcommandHandler(state, hooks)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -2292,6 +2748,8 @@ const DEFAULT_SIM_KICK_STATE = createSimKickState();
  *   `SimCmdSkips`, `SimCmdSkip`, `SimCmdNeedRest`)
  * - city/game setup commands (`SimCmdCityName`, `SimCmdCityFileName`,
  *   `SimCmdGameLevel`, `SimCmdYear`, and load/generate entries)
+ * - disasters/sprite-goal utilities (`SIMCMD_CALL` disaster creators plus
+ *   `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`, `SimCmdMonsterDirection`)
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  */
@@ -2308,6 +2766,7 @@ export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable
   ...createSimMapDynamicOverlayMiscSubcommandEntries({
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
+  ...createSimDisastersSpriteGoalUtilitySubcommandEntries(),
   ...createSimCityGameSetupSubcommandEntries(),
   ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
   ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),

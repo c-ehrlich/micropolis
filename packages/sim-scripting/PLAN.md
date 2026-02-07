@@ -110,7 +110,7 @@ Use this exact loop:
     - all ranges and map bounds checks are covered
     - dynamic map flag updates and kick behavior are correct
 
-- [ ] `P1.9` Implement disasters/sprite-goal utility subcommands.
+- [x] `P1.9` Implement disasters/sprite-goal utility subcommands.
   - C reference: `SimCmdMonsterGoal`, `SimCmdMonsterDirection`, `SimCmdHelicopterGoal`, disaster creators
   - Done when:
     - sprite lookup/create behavior follows C flow
@@ -287,3 +287,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.6` by adding `sim` city/game setup subcommands (`CityName`, `CityFileName`, `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`, `LoadScenario`), including configurable legacy `CityFileName` allocation-bug parity mode and C-mapped validation/side-effect tests.
 - [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.
 - [x] `2026-02-07` Completed `P1.8` by adding `sim` map/dynamic/overlay misc subcommands (`FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`, `ResetDynamic`) with C-parity arg/range/map-bounds checks, dynamic-map flag updates, and `Kick` coalescing coverage.
+- [x] `2026-02-07` Completed `P1.9` by adding disaster creator and sprite-goal utility `sim` subcommands (`MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`, `MakeMeltdown`, `FireBomb`, `MonsterGoal`, `HelicopterGoal`, `MonsterDirection`) with C-style call/no-argc behavior, GOD/COP lookup-create-lookup parity flow, and direction range/error-path coverage.
