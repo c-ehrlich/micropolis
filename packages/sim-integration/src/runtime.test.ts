@@ -182,6 +182,62 @@ describe('integration runtime TTY module wiring', () => {
 
     expect(stdoutChunks).toEqual(['sim:\n', 'sim:\n']);
   });
+
+  it('passes EOF through handleInputLine to trigger tty exit parity behavior', () => {
+    const exitCodes: number[] = [];
+    const runtime = createIntegrationRuntime({
+      features: {
+        tty: true,
+      },
+      hooks: {
+        evaluateTtyCommand() {
+          throw new Error('evaluateTtyCommand should not be called on EOF with no partial input');
+        },
+        tty: {
+          isTty: true,
+          onExit(exitCode) {
+            exitCodes.push(exitCode);
+          },
+        },
+      },
+    });
+
+    expect(runtime.handleInputLine(null)).toBeUndefined();
+    expect(exitCodes).toEqual([0]);
+  });
+
+  it('passes EOF through handleInputLine to disable non-tty reads', () => {
+    const evaluatedCommands: string[] = [];
+    const disableReadCalls: string[] = [];
+    const runtime = createIntegrationRuntime({
+      features: {
+        tty: true,
+      },
+      hooks: {
+        evaluateTtyCommand(command) {
+          evaluatedCommands.push(command);
+          return {
+            ok: true,
+            result: '',
+          };
+        },
+        tty: {
+          isTty: false,
+          onDisableReads() {
+            disableReadCalls.push('disabled');
+          },
+        },
+      },
+    });
+
+    expect(runtime.handleInputLine(null)).toBeUndefined();
+    expect(disableReadCalls).toEqual(['disabled']);
+
+    // Mirrors `Tk_DeleteFileHandler(0)` behavior in `StdinProc`: no more reads
+    // should be processed once non-tty EOF is reached.
+    expect(runtime.handleInputLine('puts ignored\n')).toBeUndefined();
+    expect(evaluatedCommands).toEqual([]);
+  });
 });
 
 describe('integration runtime NET module wiring', () => {

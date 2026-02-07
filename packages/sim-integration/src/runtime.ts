@@ -93,7 +93,13 @@ export interface IntegrationRuntimeOptions {
 export interface IntegrationRuntime {
   readonly mode: ParityMode;
   readonly features: IntegrationFeatureFlags;
-  handleInputLine(line: string): TtyEvaluatorResult | undefined;
+  /**
+   * Feed one stdin line (or EOF as `null`) into the TTY command channel.
+   * Mirrors `StdinProc` `fgets`/EOF handling in `ref/micropolis/src/sim/w_tk.c`.
+   * Parity note: this API is intentionally direct input injection rather than
+   * Tk file-handler callbacks.
+   */
+  handleInputLine(line: string | null): TtyEvaluatorResult | undefined;
   handleOutputLine(line: string): void;
   share(): void;
   focusIn(): void;
