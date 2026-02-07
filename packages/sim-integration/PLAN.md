@@ -45,7 +45,7 @@ Use this exact loop:
 - [x] `SugarShare`
 - [x] `SugarQuit`
 - [x] `SugarActivate`
-- [ ] `SugarDeactivate`
+- [x] `SugarDeactivate`
 - [ ] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
 - [ ] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
 - [ ] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
@@ -143,3 +143,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 2 task `SugarShare` by verifying/exporting `serializeSugarShareCommand` parity with `share()` -> `send_process('SugarShare\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarQuit` by verifying/exporting `serializeSugarQuitCommand` parity with `quit_process()` -> `send_process('SugarQuit\n')` from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarActivate` by verifying/exporting `serializeSugarActivateCommand` parity with `_focus_in_cb()` -> `send_process('SugarActivate\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarDeactivate` by verifying/exporting `serializeSugarDeactivateCommand` parity with `_focus_out_cb()` -> `send_process('SugarDeactivate\n')` from `ref/micropolis/micropolisactivity.py`.
