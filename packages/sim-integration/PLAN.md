@@ -74,7 +74,7 @@ Use this exact loop:
 - [x] print result when `(result != ok) || sim_tty`
 - [x] emit prompt exactly `sim:\n` after each command in tty mode
 - [x] emit initial prompt exactly `sim:\n` when tty channel starts
-- [ ] Add `src/tty/stdin-channel.test.ts` for all branches above.
+- [x] Add `src/tty/stdin-channel.test.ts` for all branches above.
 - [ ] Checkpoint: tty tests pass with deterministic prompt transcript snapshots.
 
 ## Phase 5: NET UDP Hooks
@@ -166,3 +166,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 4 task `print result when (result != ok) || sim_tty` by validating `StdinChannel.consumeLine` result-output gating against `StdinProc` in `ref/micropolis/src/sim/w_tk.c` (`if (*tk_mainInterp->result != 0) { if ((result != TCL_OK) || sim_tty) printf("%s\\n", tk_mainInterp->result); }`) via non-tty success suppression, non-tty error printing, and tty success printing tests in `src/tty/stdin-channel.test.ts`.
 - [x] 2026-02-07: Completed Phase 4 task `emit prompt exactly sim:\n after each command in tty mode` by adding `src/tty/stdin-channel.test.ts` coverage that validates `StdinChannel.consumeLine` emits the exact `sim:\n` prompt once per completed tty command, matching post-eval `printf("sim:\\n"); fflush(stdout);` in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 4 task `emit initial prompt exactly sim:\n when tty channel starts` by enforcing one-time startup prompt emission in `StdinChannel.start()` and adding `src/tty/stdin-channel.test.ts` coverage for exact `sim:\n` output parity with `if (sim_tty) printf("sim:\\n");` in `tk_main` from `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `Add src/tty/stdin-channel.test.ts for all branches above` by validating EOF tty/non-tty handling, partial-EOF continuation, result print gating (`(result != TCL_OK) || sim_tty`), and exact `sim:\n` startup/post-command prompts against `StdinProc` and `tk_main` in `ref/micropolis/src/sim/w_tk.c`.
