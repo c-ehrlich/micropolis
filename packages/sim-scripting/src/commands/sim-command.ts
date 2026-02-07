@@ -209,6 +209,185 @@ export function createSimAccessorIntSubcommandEntries(
 }
 
 /**
+ * Read-only getter `sim` subcommand names from `w_sim.c`.
+ * Mirrors `SIMCMD_GET_STR(Displays)` plus explicit getter handlers in
+ * `ref/micropolis/src/sim/w_sim.c` (`WorldX`, `LandValue`, `PolMaxX`, etc.).
+ * Parity note: names stay case-sensitive and are registered as-is.
+ */
+export const SIM_READ_ONLY_GETTER_SUBCOMMAND_NAMES = [
+  'Displays',
+  'WorldX',
+  'WorldY',
+  'LandValue',
+  'Traffic',
+  'Crime',
+  'Unemployment',
+  'Fires',
+  'Pollution',
+  'PolMaxX',
+  'PolMaxY',
+  'TrafMaxX',
+  'TrafMaxY',
+  'MeltX',
+  'MeltY',
+  'CrimeMaxX',
+  'CrimeMaxY',
+  'CenterX',
+  'CenterY',
+  'FloodX',
+  'FloodY',
+  'CrashX',
+  'CrashY',
+  'Platform',
+  'Version',
+  'MultiPlayerMode',
+  'SugarMode',
+] as const;
+
+/**
+ * Union of read-only getter `sim` subcommand names from `w_sim.c`.
+ */
+export type SimReadOnlyGetterSubcommandName =
+  (typeof SIM_READ_ONLY_GETTER_SUBCOMMAND_NAMES)[number];
+
+type SimReadOnlyStringGetterSubcommandName = 'Displays' | 'Platform' | 'Version';
+type SimReadOnlyIntGetterSubcommandName = Exclude<
+  SimReadOnlyGetterSubcommandName,
+  SimReadOnlyStringGetterSubcommandName
+>;
+
+/**
+ * Mutable backing state for read-only getter subcommands.
+ * Mirrors global values/functions read by getters in
+ * `ref/micropolis/src/sim/w_sim.c` (`Displays`, `WORLD_X/Y`, `LVAverage`,
+ * `PolMaxX`, `MultiPlayerMode`, etc.).
+ * Difference from C: values are centralized in one typed object so tests and
+ * future sim-core wiring can update them without process-global state.
+ */
+export type SimReadOnlyGetterState = Record<SimReadOnlyStringGetterSubcommandName, string> &
+  Record<SimReadOnlyIntGetterSubcommandName, number>;
+
+const SIM_READ_ONLY_GETTER_DEFAULT_STATE: SimReadOnlyGetterState = {
+  // `sim.c`: default global pointer, normalized to empty string in TS.
+  Displays: '',
+  // `headers/sim.h`: `SimWidth` / `SimHeight` defaults.
+  WorldX: 120,
+  WorldY: 100,
+  // Aggregate metrics are C globals/functions exposed by read-only getters.
+  LandValue: 0,
+  Traffic: 0,
+  Crime: 0,
+  Unemployment: 0,
+  Fires: 0,
+  Pollution: 0,
+  // Underlying tile/raw locations used by getter wrappers in `w_sim.c`.
+  PolMaxX: 0,
+  PolMaxY: 0,
+  TrafMaxX: 0,
+  TrafMaxY: 0,
+  MeltX: 0,
+  MeltY: 0,
+  CrimeMaxX: 0,
+  CrimeMaxY: 0,
+  CenterX: 0,
+  CenterY: 0,
+  FloodX: 0,
+  FloodY: 0,
+  CrashX: 0,
+  CrashY: 0,
+  // `SimCmdPlatform` / `MicropolisVersion` in `sim.c` + `w_sim.c`.
+  Platform: 'unix',
+  Version: '4.0',
+  // `sim.c` command-line mode toggles, read through read-only handlers.
+  MultiPlayerMode: 0,
+  SugarMode: 0,
+};
+
+const SIM_READ_ONLY_NO_ARG_COUNT_CHECK_NAMES = new Set<SimReadOnlyGetterSubcommandName>([
+  'Displays',
+  'Platform',
+  'Version',
+]);
+
+const SIM_READ_ONLY_TILE_CENTER_GETTER_NAMES = new Set<SimReadOnlyIntGetterSubcommandName>([
+  'PolMaxX',
+  'PolMaxY',
+  'MeltX',
+  'MeltY',
+  'CrimeMaxX',
+  'CrimeMaxY',
+  'CenterX',
+  'CenterY',
+  'FloodX',
+  'FloodY',
+  'CrashX',
+  'CrashY',
+]);
+
+/**
+ * Creates per-runtime mutable state for read-only getter subcommands.
+ * Mirrors getter read paths in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: callers may override values to emulate evolving sim state
+ * without mutating global C variables.
+ */
+export function createSimReadOnlyGetterState(
+  initialValues: Partial<SimReadOnlyGetterState> = {},
+): SimReadOnlyGetterState {
+  return {
+    ...SIM_READ_ONLY_GETTER_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+function isSimReadOnlyStringGetterSubcommandName(
+  name: SimReadOnlyGetterSubcommandName,
+): name is SimReadOnlyStringGetterSubcommandName {
+  return name === 'Displays' || name === 'Platform' || name === 'Version';
+}
+
+function createSimReadOnlyGetterSubcommandHandler(
+  getterState: SimReadOnlyGetterState,
+  name: SimReadOnlyGetterSubcommandName,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (!SIM_READ_ONLY_NO_ARG_COUNT_CHECK_NAMES.has(name) && argv.length !== 2) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim ${name} expects argc 2, got ${argv.length}`,
+        ),
+      );
+    }
+
+    if (isSimReadOnlyStringGetterSubcommandName(name)) {
+      return makeScriptSuccess(getterState[name]);
+    }
+
+    const value = getterState[name];
+    if (SIM_READ_ONLY_TILE_CENTER_GETTER_NAMES.has(name)) {
+      return makeScriptSuccess(String((value << 4) + 8));
+    }
+
+    return makeScriptSuccess(String(value));
+  };
+}
+
+/**
+ * Builds `sim` subcommand entries for all read-only getter handlers.
+ * Mirrors read-only `SIM_CMD(...)` registrations in `sim_command_init` and
+ * getter implementations in `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: `Displays`, `Platform`, and `Version` intentionally skip
+ * argc validation because their C handlers also skip that check.
+ */
+export function createSimReadOnlyGetterSubcommandEntries(
+  getterState: SimReadOnlyGetterState,
+): readonly SimSubcommandEntry[] {
+  return SIM_READ_ONLY_GETTER_SUBCOMMAND_NAMES.map((name) => {
+    return [name, createSimReadOnlyGetterSubcommandHandler(getterState, name)] as const;
+  });
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -230,13 +409,14 @@ export function createSimSubcommandTable(
 
 /**
  * Default `sim` subcommand table.
- * Mirrors `sim_command_init` registration for `SIMCMD_ACCESS_INT(...)` commands
- * in `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: this includes only P1.2 accessor handlers at this stage.
+ * Mirrors `sim_command_init` registration for accessor and read-only getter
+ * commands from `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: includes `SIMCMD_ACCESS_INT(...)` plus read-only getters.
  */
-export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable(
-  createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
-);
+export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable([
+  ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
+  ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
+]);
 
 /**
  * Creates the `sim` top-level command dispatcher.

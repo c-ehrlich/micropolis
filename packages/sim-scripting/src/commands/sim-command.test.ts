@@ -7,6 +7,8 @@ import {
   createSimAccessorIntState,
   createSimAccessorIntSubcommandEntries,
   createSimCommandDispatcher,
+  createSimReadOnlyGetterState,
+  createSimReadOnlyGetterSubcommandEntries,
   createSimSubcommandTable,
   registerSimCommand,
 } from './sim-command.ts';
@@ -152,6 +154,141 @@ describe('sim accessor subcommands', () => {
       code: ScriptResultCode.Error,
       errorCode: ScriptRuntimeErrorCode.InvalidInteger,
       message: 'sim LakeLevel expected a 32-bit integer at argv[2]: 2147483648',
+    });
+  });
+});
+
+describe('sim read-only getter subcommands', () => {
+  it('returns formatted string values for read-only getter commands', () => {
+    const runtime = new ScriptRuntime();
+    const getterState = createSimReadOnlyGetterState({
+      Displays: '{display0} {display1}',
+      WorldX: 120,
+      WorldY: 100,
+      LandValue: 21,
+      Traffic: 22,
+      Crime: 23,
+      Unemployment: 24,
+      Fires: 25,
+      Pollution: 26,
+      PolMaxX: 2,
+      PolMaxY: 3,
+      TrafMaxX: 27,
+      TrafMaxY: 28,
+      MeltX: 4,
+      MeltY: 5,
+      CrimeMaxX: 6,
+      CrimeMaxY: 7,
+      CenterX: 8,
+      CenterY: 9,
+      FloodX: 10,
+      FloodY: 11,
+      CrashX: 12,
+      CrashY: 13,
+      Platform: 'unix',
+      Version: '4.0',
+      MultiPlayerMode: 1,
+      SugarMode: 1,
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimReadOnlyGetterSubcommandEntries(getterState)),
+    );
+
+    // `w_sim.c` formats these coordinate getters as `(tile << 4) + 8`.
+    const cases = [
+      { name: 'Displays', value: '{display0} {display1}' },
+      { name: 'WorldX', value: '120' },
+      { name: 'WorldY', value: '100' },
+      { name: 'LandValue', value: '21' },
+      { name: 'Traffic', value: '22' },
+      { name: 'Crime', value: '23' },
+      { name: 'Unemployment', value: '24' },
+      { name: 'Fires', value: '25' },
+      { name: 'Pollution', value: '26' },
+      { name: 'PolMaxX', value: String((2 << 4) + 8) },
+      { name: 'PolMaxY', value: String((3 << 4) + 8) },
+      { name: 'TrafMaxX', value: '27' },
+      { name: 'TrafMaxY', value: '28' },
+      { name: 'MeltX', value: String((4 << 4) + 8) },
+      { name: 'MeltY', value: String((5 << 4) + 8) },
+      { name: 'CrimeMaxX', value: String((6 << 4) + 8) },
+      { name: 'CrimeMaxY', value: String((7 << 4) + 8) },
+      { name: 'CenterX', value: String((8 << 4) + 8) },
+      { name: 'CenterY', value: String((9 << 4) + 8) },
+      { name: 'FloodX', value: String((10 << 4) + 8) },
+      { name: 'FloodY', value: String((11 << 4) + 8) },
+      { name: 'CrashX', value: String((12 << 4) + 8) },
+      { name: 'CrashY', value: String((13 << 4) + 8) },
+      { name: 'Platform', value: 'unix' },
+      { name: 'Version', value: '4.0' },
+      { name: 'MultiPlayerMode', value: '1' },
+      { name: 'SugarMode', value: '1' },
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(runtime.invoke(['sim', testCase.name])).toEqual({
+        code: ScriptResultCode.Ok,
+        value: testCase.value,
+      });
+    }
+  });
+
+  it('enforces argc only for getters that validate argc in `w_sim.c`', () => {
+    const runtime = new ScriptRuntime();
+    const getterState = createSimReadOnlyGetterState({
+      Displays: '{display0}',
+      Platform: 'unix',
+      Version: '4.0',
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimReadOnlyGetterSubcommandEntries(getterState)),
+    );
+
+    // `SIMCMD_GET_STR(Displays)` and `SimCmdPlatform/SimCmdVersion` skip argc
+    // checks in `w_sim.c`, while explicit getters like `WorldX` require argc 2.
+    expect(runtime.invoke(['sim', 'Displays', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '{display0}',
+    });
+    expect(runtime.invoke(['sim', 'Platform', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'unix',
+    });
+    expect(runtime.invoke(['sim', 'Version', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4.0',
+    });
+    expect(runtime.invoke(['sim', 'WorldX', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim WorldX expects argc 2, got 3',
+    });
+    expect(runtime.invoke(['sim', 'MultiPlayerMode', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MultiPlayerMode expects argc 2, got 3',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    // Defaults match `headers/sim.h` (`WORLD_X=120`, `WORLD_Y=100`) and
+    // coordinate getters in `w_sim.c` use `(tile << 4) + 8`, so tile `0` => `8`.
+    expect(runtime.invoke(['sim', 'WorldX'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '120',
+    });
+    expect(runtime.invoke(['sim', 'WorldY'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '100',
+    });
+    expect(runtime.invoke(['sim', 'PolMaxX'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '8',
     });
   });
 });

@@ -74,7 +74,7 @@ Use this exact loop:
     - each accessor supports get and set
     - bad argc/parse failures return error
 
-- [ ] `P1.3` Implement read-only getter subcommands.
+- [x] `P1.3` Implement read-only getter subcommands.
   - C reference: `SIMCMD_GET_INT`, `SIMCMD_GET_STR`, explicit getters in `w_sim.c`
   - Done when:
     - getters return formatted string values
@@ -281,3 +281,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.1` by adding `sim` command registration/dispatch helpers, a case-sensitive subcommand table scaffold, and tests for dispatch plus typed missing/unknown-subcommand failures.
 - [x] `2026-02-07` Repaired `P1.1` by adding `createSimSubcommandTable` with C-style duplicate overwrite semantics (`HASHED_CMD`/`Tcl_CreateHashEntry`) and coverage that validates last-registration-wins dispatch.
 - [x] `2026-02-07` Completed `P1.2` by porting all `SIMCMD_ACCESS_INT(...)` `sim` subcommands with C-defaulted backing state, read/write accessor behavior, and tests for get/set plus argc and integer-parse failure paths.
+- [x] `2026-02-07` Completed `P1.3` by porting `sim` read-only getter subcommands (`SIMCMD_GET_STR` + explicit getters), adding tile-center coordinate conversion parity for the required getter set, and covering formatted-return/argc-parity behavior in `sim-command` tests.
