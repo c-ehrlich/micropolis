@@ -6,6 +6,8 @@ import { ScriptRuntime } from '../runtime/script-runtime.ts';
 import {
   createSimAccessorIntState,
   createSimAccessorIntSubcommandEntries,
+  createSimBudgetOptionsState,
+  createSimBudgetOptionsSubcommandEntries,
   createSimCityGameSetupState,
   createSimCityGameSetupSubcommandEntries,
   createSimCommandDispatcher,
@@ -637,6 +639,249 @@ describe('sim city/game setup subcommands', () => {
     expect(runtime.invoke(['sim', 'GenerateSomeCity', '9'])).toEqual({
       code: ScriptResultCode.Ok,
       value: '',
+    });
+  });
+});
+
+describe('sim budget/options subcommands', () => {
+  it('applies budget setters with C-parity integer math and side-effect order', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimBudgetOptionsState({
+      // `w_budget.c` writes `FireSpend = (fireMaxValue * percent) / 100`,
+      // and equivalent formulas for police/road, using C integer division.
+      fireMaxValue: 333,
+      policeMaxValue: 201,
+      roadMaxValue: 999,
+    });
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimBudgetOptionsSubcommandEntries({
+          state,
+          kickState,
+          hooks: {
+            onDrawBudgetWindow: () => {
+              eventLog.push('drawBudgetWindow');
+            },
+            onUpdateFundEffects: () => {
+              eventLog.push('updateFundEffects');
+            },
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `sim_init` (`sim.c`) sets funds to 5000 then `SetGameLevelFunds(0)`,
+    // yielding `TotalFunds = 20000`.
+    expect(runtime.invoke(['sim', 'Funds'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20000',
+    });
+    expect(runtime.invoke(['sim', 'Funds', '1234'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1234',
+    });
+    expect(state.mustUpdateFunds).toBe(1);
+
+    expect(runtime.invoke(['sim', 'TaxRate', '19'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '19',
+    });
+
+    expect(runtime.invoke(['sim', 'FireFund', '25'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '25',
+    });
+    expect(runtime.invoke(['sim', 'PoliceFund', '33'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '33',
+    });
+    expect(runtime.invoke(['sim', 'RoadFund', '99'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '99',
+    });
+
+    expect(state.fireSpend).toBe(83);
+    expect(state.policeSpend).toBe(66);
+    expect(state.roadSpend).toBe(989);
+
+    // `SimCmdTaxRate` runs `drawBudgetWindow(); Kick();`
+    // and fund-percent commands run `UpdateFundEffects(); Kick();`.
+    expect(eventLog).toEqual([
+      'kick',
+      'schedule',
+      'drawBudgetWindow',
+      'kick',
+      'updateFundEffects',
+      'kick',
+      'updateFundEffects',
+      'kick',
+      'updateFundEffects',
+      'kick',
+    ]);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('matches option toggle semantics, including `Disasters` inversion and `AutoBudget` order', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimBudgetOptionsState();
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimBudgetOptionsSubcommandEntries({
+          state,
+          kickState,
+          hooks: {
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+            onUpdateBudget: () => {
+              eventLog.push('updateBudget');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `NoDisasters = 0` in `sim.c`, and `SimCmdDisasters` returns
+    // `NoDisasters ? 0 : 1`, so default command result is `1`.
+    expect(runtime.invoke(['sim', 'Disasters'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    expect(runtime.invoke(['sim', 'AutoBudget', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'AutoGoto', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'AutoBulldoze', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'Disasters', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'Disasters', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    expect(runtime.invoke(['sim', 'Sound', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DoAnimation', '-2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-2',
+    });
+    expect(runtime.invoke(['sim', 'DoMessages', '-3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-3',
+    });
+    expect(runtime.invoke(['sim', 'DoNotices', '-4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-4',
+    });
+
+    expect(state.autoBudget).toBe(0);
+    expect(state.autoGo).toBe(0);
+    expect(state.autoBulldoze).toBe(0);
+    expect(state.noDisasters).toBe(0);
+    expect(state.userSoundOn).toBe(0);
+    expect(state.doAnimation).toBe(-2);
+    expect(state.doMessages).toBe(-3);
+    expect(state.doNotices).toBe(-4);
+    expect(state.mustUpdateOptions).toBe(1);
+
+    // `SimCmdAutoBudget` order in `w_sim.c` is `Kick(); UpdateBudget();`.
+    expect(eventLog).toEqual([
+      'kick',
+      'schedule',
+      'updateBudget',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+    ]);
+  });
+
+  it('enforces C-parity argc/range/integer validation for budget/options handlers', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimBudgetOptionsSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'Funds', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Funds expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'TaxRate', '21'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim TaxRate expected an integer in range 0..20 at argv[2]: 21',
+    });
+    expect(runtime.invoke(['sim', 'FireFund', '101'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim FireFund expected an integer in range 0..100 at argv[2]: 101',
+    });
+    expect(runtime.invoke(['sim', 'AutoGoto', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim AutoGoto expected an integer in range 0..1 at argv[2]: 2',
+    });
+    expect(runtime.invoke(['sim', 'DoMessages', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DoMessages expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'AutoBudget', '0', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim AutoBudget expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'Funds'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20000',
+    });
+    expect(runtime.invoke(['sim', 'AutoBudget'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    // `InitFundingLevel` in `w_budget.c` initializes percent fields to `1.0`,
+    // and handlers return `(int)(percent * 100.0)`.
+    expect(runtime.invoke(['sim', 'FireFund'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '100',
     });
   });
 });

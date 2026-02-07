@@ -98,7 +98,7 @@ Use this exact loop:
     - `CityName`, `CityFileName`, `GameLevel`, `Year` semantics match spec/C
     - parity mode supports `CityFileName` legacy bug behavior
 
-- [ ] `P1.7` Implement budget/options subcommands.
+- [x] `P1.7` Implement budget/options subcommands.
   - C reference: `SimCmdFunds`, `SimCmdTaxRate`, `SimCmdRoadFund`, `SimCmdFireFund`, `SimCmdPoliceFund`, options toggles
   - Done when:
     - percent math uses C-like integer behavior
@@ -285,3 +285,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.4` by adding session/redraw `sim` call and call+`Kick` subcommands (`SIMCMD_CALL`/`SIMCMD_CALL_KICK` parity), implementing `Kick` delayed-update coalescing hooks (`UpdateDelayed` behavior), and adding tests for side-effect order plus no-kick `Update`.
 - [x] `2026-02-07` Completed `P1.5` by adding `sim` speed/delay/skip/rest subcommands with C-parity argc/range validation (`SimCmdSpeed`/`Delay`/`Skips`/`Skip`/`NeedRest`), `setSpeed` clamp behavior (`0..7` input to `0..3` effective speed), `setSkips` reset semantics, and `Kick` sequencing coverage in `sim-command` tests.
 - [x] `2026-02-07` Completed `P1.6` by adding `sim` city/game setup subcommands (`CityName`, `CityFileName`, `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`, `LoadScenario`), including configurable legacy `CityFileName` allocation-bug parity mode and C-mapped validation/side-effect tests.
+- [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.

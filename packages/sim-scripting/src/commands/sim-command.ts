@@ -1352,6 +1352,526 @@ export function createSimCityGameSetupSubcommandEntries(
 }
 
 /**
+ * `sim` budget/options subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for:
+ * `Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`,
+ * `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`,
+ * `DoAnimation`, `DoMessages`, and `DoNotices` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_BUDGET_OPTIONS_SUBCOMMAND_NAMES = [
+  'Funds',
+  'TaxRate',
+  'FireFund',
+  'PoliceFund',
+  'RoadFund',
+  'AutoBudget',
+  'AutoGoto',
+  'AutoBulldoze',
+  'Disasters',
+  'Sound',
+  'DoAnimation',
+  'DoMessages',
+  'DoNotices',
+] as const;
+
+/**
+ * Union of budget/options subcommand names from `w_sim.c`.
+ */
+export type SimBudgetOptionsSubcommandName = (typeof SIM_BUDGET_OPTIONS_SUBCOMMAND_NAMES)[number];
+
+type SimBudgetOptionsBinaryToggleSubcommandName =
+  | 'AutoBudget'
+  | 'AutoGoto'
+  | 'AutoBulldoze'
+  | 'Disasters'
+  | 'Sound';
+
+type SimBudgetOptionsFreeIntToggleSubcommandName = 'DoAnimation' | 'DoMessages' | 'DoNotices';
+
+/**
+ * Mutable backing state for budget/options subcommands.
+ * Mirrors globals touched by these `SimCmd*` handlers in
+ * `ref/micropolis/src/sim/w_sim.c` plus funding state in
+ * `ref/micropolis/src/sim/w_budget.c`:
+ * `TotalFunds`, `CityTax`, department fund percentages/spend/max values,
+ * option toggles, and `MustUpdateFunds`/`MustUpdateOptions`.
+ * Difference from C: process-global values are grouped into one typed object.
+ */
+export interface SimBudgetOptionsState {
+  totalFunds: number;
+  mustUpdateFunds: number;
+  cityTax: number;
+  firePercent: number;
+  policePercent: number;
+  roadPercent: number;
+  fireSpend: number;
+  policeSpend: number;
+  roadSpend: number;
+  fireMaxValue: number;
+  policeMaxValue: number;
+  roadMaxValue: number;
+  autoBudget: number;
+  autoGo: number;
+  autoBulldoze: number;
+  noDisasters: number;
+  userSoundOn: number;
+  doAnimation: number;
+  doMessages: number;
+  doNotices: number;
+  mustUpdateOptions: number;
+}
+
+const SIM_BUDGET_OPTIONS_DEFAULT_STATE: SimBudgetOptionsState = {
+  // `sim_init` sets funds to 5000 then applies `SetGameLevelFunds(0)`.
+  totalFunds: 20000,
+  // `w_update.c` globals are zero-initialized.
+  mustUpdateFunds: 0,
+  // `sim_init` default.
+  cityTax: 7,
+  // `InitFundingLevel` in `w_budget.c`.
+  firePercent: 1.0,
+  policePercent: 1.0,
+  roadPercent: 1.0,
+  // `s_alloc.c` globals are zero-initialized.
+  fireSpend: 0,
+  policeSpend: 0,
+  roadSpend: 0,
+  fireMaxValue: 0,
+  policeMaxValue: 0,
+  roadMaxValue: 0,
+  // `sim_init` defaults in `sim.c`.
+  autoBudget: 1,
+  autoGo: 1,
+  autoBulldoze: 1,
+  noDisasters: 0,
+  userSoundOn: 1,
+  doAnimation: 1,
+  doMessages: 1,
+  doNotices: 1,
+  // `sim_init` marks options dirty once at startup.
+  mustUpdateOptions: 1,
+};
+
+/**
+ * Hook callbacks for budget/options command side effects.
+ * Mirrors side effects triggered by `SimCmd*` handlers in
+ * `ref/micropolis/src/sim/w_sim.c`:
+ * `drawBudgetWindow()`, `UpdateFundEffects()`, and `UpdateBudget()`.
+ * Difference from C: side effects are injected as typed callbacks.
+ */
+export interface SimBudgetOptionsHooks extends SimKickHooks {
+  onDrawBudgetWindow?: () => void;
+  onUpdateFundEffects?: () => void;
+  onUpdateBudget?: () => void;
+}
+
+/**
+ * Constructor options for `createSimBudgetOptionsSubcommandEntries`.
+ * Mirrors budget/options command wiring in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimBudgetOptionsSubcommandEntriesOptions {
+  state?: SimBudgetOptionsState;
+  hooks?: SimBudgetOptionsHooks;
+  kickState?: SimKickState;
+}
+
+/**
+ * Creates mutable state for budget/options subcommands.
+ * Mirrors relevant globals initialized in `ref/micropolis/src/sim/sim.c`,
+ * `ref/micropolis/src/sim/w_budget.c`, and `ref/micropolis/src/sim/w_update.c`.
+ * Difference from C: callers may override defaults per runtime/test.
+ */
+export function createSimBudgetOptionsState(
+  initialValues: Partial<SimBudgetOptionsState> = {},
+): SimBudgetOptionsState {
+  return {
+    ...SIM_BUDGET_OPTIONS_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+/**
+ * Validates C-parity argc for budget/options controls.
+ * Mirrors `if ((argc != 2) && (argc != 3)) return TCL_ERROR;` in
+ * `SimCmdFunds`, `SimCmdTaxRate`, fund-percent commands, and option toggles
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function validateSimBudgetOptionsArgCount(
+  argv: readonly string[],
+  name: SimBudgetOptionsSubcommandName,
+): ScriptRuntimeResult | null {
+  if (argv.length === 2 || argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 2 or 3, got ${argv.length}`,
+    ),
+  );
+}
+
+/**
+ * Parses one write-argument integer for budget/options controls.
+ * Mirrors `Tcl_GetInt(interp, argv[2], &value)` usage in the corresponding
+ * `SimCmd*` handlers from `ref/micropolis/src/sim/w_sim.c`.
+ */
+function parseSimBudgetOptionsWriteInt(
+  argv: readonly string[],
+  name: SimBudgetOptionsSubcommandName,
+): number | ScriptRuntimeResult {
+  const rawValue = argv[2];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[2]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[2]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+/**
+ * Converts stored percent fraction to C `int` return format.
+ * Mirrors `sprintf(..., "%d", (int)(percent * 100.0))` in
+ * `SimCmdFireFund`, `SimCmdPoliceFund`, and `SimCmdRoadFund`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+function toPercentIntForResult(percent: number): number {
+  return Math.trunc(percent * 100.0);
+}
+
+/**
+ * Applies one department fund-percent write with C integer spend math.
+ * Mirrors `SimCmdFireFund`, `SimCmdPoliceFund`, and `SimCmdRoadFund` in
+ * `ref/micropolis/src/sim/w_sim.c`: set percent as fraction, compute spend via
+ * integer division, run `UpdateFundEffects()`, then `Kick()`.
+ */
+function applyDepartmentFundPercentWrite(
+  state: SimBudgetOptionsState,
+  hooks: SimBudgetOptionsHooks,
+  kickState: SimKickState,
+  rawPercent: number,
+  fields: {
+    percentField: 'firePercent' | 'policePercent' | 'roadPercent';
+    spendField: 'fireSpend' | 'policeSpend' | 'roadSpend';
+    maxField: 'fireMaxValue' | 'policeMaxValue' | 'roadMaxValue';
+  },
+): void {
+  state[fields.percentField] = rawPercent / 100.0;
+  state[fields.spendField] = cIntDiv(state[fields.maxField] * rawPercent, 100);
+  hooks.onUpdateFundEffects?.();
+  runSimKick(kickState, hooks);
+}
+
+/**
+ * Creates one budget-control (`Funds`/`TaxRate`) handler.
+ * Mirrors `SimCmdFunds` and `SimCmdTaxRate` in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function createSimBudgetControlSubcommandHandler(
+  state: SimBudgetOptionsState,
+  hooks: SimBudgetOptionsHooks,
+  kickState: SimKickState,
+  name: 'Funds' | 'TaxRate',
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimBudgetOptionsArgCount(argv, name);
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimBudgetOptionsWriteInt(argv, name);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+
+      if (name === 'Funds') {
+        if (parsedValue < 0) {
+          return makeScriptFailure(
+            new ScriptRuntimeError(
+              ScriptRuntimeErrorCode.InvalidInteger,
+              `sim Funds expected a non-negative integer at argv[2]: ${parsedValue}`,
+            ),
+          );
+        }
+
+        state.totalFunds = parsedValue;
+        state.mustUpdateFunds = 1;
+        runSimKick(kickState, hooks);
+      } else {
+        if (parsedValue < 0 || parsedValue > 20) {
+          return makeScriptFailure(
+            new ScriptRuntimeError(
+              ScriptRuntimeErrorCode.InvalidInteger,
+              `sim TaxRate expected an integer in range 0..20 at argv[2]: ${parsedValue}`,
+            ),
+          );
+        }
+
+        state.cityTax = parsedValue;
+        hooks.onDrawBudgetWindow?.();
+        runSimKick(kickState, hooks);
+      }
+    }
+
+    return makeScriptSuccess(String(name === 'Funds' ? state.totalFunds : state.cityTax));
+  };
+}
+
+/**
+ * Creates one department fund-percent handler.
+ * Mirrors `SimCmdFireFund`, `SimCmdPoliceFund`, and `SimCmdRoadFund`
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function createSimDepartmentFundSubcommandHandler(
+  state: SimBudgetOptionsState,
+  hooks: SimBudgetOptionsHooks,
+  kickState: SimKickState,
+  name: 'FireFund' | 'PoliceFund' | 'RoadFund',
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimBudgetOptionsArgCount(argv, name);
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimBudgetOptionsWriteInt(argv, name);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0 || parsedValue > 100) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim ${name} expected an integer in range 0..100 at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      if (name === 'FireFund') {
+        applyDepartmentFundPercentWrite(state, hooks, kickState, parsedValue, {
+          percentField: 'firePercent',
+          spendField: 'fireSpend',
+          maxField: 'fireMaxValue',
+        });
+      } else if (name === 'PoliceFund') {
+        applyDepartmentFundPercentWrite(state, hooks, kickState, parsedValue, {
+          percentField: 'policePercent',
+          spendField: 'policeSpend',
+          maxField: 'policeMaxValue',
+        });
+      } else {
+        applyDepartmentFundPercentWrite(state, hooks, kickState, parsedValue, {
+          percentField: 'roadPercent',
+          spendField: 'roadSpend',
+          maxField: 'roadMaxValue',
+        });
+      }
+    }
+
+    if (name === 'FireFund') {
+      return makeScriptSuccess(String(toPercentIntForResult(state.firePercent)));
+    }
+    if (name === 'PoliceFund') {
+      return makeScriptSuccess(String(toPercentIntForResult(state.policePercent)));
+    }
+    return makeScriptSuccess(String(toPercentIntForResult(state.roadPercent)));
+  };
+}
+
+/**
+ * Creates one binary option-toggle handler (`0|1`) with C parity behavior.
+ * Mirrors `SimCmdAutoBudget`, `SimCmdAutoGoto`, `SimCmdAutoBulldoze`,
+ * `SimCmdDisasters`, and `SimCmdSound` in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function createSimBinaryOptionSubcommandHandler(
+  state: SimBudgetOptionsState,
+  hooks: SimBudgetOptionsHooks,
+  kickState: SimKickState,
+  name: SimBudgetOptionsBinaryToggleSubcommandName,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimBudgetOptionsArgCount(argv, name);
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimBudgetOptionsWriteInt(argv, name);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0 || parsedValue > 1) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim ${name} expected an integer in range 0..1 at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      if (name === 'AutoBudget') {
+        state.autoBudget = parsedValue;
+      } else if (name === 'AutoGoto') {
+        state.autoGo = parsedValue;
+      } else if (name === 'AutoBulldoze') {
+        state.autoBulldoze = parsedValue;
+      } else if (name === 'Disasters') {
+        state.noDisasters = parsedValue !== 0 ? 0 : 1;
+      } else {
+        state.userSoundOn = parsedValue;
+      }
+
+      state.mustUpdateOptions = 1;
+      runSimKick(kickState, hooks);
+      if (name === 'AutoBudget') {
+        hooks.onUpdateBudget?.();
+      }
+    }
+
+    if (name === 'AutoBudget') {
+      return makeScriptSuccess(String(state.autoBudget));
+    }
+    if (name === 'AutoGoto') {
+      return makeScriptSuccess(String(state.autoGo));
+    }
+    if (name === 'AutoBulldoze') {
+      return makeScriptSuccess(String(state.autoBulldoze));
+    }
+    if (name === 'Disasters') {
+      return makeScriptSuccess(String(state.noDisasters !== 0 ? 0 : 1));
+    }
+    return makeScriptSuccess(String(state.userSoundOn));
+  };
+}
+
+/**
+ * Creates one free-int option-toggle handler.
+ * Mirrors `SimCmdDoAnimation`, `SimCmdDoMessages`, and `SimCmdDoNotices` in
+ * `ref/micropolis/src/sim/w_sim.c`, which accept any Tcl integer.
+ */
+function createSimFreeIntOptionSubcommandHandler(
+  state: SimBudgetOptionsState,
+  hooks: SimBudgetOptionsHooks,
+  kickState: SimKickState,
+  name: SimBudgetOptionsFreeIntToggleSubcommandName,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimBudgetOptionsArgCount(argv, name);
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimBudgetOptionsWriteInt(argv, name);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+
+      if (name === 'DoAnimation') {
+        state.doAnimation = parsedValue;
+      } else if (name === 'DoMessages') {
+        state.doMessages = parsedValue;
+      } else {
+        state.doNotices = parsedValue;
+      }
+
+      state.mustUpdateOptions = 1;
+      runSimKick(kickState, hooks);
+    }
+
+    if (name === 'DoAnimation') {
+      return makeScriptSuccess(String(state.doAnimation));
+    }
+    if (name === 'DoMessages') {
+      return makeScriptSuccess(String(state.doMessages));
+    }
+    return makeScriptSuccess(String(state.doNotices));
+  };
+}
+
+/**
+ * Builds budget/options `sim` subcommand entries.
+ * Mirrors `SimCmdFunds`, `SimCmdTaxRate`, fund-percent handlers, and option
+ * toggles in `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: department spend math uses truncating integer division to match
+ * C integer behavior from `(maxValue * percent) / 100`.
+ */
+export function createSimBudgetOptionsSubcommandEntries(
+  options: CreateSimBudgetOptionsSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimBudgetOptionsState();
+  const hooks = options.hooks ?? {};
+  const kickState = options.kickState ?? createSimKickState();
+
+  return [
+    ['Funds', createSimBudgetControlSubcommandHandler(state, hooks, kickState, 'Funds')] as const,
+    [
+      'TaxRate',
+      createSimBudgetControlSubcommandHandler(state, hooks, kickState, 'TaxRate'),
+    ] as const,
+    [
+      'FireFund',
+      createSimDepartmentFundSubcommandHandler(state, hooks, kickState, 'FireFund'),
+    ] as const,
+    [
+      'PoliceFund',
+      createSimDepartmentFundSubcommandHandler(state, hooks, kickState, 'PoliceFund'),
+    ] as const,
+    [
+      'RoadFund',
+      createSimDepartmentFundSubcommandHandler(state, hooks, kickState, 'RoadFund'),
+    ] as const,
+    [
+      'AutoBudget',
+      createSimBinaryOptionSubcommandHandler(state, hooks, kickState, 'AutoBudget'),
+    ] as const,
+    [
+      'AutoGoto',
+      createSimBinaryOptionSubcommandHandler(state, hooks, kickState, 'AutoGoto'),
+    ] as const,
+    [
+      'AutoBulldoze',
+      createSimBinaryOptionSubcommandHandler(state, hooks, kickState, 'AutoBulldoze'),
+    ] as const,
+    [
+      'Disasters',
+      createSimBinaryOptionSubcommandHandler(state, hooks, kickState, 'Disasters'),
+    ] as const,
+    ['Sound', createSimBinaryOptionSubcommandHandler(state, hooks, kickState, 'Sound')] as const,
+    [
+      'DoAnimation',
+      createSimFreeIntOptionSubcommandHandler(state, hooks, kickState, 'DoAnimation'),
+    ] as const,
+    [
+      'DoMessages',
+      createSimFreeIntOptionSubcommandHandler(state, hooks, kickState, 'DoMessages'),
+    ] as const,
+    [
+      'DoNotices',
+      createSimFreeIntOptionSubcommandHandler(state, hooks, kickState, 'DoNotices'),
+    ] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -1390,6 +1910,9 @@ export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
   ...createSimSpeedDelayControlSubcommandEntries({
+    kickState: DEFAULT_SIM_KICK_STATE,
+  }),
+  ...createSimBudgetOptionsSubcommandEntries({
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
   ...createSimCityGameSetupSubcommandEntries(),
