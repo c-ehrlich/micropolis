@@ -159,7 +159,7 @@ Verification:
 ## Phase 6: CI Drift Gates
 
 ### P6.1 Add manifest drift gate
-- [ ] Add script/check that regenerates manifests and fails on diff.
+- [x] Add script/check that regenerates manifests and fails on diff.
 
 Verification:
 - [ ] Intentional stale manifest causes failure.
@@ -205,3 +205,4 @@ Verification:
 - [x] 2026-02-07: Completed P5.1 helper-export task by extending `packages/sim-assets/src/legacy.ts` with C-parity scenario/resource resolution exports (`normalizeLegacyScenarioId`, `resolveLegacyScenarioResourceId`, `resolveLegacyScenarioResourceName`, and typed `stri`/`snro` identifier helpers) and added parity tests in `packages/sim-assets/src/legacy.test.ts`.
 - [x] 2026-02-07: Completed P5.2 helper-export task by adding `packages/sim-assets/src/sim-ui.ts` exports for editor tool icon bitmaps, `stri.356` string-resource references, tool sound token/file mappings, and tool help-doc id/html helpers, with parity tests in `packages/sim-assets/src/sim-ui.test.ts`.
 - [x] 2026-02-07: Completed P5.2 canonical-key/derived-overlay task by adding `resolveSimUiToolIconAssetLookup` in `packages/sim-assets/src/sim-ui.ts` to return canonical `ref/micropolis/images/*.xpm` tool icon keys with optional derived PNG path lookup, plus coverage in `packages/sim-assets/src/sim-ui.test.ts`.
+- [x] 2026-02-07: Completed P6.1 manifest drift gate task by adding `packages/sim-assets/scripts/check-manifest-drift.mjs` and `package.json` wiring to regenerate `src/generated/assets-manifest.ts` and fail when regeneration changes bytes.
