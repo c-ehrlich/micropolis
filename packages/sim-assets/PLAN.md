@@ -61,11 +61,11 @@ Verification:
 
 ### P1.2 Add package test harness
 - [x] Add `vitest` config for `sim-assets`.
-- [ ] Add `test` script in `packages/sim-assets/package.json`.
-- [ ] Add first smoke test for package exports.
+- [x] Add `test` script in `packages/sim-assets/package.json`.
+- [x] Add first smoke test for package exports.
 
 Verification:
-- [ ] `pnpm -C /Users/cje/dev/city/packages/sim-assets test`
+- [x] `pnpm -C /Users/cje/dev/city/packages/sim-assets test`
 
 ## Phase 2: Canonical Manifest Generation
 
@@ -179,3 +179,5 @@ Verification:
 - [x] 2026-02-07: Audited current `sim-assets` state. Conclusion: existing module skeleton is directionally correct and should be retained; next work is generator/tests/resource-loader completion plus derived PNG export pipeline.
 - [x] 2026-02-07: Completed P1.1 by replacing `TODO.md` stub with package intent + `PLAN.md` link; verified with package typecheck.
 - [x] 2026-02-07: Completed P1.2 task to add `vitest` config for `sim-assets` by creating `packages/sim-assets/vitest.config.ts`.
+- [x] 2026-02-07: Completed P1.2 task to add `test` script in `packages/sim-assets/package.json`.
+- [x] 2026-02-07: Completed P1.2 smoke-test task by adding `src/index.test.ts`; verified with `pnpm -C packages/sim-assets test`.

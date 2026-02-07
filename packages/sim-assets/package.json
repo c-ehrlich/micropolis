@@ -8,6 +8,7 @@
   "scripts": {
     "build": "pnpm -w tsc -p packages/sim-assets/tsconfig.json --noEmit",
     "lint": "pnpm -w eslint packages/sim-assets/src",
+    "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }
