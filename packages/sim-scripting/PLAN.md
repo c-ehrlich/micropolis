@@ -237,7 +237,7 @@ Use this exact loop:
   - Done when:
     - `sim ListenTo`, `sim HearFrom`, and packet callback contract are tested
 
-- [ ] `P6.4` Implement source-delta extras in `legacyExtras`.
+- [x] `P6.4` Implement source-delta extras in `legacyExtras`.
   - Extras: `sim HeatSteps`, `sim HeatFlow`, `sim HeatRule`, `UIDidGenerateNewCity`, `DropFireBombs`
   - Done when:
     - extras are unavailable by default and available when `legacyExtras=true`
@@ -311,3 +311,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P5.6` by adding tool/sound callback helpers (`UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`), implementing wildcard callback remap resolution (`UIDidTool*`) with exact-match precedence, and adding colocated parity tests for callback argv shape.
 - [x] `2026-02-07` Completed `P6.2` by adding the optional `camview` command family (`configure`, `position`, `size`, `Visible`, `StoreColor`, `NewCam`, `DeleteCam`, `RandomizeCam`, `ConfigCam`, `FindCam`, `FindSomeCam`) with CAM-flag-gated default registration, C-mapped `w_cam.c`/`g_cam.c` parsing and camera-list semantics, and colocated unit coverage for lifecycle/error/parity behavior.
 - [x] `2026-02-07` Completed `P6.3` by adding optional NET `sim` subcommands (`ListenTo`, `HearFrom`) with `w_sim.c` arg/`file<sock>` parsing parity, default NET-enabled registration wiring, `HandlePacket` callback dispatch formatting parity from `w_net.c` (`%3d ` byte list), and colocated tests for command and packet-callback contracts.
+- [x] `2026-02-07` Completed `P6.4` by adding built-in `legacyExtras` support for source-delta `sim` heat commands (`HeatSteps`, `HeatFlow`, `HeatRule`) with `w_sim.c`/`sim.c` defaults and `Kick()` parity, wiring those entries into flag-gated default registration, and adding source-delta callback helpers/tests for `UIDidGenerateNewCity` (`s_gen.c`) and `DropFireBombs` (`w_stubs.c`).

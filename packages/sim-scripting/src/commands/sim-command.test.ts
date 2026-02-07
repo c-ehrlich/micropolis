@@ -15,6 +15,8 @@ import {
   createSimDisastersSpriteGoalUtilityState,
   createSimDisastersSpriteGoalUtilitySubcommandEntries,
   createSimKickState,
+  createSimLegacyExtraState,
+  createSimLegacyExtraSubcommandEntries,
   createSimMapDynamicOverlayMiscState,
   createSimMapDynamicOverlayMiscSubcommandEntries,
   createSimNetworkingSubcommandEntries,
@@ -127,6 +129,19 @@ describe('sim default subcommand entries', () => {
     expect(table.has('JustCam')).toBe(true);
     expect(table.has('ListenTo')).toBe(true);
     expect(table.has('HeatSteps')).toBe(true);
+  });
+
+  it('registers built-in legacy extras when `legacyExtras` is enabled without overrides', () => {
+    const entries = createSimDefaultSubcommandEntries({
+      featureFlags: {
+        legacyExtras: true,
+      },
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('HeatSteps')).toBe(true);
+    expect(table.has('HeatFlow')).toBe(true);
+    expect(table.has('HeatRule')).toBe(true);
   });
 });
 
@@ -484,6 +499,109 @@ describe('sim speed/delay/skip/rest control subcommands', () => {
     expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
       code: ScriptResultCode.Ok,
       value: '3',
+    });
+  });
+});
+
+describe('sim legacy extra subcommands', () => {
+  it('matches C get/set semantics for HeatSteps, HeatFlow, and HeatRule', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimLegacyExtraState();
+    const kickState = createSimKickState();
+    const kickEvents: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimLegacyExtraSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              kickEvents.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              kickEvents.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // Defaults come from `sim.c`: `heat_steps=0`, `heat_flow=-7`, `heat_rule=0`.
+    expect(runtime.invoke(['sim', 'HeatSteps'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-7',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    expect(runtime.invoke(['sim', 'HeatSteps', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow', '-19'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-19',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    expect(state).toEqual({
+      heatSteps: 4,
+      heatFlow: -19,
+      heatRule: 1,
+    });
+
+    // `SimCmdHeatSteps` calls `Kick()` in `w_sim.c`; `HeatFlow`/`HeatRule` do not.
+    expect(kickEvents).toEqual(['kick', 'schedule']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('enforces C-parity argc and integer validation for heat extras', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime, createSimSubcommandTable(createSimLegacyExtraSubcommandEntries()));
+
+    expect(runtime.invoke(['sim', 'HeatSteps', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HeatSteps expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HeatFlow expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim HeatRule expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('is added to default `sim` registration only when `legacyExtras` is enabled', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDefaultSubcommandEntries({
+          featureFlags: {
+            legacyExtras: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'HeatFlow'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-7',
     });
   });
 });

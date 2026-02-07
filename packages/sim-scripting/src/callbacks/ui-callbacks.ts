@@ -248,6 +248,28 @@ export function dispatchUiStartLoad(dispatch: UiCallbackDispatcher): ScriptRunti
 }
 
 /**
+ * Dispatches the generated-new-city callback.
+ * Mirrors `Eval("UIDidGenerateNewCity")` in `GenerateSomeCity`
+ * (`ref/micropolis/src/sim/s_gen.c`).
+ * Parity note: this is a source-delta legacy extra; callers should wire it
+ * only when `legacyExtras` behavior is enabled.
+ */
+export function dispatchUiDidGenerateNewCity(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIDidGenerateNewCity');
+}
+
+/**
+ * Dispatches the scenario firebomb callback.
+ * Mirrors `Eval("DropFireBombs")` in `DropFireBombs`
+ * (`ref/micropolis/src/sim/w_stubs.c`).
+ * Parity note: this is a source-delta legacy extra and is intentionally
+ * exposed as an explicit helper for integration-layer opt-in.
+ */
+export function dispatchDropFireBombs(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('DropFireBombs');
+}
+
+/**
  * Dispatches the scenario-start lifecycle callback with C `%d` integer shape.
  * Mirrors `sprintf("UIStartScenario %d", scenario)` in `DoStartScenario`
  * (`ref/micropolis/src/sim/w_stubs.c`).

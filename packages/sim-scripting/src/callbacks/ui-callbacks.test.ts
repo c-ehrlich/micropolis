@@ -8,9 +8,11 @@ import {
   createUiCallbackDispatcher,
   dispatchDoPendTool,
   dispatchDoStopMicropolis,
+  dispatchDropFireBombs,
   dispatchHandlePacket,
   dispatchUiAutoGoto,
   dispatchUiCallback,
+  dispatchUiDidGenerateNewCity,
   dispatchUiDidLoadCity,
   dispatchUiDidLoadScenario,
   dispatchUiDidntLoadCity,
@@ -202,6 +204,8 @@ describe('ui startup/lifecycle callback helpers', () => {
       ['UIPlayNewCity', '::ui::playNewCity'],
       ['UIReallyStartGame', '::ui::reallyStartGame'],
       ['UIStartLoad', '::ui::startLoad'],
+      ['UIDidGenerateNewCity', '::ui::didGenerateNewCity'],
+      ['DropFireBombs', '::ui::dropFireBombs'],
       ['UINewGame', '::ui::newGame'],
       ['DoStopMicropolis', '::ui::stopMicropolis'],
     ];
@@ -230,6 +234,14 @@ describe('ui startup/lifecycle callback helpers', () => {
       code: ScriptResultCode.Ok,
       value: '::ui::startLoad',
     });
+    expect(dispatchUiDidGenerateNewCity(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::didGenerateNewCity',
+    });
+    expect(dispatchDropFireBombs(dispatch)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '::ui::dropFireBombs',
+    });
     expect(dispatchUiNewGame(dispatch)).toEqual({
       code: ScriptResultCode.Ok,
       value: '::ui::newGame',
@@ -243,6 +255,8 @@ describe('ui startup/lifecycle callback helpers', () => {
       ['::ui::playNewCity'],
       ['::ui::reallyStartGame'],
       ['::ui::startLoad'],
+      ['::ui::didGenerateNewCity'],
+      ['::ui::dropFireBombs'],
       ['::ui::newGame'],
       ['::ui::stopMicropolis'],
     ]);

@@ -155,4 +155,28 @@ describe('createDefaultSimScriptingBaseCommandRegistrar', () => {
       value: '',
     });
   });
+
+  it('registers built-in legacy extra sim subcommands by default when legacyExtras is enabled', () => {
+    const bundle = createSimScriptingRuntime({
+      registerBaseCommands: createDefaultSimScriptingBaseCommandRegistrar({
+        featureFlags: {
+          legacyExtras: true,
+        },
+      }),
+    });
+
+    // Defaults from `sim.c`: `heat_steps=0`, `heat_flow=-7`, `heat_rule=0`.
+    expect(bundle.runtime.invoke(['sim', 'HeatSteps'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(bundle.runtime.invoke(['sim', 'HeatFlow'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-7',
+    });
+    expect(bundle.runtime.invoke(['sim', 'HeatRule'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+  });
 });

@@ -926,6 +926,201 @@ export function createSimSpeedDelayControlSubcommandEntries(
 }
 
 /**
+ * `sim` legacy extra subcommands from source deltas.
+ * Mirrors explicit registrations for `HeatSteps`, `HeatFlow`, and `HeatRule`
+ * in `sim_command_init` (`ref/micropolis/src/sim/w_sim.c`).
+ * Parity note: these are grouped under optional `legacyExtras` in TS even
+ * though the original C build registers them unconditionally.
+ */
+export const SIM_LEGACY_EXTRA_SUBCOMMAND_NAMES = ['HeatSteps', 'HeatFlow', 'HeatRule'] as const;
+
+/**
+ * Union of source-delta legacy extra subcommand names.
+ */
+export type SimLegacyExtraSubcommandName = (typeof SIM_LEGACY_EXTRA_SUBCOMMAND_NAMES)[number];
+
+/**
+ * Mutable backing state for source-delta `sim` legacy extras.
+ * Mirrors globals initialized in `ref/micropolis/src/sim/sim.c`:
+ * `heat_steps`, `heat_flow`, and `heat_rule`.
+ * Difference from C: values are grouped into one typed object for per-runtime
+ * configuration instead of process globals.
+ */
+export interface SimLegacyExtraState {
+  heatSteps: number;
+  heatFlow: number;
+  heatRule: number;
+}
+
+const SIM_LEGACY_EXTRA_DEFAULT_STATE: SimLegacyExtraState = {
+  // Defaults from `sim.c`.
+  heatSteps: 0,
+  heatFlow: -7,
+  heatRule: 0,
+};
+
+/**
+ * Constructor options for `createSimLegacyExtraSubcommandEntries`.
+ * Mirrors legacy extra command wiring in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimLegacyExtraSubcommandEntriesOptions {
+  state?: SimLegacyExtraState;
+  kickState?: SimKickState;
+  kickHooks?: SimKickHooks;
+}
+
+/**
+ * Creates mutable state for source-delta legacy extras.
+ * Mirrors `heat_steps`, `heat_flow`, and `heat_rule` defaults from
+ * `ref/micropolis/src/sim/sim.c`.
+ * Difference from C: callers can override defaults for tests/runtime wiring.
+ */
+export function createSimLegacyExtraState(
+  initialValues: Partial<SimLegacyExtraState> = {},
+): SimLegacyExtraState {
+  return {
+    ...SIM_LEGACY_EXTRA_DEFAULT_STATE,
+    ...initialValues,
+  };
+}
+
+function validateSimLegacyExtraArgCount(
+  argv: readonly string[],
+  name: SimLegacyExtraSubcommandName,
+): ScriptRuntimeResult | null {
+  if (argv.length === 2 || argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 2 or 3, got ${argv.length}`,
+    ),
+  );
+}
+
+function parseSimLegacyExtraWriteInt(
+  argv: readonly string[],
+  name: SimLegacyExtraSubcommandName,
+): number | ScriptRuntimeResult {
+  const rawValue = argv[2];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[2]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[2]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+function createSimHeatStepsSubcommandHandler(
+  state: SimLegacyExtraState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimLegacyExtraArgCount(argv, 'HeatSteps');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimLegacyExtraWriteInt(argv, 'HeatSteps');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim HeatSteps expected a non-negative integer at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      state.heatSteps = parsedValue;
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(String(state.heatSteps));
+  };
+}
+
+function createSimHeatFlowSubcommandHandler(state: SimLegacyExtraState): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimLegacyExtraArgCount(argv, 'HeatFlow');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimLegacyExtraWriteInt(argv, 'HeatFlow');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      state.heatFlow = parsedValue;
+    }
+
+    return makeScriptSuccess(String(state.heatFlow));
+  };
+}
+
+function createSimHeatRuleSubcommandHandler(state: SimLegacyExtraState): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimLegacyExtraArgCount(argv, 'HeatRule');
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimLegacyExtraWriteInt(argv, 'HeatRule');
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      state.heatRule = parsedValue;
+    }
+
+    return makeScriptSuccess(String(state.heatRule));
+  };
+}
+
+/**
+ * Builds source-delta legacy extra `sim` subcommand entries.
+ * Mirrors `SimCmdHeatSteps`, `SimCmdHeatFlow`, and `SimCmdHeatRule` in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: `HeatSteps` setter runs `Kick()` in C; `HeatFlow` and
+ * `HeatRule` setters do not.
+ */
+export function createSimLegacyExtraSubcommandEntries(
+  options: CreateSimLegacyExtraSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimLegacyExtraState();
+  const kickState = options.kickState ?? createSimKickState();
+  const kickHooks = options.kickHooks ?? {};
+
+  return [
+    ['HeatSteps', createSimHeatStepsSubcommandHandler(state, kickState, kickHooks)] as const,
+    ['HeatFlow', createSimHeatFlowSubcommandHandler(state)] as const,
+    ['HeatRule', createSimHeatRuleSubcommandHandler(state)] as const,
+  ];
+}
+
+/**
  * `sim` city/game setup subcommands from `w_sim.c`.
  * Mirrors explicit command registrations for `CityName`, `CityFileName`,
  * `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`,
@@ -3292,7 +3487,9 @@ export function createSimDefaultSubcommandEntries(
   }
 
   if (featureFlags.legacyExtras) {
-    entries.push(...(options.legacyExtraSubcommandEntries ?? []));
+    entries.push(
+      ...(options.legacyExtraSubcommandEntries ?? createSimLegacyExtraSubcommandEntries()),
+    );
   }
 
   return entries;
@@ -3313,6 +3510,9 @@ export function createSimDefaultSubcommandEntries(
  *   `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`)
  * - optional networking utilities (`SimCmdListenTo`, `SimCmdHearFrom`)
  *   via `createSimNetworkingSubcommandEntries` when `NET` is enabled
+ * - optional source-delta legacy extras (`SimCmdHeatSteps`, `SimCmdHeatFlow`,
+ *   `SimCmdHeatRule`) via `createSimLegacyExtraSubcommandEntries` when
+ *   `legacyExtras` is enabled
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  * Parity note: optional feature slices (`CAM`, `NET`, `legacyExtras`) default
