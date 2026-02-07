@@ -31,8 +31,9 @@ describe('createUdpHookRuntime listenTo parity', () => {
         makeOpenFile(sock, readable, writable) {
           calls.push(`open-file ${sock} ${readable} ${writable}`);
         },
-        hearSocket(sock) {
-          calls.push(`hear ${sock}`);
+        recvFrom(sock) {
+          calls.push(`recv ${sock}`);
+          return { kind: 'wouldBlock' };
         },
       },
     });
@@ -119,12 +120,13 @@ describe('createUdpHookRuntime listenTo parity', () => {
 });
 
 describe('createUdpHookRuntime hearFrom parsing parity', () => {
-  it('parses file<sock> and forwards the socket to hearSocket', () => {
-    const heardSockets: number[] = [];
+  it('parses file<sock> and runs the recv loop on the parsed socket', () => {
+    const recvCalls: number[] = [];
     const runtime = createUdpHookRuntime({
       platform: createPlatform({
-        hearSocket(sock) {
-          heardSockets.push(sock);
+        recvFrom(sock) {
+          recvCalls.push(sock);
+          return { kind: 'wouldBlock' };
         },
       }),
     });
@@ -133,11 +135,62 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
     // `argv[2]` must begin with `file`, then parse int from `argv[2] + 4`.
     runtime.hearFrom('file27');
 
-    expect(heardSockets).toEqual([27]);
+    expect(recvCalls).toEqual([27]);
+  });
+
+  it('continues on EINTR and packet, then stops on EWOULDBLOCK', () => {
+    const recvCalls: number[] = [];
+    const sequence: Array<'eintr' | 'packet' | 'wouldBlock'> = [
+      'eintr',
+      'packet',
+      'packet',
+      'wouldBlock',
+    ];
+    const runtime = createUdpHookRuntime({
+      platform: createPlatform({
+        recvFrom(sock) {
+          recvCalls.push(sock);
+          const next = sequence.shift() ?? 'wouldBlock';
+          return { kind: next };
+        },
+      }),
+    });
+
+    // Mirrors `udp_hear` in ref/micropolis/src/sim/w_net.c:
+    // `EINTR` retries the loop and `EWOULDBLOCK` terminates it.
+    runtime.hearFrom('file9');
+
+    expect(recvCalls).toEqual([9, 9, 9, 9]);
+    expect(sequence).toEqual([]);
+  });
+
+  it('reports recvfrom error on non-EINTR and non-EWOULDBLOCK failure', () => {
+    const hearErrors: Array<{ message: string; phase: 'listen' | 'hear' }> = [];
+    const recvCalls: number[] = [];
+    const runtime = createUdpHookRuntime({
+      hooks: {
+        onError(error, phase) {
+          hearErrors.push({ message: error.message, phase });
+        },
+      },
+      platform: createPlatform({
+        recvFrom(sock) {
+          recvCalls.push(sock);
+          return { kind: 'error' };
+        },
+      }),
+    });
+
+    // Mirrors `udp_hear`: unexpected recvfrom error calls perror("recvfrom")
+    // and returns immediately.
+    runtime.hearFrom('file12');
+
+    expect(recvCalls).toEqual([12]);
+    expect(hearErrors).toEqual([{ message: 'recvfrom', phase: 'hear' }]);
   });
 
   it('requires exact lowercase file prefix and reports hear-phase errors otherwise', () => {
-    const heardSockets: number[] = [];
+    const recvCalls: number[] = [];
     const hearErrors: Array<{ message: string; phase: 'listen' | 'hear' }> = [];
     const runtime = createUdpHookRuntime({
       hooks: {
@@ -146,8 +199,9 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
         },
       },
       platform: createPlatform({
-        hearSocket(sock) {
-          heardSockets.push(sock);
+        recvFrom(sock) {
+          recvCalls.push(sock);
+          return { kind: 'wouldBlock' };
         },
       }),
     });
@@ -158,7 +212,7 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
     runtime.hearFrom('file');
     runtime.hearFrom('file27suffix');
 
-    expect(heardSockets).toEqual([]);
+    expect(recvCalls).toEqual([]);
     expect(hearErrors).toEqual([
       { message: 'HearFrom expects file<sock>', phase: 'hear' },
       { message: 'HearFrom expects file<sock>', phase: 'hear' },
@@ -177,7 +231,7 @@ function createPlatform(overrides: Partial<UdpListenPlatform>): UdpListenPlatfor
     getFileStatusFlags: () => 0,
     setFileStatusFlags: () => true,
     makeOpenFile: () => undefined,
-    hearSocket: () => undefined,
+    recvFrom: () => ({ kind: 'wouldBlock' }),
     ...overrides,
   };
 }

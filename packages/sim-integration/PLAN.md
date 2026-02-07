@@ -81,7 +81,7 @@ Use this exact loop:
 
 - [x] Create `src/net/udp-hooks.ts` implementing `listenTo(port)` parity interface.
 - [x] Implement `hearFrom(fileSock)` parsing with exact `file<sock>` prefix requirement.
-- [ ] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
+- [x] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
 - [ ] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
 - [ ] Format each byte as `%3d ` equivalent (fixed width + trailing space).
 - [ ] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
@@ -169,3 +169,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 4 task `Add src/tty/stdin-channel.test.ts for all branches above` by validating EOF tty/non-tty handling, partial-EOF continuation, result print gating (`(result != TCL_OK) || sim_tty`), and exact `sim:\n` startup/post-command prompts against `StdinProc` and `tk_main` in `ref/micropolis/src/sim/w_tk.c`.
 - [x] 2026-02-07: Completed Phase 5 task `Create src/net/udp-hooks.ts implementing listenTo(port) parity interface` by adding `createUdpHookRuntime(...).listenTo(port)` as an adapter-backed parity port of `udp_listen` in `ref/micropolis/src/sim/w_net.c` (socket/setup/fcntl/open-file order, `SO_REUSEADDR`, and `0` return on setup failure), with focused tests in `src/net/udp-hooks.test.ts`.
 - [x] 2026-02-07: Completed Phase 5 task `Implement hearFrom(fileSock) parsing with exact file<sock> prefix requirement` by adding `createUdpHookRuntime(...).hearFrom(fileSock)` parsing that mirrors `SimCmdHearFrom` char-by-char `file` prefix checks and integer parsing of `argv[2] + 4` from `ref/micropolis/src/sim/w_sim.c`, then forwarding parsed sockets to the UDP hear adapter with hear-phase error reporting on malformed tokens.
+- [x] 2026-02-07: Completed Phase 5 task `Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK)` by porting `udp_hear` loop control from `ref/micropolis/src/sim/w_net.c` into `createUdpHookRuntime(...).hearFrom(fileSock)` using adapter-driven receive results (`eintr` retry, `wouldBlock` stop, other errors report `recvfrom` and return), with focused parity tests in `src/net/udp-hooks.test.ts`.

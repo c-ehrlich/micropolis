@@ -1,10 +1,23 @@
 import type { UdpHooks } from '../types.ts';
 
 /**
+ * One `recvfrom` attempt outcome for `udp_hear`.
+ * Mirrors error branches in `ref/micropolis/src/sim/w_net.c`:
+ * data packet, `EINTR` retry, `EWOULDBLOCK` stop, or other error return.
+ */
+type UdpReceiveResult =
+  | { kind: 'packet' }
+  | { kind: 'eintr' }
+  | { kind: 'wouldBlock' }
+  | { kind: 'error' };
+
+/**
  * Platform adapter for `udp_listen` system calls.
  * Mirrors the syscall sequence in `ref/micropolis/src/sim/w_net.c`:
  * `socket` -> `setsockopt(SO_REUSEADDR)` -> `bind` -> `fcntl(F_GETFL)` ->
- * `fcntl(F_SETFL, flags | O_NDELAY)` -> `Tcp_MakeOpenFile`.
+ * `fcntl(F_SETFL, flags | O_NDELAY)` -> `Tcp_MakeOpenFile`; and
+ * `udp_hear` nonblocking `recvfrom` loop control (`EINTR` retry,
+ * `EWOULDBLOCK` stop).
  * Parity note: this is intentionally adapter-based so Node/browser specifics
  * remain outside integration logic.
  */
@@ -16,7 +29,7 @@ export interface UdpListenPlatform {
   getFileStatusFlags(sock: number): number;
   setFileStatusFlags(sock: number, flags: number): boolean;
   makeOpenFile(sock: number, readable: 1, writable: 1): void;
-  hearSocket(sock: number): void;
+  recvFrom(sock: number): UdpReceiveResult;
 }
 
 /**
@@ -93,7 +106,20 @@ export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpH
         return;
       }
 
-      platform.hearSocket(sock);
+      while (true) {
+        const receiveResult = platform.recvFrom(sock);
+
+        if (receiveResult.kind === 'packet' || receiveResult.kind === 'eintr') {
+          continue;
+        }
+
+        if (receiveResult.kind === 'wouldBlock') {
+          break;
+        }
+
+        reportHearFailure('recvfrom');
+        return;
+      }
     },
   };
 
