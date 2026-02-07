@@ -96,3 +96,72 @@ describe('StdinChannel StdinProc EOF parity', () => {
     expect(exitCodes).toEqual([]);
   });
 });
+
+describe('StdinChannel StdinProc result printing parity', () => {
+  it('does not print successful non-tty results', () => {
+    // Mirrors `StdinProc` in ref/micropolis/src/sim/w_tk.c:
+    // non-empty `tk_mainInterp->result` is printed only when
+    // `(result != TCL_OK) || sim_tty` is true.
+    const stdoutChunks: string[] = [];
+    const channel = new StdinChannel({
+      isTty: false,
+      evaluateCommand() {
+        return {
+          ok: true,
+          result: 'ok output',
+        };
+      },
+      onWriteStdout(chunk) {
+        stdoutChunks.push(chunk);
+      },
+    });
+
+    channel.consumeLine('puts ok output\n');
+
+    expect(stdoutChunks).toEqual([]);
+  });
+
+  it('prints error results in non-tty mode', () => {
+    // Mirrors the `(result != TCL_OK)` side of the print condition in
+    // `StdinProc` from ref/micropolis/src/sim/w_tk.c.
+    const stdoutChunks: string[] = [];
+    const channel = new StdinChannel({
+      isTty: false,
+      evaluateCommand() {
+        return {
+          ok: false,
+          result: 'command failed',
+        };
+      },
+      onWriteStdout(chunk) {
+        stdoutChunks.push(chunk);
+      },
+    });
+
+    channel.consumeLine('bad command\n');
+
+    expect(stdoutChunks).toEqual(['command failed\n']);
+  });
+
+  it('prints successful results in tty mode', () => {
+    // Mirrors the `|| sim_tty` side of the print condition in
+    // `StdinProc` from ref/micropolis/src/sim/w_tk.c.
+    const stdoutChunks: string[] = [];
+    const channel = new StdinChannel({
+      isTty: true,
+      evaluateCommand() {
+        return {
+          ok: true,
+          result: 'command output',
+        };
+      },
+      onWriteStdout(chunk) {
+        stdoutChunks.push(chunk);
+      },
+    });
+
+    channel.consumeLine('puts command output\n');
+
+    expect(stdoutChunks).toContain('command output\n');
+  });
+});
