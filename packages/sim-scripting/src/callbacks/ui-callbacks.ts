@@ -49,6 +49,18 @@ function toCIntegerString(value: number): string {
 }
 
 /**
+ * Formats budget slider percentages like `SetBudgetValues` in Micropolis.
+ * Mirrors `(int)(roadPercent * 100)` style coercion in
+ * `ref/micropolis/src/sim/w_budget.c`.
+ * Difference from C: accepts either raw ratios (`0..1`) or already-scaled
+ * percentages (`0..100`) so bridge callers can pass either representation.
+ */
+function toCBudgetPercentString(value: number): string {
+  const normalizedValue = Math.abs(value) <= 1 ? value * 100 : value;
+  return toCIntegerString(normalizedValue);
+}
+
+/**
  * Registers or replaces one callback mapping in scripting state.
  * Mirrors C behavior where later script definitions replace earlier procedures,
  * while preserving case-sensitive callback command names.
@@ -447,8 +459,8 @@ export function dispatchUiSetBudget(
  * Dispatches per-department budget slider values in Tcl callback order.
  * Mirrors `sprintf("UISetBudgetValues {%s} {%s} %d {%s} {%s} %d {%s} {%s} %d", ...)`
  * in `SetBudgetValues` (`ref/micropolis/src/sim/w_budget.c`).
- * Difference from C: percent values are supplied by caller instead of reading
- * global `roadPercent`/`policePercent`/`firePercent` state.
+ * Difference from C: percent inputs can be passed either as raw C-style
+ * fractions (`0..1`) or already-scaled percentages (`0..100`).
  */
 export function dispatchUiSetBudgetValues(
   dispatch: UiCallbackDispatcher,
@@ -465,13 +477,13 @@ export function dispatchUiSetBudgetValues(
   return dispatch('UISetBudgetValues', [
     roadGot,
     roadWant,
-    toCIntegerString(roadPercent),
+    toCBudgetPercentString(roadPercent),
     policeGot,
     policeWant,
-    toCIntegerString(policePercent),
+    toCBudgetPercentString(policePercent),
     fireGot,
     fireWant,
-    toCIntegerString(firePercent),
+    toCBudgetPercentString(firePercent),
   ]);
 }
 

@@ -445,4 +445,45 @@ describe('ui status/budget/evaluation callback helpers', () => {
       ],
     ]);
   });
+
+  it('accepts C-style budget ratio inputs and emits percent argv values', () => {
+    // `SetBudgetValues` emits `(int)(<percentFloat> * 100)` in
+    // `ref/micropolis/src/sim/w_budget.c` (`roadPercent`, `policePercent`,
+    // `firePercent` are stored as 0..1 floats).
+    const runtime = new ScriptRuntime();
+    let capturedArgv: readonly string[] = [];
+    runtime.registerCommand('UISetBudgetValues', (argv) => {
+      capturedArgv = argv;
+      return makeScriptSuccess('ok');
+    });
+
+    const state = createScriptingState();
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    dispatchUiSetBudgetValues(
+      dispatch,
+      '$100',
+      '$100',
+      0.759,
+      '$80',
+      '$100',
+      0.482,
+      '$60',
+      '$100',
+      0.279,
+    );
+
+    expect(capturedArgv).toEqual([
+      'UISetBudgetValues',
+      '$100',
+      '$100',
+      '75',
+      '$80',
+      '$100',
+      '48',
+      '$60',
+      '$100',
+      '27',
+    ]);
+  });
 });
