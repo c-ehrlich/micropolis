@@ -535,3 +535,120 @@ export function dispatchUiSetEvaluation(
     title,
   ]);
 }
+
+/**
+ * Dispatches the status-line message callback.
+ * Mirrors `sprintf("UISetMessage {%s}", str)` in `SetMessageField`
+ * (`ref/micropolis/src/sim/s_msg.c`).
+ * Difference from C: accepts optional Tcl `tag` parity argument from
+ * `proc UISetMessage {msg {tag status}}` in `ref/micropolis/res/micropolis.tcl`;
+ * C call sites emit only the message text.
+ */
+export function dispatchUiSetMessage(
+  dispatch: UiCallbackDispatcher,
+  message: string,
+  tag?: string,
+): ScriptRuntimeResult {
+  return tag === undefined
+    ? dispatch('UISetMessage', [message])
+    : dispatch('UISetMessage', [message, tag]);
+}
+
+/**
+ * Dispatches the pop-up notice callback.
+ * Mirrors `sprintf("UIPopUpMessage {%s}", msg)` in `DoPopUpMessage`
+ * (`ref/micropolis/src/sim/w_util.c`).
+ * Difference from C: message transport is argv-based instead of Tcl brace formatting.
+ */
+export function dispatchUiPopUpMessage(
+  dispatch: UiCallbackDispatcher,
+  message: string,
+): ScriptRuntimeResult {
+  return dispatch('UIPopUpMessage', [message]);
+}
+
+/**
+ * Dispatches the notice-picture callback.
+ * Mirrors `sprintf("UIShowPicture %d", id)` in `DoShowPicture`
+ * (`ref/micropolis/src/sim/s_msg.c`).
+ * Difference from C: accepts optional Tcl `parms` parity argument from
+ * `proc UIShowPicture {id {parms \"\"}}` in `ref/micropolis/res/micropolis.tcl`;
+ * C call sites pass only `id`.
+ */
+export function dispatchUiShowPicture(
+  dispatch: UiCallbackDispatcher,
+  pictureId: number,
+  parms?: string,
+): ScriptRuntimeResult {
+  return parms === undefined
+    ? dispatch('UIShowPicture', [toCIntegerString(pictureId)])
+    : dispatch('UIShowPicture', [toCIntegerString(pictureId), parms]);
+}
+
+/**
+ * Dispatches the zone-status notice callback.
+ * Mirrors `sprintf("UIShowZoneStatus {%s} ... %d %d", ..., x, y)` in
+ * `DoShowZoneStatus` (`ref/micropolis/src/sim/w_tool.c`).
+ * Difference from C: callback invocation is explicit and argv-based.
+ */
+export function dispatchUiShowZoneStatus(
+  dispatch: UiCallbackDispatcher,
+  zone: string,
+  density: string,
+  value: string,
+  crime: string,
+  pollution: string,
+  growth: string,
+  x: number,
+  y: number,
+): ScriptRuntimeResult {
+  return dispatch('UIShowZoneStatus', [
+    zone,
+    density,
+    value,
+    crime,
+    pollution,
+    growth,
+    toCIntegerString(x),
+    toCIntegerString(y),
+  ]);
+}
+
+/**
+ * Dispatches the automatic-goto callback with tile coordinates.
+ * Mirrors `sprintf("UIAutoGoto %d %d", x, y)` in `DoAutoGoto`
+ * (`ref/micropolis/src/sim/s_msg.c`).
+ * Parity note: emits tile coordinates; Tcl `UIAutoGoto` converts to pixels
+ * with `(tile * 16) + 8` before `AutoGoal` (`ref/micropolis/res/micropolis.tcl`).
+ * Difference from C: accepts optional `except` parity argument used by Tcl-side calls.
+ */
+export function dispatchUiAutoGoto(
+  dispatch: UiCallbackDispatcher,
+  x: number,
+  y: number,
+  except?: string,
+): ScriptRuntimeResult {
+  return except === undefined
+    ? dispatch('UIAutoGoto', [toCIntegerString(x), toCIntegerString(y)])
+    : dispatch('UIAutoGoto', [toCIntegerString(x), toCIntegerString(y), except]);
+}
+
+/**
+ * Dispatches the lose-game callback.
+ * Mirrors `Eval("UILoseGame")` in `DoLoseGame`
+ * (`ref/micropolis/src/sim/s_msg.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiLoseGame(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UILoseGame');
+}
+
+/**
+ * Dispatches the win-game callback.
+ * Mirrors `Eval("UIWinGame")` in `DoWinGame`
+ * (`ref/micropolis/src/sim/s_msg.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiWinGame(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIWinGame');
+}

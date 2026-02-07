@@ -7,14 +7,17 @@ import { createScriptingState } from '../state/scripting-state.ts';
 import {
   createUiCallbackDispatcher,
   dispatchDoStopMicropolis,
+  dispatchUiAutoGoto,
   dispatchUiCallback,
   dispatchUiDidLoadCity,
   dispatchUiDidLoadScenario,
   dispatchUiDidntLoadCity,
   dispatchUiDidntSaveCity,
   dispatchUiDidSaveCity,
+  dispatchUiLoseGame,
   dispatchUiNewGame,
   dispatchUiPlayNewCity,
+  dispatchUiPopUpMessage,
   dispatchUiReallyStartGame,
   dispatchUiSaveCityAs,
   dispatchUiSetBudget,
@@ -26,13 +29,17 @@ import {
   dispatchUiSetFunds,
   dispatchUiSetGameLevel,
   dispatchUiSetMapState,
+  dispatchUiSetMessage,
   dispatchUiSetOptions,
   dispatchUiSetSpeed,
   dispatchUiShowBudgetAndWait,
+  dispatchUiShowPicture,
+  dispatchUiShowZoneStatus,
   dispatchUiStartLoad,
   dispatchUiStartMicropolis,
   dispatchUiStartScenario,
   dispatchUiUpdateBudget,
+  dispatchUiWinGame,
   registerUiCallback,
   registerUiCallbacks,
 } from './ui-callbacks.ts';
@@ -485,5 +492,90 @@ describe('ui status/budget/evaluation callback helpers', () => {
       '$100',
       '27',
     ]);
+  });
+});
+
+describe('ui message/notice/autogoto callback helpers', () => {
+  it('dispatches message and notice callbacks with C callback argv order', () => {
+    // Mirrors `UISetMessage`, `UIPopUpMessage`, `UIShowPicture`,
+    // `UIShowZoneStatus`, `UILoseGame`, and `UIWinGame` emission in
+    // `ref/micropolis/src/sim/s_msg.c`, `w_tool.c`, and `w_util.c`.
+    // "Magic" `9` picture id comes from `UIShowZoneStatus` -> `UIShowPicture 9`
+    // flow in `proc UIShowZoneStatus` (`ref/micropolis/res/micropolis.tcl`).
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UISetMessage', '::ui::setMessage'],
+      ['UIPopUpMessage', '::ui::popUpMessage'],
+      ['UIShowPicture', '::ui::showPicture'],
+      ['UIShowZoneStatus', '::ui::showZoneStatus'],
+      ['UILoseGame', '::ui::loseGame'],
+      ['UIWinGame', '::ui::winGame'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    dispatchUiSetMessage(dispatch, 'Power lines overloaded.');
+    dispatchUiPopUpMessage(dispatch, 'Emergency services dispatched.');
+    dispatchUiShowPicture(dispatch, 42.9);
+    dispatchUiShowPicture(dispatch, 9, '{zone status args}');
+    dispatchUiShowZoneStatus(
+      dispatch,
+      'Residential',
+      'Sparse',
+      'Low',
+      'Low',
+      'None',
+      'Stable',
+      12.8,
+      24.2,
+    );
+    dispatchUiLoseGame(dispatch);
+    dispatchUiWinGame(dispatch);
+
+    expect(observedArgv).toEqual([
+      ['::ui::setMessage', 'Power lines overloaded.'],
+      ['::ui::popUpMessage', 'Emergency services dispatched.'],
+      ['::ui::showPicture', '42'],
+      ['::ui::showPicture', '9', '{zone status args}'],
+      ['::ui::showZoneStatus', 'Residential', 'Sparse', 'Low', 'Low', 'None', 'Stable', '12', '24'],
+      ['::ui::loseGame'],
+      ['::ui::winGame'],
+    ]);
+  });
+
+  it('keeps UIAutoGoto tile argv so callback handlers can convert to pixel coordinates', () => {
+    // `DoAutoGoto` emits tile-space `%d` values in `ref/micropolis/src/sim/s_msg.c`.
+    // Tcl `proc UIAutoGoto` converts them to pixel centers with
+    // `(tile * 16) + 8` before `AutoGoal` in `ref/micropolis/res/micropolis.tcl`.
+    const runtime = new ScriptRuntime();
+    let capturedArgv: readonly string[] = [];
+    runtime.registerCommand('UIAutoGoto', (argv) => {
+      capturedArgv = argv;
+      const tileX = Number.parseInt(argv[1] ?? '0', 10);
+      const tileY = Number.parseInt(argv[2] ?? '0', 10);
+      const pixelX = tileX * 16 + 8;
+      const pixelY = tileY * 16 + 8;
+      return makeScriptSuccess(`${pixelX},${pixelY},${argv[3] ?? ''}`);
+    });
+
+    const state = createScriptingState();
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiAutoGoto(dispatch, 7.9, 3.2, '.editor.main')).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '120,56,.editor.main',
+    });
+    expect(capturedArgv).toEqual(['UIAutoGoto', '7', '3', '.editor.main']);
   });
 });

@@ -212,7 +212,7 @@ Use this exact loop:
   - Done when:
     - all callback argument orders match spec
 
-- [ ] `P5.5` Implement message/notice/autogoto callbacks.
+- [x] `P5.5` Implement message/notice/autogoto callbacks.
   - Procedures: `UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`
   - Done when:
     - picture/text flow and autogoto coordinate conversion are tested
@@ -306,3 +306,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P5.3` by adding file I/O callback helpers (`UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`) mapped to `s_fileio.c` `Eval`/`sprintf` flows, with deterministic success/failure callback-name emission and message-argv parity tests.
 - [x] `2026-02-07` Completed `P5.4` by adding status/budget/evaluation callback helpers (`UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`) with C-mapped `%d`/bitfield coercion parity from `w_update.c`/`w_util.c`/`w_budget.c`/`w_eval.c` and colocated argv-order tests.
 - [x] `2026-02-07` Repaired `P5.4` by updating `UISetBudgetValues` percent coercion to accept C-style `0..1` funding ratios (`(int)(ratio * 100)` parity from `w_budget.c`) while keeping `0..100` caller compatibility, and adding callback tests for ratio-input argv output ordering.
+- [x] `2026-02-07` Completed `P5.5` by adding message/notice/autogoto callback helpers (`UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`) with C-mapped `%d` argument coercion from `s_msg.c`/`w_tool.c`/`w_util.c`, optional Tcl-parity callback args, and colocated tests covering picture/text callback flow plus tile-to-pixel autogoto conversion parity.
