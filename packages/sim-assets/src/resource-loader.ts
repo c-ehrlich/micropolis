@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import type { ResourceRoots } from './resource-roots.ts';
 
 /**
@@ -37,4 +39,18 @@ export function formatResourcePath(roots: ResourceRoots, identifier: ResourceIde
   }
 
   return `${roots.resourceDir}${identifier.type[0]}${identifier.type[1]}${identifier.type[2]}${identifier.type[3]}.${identifier.id}`;
+}
+
+/**
+ * Read an entire Micropolis resource file payload for a `(type,id)` lookup.
+ * Mirrors `GetResource` in `ref/micropolis/src/sim/w_resrc.c`, where the file is
+ * loaded in full with a single `fread` into a newly allocated buffer.
+ * Parity notes: this helper performs only full-file byte loading; cache lifetime
+ * and structured error translation are handled by higher-level TypeScript helpers.
+ */
+export async function readResourceFile(
+  roots: ResourceRoots,
+  identifier: ResourceIdentifier,
+): Promise<Uint8Array> {
+  return readFile(formatResourcePath(roots, identifier));
 }
