@@ -10,6 +10,7 @@ export * from './help-docs.ts';
 export * from './legacy.ts';
 export * from './resource-loader.ts';
 export * from './resource-roots.ts';
+export * from './sim-ui.ts';
 export * from './sounds.ts';
 export * from './sprites.ts';
 export * from './string-table.ts';
