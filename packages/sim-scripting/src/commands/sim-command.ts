@@ -2718,6 +2718,358 @@ export function createSimDisastersSpriteGoalUtilitySubcommandEntries(
 }
 
 /**
+ * `sim` URL/browser/random/dollars utility subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for `QuoteURL`, `OpenWebBrowser`,
+ * `Rand`, and `Dollars` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_URL_BROWSER_RANDOM_DOLLARS_UTILITY_SUBCOMMAND_NAMES = [
+  'QuoteURL',
+  'OpenWebBrowser',
+  'Rand',
+  'Dollars',
+] as const;
+
+/**
+ * Union of URL/browser/random/dollars utility subcommand names from `w_sim.c`.
+ */
+export type SimUrlBrowserRandomDollarsUtilitySubcommandName =
+  (typeof SIM_URL_BROWSER_RANDOM_DOLLARS_UTILITY_SUBCOMMAND_NAMES)[number];
+
+/**
+ * Hook callbacks for URL/browser/random/dollars side effects.
+ * Mirrors side effects in `SimCmdOpenWebBrowser` and random helpers used by
+ * `SimCmdRand` in `ref/micropolis/src/sim/w_sim.c` plus `Rand`/`Rand16` in
+ * `ref/micropolis/src/sim/s_sim.c`.
+ * Difference from C: browser launch and RNG are injectable for deterministic
+ * tests and host-environment integration.
+ */
+export interface SimUrlBrowserRandomDollarsUtilityHooks {
+  onOpenWebBrowser?: (shellCommand: string, url: string) => number | undefined;
+  onRand?: (maxInclusive: number) => number;
+  onRand16?: () => number;
+}
+
+/**
+ * Parity flags for URL/browser/random/dollars utilities.
+ * Mirrors legacy `SimCmdDollars` behavior in `ref/micropolis/src/sim/w_sim.c`,
+ * which formats `argv[1]` ("Dollars") because it accepts argc 2.
+ * Difference from C: non-legacy mode provides a corrected interface that
+ * formats caller input from `argv[2]` with argc 3.
+ */
+export interface SimUrlBrowserRandomDollarsUtilityParityOptions {
+  legacyDollarsLiteralFormat?: boolean;
+}
+
+/**
+ * Constructor options for `createSimUrlBrowserRandomDollarsUtilitySubcommandEntries`.
+ * Mirrors utility command wiring in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimUrlBrowserRandomDollarsUtilitySubcommandEntriesOptions {
+  hooks?: SimUrlBrowserRandomDollarsUtilityHooks;
+  parity?: SimUrlBrowserRandomDollarsUtilityParityOptions;
+}
+
+const SIM_URL_QUOTE_HEX_DIGITS = '0123456789ABCDEF';
+const SIM_URL_UTILITY_MAX_BYTE_LENGTH = 255;
+const SIM_RAND16_MAX = 0xffff;
+
+function getUtf8ByteLength(value: string): number {
+  return Buffer.byteLength(value, 'utf8');
+}
+
+/**
+ * URL-escapes bytes using `SimCmdQuoteURL` rules.
+ * Mirrors byte loop + `%XX` escaping in `SimCmdQuoteURL`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ * Difference from C: JavaScript strings are encoded as UTF-8 bytes first.
+ */
+function quoteUrlParity(raw: string): string {
+  const bytes = Buffer.from(raw, 'utf8');
+  let quoted = '';
+
+  for (const byte of bytes.values()) {
+    if (
+      byte < 32 ||
+      byte >= 128 ||
+      byte === 43 ||
+      byte === 37 ||
+      byte === 38 ||
+      byte === 60 ||
+      byte === 62 ||
+      byte === 34 ||
+      byte === 39
+    ) {
+      quoted += `%${SIM_URL_QUOTE_HEX_DIGITS[(byte >> 4) & 0x0f]}${SIM_URL_QUOTE_HEX_DIGITS[byte & 0x0f]}`;
+    } else if (byte === 32) {
+      quoted += '+';
+    } else {
+      quoted += String.fromCharCode(byte);
+    }
+  }
+
+  return quoted;
+}
+
+/**
+ * Dollar formatter used by `SimCmdDollars`.
+ * Mirrors `makeDollarDecimalStr` in `ref/micropolis/src/sim/w_util.c`.
+ */
+function formatDollarDecimalParity(raw: string): string {
+  const numOfDigits = raw.length;
+  if (numOfDigits <= 3) {
+    return `$${raw}`;
+  }
+
+  let leftMostSet = numOfDigits % 3;
+  if (leftMostSet === 0) {
+    leftMostSet = 3;
+  }
+
+  let formatted = `$${raw.slice(0, leftMostSet)}`;
+  for (let index = leftMostSet; index < numOfDigits; index += 3) {
+    formatted += `,${raw.slice(index, index + 3)}`;
+  }
+
+  return formatted;
+}
+
+function toSignedInt16(value: number): number {
+  const wrapped = value & SIM_RAND16_MAX;
+  return wrapped >= 0x8000 ? wrapped - 0x10000 : wrapped;
+}
+
+function runSimRand16Parity(hooks: SimUrlBrowserRandomDollarsUtilityHooks): number {
+  const hookedValue = hooks.onRand16?.() ?? hooks.onRand?.(SIM_RAND16_MAX);
+  if (hookedValue !== undefined) {
+    return Math.trunc(hookedValue) & SIM_RAND16_MAX;
+  }
+
+  return Math.trunc(Math.random() * (SIM_RAND16_MAX + 1));
+}
+
+/**
+ * Runs C-style `Rand(short range)` logic for `SimCmdRand`.
+ * Mirrors `Rand` in `ref/micropolis/src/sim/s_sim.c`.
+ * Difference from C: the divide-by-zero case from input `-1` is safely mapped
+ * to `0` instead of invoking undefined behavior.
+ */
+function runSimRandWithMaxParity(
+  maxInclusive: number,
+  hooks: SimUrlBrowserRandomDollarsUtilityHooks,
+): number {
+  if (hooks.onRand !== undefined) {
+    return Math.trunc(hooks.onRand(maxInclusive));
+  }
+
+  const range = maxInclusive + 1;
+  if (range === 0) {
+    return 0;
+  }
+
+  const maxMultiple = Math.trunc(SIM_RAND16_MAX / range) * range;
+  let randomValue = runSimRand16Parity(hooks);
+  while (randomValue >= maxMultiple) {
+    randomValue = runSimRand16Parity(hooks);
+  }
+
+  return Math.trunc(randomValue % range);
+}
+
+function createSimQuoteUrlSubcommandHandler(): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim QuoteURL expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const rawUrl = argv[2];
+    if (rawUrl === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim QuoteURL missing string argument at argv[2]',
+        ),
+      );
+    }
+    const byteLength = getUtf8ByteLength(rawUrl);
+    if (byteLength > SIM_URL_UTILITY_MAX_BYTE_LENGTH) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim QuoteURL expected argv[2] byte length <= 255, got ${byteLength}`,
+        ),
+      );
+    }
+
+    return makeScriptSuccess(quoteUrlParity(rawUrl));
+  };
+}
+
+function createSimOpenWebBrowserSubcommandHandler(
+  hooks: SimUrlBrowserRandomDollarsUtilityHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim OpenWebBrowser expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const url = argv[2];
+    if (url === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim OpenWebBrowser missing string argument at argv[2]',
+        ),
+      );
+    }
+    const byteLength = getUtf8ByteLength(url);
+    if (byteLength > SIM_URL_UTILITY_MAX_BYTE_LENGTH) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim OpenWebBrowser expected argv[2] byte length <= 255, got ${byteLength}`,
+        ),
+      );
+    }
+
+    const shellCommand = `netscape -no-about-splash '${url}' &`;
+    let result = 1;
+    const hookResult = hooks.onOpenWebBrowser?.(shellCommand, url);
+    if (hookResult !== undefined) {
+      result = Math.trunc(hookResult);
+    }
+
+    return makeScriptSuccess(String(result));
+  };
+}
+
+function createSimRandSubcommandHandler(
+  hooks: SimUrlBrowserRandomDollarsUtilityHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 2 && argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim Rand expects argc 2 or 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    if (argv.length === 3) {
+      const rawValue = argv[2];
+      if (rawValue === undefined) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidArgCount,
+            'sim Rand missing integer argument at argv[2]',
+          ),
+        );
+      }
+
+      const parsedValue = parseTclInt32(rawValue);
+      if (parsedValue === null) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim Rand expected a 32-bit integer at argv[2]: ${rawValue}`,
+          ),
+        );
+      }
+
+      const range = toSignedInt16(parsedValue);
+      return makeScriptSuccess(String(runSimRandWithMaxParity(range, hooks)));
+    }
+
+    return makeScriptSuccess(String(runSimRand16Parity(hooks)));
+  };
+}
+
+function createSimDollarsSubcommandHandler(
+  parity: SimUrlBrowserRandomDollarsUtilityParityOptions,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (parity.legacyDollarsLiteralFormat) {
+      if (argv.length !== 2) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidArgCount,
+            `sim Dollars expects argc 2 in legacy mode, got ${argv.length}`,
+          ),
+        );
+      }
+
+      const source = argv[1];
+      if (source === undefined) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidArgCount,
+            'sim Dollars missing legacy input at argv[1]',
+          ),
+        );
+      }
+
+      return makeScriptSuccess(formatDollarDecimalParity(source));
+    }
+
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim Dollars expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const source = argv[2];
+    if (source === undefined) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          'sim Dollars missing string argument at argv[2]',
+        ),
+      );
+    }
+
+    return makeScriptSuccess(formatDollarDecimalParity(source));
+  };
+}
+
+/**
+ * Builds URL/browser/random/dollars utility `sim` subcommand entries.
+ * Mirrors `SimCmdQuoteURL`, `SimCmdOpenWebBrowser`, `SimCmdRand`, and
+ * `SimCmdDollars` in `ref/micropolis/src/sim/w_sim.c`, plus `Rand` in
+ * `ref/micropolis/src/sim/s_sim.c` and `makeDollarDecimalStr` in
+ * `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: `legacyDollarsLiteralFormat` toggles the legacy `argv[1]`
+ * formatting quirk from C; default mode accepts explicit input at `argv[2]`.
+ */
+export function createSimUrlBrowserRandomDollarsUtilitySubcommandEntries(
+  options: CreateSimUrlBrowserRandomDollarsUtilitySubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const hooks = options.hooks ?? {};
+  const parity = options.parity ?? {};
+
+  return [
+    ['QuoteURL', createSimQuoteUrlSubcommandHandler()] as const,
+    ['OpenWebBrowser', createSimOpenWebBrowserSubcommandHandler(hooks)] as const,
+    ['Rand', createSimRandSubcommandHandler(hooks)] as const,
+    ['Dollars', createSimDollarsSubcommandHandler(parity)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -2750,6 +3102,8 @@ const DEFAULT_SIM_KICK_STATE = createSimKickState();
  *   `SimCmdGameLevel`, `SimCmdYear`, and load/generate entries)
  * - disasters/sprite-goal utilities (`SIMCMD_CALL` disaster creators plus
  *   `SimCmdMonsterGoal`, `SimCmdHelicopterGoal`, `SimCmdMonsterDirection`)
+ * - URL/browser/random/dollars utilities (`SimCmdQuoteURL`,
+ *   `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`)
  * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
  * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  */
@@ -2767,6 +3121,7 @@ export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
   ...createSimDisastersSpriteGoalUtilitySubcommandEntries(),
+  ...createSimUrlBrowserRandomDollarsUtilitySubcommandEntries(),
   ...createSimCityGameSetupSubcommandEntries(),
   ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
   ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),

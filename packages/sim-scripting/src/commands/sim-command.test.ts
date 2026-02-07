@@ -22,6 +22,7 @@ import {
   createSimSpeedDelayControlState,
   createSimSpeedDelayControlSubcommandEntries,
   createSimSubcommandTable,
+  createSimUrlBrowserRandomDollarsUtilitySubcommandEntries,
   registerSimCommand,
 } from './sim-command.ts';
 
@@ -1389,6 +1390,186 @@ describe('sim disasters/sprite-goal utility subcommands', () => {
       code: ScriptResultCode.Ok,
       value: '',
     });
+  });
+});
+
+describe('sim URL/browser/random/dollars utility subcommands', () => {
+  it('quotes URLs using C byte-escape rules and enforces byte-length limits', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimUrlBrowserRandomDollarsUtilitySubcommandEntries()),
+    );
+
+    // Mirrors `SimCmdQuoteURL` in `w_sim.c`:
+    // spaces -> '+', and '+', '%', '&', '<', '>', '"', "'", and control bytes
+    // are escaped as `%XX` with uppercase hex digits.
+    expect(runtime.invoke(['sim', 'QuoteURL', `Hello world+%&<>"'\n`])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'Hello+world%2B%25%26%3C%3E%22%27%0A',
+    });
+
+    expect(runtime.invoke(['sim', 'QuoteURL'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim QuoteURL expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'QuoteURL', 'a'.repeat(256)])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim QuoteURL expected argv[2] byte length <= 255, got 256',
+    });
+  });
+
+  it('builds the legacy Netscape shell command shape for `OpenWebBrowser` and returns result code', () => {
+    const runtime = new ScriptRuntime();
+    const calls: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          hooks: {
+            onOpenWebBrowser: (shellCommand) => {
+              calls.push(shellCommand);
+              return 42;
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'https://example.com/docs?q=abc'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '42',
+    });
+    expect(calls).toEqual(["netscape -no-about-splash 'https://example.com/docs?q=abc' &"]);
+
+    expect(runtime.invoke(['sim', 'OpenWebBrowser'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim OpenWebBrowser expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'a'.repeat(256)])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim OpenWebBrowser expected argv[2] byte length <= 255, got 256',
+    });
+  });
+
+  it('matches `Rand` command contract for argc, integer parsing, and optional max argument', () => {
+    const runtime = new ScriptRuntime();
+    const randCalls: number[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          hooks: {
+            onRand: (maxInclusive) => {
+              randCalls.push(maxInclusive);
+              return maxInclusive + 10;
+            },
+            onRand16: () => 54321,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'Rand', '0x000A'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20',
+    });
+    // `SimCmdRand` calls `Rand(short range)` in `s_sim.c`, so `65536` truncates
+    // to signed 16-bit `0` before range math.
+    expect(runtime.invoke(['sim', 'Rand', '65536'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '10',
+    });
+    expect(runtime.invoke(['sim', 'Rand'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '54321',
+    });
+    expect(randCalls).toEqual([10, 0]);
+
+    expect(runtime.invoke(['sim', 'Rand', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Rand expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'Rand', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Rand expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('supports corrected and legacy `Dollars` formatting modes', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimUrlBrowserRandomDollarsUtilitySubcommandEntries()),
+    );
+
+    // `makeDollarDecimalStr` in `w_util.c` inserts commas every three chars.
+    expect(runtime.invoke(['sim', 'Dollars', '123456789'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$123,456,789',
+    });
+    expect(runtime.invoke(['sim', 'Dollars'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Dollars expects argc 3, got 2',
+    });
+
+    const legacyRuntime = new ScriptRuntime();
+    registerSimCommand(
+      legacyRuntime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          parity: {
+            // `SimCmdDollars` in `w_sim.c` formats `argv[1]` ("Dollars").
+            legacyDollarsLiteralFormat: true,
+          },
+        }),
+      ),
+    );
+
+    expect(legacyRuntime.invoke(['sim', 'Dollars'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$D,oll,ars',
+    });
+    expect(legacyRuntime.invoke(['sim', 'Dollars', '1000'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Dollars expects argc 2 in legacy mode, got 3',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'QuoteURL', 'a b'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'a+b',
+    });
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'https://example.com'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    expect(runtime.invoke(['sim', 'Dollars', '1000'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$1,000',
+    });
+
+    const randResult = runtime.invoke(['sim', 'Rand']);
+    expect(randResult.code).toBe(ScriptResultCode.Ok);
+    if (randResult.code === ScriptResultCode.Ok) {
+      const parsedRand = Number(randResult.value);
+      // `Rand16()` in `s_sim.c` returns the `sim_rand()` 16-bit range [0..65535].
+      expect(Number.isInteger(parsedRand)).toBe(true);
+      expect(parsedRand).toBeGreaterThanOrEqual(0);
+      expect(parsedRand).toBeLessThanOrEqual(65535);
+    }
   });
 });
 

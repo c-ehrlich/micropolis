@@ -116,7 +116,7 @@ Use this exact loop:
     - sprite lookup/create behavior follows C flow
     - direction range checks enforced
 
-- [ ] `P1.10` Implement URL/browser/random/dollars utilities.
+- [x] `P1.10` Implement URL/browser/random/dollars utilities.
   - C reference: `SimCmdQuoteURL`, `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`
   - Done when:
     - URL quoting behavior matches byte escaping rules
@@ -288,3 +288,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.
 - [x] `2026-02-07` Completed `P1.8` by adding `sim` map/dynamic/overlay misc subcommands (`FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`, `ResetDynamic`) with C-parity arg/range/map-bounds checks, dynamic-map flag updates, and `Kick` coalescing coverage.
 - [x] `2026-02-07` Completed `P1.9` by adding disaster creator and sprite-goal utility `sim` subcommands (`MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`, `MakeMeltdown`, `FireBomb`, `MonsterGoal`, `HelicopterGoal`, `MonsterDirection`) with C-style call/no-argc behavior, GOD/COP lookup-create-lookup parity flow, and direction range/error-path coverage.
+- [x] `2026-02-07` Completed `P1.10` by adding `sim` URL/browser/random/dollars utilities (`QuoteURL`, `OpenWebBrowser`, `Rand`, `Dollars`) with C-mapped byte-escaping and command-string behavior, signed-16-bit `Rand(short)` range parity, and configurable legacy `Dollars` literal-format compatibility mode.
