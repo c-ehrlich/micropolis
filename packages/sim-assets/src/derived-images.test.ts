@@ -7,7 +7,10 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalSourcePathToDerivedPngPath,
   DERIVED_IMAGE_PATH_MANIFEST,
+  DERIVED_IMAGE_PATH_MANIFEST_BY_CANONICAL_KEY,
   DERIVED_IMAGES_OUTPUT_DIR,
+  getDerivedImagePathManifestEntry,
+  toCanonicalImageIdentityKey,
 } from './derived-images.ts';
 import { ASSETS_MANIFEST } from './generated/assets-manifest.ts';
 
@@ -33,11 +36,30 @@ describe('derived image output convention', () => {
     expect(DERIVED_IMAGE_PATH_MANIFEST.map((entry) => entry.canonicalSourcePath)).toEqual(
       canonicalXpmPaths,
     );
+    expect(DERIVED_IMAGE_PATH_MANIFEST.map((entry) => entry.canonicalIdentityKey)).toEqual(
+      canonicalXpmPaths,
+    );
   });
 
   it('maps canonical xpm paths into package-local png overlay outputs', () => {
     expect(canonicalSourcePathToDerivedPngPath('ref/micropolis/images/airport.xpm')).toBe(
       'packages/sim-assets/generated-images/images/airport.png',
     );
+  });
+
+  it('indexes runtime metadata by canonical identity key', () => {
+    const canonicalIdentityKey = toCanonicalImageIdentityKey('ref/micropolis/images/airport.xpm');
+    const entry = getDerivedImagePathManifestEntry(canonicalIdentityKey);
+
+    expect(entry).toBeDefined();
+    expect(entry?.canonicalIdentityKey).toBe(canonicalIdentityKey);
+    expect(entry?.canonicalSourcePath).toBe(canonicalIdentityKey);
+    expect(entry?.derivedPngPath).toBe('packages/sim-assets/generated-images/images/airport.png');
+    expect(DERIVED_IMAGE_PATH_MANIFEST_BY_CANONICAL_KEY.has(canonicalIdentityKey)).toBe(true);
+    expect(
+      [...DERIVED_IMAGE_PATH_MANIFEST_BY_CANONICAL_KEY.keys()].every((key) =>
+        key.startsWith('ref/micropolis/images/'),
+      ),
+    ).toBe(true);
   });
 });

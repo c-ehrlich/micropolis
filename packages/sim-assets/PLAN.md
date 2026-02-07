@@ -135,7 +135,7 @@ Verification:
 - [ ] Second run yields no diff.
 
 ### P4.3 Enforce canonical/derived separation
-- [ ] Ensure runtime metadata always points to canonical identity keys.
+- [x] Ensure runtime metadata always points to canonical identity keys.
 - [ ] Ensure derived PNG paths are optional overlays, not replacements for canonical IDs.
 
 Verification:
@@ -200,3 +200,4 @@ Verification:
 - [x] 2026-02-07: Completed P4.2 script-addition task by creating `packages/sim-assets/scripts/export-derived-images.mjs` with deterministic canonical `ref/micropolis/images/*.xpm` to derived PNG export plumbing under `packages/sim-assets/generated-images/images/*.png`.
 - [x] 2026-02-07: Completed P4.2 conversion task by running `pnpm -C packages/sim-assets export-derived-images`, exporting required canonical `ref/micropolis/images/*.xpm` assets to `packages/sim-assets/generated-images/images/*.png` (340 PNGs written, 1 empty-source XPM skipped).
 - [x] 2026-02-07: Completed P4.2 determinism/idempotence task by parameterizing `scripts/export-derived-images.mjs` path roots for isolated runs and adding `scripts/export-derived-images.test.ts` assertions for stable ASCII ordering, repeat-run no-op writes, and deterministic PNG bytes from identical XPM input.
+- [x] 2026-02-07: Completed P4.3 runtime-canonical-key task by adding canonical image identity key typing/validation plus canonical-key-indexed runtime derived-image metadata in `packages/sim-assets/src/derived-images.ts`, with parity coverage in `packages/sim-assets/src/derived-images.test.ts`.
