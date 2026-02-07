@@ -24,12 +24,39 @@ export type SimSubcommandHandler = (argv: readonly string[]) => ScriptRuntimeRes
 export type SimSubcommandTable = ReadonlyMap<string, SimSubcommandHandler>;
 
 /**
+ * One `sim` subcommand registration entry.
+ * Mirrors one `HASHED_CMD(Sim, name)` registration in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export type SimSubcommandEntry = readonly [name: string, handler: SimSubcommandHandler];
+
+/**
+ * Builds a case-sensitive `sim` subcommand table from ordered entries.
+ * Mirrors repeated `HASHED_CMD(...)` registration writes in
+ * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
+ * `ref/micropolis/src/sim/headers/macros.h`: duplicate keys overwrite
+ * `clientData`, so the last entry wins.
+ * Difference from C: returns a typed `Map` instead of mutating one global hash
+ * in place.
+ */
+export function createSimSubcommandTable(
+  entries: readonly SimSubcommandEntry[] = [],
+): SimSubcommandTable {
+  const table = new Map<string, SimSubcommandHandler>();
+  for (const [name, handler] of entries) {
+    table.set(name, handler);
+  }
+
+  return table;
+}
+
+/**
  * Default `sim` subcommand table.
  * Mirrors the empty table before `sim_command_init` calls `HASHED_CMD(...)`
  * in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this starts empty in P1.1 and is filled by later tasks.
  */
-export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = new Map();
+export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable();
 
 /**
  * Creates the `sim` top-level command dispatcher.

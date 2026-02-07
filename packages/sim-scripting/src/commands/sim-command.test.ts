@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { makeScriptSuccess, ScriptRuntimeErrorCode } from '../runtime/errors.ts';
 import { ScriptResultCode } from '../runtime/result-code.ts';
 import { ScriptRuntime } from '../runtime/script-runtime.ts';
-import { createSimCommandDispatcher, registerSimCommand } from './sim-command.ts';
+import {
+  createSimCommandDispatcher,
+  createSimSubcommandTable,
+  registerSimCommand,
+} from './sim-command.ts';
 
 describe('sim command dispatcher', () => {
   it('dispatches `sim <Subcommand>` using a case-sensitive subcommand table', () => {
@@ -12,7 +16,7 @@ describe('sim command dispatcher', () => {
     const runtime = new ScriptRuntime();
     registerSimCommand(
       runtime,
-      new Map([
+      createSimSubcommandTable([
         [
           'Speed',
           (argv) => {
@@ -29,7 +33,7 @@ describe('sim command dispatcher', () => {
   });
 
   it('returns an arg-count error when `sim` is invoked without argv[1]', () => {
-    const simDispatcher = createSimCommandDispatcher(new Map());
+    const simDispatcher = createSimCommandDispatcher(createSimSubcommandTable());
 
     expect(simDispatcher(['sim'])).toEqual({
       code: ScriptResultCode.Error,
@@ -40,12 +44,34 @@ describe('sim command dispatcher', () => {
 
   it('returns a typed unknown-subcommand error when lookup misses', () => {
     const runtime = new ScriptRuntime();
-    registerSimCommand(runtime, new Map([['Speed', () => makeScriptSuccess('3')]]));
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable([['Speed', () => makeScriptSuccess('3')]]),
+    );
 
     expect(runtime.invoke(['sim', 'speed'])).toEqual({
       code: ScriptResultCode.Error,
       errorCode: ScriptRuntimeErrorCode.UnknownSubcommand,
       message: 'unknown sim subcommand: speed',
+    });
+  });
+
+  it('overwrites duplicate subcommand registrations using last-entry-wins semantics', () => {
+    // Mirrors `HASHED_CMD` + `Tcl_CreateHashEntry` behavior in
+    // `ref/micropolis/src/sim/headers/macros.h`: duplicate command names update
+    // existing hash entry `clientData`.
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable([
+        ['Speed', () => makeScriptSuccess('first')],
+        ['Speed', () => makeScriptSuccess('second')],
+      ]),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'second',
     });
   });
 });
