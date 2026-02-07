@@ -92,7 +92,7 @@ Use this exact loop:
 
 - [x] Create `src/adapters/node-process.ts` for stdin/stdout wiring abstractions.
 - [x] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
-- [ ] Add adapter tests with fakes/mocks only (no real network required).
+- [x] Add adapter tests with fakes/mocks only (no real network required).
 - [ ] Checkpoint: adapter tests pass and no direct Node dependency leaks outside adapters.
 
 ## Phase 7: Runtime Orchestration
@@ -176,3 +176,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 5 task `Add src/net/udp-hooks.test.ts for parser and formatter exactness` by extending `src/net/udp-hooks.test.ts` with exact `SimCmdHearFrom` parser coverage (signed `file<sock>` integers and 32-bit bounds) and exact `udp_hear` formatter coverage (`len==0` produces `{}` and `%3d ` width/trailing spacing for each byte) mapped to `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
 - [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-process.ts for stdin/stdout wiring abstractions` by adding `createNodeProcessIoAdapter` with adapter contracts for stdin writes and stdout line subscription in `src/adapters/node-process.ts`, mirroring Sugar transport behavior from `ref/micropolis/micropolisactivity.py` (`send_process` and `_stdout_thread_function`) while keeping parsing behavior in protocol modules.
 - [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-udp.ts for UDP socket abstraction` by adding `createNodeUdpPlatform` in `src/adapters/node-udp.ts` as a Node `dgram` adapter for the `UdpListenPlatform` contract from `src/net/udp-hooks.ts`, mapping `udp_listen`/`udp_hear` responsibilities from `ref/micropolis/src/sim/w_net.c` (socket creation, reuse-address intent, bind-any, nonblocking-flag tracking, and EINTR/EWOULDBLOCK/error receive outcomes via a polling queue abstraction).
+- [x] 2026-02-07: Completed Phase 6 task `Add adapter tests with fakes/mocks only (no real network required)` by adding `src/adapters/node-process.test.ts` (fake stdin/stdout stream wiring tests) and `src/adapters/node-udp.test.ts` (mocked `node:dgram` + fake socket tests for socket setup, bind normalization, recv outcome mapping, and teardown) with no real network usage, aligned to adapter parity boundaries from `ref/micropolis/micropolisactivity.py` and `ref/micropolis/src/sim/w_net.c`.
