@@ -26,6 +26,35 @@ pnpm test
 pnpm format
 ```
 
+## Autonomous task orchestration
+The repo includes a Codex-driven orchestrator at `scripts/auto-orchestrator.mjs` for
+the three package streams:
+
+- `packages/sim-assets`
+- `packages/sim-scripting`
+- `packages/sim-integration`
+
+Inspect queue + drift:
+```bash
+pnpm auto:queue
+pnpm auto:drift
+```
+
+Run unattended (default runtime cap: 24 hours):
+```bash
+pnpm auto:run -- --max-runtime-minutes 1440
+```
+
+Useful flags:
+- `--once`: complete exactly one task and stop.
+- `--dry-run`: plan/selection only; no git push or PR changes.
+- `--no-tests`: skip `pnpm test` gate (keeps `typecheck/lint/format`).
+- `--max-retries-per-task <n>`: retries before a task is marked blocked.
+- `--model <name>`: pass a specific model to `codex exec`.
+
+The orchestrator stores state/logs in `.automation/`.
+Create `.automation/STOP` to halt the loop after the current iteration.
+
 ## Turborepo remote caching
 Remote caching is ready to wire up when you want it:
 ```bash

@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "auto:queue": "node scripts/auto-orchestrator.mjs queue",
+    "auto:drift": "node scripts/auto-orchestrator.mjs drift",
+    "auto:run": "node scripts/auto-orchestrator.mjs run",
     "lint": "turbo lint -- --fix",
     "lint:check": "turbo lint",
     "typecheck": "turbo typecheck",
