@@ -30,7 +30,7 @@ Use this exact loop:
 ## Phase 1: Package Foundation
 
 - [x] Create `src/types.ts` with core integration types (`ParityMode`, feature flags, Sugar buddy shape, TTY evaluator result, UDP hooks).
-- [ ] Create `src/runtime.ts` with `createIntegrationRuntime(options)` skeleton and no-op feature wiring.
+- [x] Create `src/runtime.ts` with `createIntegrationRuntime(options)` skeleton and no-op feature wiring.
 - [ ] Update `src/index.ts` to export the new public API.
 - [ ] Add `src/runtime.test.ts` to verify runtime creation and feature flag defaults.
 - [ ] Checkpoint: `pnpm --filter @city/sim-integration typecheck` and `pnpm --filter @city/sim-integration test` pass.
@@ -132,3 +132,4 @@ Use this exact loop:
 
 ## Execution Log
 - [x] 2026-02-07: Implemented `src/types.ts` with parity-mode, feature-flag, Sugar buddy, TTY evaluator result, and UDP hook type contracts; added source-linked JSDoc to Micropolis integration files.
+- [x] 2026-02-07: Added `src/runtime.ts` with `createIntegrationRuntime(options)` scaffold, strict-default mode and feature normalization, plus feature-gated Sugar/TTY/NET no-op runtime methods for phased wiring.
