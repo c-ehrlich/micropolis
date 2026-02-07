@@ -144,7 +144,7 @@ Verification:
 ## Phase 5: Integration Hooks
 
 ### P5.1 `sim-io` integration
-- [ ] Export helpers for scenario/resource resolution to avoid duplicate constants in `sim-io`.
+- [x] Export helpers for scenario/resource resolution to avoid duplicate constants in `sim-io`.
 
 Verification:
 - [ ] `sim-io` typecheck passes with helper usage.
@@ -202,3 +202,4 @@ Verification:
 - [x] 2026-02-07: Completed P4.2 determinism/idempotence task by parameterizing `scripts/export-derived-images.mjs` path roots for isolated runs and adding `scripts/export-derived-images.test.ts` assertions for stable ASCII ordering, repeat-run no-op writes, and deterministic PNG bytes from identical XPM input.
 - [x] 2026-02-07: Completed P4.3 runtime-canonical-key task by adding canonical image identity key typing/validation plus canonical-key-indexed runtime derived-image metadata in `packages/sim-assets/src/derived-images.ts`, with parity coverage in `packages/sim-assets/src/derived-images.test.ts`.
 - [x] 2026-02-07: Completed P4.3 overlay-optional task by making derived PNG paths optional in `packages/sim-assets/src/derived-images.ts` and adding `packages/sim-assets/src/derived-images.test.ts` coverage that canonical IDs/maps remain identical with overlays enabled or omitted.
+- [x] 2026-02-07: Completed P5.1 helper-export task by extending `packages/sim-assets/src/legacy.ts` with C-parity scenario/resource resolution exports (`normalizeLegacyScenarioId`, `resolveLegacyScenarioResourceId`, `resolveLegacyScenarioResourceName`, and typed `stri`/`snro` identifier helpers) and added parity tests in `packages/sim-assets/src/legacy.test.ts`.
