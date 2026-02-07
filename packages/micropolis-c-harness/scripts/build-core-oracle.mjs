@@ -20,6 +20,9 @@ const cc = process.env.CC ?? 'cc';
 const args = [
   '-O2',
   '-std=gnu89',
+  // Micropolis C sources rely on legacy common-symbol behavior for some globals.
+  // GCC 10+ defaults to -fno-common, which fails on Linux CI with duplicate defs.
+  '-fcommon',
   '-Wall',
   '-Wextra',
   '-Werror',
