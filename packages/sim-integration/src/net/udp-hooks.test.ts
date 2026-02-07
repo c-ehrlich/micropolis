@@ -44,11 +44,37 @@ describe('createUdpHookRuntime listenTo parity', () => {
     expect(calls).toEqual([
       'socket AF_INET SOCK_DGRAM 0',
       'setsockopt 17 1',
-      'bind 17 1234',
+      `bind 17 ${expectedStrictBindPort(1234)}`,
       'fcntl-get 17',
       'fcntl-set 17 6',
       'open-file 17 1 1',
     ]);
+  });
+
+  it('normalizes listen port in safe mode before bind', () => {
+    const calls: string[] = [];
+    const runtime = createUdpHookRuntime({
+      mode: 'safe',
+      platform: createPlatform({
+        createSocket() {
+          calls.push('socket');
+          return 23;
+        },
+        setReuseAddress(sock, enabled) {
+          calls.push(`setsockopt ${sock} ${enabled}`);
+          return true;
+        },
+        bindAny(sock, port) {
+          calls.push(`bind ${sock} ${port}`);
+          return true;
+        },
+      }),
+    });
+
+    // Safe-mode hardening intentionally normalizes to unsigned 16-bit range.
+    // `70000` normalized to `4464` comes from modulo 2^16 behavior.
+    expect(runtime.listenTo(70000)).toBe(23);
+    expect(calls).toEqual(['socket', 'setsockopt 23 1', 'bind 23 4464']);
   });
 
   it('returns 0 when socket creation fails and reports listen-phase error', () => {
@@ -114,18 +140,23 @@ describe('createUdpHookRuntime listenTo parity', () => {
     // Mirrors `udp_listen` in ref/micropolis/src/sim/w_net.c:
     // any setup failure returns integer `0`.
     expect(runtime.listenTo(3333)).toBe(0);
-    expect(calls).toEqual(['socket', 'setsockopt 21 1', 'bind 21 3333', 'fcntl-get 21']);
+    expect(calls).toEqual([
+      'socket',
+      'setsockopt 21 1',
+      `bind 21 ${expectedStrictBindPort(3333)}`,
+      'fcntl-get 21',
+    ]);
     expect(listenErrors).toEqual([{ message: 'fcntl F_GETFL', phase: 'listen' }]);
   });
 });
 
 describe('createUdpHookRuntime hearFrom parsing parity', () => {
-  it('parses file<sock> and runs the recv loop on the parsed socket', () => {
-    const recvCalls: number[] = [];
+  it('parses file<sock> and keeps strict-mode addr length uninitialized', () => {
+    const recvCalls: Array<{ sock: number; addrLength: number | undefined }> = [];
     const runtime = createUdpHookRuntime({
       platform: createPlatform({
-        recvFrom(sock) {
-          recvCalls.push(sock);
+        recvFrom(sock, addrLength) {
+          recvCalls.push({ sock, addrLength });
           return { kind: 'wouldBlock' };
         },
       }),
@@ -135,7 +166,26 @@ describe('createUdpHookRuntime hearFrom parsing parity', () => {
     // `argv[2]` must begin with `file`, then parse int from `argv[2] + 4`.
     runtime.hearFrom('file27');
 
-    expect(recvCalls).toEqual([27]);
+    expect(recvCalls).toEqual([{ sock: 27, addrLength: undefined }]);
+  });
+
+  it('passes initialized sockaddr length to recvfrom in safe mode', () => {
+    const recvCalls: Array<{ sock: number; addrLength: number | undefined }> = [];
+    const runtime = createUdpHookRuntime({
+      mode: 'safe',
+      platform: createPlatform({
+        recvFrom(sock, addrLength) {
+          recvCalls.push({ sock, addrLength });
+          return { kind: 'wouldBlock' };
+        },
+      }),
+    });
+
+    // Safe mode intentionally fixes `udp_hear` undefined-behavior by passing
+    // `sizeof(struct sockaddr_in)`; on IPv4 this is 16 bytes.
+    runtime.hearFrom('file27');
+
+    expect(recvCalls).toEqual([{ sock: 27, addrLength: 16 }]);
   });
 
   it('continues on EINTR and packet, then stops on EWOULDBLOCK', () => {
@@ -264,4 +314,30 @@ function createPlatform(overrides: Partial<UdpListenPlatform>): UdpListenPlatfor
     recvFrom: () => ({ kind: 'wouldBlock' }),
     ...overrides,
   };
+}
+
+function expectedStrictBindPort(port: number): number {
+  const normalizedPort = normalizeSafePort(port);
+  if (!isLittleEndianHost()) {
+    return normalizedPort;
+  }
+
+  return ((normalizedPort & 0xff) << 8) | ((normalizedPort >> 8) & 0xff);
+}
+
+function normalizeSafePort(port: number): number {
+  return truncateTowardZero(port) & 0xffff;
+}
+
+function truncateTowardZero(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return value < 0 ? Math.ceil(value) : Math.floor(value);
+}
+
+function isLittleEndianHost(): boolean {
+  const view = new Uint16Array([1]);
+  return new Uint8Array(view.buffer)[0] === 1;
 }

@@ -1,4 +1,4 @@
-import type { UdpHooks } from '../types.ts';
+import type { ParityMode, UdpHooks } from '../types.ts';
 
 /**
  * One `recvfrom` attempt outcome for `udp_hear`.
@@ -29,7 +29,7 @@ export interface UdpListenPlatform {
   getFileStatusFlags(sock: number): number;
   setFileStatusFlags(sock: number, flags: number): boolean;
   makeOpenFile(sock: number, readable: 1, writable: 1): void;
-  recvFrom(sock: number): UdpReceiveResult;
+  recvFrom(sock: number, addrLength: number | undefined): UdpReceiveResult;
 }
 
 /**
@@ -38,6 +38,13 @@ export interface UdpListenPlatform {
  * where failures call `perror(...)` and return `0`.
  */
 export interface CreateUdpHookRuntimeOptions {
+  /**
+   * UDP parity mode for strict Micropolis quirks vs safe hardening.
+   * Mirrors `udp_listen`/`udp_hear` in `ref/micropolis/src/sim/w_net.c`:
+   * strict preserves no-`htons` port behavior plus uninitialized `addr_len`,
+   * while safe fixes both with normalized ports and initialized addr length.
+   */
+  mode?: ParityMode;
   platform: UdpListenPlatform;
   hooks?: Pick<UdpHooks, 'onError' | 'onPacketCommand'>;
 }
@@ -64,16 +71,18 @@ export interface UdpHookRuntime {
  * partially initialized sockets when a later step fails).
  */
 export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpHookRuntime {
+  const mode = options.mode ?? 'strict';
   const { platform } = options;
   const onError = options.hooks?.onError;
   const onPacketCommand = options.hooks?.onPacketCommand;
+  const recvAddressLength = mode === 'safe' ? SOCKADDR_IN_BYTE_LENGTH : undefined;
 
   let netListenPort = 0;
   let netListenSocket = 0;
 
   return {
     listenTo(port) {
-      netListenPort = port;
+      netListenPort = resolveUdpListenPort(port, mode);
 
       netListenSocket = platform.createSocket('AF_INET', 'SOCK_DGRAM', 0);
       if (netListenSocket < 0) {
@@ -108,7 +117,7 @@ export function createUdpHookRuntime(options: CreateUdpHookRuntimeOptions): UdpH
       }
 
       while (true) {
-        const receiveResult = platform.recvFrom(sock);
+        const receiveResult = platform.recvFrom(sock, recvAddressLength);
 
         if (receiveResult.kind === 'packet') {
           onPacketCommand?.(
@@ -159,6 +168,46 @@ function formatHandlePacketCommand(
 
 function formatUdpPacketBytes(bytes: ReadonlyArray<number>): string {
   return bytes.map((byte) => `${byte.toString().padStart(3, ' ')} `).join('');
+}
+
+const SOCKADDR_IN_BYTE_LENGTH = 16;
+const UINT16_MASK = 0xffff;
+const HOST_IS_LITTLE_ENDIAN = detectHostLittleEndian();
+
+/**
+ * Resolve the listening port argument for `bind`.
+ * Mirrors `udp_listen` in `ref/micropolis/src/sim/w_net.c` where strict mode
+ * preserves `sin_port = net_listen_port` (no `htons`) behavior, while safe
+ * mode intentionally normalizes to canonical 16-bit port numbers.
+ */
+function resolveUdpListenPort(port: number, mode: ParityMode): number {
+  const normalizedPort = normalizeUdpPort(port);
+  if (mode === 'safe') {
+    return normalizedPort;
+  }
+
+  return HOST_IS_LITTLE_ENDIAN ? byteSwap16(normalizedPort) : normalizedPort;
+}
+
+function normalizeUdpPort(port: number): number {
+  return truncateTowardZero(port) & UINT16_MASK;
+}
+
+function truncateTowardZero(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return value < 0 ? Math.ceil(value) : Math.floor(value);
+}
+
+function byteSwap16(value: number): number {
+  return ((value & 0xff) << 8) | ((value >> 8) & 0xff);
+}
+
+function detectHostLittleEndian(): boolean {
+  const view = new Uint16Array([1]);
+  return new Uint8Array(view.buffer)[0] === 1;
 }
 
 const INT32_MAX = 2_147_483_647;
