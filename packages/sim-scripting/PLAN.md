@@ -145,7 +145,7 @@ Use this exact loop:
   - Done when:
     - parse/set/get behavior tested
 
-- [ ] `P2.5` Implement map pan/track/state/visibility commands.
+- [x] `P2.5` Implement map pan/track/state/visibility commands.
   - Commands: `MapState`, `ShowEditors`, `PanStart`, `PanTo`, `Visible`, `ViewAt`
   - Done when:
     - `16/3` and `*16/3` conversion logic is tested
@@ -293,3 +293,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P2.2` by adding `editorview` pan/tool subcommands (`Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`) with C-mapped pan clamp/delta logic from `w_editor.c`/`w_x.c`, command-level kick coalescing parity, and colocated tests covering kick behavior plus view/pixel and tile command coordinate semantics.
 - [x] `2026-02-07` Completed `P2.3` by adding `editorview` mode/visibility/auto commands (`AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`) with C-parity state transitions from `w_editor.c`/`w_x.c` and colocated tests covering auto-go threshold/flag behavior plus follow lookup/pan updates.
 - [x] `2026-02-07` Completed `P2.4` by adding the `mapview` command-family shell (`configure`, `position`, `size`), including top-level `mapview pathName ?options?` command creation/registration, Tcl-style integer parsing and argc parity for `MapCmdposition`/`MapCmdsize`, and colocated tests covering configure/set/get, case-sensitive unknown-subcommand errors, and default map-size initialization from `MAP_W/MAP_H`.
+- [x] `2026-02-07` Completed `P2.5` by adding `mapview` pan/track/state/visibility subcommands (`MapState`, `ShowEditors`, `PanStart`, `PanTo`, `Visible`, `ViewAt`) with C-parity `*3/16` hit-box and `*16/3` pan-delta integer math from `w_map.c`, `Kick()` sequencing for `MapState`/`PanTo`, and placeholder `ViewAt` behavior coverage.
