@@ -119,7 +119,7 @@ Verification:
 ## Phase 4: Derived PNG Export Pipeline
 
 ### P4.1 Define derived-image output contract
-- [ ] Add output directory convention (for example `packages/sim-assets/generated-images/`).
+- [x] Add output directory convention (for example `packages/sim-assets/generated-images/`).
 - [ ] Define manifest mapping canonical source path -> derived PNG path.
 
 Verification:
@@ -195,3 +195,4 @@ Verification:
 - [x] 2026-02-07: Completed P3.3 sprite-parity task by adding `packages/sim-assets/src/sprites.test.ts` to discover canonical `ref/micropolis/images/obj*-*.xpm` files and verify generated sprite frame manifests plus C-derived frame-count parity.
 - [x] 2026-02-07: Completed P3.4 help-doc inventory builder task by implementing `packages/sim-assets/src/help-docs.ts` builders for help IDs, manual HTML IDs, and missing/extra parity sets, and extending `packages/sim-assets/scripts/gen-assets-manifest.mjs` / `src/generated/assets-manifest.ts` to emit canonical `help.tcl` help IDs.
 - [x] 2026-02-07: Completed P3.4 deterministic help-doc parity test task by adding `packages/sim-assets/src/help-docs.test.ts` with fixed canonical missing/extra assertions derived from `ref/micropolis/res/help.tcl` vs `ref/micropolis/manual/*.html`.
+- [x] 2026-02-07: Completed P4.1 output-directory convention task by defining `packages/sim-assets/generated-images/` as the derived PNG destination in `src/derived-images.ts`, documenting it in `packages/sim-assets/README.md`, and adding the committed directory placeholder.
