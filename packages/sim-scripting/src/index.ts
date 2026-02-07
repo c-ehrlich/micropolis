@@ -2,6 +2,7 @@ export * from './bootstrap/create-sim-scripting-runtime.ts';
 export * from './commands/dateview-command.ts';
 export * from './commands/editorview-command.ts';
 export * from './commands/graphview-command.ts';
+export * from './commands/interval-command.ts';
 export * from './commands/mapview-command.ts';
 export * from './commands/piemenu-command.ts';
 export * from './commands/sim-command.ts';

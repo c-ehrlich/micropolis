@@ -186,7 +186,7 @@ Use this exact loop:
   - Done when:
     - index parsing modes (`active`, `last`, `none`, `@x,y`, label match) are tested
 
-- [ ] `P4.3` Implement `interval` command family.
+- [x] `P4.3` Implement `interval` command family.
   - Commands: `configure`, `get`, `set`, `reset`
   - Done when:
     - min/max swap, clamp, and disabled behavior match C logic
@@ -300,3 +300,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P3.4` by porting all `sprite` field accessors and `Init`/`Explode` subcommands from `w_sprite.c`, including Tcl-style integer parsing, `WORLD_X/Y` pixel-bound checks (`0..1919`, `0..1599`), type-specific `InitSprite` defaults, and `ExplodeSprite` frame/message parity coverage.
 - [x] `2026-02-07` Completed `P4.1` by adding `piemenu` state + command shell (`configure`, `add`, `delete`, `entryconfigure`, `index`) with C-mapped defaults/option parsing from `w_piem.c` and colocated state-transition/index-resolution tests.
 - [x] `2026-02-07` Completed `P4.2` by implementing `piemenu` activation/invocation/posting subcommands (`activate`, `invoke`, `show`, `pending`, `defer`, `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`) with C-mapped `w_piem.c` state transitions, `CalcPieMenuItem`-style cursor delta math for `@x,y` indexing, and colocated parity tests for posting flow, script hooks, and distance/direction rounding.
+- [x] `2026-02-07` Completed `P4.3` by adding the `interval` command family (`configure`, `get`, `set`, `reset`) with C-mapped defaults and option handling from `w_inter.c`/`w_tk.c`, including `SetInterval`-parity min/max swap + directional clamp logic, disabled-state `set` no-op behavior, and colocated tests covering reset/tick-sign normalization/error paths.
