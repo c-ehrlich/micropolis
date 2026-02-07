@@ -61,6 +61,50 @@ function toCBudgetPercentString(value: number): string {
 }
 
 /**
+ * Resolves one callback name to its mapped callback reference.
+ * Mirrors direct-name callback lookup in Micropolis `Eval("UI...")` emitters
+ * from `ref/micropolis/src/sim/w_tk.c` and peers.
+ * Difference from C: supports optional trailing-`*` wildcard registrations
+ * (for example `UIDidTool*`) with longest-prefix matching.
+ */
+function resolveUiCallbackReference<
+  TSim = unknown,
+  TView = unknown,
+  TSprite = unknown,
+  TWidget = unknown,
+  TCallback extends ScriptingCallbackReference = ScriptingCallbackReference,
+>(
+  state: ScriptingState<TSim, TView, TSprite, TWidget, TCallback>,
+  callbackName: string,
+): TCallback | string {
+  const callbackReference = state.callbacks.get(callbackName);
+  if (callbackReference !== undefined) {
+    return callbackReference;
+  }
+
+  let wildcardCallbackReference: TCallback | undefined;
+  let wildcardPrefixLength = -1;
+
+  for (const [registeredCallbackName, registeredCallbackReference] of state.callbacks) {
+    if (!registeredCallbackName.endsWith('*')) {
+      continue;
+    }
+
+    const wildcardPrefix = registeredCallbackName.slice(0, -1);
+    if (!callbackName.startsWith(wildcardPrefix)) {
+      continue;
+    }
+
+    if (wildcardPrefix.length > wildcardPrefixLength) {
+      wildcardPrefixLength = wildcardPrefix.length;
+      wildcardCallbackReference = registeredCallbackReference;
+    }
+  }
+
+  return wildcardCallbackReference ?? callbackName;
+}
+
+/**
  * Registers or replaces one callback mapping in scripting state.
  * Mirrors C behavior where later script definitions replace earlier procedures,
  * while preserving case-sensitive callback command names.
@@ -116,7 +160,7 @@ export function dispatchUiCallback<
   callbackName: string,
   callbackArgv: readonly string[] = [],
 ): ScriptRuntimeResult {
-  const callbackReference = options.state.callbacks.get(callbackName) ?? callbackName;
+  const callbackReference = resolveUiCallbackReference(options.state, callbackName);
   return options.runtime.invoke([callbackReference, ...callbackArgv]);
 }
 
@@ -651,4 +695,194 @@ export function dispatchUiLoseGame(dispatch: UiCallbackDispatcher): ScriptRuntim
  */
 export function dispatchUiWinGame(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
   return dispatch('UIWinGame');
+}
+
+/**
+ * Dispatches one tool-feedback callback using `UIDidTool<NAME>` callback names.
+ * Mirrors `sprintf("UIDidTool%s %s %d %d", ...)` + `Eval(buf)` in `DidTool`
+ * (`ref/micropolis/src/sim/w_tool.c`).
+ * Difference from C: supports wildcard callback remaps (`UIDidTool*`) through
+ * dispatcher resolution while preserving dynamic callback-name emission.
+ */
+export function dispatchUiDidTool(
+  dispatch: UiCallbackDispatcher,
+  toolName: string,
+  viewPath: string,
+  x: number,
+  y: number,
+): ScriptRuntimeResult {
+  return dispatch(`UIDidTool${toolName}`, [viewPath, toCIntegerString(x), toCIntegerString(y)]);
+}
+
+/**
+ * Dispatches the tool-state update callback.
+ * Mirrors `sprintf("UISetToolState %s %d", ...)` + `Eval(buf)` in
+ * `DoSetWandState` (`ref/micropolis/src/sim/w_tool.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiSetToolState(
+  dispatch: UiCallbackDispatcher,
+  viewPath: string,
+  state: number,
+): ScriptRuntimeResult {
+  return dispatch('UISetToolState', [viewPath, toCIntegerString(state)]);
+}
+
+/**
+ * Dispatches the pending-tool vote callback.
+ * Mirrors `sprintf("DoPendTool %s %d %d %d", ...)` + `Eval(buf)` in
+ * `DoPendTool` (`ref/micropolis/src/sim/w_tool.c`).
+ * Difference from C: callback invocation is explicit and argv-based.
+ */
+export function dispatchDoPendTool(
+  dispatch: UiCallbackDispatcher,
+  viewPath: string,
+  tool: number,
+  x: number,
+  y: number,
+): ScriptRuntimeResult {
+  return dispatch('DoPendTool', [
+    viewPath,
+    toCIntegerString(tool),
+    toCIntegerString(x),
+    toCIntegerString(y),
+  ]);
+}
+
+/**
+ * Dispatches the auto-scroll pan callback.
+ * Mirrors `sprintf("UIDidPan %s %d %d", ...)` + `Eval(buf)` in
+ * `TileAutoScrollProc` (`ref/micropolis/src/sim/w_tk.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiDidPan(
+  dispatch: UiCallbackDispatcher,
+  viewPath: string,
+  x: number,
+  y: number,
+): ScriptRuntimeResult {
+  return dispatch('UIDidPan', [viewPath, toCIntegerString(x), toCIntegerString(y)]);
+}
+
+/**
+ * Dispatches the pan-stop callback.
+ * Mirrors `sprintf("UIDidStopPan %s", ...)` + `Eval(buf)` in `DidStopPan`
+ * (`ref/micropolis/src/sim/w_tk.c`).
+ * Difference from C: callback invocation is explicit and testable.
+ */
+export function dispatchUiDidStopPan(
+  dispatch: UiCallbackDispatcher,
+  viewPath: string,
+): ScriptRuntimeResult {
+  return dispatch('UIDidStopPan', [viewPath]);
+}
+
+/**
+ * Dispatches the earthquake UI callback.
+ * Mirrors `Eval("UIEarthQuake")` in `DoEarthQuake`
+ * (`ref/micropolis/src/sim/w_tk.c`).
+ * Difference from C: quake sound/timer side effects are outside this helper.
+ */
+export function dispatchUiEarthQuake(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIEarthQuake');
+}
+
+/**
+ * Dispatches the sound-initialization callback.
+ * Mirrors `Eval("UIInitializeSound")` in `InitializeSound`
+ * (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: sound-system state flags are managed by caller.
+ */
+export function dispatchUiInitializeSound(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIInitializeSound');
+}
+
+/**
+ * Dispatches the sound-shutdown callback.
+ * Mirrors `Eval("UIShutDownSound")` in `ShutDownSound`
+ * (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: `SoundInitialized` lifecycle is managed by caller.
+ */
+export function dispatchUiShutDownSound(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UIShutDownSound');
+}
+
+/**
+ * Dispatches one-shot sound playback callback.
+ * Mirrors `sprintf("UIMakeSound \"%s\" \"%s\"", ...)` + `Eval(buf)` in
+ * `MakeSound` (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: accepts optional Tcl `opts` parity argument used by
+ * `proc UIMakeSound {chan sound {opts \"\"}}` in `ref/micropolis/res/micropolis.tcl`.
+ */
+export function dispatchUiMakeSound(
+  dispatch: UiCallbackDispatcher,
+  channel: string,
+  sound: string,
+  opts?: string,
+): ScriptRuntimeResult {
+  return opts === undefined
+    ? dispatch('UIMakeSound', [channel, sound])
+    : dispatch('UIMakeSound', [channel, sound, opts]);
+}
+
+/**
+ * Dispatches one-shot per-view sound playback callback.
+ * Mirrors `sprintf("UIMakeSoundOn %s \"%s\" \"%s\"", ...)` + `Eval(buf)` in
+ * `MakeSoundOn` (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: accepts optional Tcl `opts` parity argument used by
+ * `proc UIMakeSoundOn {win chan sound {opts \"\"}}` in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+export function dispatchUiMakeSoundOn(
+  dispatch: UiCallbackDispatcher,
+  viewPath: string,
+  channel: string,
+  sound: string,
+  opts?: string,
+): ScriptRuntimeResult {
+  return opts === undefined
+    ? dispatch('UIMakeSoundOn', [viewPath, channel, sound])
+    : dispatch('UIMakeSoundOn', [viewPath, channel, sound, opts]);
+}
+
+/**
+ * Dispatches looping sound-start callback.
+ * Mirrors `sprintf("UIStartSound %s %s", ...)` + `Eval(buf)` in `DoStartSound`
+ * (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: accepts optional Tcl `opts` parity argument used by
+ * `proc UIStartSound {chan sound {opts \"\"}}` in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+export function dispatchUiStartSound(
+  dispatch: UiCallbackDispatcher,
+  channel: string,
+  sound: string,
+  opts?: string,
+): ScriptRuntimeResult {
+  return opts === undefined
+    ? dispatch('UIStartSound', [channel, sound])
+    : dispatch('UIStartSound', [channel, sound, opts]);
+}
+
+/**
+ * Dispatches looping sound-stop callback.
+ * Mirrors `sprintf("UIStopSound %s", id)` + `Eval(buf)` in `DoStopSound`
+ * (`ref/micropolis/src/sim/w_sound.c`).
+ * Parity note: helper keeps C bridge one-argument `id` shape.
+ */
+export function dispatchUiStopSound(
+  dispatch: UiCallbackDispatcher,
+  sound: string,
+): ScriptRuntimeResult {
+  return dispatch('UIStopSound', [sound]);
+}
+
+/**
+ * Dispatches "all sound off" callback.
+ * Mirrors `Eval("UISoundOff")` in `SoundOff`
+ * (`ref/micropolis/src/sim/w_sound.c`).
+ * Difference from C: `Dozing` reset side effect is outside this helper.
+ */
+export function dispatchUiSoundOff(dispatch: UiCallbackDispatcher): ScriptRuntimeResult {
+  return dispatch('UISoundOff');
 }

@@ -217,7 +217,7 @@ Use this exact loop:
   - Done when:
     - picture/text flow and autogoto coordinate conversion are tested
 
-- [ ] `P5.6` Implement tool/sound callbacks.
+- [x] `P5.6` Implement tool/sound callbacks.
   - Procedures: `UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`
   - Done when:
     - wildcard tool callback mapping is covered by tests
@@ -307,3 +307,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P5.4` by adding status/budget/evaluation callback helpers (`UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`) with C-mapped `%d`/bitfield coercion parity from `w_update.c`/`w_util.c`/`w_budget.c`/`w_eval.c` and colocated argv-order tests.
 - [x] `2026-02-07` Repaired `P5.4` by updating `UISetBudgetValues` percent coercion to accept C-style `0..1` funding ratios (`(int)(ratio * 100)` parity from `w_budget.c`) while keeping `0..100` caller compatibility, and adding callback tests for ratio-input argv output ordering.
 - [x] `2026-02-07` Completed `P5.5` by adding message/notice/autogoto callback helpers (`UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`) with C-mapped `%d` argument coercion from `s_msg.c`/`w_tool.c`/`w_util.c`, optional Tcl-parity callback args, and colocated tests covering picture/text callback flow plus tile-to-pixel autogoto conversion parity.
+- [x] `2026-02-07` Completed `P5.6` by adding tool/sound callback helpers (`UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`), implementing wildcard callback remap resolution (`UIDidTool*`) with exact-match precedence, and adding colocated parity tests for callback argv shape.

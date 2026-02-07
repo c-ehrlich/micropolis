@@ -6,6 +6,7 @@ import { ScriptRuntime } from '../runtime/script-runtime.ts';
 import { createScriptingState } from '../state/scripting-state.ts';
 import {
   createUiCallbackDispatcher,
+  dispatchDoPendTool,
   dispatchDoStopMicropolis,
   dispatchUiAutoGoto,
   dispatchUiCallback,
@@ -13,8 +14,15 @@ import {
   dispatchUiDidLoadScenario,
   dispatchUiDidntLoadCity,
   dispatchUiDidntSaveCity,
+  dispatchUiDidPan,
   dispatchUiDidSaveCity,
+  dispatchUiDidStopPan,
+  dispatchUiDidTool,
+  dispatchUiEarthQuake,
+  dispatchUiInitializeSound,
   dispatchUiLoseGame,
+  dispatchUiMakeSound,
+  dispatchUiMakeSoundOn,
   dispatchUiNewGame,
   dispatchUiPlayNewCity,
   dispatchUiPopUpMessage,
@@ -32,12 +40,17 @@ import {
   dispatchUiSetMessage,
   dispatchUiSetOptions,
   dispatchUiSetSpeed,
+  dispatchUiSetToolState,
   dispatchUiShowBudgetAndWait,
   dispatchUiShowPicture,
   dispatchUiShowZoneStatus,
+  dispatchUiShutDownSound,
+  dispatchUiSoundOff,
   dispatchUiStartLoad,
   dispatchUiStartMicropolis,
   dispatchUiStartScenario,
+  dispatchUiStartSound,
+  dispatchUiStopSound,
   dispatchUiUpdateBudget,
   dispatchUiWinGame,
   registerUiCallback,
@@ -110,6 +123,41 @@ describe('ui callback dispatcher and registration', () => {
       code: ScriptResultCode.Ok,
       value: 'Apr 1900|3|1900',
     });
+  });
+
+  it('supports wildcard callback remaps and keeps exact-match precedence', () => {
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    runtime.registerCommand('::ui::didToolWildcard', (argv) => {
+      observedArgv.push([...argv]);
+      return makeScriptSuccess('wildcard');
+    });
+    runtime.registerCommand('::ui::didToolRes', (argv) => {
+      observedArgv.push([...argv]);
+      return makeScriptSuccess('res');
+    });
+
+    const state = createScriptingState({
+      callbackEntries: [
+        ['UIDidTool*', '::ui::didToolWildcard'],
+        ['UIDidToolRes', '::ui::didToolRes'],
+      ],
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    expect(dispatchUiDidTool(dispatch, 'Com', '.editor.main', 10.9, 25.2)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'wildcard',
+    });
+    expect(dispatchUiDidTool(dispatch, 'Res', '.editor.main', 11.9, 26.2)).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'res',
+    });
+
+    expect(observedArgv).toEqual([
+      ['::ui::didToolWildcard', '.editor.main', '10', '25'],
+      ['::ui::didToolRes', '.editor.main', '11', '26'],
+    ]);
   });
 });
 
@@ -577,5 +625,78 @@ describe('ui message/notice/autogoto callback helpers', () => {
       value: '120,56,.editor.main',
     });
     expect(capturedArgv).toEqual(['UIAutoGoto', '7', '3', '.editor.main']);
+  });
+});
+
+describe('ui tool/pan/disaster/sound callback helpers', () => {
+  it('dispatches tool/pan/disaster/sound callbacks with C callback argv shape', () => {
+    // Mirrors callback emissions in `ref/micropolis/src/sim/w_tool.c`,
+    // `ref/micropolis/src/sim/w_tk.c`, and `ref/micropolis/src/sim/w_sound.c`.
+    // "Magic" integer argv values below come from C `%d`/`(int)` truncation.
+    const runtime = new ScriptRuntime();
+    const observedArgv: string[][] = [];
+    const callbackEntries: Array<readonly [string, string]> = [
+      ['UIDidTool*', '::ui::didTool'],
+      ['UISetToolState', '::ui::setToolState'],
+      ['DoPendTool', '::ui::doPendTool'],
+      ['UIDidPan', '::ui::didPan'],
+      ['UIDidStopPan', '::ui::didStopPan'],
+      ['UIEarthQuake', '::ui::earthQuake'],
+      ['UIInitializeSound', '::ui::initializeSound'],
+      ['UIShutDownSound', '::ui::shutDownSound'],
+      ['UIMakeSound', '::ui::makeSound'],
+      ['UIMakeSoundOn', '::ui::makeSoundOn'],
+      ['UIStartSound', '::ui::startSound'],
+      ['UIStopSound', '::ui::stopSound'],
+      ['UISoundOff', '::ui::soundOff'],
+    ];
+
+    for (const [, reference] of callbackEntries) {
+      runtime.registerCommand(reference, (argv) => {
+        observedArgv.push([...argv]);
+        return makeScriptSuccess(reference);
+      });
+    }
+
+    const state = createScriptingState({
+      callbackEntries,
+    });
+    const dispatch = createUiCallbackDispatcher({ runtime, state });
+
+    dispatchUiDidTool(dispatch, 'Road', '.editor.main.view', 19.9, 37.2);
+    dispatchUiDidTool(dispatch, 'Nuc', '.editor.main.view', 20.9, 38.2);
+    dispatchUiSetToolState(dispatch, '.editor.main.view', 7.9);
+    dispatchDoPendTool(dispatch, '.editor.main.view', 13.8, 120.6, 42.4);
+    dispatchUiDidPan(dispatch, '.editor.main.view', 311.9, 199.2);
+    dispatchUiDidStopPan(dispatch, '.editor.main.view');
+    dispatchUiEarthQuake(dispatch);
+    dispatchUiInitializeSound(dispatch);
+    dispatchUiShutDownSound(dispatch);
+    dispatchUiMakeSound(dispatch, 'edit', 'Boing');
+    dispatchUiMakeSound(dispatch, 'warning', 'Sorry', '-speed 85');
+    dispatchUiMakeSoundOn(dispatch, '.editor.main.view', 'edit', 'O', '-speed 120');
+    dispatchUiStartSound(dispatch, 'edit', '1');
+    dispatchUiStartSound(dispatch, 'fancy', 'Skid', '-volume 25');
+    dispatchUiStopSound(dispatch, '1');
+    dispatchUiSoundOff(dispatch);
+
+    expect(observedArgv).toEqual([
+      ['::ui::didTool', '.editor.main.view', '19', '37'],
+      ['::ui::didTool', '.editor.main.view', '20', '38'],
+      ['::ui::setToolState', '.editor.main.view', '7'],
+      ['::ui::doPendTool', '.editor.main.view', '13', '120', '42'],
+      ['::ui::didPan', '.editor.main.view', '311', '199'],
+      ['::ui::didStopPan', '.editor.main.view'],
+      ['::ui::earthQuake'],
+      ['::ui::initializeSound'],
+      ['::ui::shutDownSound'],
+      ['::ui::makeSound', 'edit', 'Boing'],
+      ['::ui::makeSound', 'warning', 'Sorry', '-speed 85'],
+      ['::ui::makeSoundOn', '.editor.main.view', 'edit', 'O', '-speed 120'],
+      ['::ui::startSound', 'edit', '1'],
+      ['::ui::startSound', 'fancy', 'Skid', '-volume 25'],
+      ['::ui::stopSound', '1'],
+      ['::ui::soundOff'],
+    ]);
   });
 });
