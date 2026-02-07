@@ -118,9 +118,24 @@ importers:
 
   packages/sim-integration: {}
 
-  packages/sim-io: {}
+  packages/sim-io:
+    dependencies:
+      '@city/sim-core':
+        specifier: workspace:*
+        version: link:../sim-core
+    devDependencies:
+      '@city/micropolis-c-harness':
+        specifier: workspace:*
+        version: link:../micropolis-c-harness
+      '@types/node':
+        specifier: 25.0.10
+        version: 25.0.10
 
-  packages/sim-scripting: {}
+  packages/sim-scripting:
+    devDependencies:
+      '@types/node':
+        specifier: 25.0.10
+        version: 25.0.10
 
   packages/sim-terrain: {}
 
