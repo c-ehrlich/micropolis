@@ -113,7 +113,7 @@ Use this exact loop:
 
 ## Phase 8: Cross-Package Contract
 
-- [ ] Add `INTEGRATION-CONTRACT.md` describing ownership boundaries with `@city/sim-core`, `@city/sim-ui`, and `@city/sim-io`.
+- [x] Add `INTEGRATION-CONTRACT.md` describing ownership boundaries with `@city/sim-core`, `@city/sim-ui`, and `@city/sim-io`.
 - [ ] Document how `makeSound`/message/UI hook pathways are connected without duplicating sim-core responsibilities.
 - [ ] Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks.
 - [ ] Checkpoint: docs and contract tests pass.
@@ -190,3 +190,4 @@ Use this exact loop:
 - [x] 2026-02-07: Checked Phase 7 task `tty-only` by validating the `records deterministic tty-only events` scenario in `src/runtime.integration.test.ts` (startup/post-command `sim:\n` prompts, multiline `Tcl_AssembleCmd`-style input completion, and EOF `sim_exit(0)` parity from `ref/micropolis/src/sim/w_tk.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic tty-only events"`.
 - [x] 2026-02-07: Checked Phase 7 task `net-only` by validating the `records deterministic net-only events` scenario in `src/runtime.integration.test.ts`, including `udp_listen` strict bind-port quirk and `udp_hear` packet command formatting parity (`HandlePacket <sock> {<ip>} {%3d }`) against `ref/micropolis/src/sim/w_net.c`, via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic net-only events"`.
 - [x] 2026-02-07: Checked Phase 7 task `sugar+tty+net` by validating the `records deterministic sugar+tty+net events` scenario in `src/runtime.integration.test.ts`, covering combined Sugar stdout/command dispatch (`ref/micropolis/micropolisactivity.py`), TTY prompt/eval/EOF behavior (`ref/micropolis/src/sim/w_tk.c`), and NET listen/hear packet formatting (`ref/micropolis/src/sim/w_net.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic sugar+tty+net events"`.
+- [x] 2026-02-07: Completed Phase 8 task `Add INTEGRATION-CONTRACT.md describing ownership boundaries with @city/sim-core, @city/sim-ui, and @city/sim-io` by adding `packages/sim-integration/INTEGRATION-CONTRACT.md` with explicit ownership matrix, layering rules, dependency direction, and Micropolis parity source mapping (`micropolisactivity.py`, `w_tk.c`, `w_sim.c`, `w_net.c`).
