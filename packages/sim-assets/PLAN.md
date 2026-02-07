@@ -97,7 +97,7 @@ Verification:
 
 ### P3.2 Harden string-table parity
 - [x] Ensure parser/lookup semantics are documented against `GetIndString` behavior.
-- [ ] Add `string-table.test.ts` with fixture assertions for `stri.202/.219/.301/.356`.
+- [x] Add `string-table.test.ts` with fixture assertions for `stri.202/.219/.301/.356`.
 
 Verification:
 - [ ] String-table tests pass.
@@ -190,3 +190,4 @@ Verification:
 - [x] 2026-02-07: Completed P3.1 cache task by adding module-lifetime payload caching in `packages/sim-assets/src/resource-loader.ts` keyed by `(type,id)` to mirror `GetResource` resource identity semantics in `ref/micropolis/src/sim/w_resrc.c`.
 - [x] 2026-02-07: Completed P3.1 missing-resource error-shape task by adding deterministic `ResourceFileNotFoundError` metadata for missing files in `packages/sim-assets/src/resource-loader.ts` and parity tests in `packages/sim-assets/src/resource-loader.test.ts`.
 - [x] 2026-02-07: Completed P3.2 parser/lookup-documentation task by updating `packages/sim-assets/src/string-table.ts` JSDoc with explicit `GetIndString` source mapping and parity notes for newline-delimited parsing and 1-based lookup miss handling.
+- [x] 2026-02-07: Completed P3.2 fixture-parity test task by adding `packages/sim-assets/src/string-table.test.ts` with canonical assertions for `ref/micropolis/res/stri.202/.219/.301/.356` and `GetIndString`-aligned 1-based lookup behavior.
