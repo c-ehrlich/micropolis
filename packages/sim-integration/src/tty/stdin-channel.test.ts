@@ -61,4 +61,38 @@ describe('StdinChannel StdinProc EOF parity', () => {
     expect(exitCodes).toEqual([]);
     expect(evaluatedCommands).toEqual([]);
   });
+
+  it('treats EOF with a partial command as an empty line and continues', () => {
+    // Mirrors `StdinProc` in ref/micropolis/src/sim/w_tk.c:
+    // `if (fgets(...) == NULL && gotPartial) line[0] = 0;`
+    // followed by `cmd = Tcl_AssembleCmd(buffer, line);` and eval.
+    const evaluatedCommands: string[] = [];
+    const disableReadEvents: string[] = [];
+    const exitCodes: number[] = [];
+    const channel = new StdinChannel({
+      isTty: false,
+      evaluateCommand(command) {
+        evaluatedCommands.push(command);
+        return {
+          ok: true,
+          result: '',
+        };
+      },
+      onDisableReads() {
+        disableReadEvents.push('disabled');
+      },
+      onExit(exitCode) {
+        exitCodes.push(exitCode);
+      },
+    });
+
+    // No newline means command is still partial, matching Tcl_AssembleCmd(NULL) path.
+    channel.consumeLine('puts hello');
+    channel.consumeLine(null);
+
+    expect(evaluatedCommands).toEqual(['puts hello']);
+    expect(channel.isReadEnabled()).toBe(true);
+    expect(disableReadEvents).toEqual([]);
+    expect(exitCodes).toEqual([]);
+  });
 });
