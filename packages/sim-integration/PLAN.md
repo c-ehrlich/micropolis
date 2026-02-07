@@ -53,7 +53,7 @@ Use this exact loop:
 
 ## Phase 3: Sugar Stdout Protocol (`PlaySound`)
 
-- [ ] Create `src/sugar/stdout-protocol.ts` for line parsing using explicit `split(' ')` parity.
+- [x] Create `src/sugar/stdout-protocol.ts` for line parsing using explicit `split(' ')` parity.
 - [ ] Implement strict-mode behavior for malformed `PlaySound` lines (missing arg should surface parity failure behavior).
 - [ ] Implement safe-mode behavior for malformed lines (return typed error; do not kill processing).
 - [ ] Add `src/sugar/stdout-protocol.test.ts` covering:
@@ -147,3 +147,4 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 2 task `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyAddCommand` emits `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_appeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyDelCommand` emits `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_disappeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
 - [x] 2026-02-07: Completed Phase 2 task `Add src/sugar/activity-bridge.test.ts covering exact string output and buddy fallback field ordering` by validating exact outbound command strings (including `\n` and `QuoteTCL` quoting) and full getter-fallback call ordering parity against `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 3 task `Create src/sugar/stdout-protocol.ts for line parsing using explicit split(' ') parity` by adding a parity tokenizer/line parser that mirrors `line.strip().split(' ')` semantics from `ref/micropolis/micropolisactivity.py` and `ref/micropolis/spec/integration/SPEC.md`.
