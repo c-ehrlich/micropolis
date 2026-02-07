@@ -126,7 +126,7 @@ export function createIntegrationRuntime(
         return;
       }
 
-      hooks?.onSoundToken?.(soundToken);
+      hooks?.onSoundToken?.(soundToken.toLowerCase());
     },
     share() {
       if (!features.sugar) {

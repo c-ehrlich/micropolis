@@ -48,7 +48,7 @@ describe('integration runtime Sugar stdout handling', () => {
     );
   });
 
-  it('passes through valid PlaySound token to the sound hook', () => {
+  it('passes through valid PlaySound token to the sound hook as lowercase for wav mapping parity', () => {
     const soundTokens: string[] = [];
     const runtime = createIntegrationRuntime({
       features: {
@@ -62,7 +62,7 @@ describe('integration runtime Sugar stdout handling', () => {
     });
 
     runtime.handleOutputLine('PlaySound Bulldozer');
-    expect(soundTokens).toEqual(['Bulldozer']);
+    expect(soundTokens).toEqual(['bulldozer']);
   });
 
   it('keeps processing after malformed PlaySound in safe mode', () => {
@@ -81,6 +81,6 @@ describe('integration runtime Sugar stdout handling', () => {
 
     expect(() => runtime.handleOutputLine('PlaySound')).not.toThrow();
     runtime.handleOutputLine('PlaySound Siren');
-    expect(soundTokens).toEqual(['Siren']);
+    expect(soundTokens).toEqual(['siren']);
   });
 });
