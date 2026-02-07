@@ -35,6 +35,7 @@ const EXPECTED_SPRITE_FRAME_COUNTS = {
   8: 4,
 };
 const EXPECTED_KNOWN_MISSING_BITMAPS = ['micropolisl', 'splashscreen'];
+const TCL_LITERAL_BITMAP_REFERENCE_REGEX = /@images\/([a-z0-9_-]+)\.xpm/gi;
 
 /**
  * Read the first quoted XPM header tuple (`"w h colors cpp"`) from a Micropolis
@@ -120,6 +121,25 @@ const collectTclFilesRecursively = (rootDir, relativePrefix = '') => {
   }
 
   return filePaths;
+};
+
+/**
+ * Extract literal `@images/<name>.xpm` bitmap references from Tcl source text.
+ * Mirrors bitmap naming conventions used in `ref/micropolis/res/*.tcl`
+ * (parity check is intentionally literal-only and does not evaluate Tcl
+ * variable interpolation such as `${prefix}${name}.xpm`).
+ */
+const collectLiteralBitmapReferencesFromTcl = (tclText) => {
+  const references = new Set();
+  TCL_LITERAL_BITMAP_REFERENCE_REGEX.lastIndex = 0;
+
+  let match = TCL_LITERAL_BITMAP_REFERENCE_REGEX.exec(tclText);
+  while (match) {
+    references.add(match[1].toLowerCase());
+    match = TCL_LITERAL_BITMAP_REFERENCE_REGEX.exec(tclText);
+  }
+
+  return [...references].sort();
 };
 
 /**
@@ -225,12 +245,12 @@ export function verifyAssetsParity() {
   const tclText = tclFiles
     .map((relativePath) => readFileSync(path.join(MICROPOLIS_RES_DIR, relativePath), 'utf8'))
     .join('\n');
-  const referencedMissingBitmaps = EXPECTED_KNOWN_MISSING_BITMAPS.filter((name) =>
-    tclText.includes(`${name}.xpm`),
-  );
-  if (JSON.stringify(referencedMissingBitmaps) !== JSON.stringify(EXPECTED_KNOWN_MISSING_BITMAPS)) {
+  const referencedBitmaps = collectLiteralBitmapReferencesFromTcl(tclText);
+  const referencedMissingBitmaps = referencedBitmaps.filter((name) => !imageBaseNames.has(name));
+  const expectedKnownMissingBitmaps = [...EXPECTED_KNOWN_MISSING_BITMAPS].sort();
+  if (JSON.stringify(referencedMissingBitmaps) !== JSON.stringify(expectedKnownMissingBitmaps)) {
     failures.push(
-      `Expected Tcl references for known missing bitmaps [${EXPECTED_KNOWN_MISSING_BITMAPS.join(', ')}], found [${referencedMissingBitmaps.join(', ')}].`,
+      `Expected missing literal Tcl bitmap refs [${expectedKnownMissingBitmaps.join(', ')}], found [${referencedMissingBitmaps.join(', ')}].`,
     );
   }
 

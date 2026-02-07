@@ -80,7 +80,7 @@ Verification:
 
 ### P2.2 Add parity verifier
 - [x] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
-- [ ] Assert all locked invariants and known-missing sets.
+- [x] Assert all locked invariants and known-missing sets.
 
 Verification:
 - [ ] Verifier exits 0 on current reference assets.
@@ -185,3 +185,4 @@ Verification:
 - [x] 2026-02-07: Completed P2.1 canonical-input scan task by implementing explicit `scanCanonicalInputs()` traversal of `ref/micropolis/{res,images,manual}` in `scripts/gen-assets-manifest.mjs`.
 - [x] 2026-02-07: Completed P2.1 deterministic-generation task by regenerating `packages/sim-assets/src/generated/assets-manifest.ts` with stable ordering from canonical `ref/micropolis/{res,images,manual}` inputs.
 - [x] 2026-02-07: Completed P2.2 task by creating `packages/sim-assets/scripts/verify-assets-parity.mjs` to validate locked asset parity invariants against `ref/micropolis`.
+- [x] 2026-02-07: Completed P2.2 invariant-assertion task by tightening `scripts/verify-assets-parity.mjs` to enforce the exact known-missing literal Tcl bitmap set (`micropolisl`, `splashscreen`) alongside locked asset invariants.
