@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalSourcePathToDerivedPngPath,
+  createDerivedImagePathManifest,
+  createDerivedImagePathManifestByCanonicalKey,
   DERIVED_IMAGE_PATH_MANIFEST,
   DERIVED_IMAGE_PATH_MANIFEST_BY_CANONICAL_KEY,
   DERIVED_IMAGES_OUTPUT_DIR,
@@ -61,5 +63,29 @@ describe('derived image output convention', () => {
         key.startsWith('ref/micropolis/images/'),
       ),
     ).toBe(true);
+  });
+
+  it('keeps canonical identity keys stable when derived png overlays are omitted', () => {
+    const overlayManifest = createDerivedImagePathManifest({ includeDerivedPngPathOverlay: true });
+    const canonicalOnlyManifest = createDerivedImagePathManifest({
+      includeDerivedPngPathOverlay: false,
+    });
+    const overlayMap = createDerivedImagePathManifestByCanonicalKey(overlayManifest);
+    const canonicalOnlyMap = createDerivedImagePathManifestByCanonicalKey(canonicalOnlyManifest);
+
+    expect(canonicalOnlyManifest.map((entry) => entry.canonicalIdentityKey)).toEqual(
+      overlayManifest.map((entry) => entry.canonicalIdentityKey),
+    );
+    expect(canonicalOnlyManifest.map((entry) => entry.canonicalSourcePath)).toEqual(
+      overlayManifest.map((entry) => entry.canonicalSourcePath),
+    );
+    expect(canonicalOnlyManifest.every((entry) => entry.derivedPngPath === undefined)).toBe(true);
+    expect([...canonicalOnlyMap.keys()]).toEqual([...overlayMap.keys()]);
+
+    const canonicalIdentityKey = toCanonicalImageIdentityKey('ref/micropolis/images/airport.xpm');
+    expect(canonicalOnlyMap.get(canonicalIdentityKey)?.canonicalIdentityKey).toBe(
+      canonicalIdentityKey,
+    );
+    expect(canonicalOnlyMap.get(canonicalIdentityKey)?.derivedPngPath).toBeUndefined();
   });
 });

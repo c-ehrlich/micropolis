@@ -49,7 +49,11 @@ export function toCanonicalImageIdentityKey(
 export interface DerivedImagePathManifestEntry {
   readonly canonicalIdentityKey: CanonicalImageIdentityKey;
   readonly canonicalSourcePath: CanonicalImageIdentityKey;
-  readonly derivedPngPath: string;
+  readonly derivedPngPath?: string;
+}
+
+interface CreateDerivedImagePathManifestOptions {
+  readonly includeDerivedPngPathOverlay?: boolean;
 }
 
 /**
@@ -57,17 +61,32 @@ export interface DerivedImagePathManifestEntry {
  * Mirrors canonical image identity keys under `ref/micropolis/images/*.xpm`
  * used by `g_setup.c`, while projecting deterministic PNG overlay paths under
  * `packages/sim-assets/generated-images/` for optional TypeScript workflows.
+ * Parity note: canonical identity keys are always present (C/Tcl parity), while
+ * derived PNG paths are optional overlays with no direct C runtime equivalent.
  */
-export function createDerivedImagePathManifest(): readonly DerivedImagePathManifestEntry[] {
+export function createDerivedImagePathManifest(
+  options: CreateDerivedImagePathManifestOptions = {},
+): readonly DerivedImagePathManifestEntry[] {
+  const includeDerivedPngPathOverlay = options.includeDerivedPngPathOverlay ?? true;
   const entries = ASSETS_MANIFEST.files.images
     .map((imageFile) => `${ASSETS_MANIFEST.sourceRoots.images}/${imageFile.path}`)
     .filter((canonicalSourcePath) => canonicalSourcePath.endsWith('.xpm'))
     .map((canonicalSourcePath) => toCanonicalImageIdentityKey(canonicalSourcePath))
-    .map((canonicalIdentityKey) => ({
-      canonicalIdentityKey,
-      canonicalSourcePath: canonicalIdentityKey,
-      derivedPngPath: canonicalSourcePathToDerivedPngPath(canonicalIdentityKey),
-    }));
+    .map((canonicalIdentityKey) => {
+      const entry: DerivedImagePathManifestEntry = {
+        canonicalIdentityKey,
+        canonicalSourcePath: canonicalIdentityKey,
+      };
+
+      if (!includeDerivedPngPathOverlay) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        derivedPngPath: canonicalSourcePathToDerivedPngPath(canonicalIdentityKey),
+      };
+    });
 
   return Object.freeze(entries.map((entry) => Object.freeze(entry)));
 }
