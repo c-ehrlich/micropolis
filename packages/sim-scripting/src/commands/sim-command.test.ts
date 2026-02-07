@@ -12,6 +12,8 @@ import {
   createSimCityGameSetupSubcommandEntries,
   createSimCommandDispatcher,
   createSimKickState,
+  createSimMapDynamicOverlayMiscState,
+  createSimMapDynamicOverlayMiscSubcommandEntries,
   createSimReadOnlyGetterState,
   createSimReadOnlyGetterSubcommandEntries,
   createSimSessionControlSubcommandEntries,
@@ -882,6 +884,216 @@ describe('sim budget/options subcommands', () => {
     expect(runtime.invoke(['sim', 'FireFund'])).toEqual({
       code: ScriptResultCode.Ok,
       value: '100',
+    });
+  });
+});
+
+describe('sim map/dynamic/overlay misc subcommands', () => {
+  it('matches C-parity map and overlay get/set behavior for `Tile`, `Fill`, and overlay accessors', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimMapDynamicOverlayMiscState({
+      worldWidth: 4,
+      worldHeight: 3,
+      // `Map[x][y]` in `s_alloc.c` uses x-major layout (`Map[i] = base + i*WORLD_Y`),
+      // mirrored here as `index = x * worldHeight + y`.
+      mapTiles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimMapDynamicOverlayMiscSubcommandEntries({ state })),
+    );
+
+    // Defaults mirror C globals:
+    // `FlushStyle=3` for Linux builds in `w_x.c`,
+    // `DonDither=0` in `s_scan.c`,
+    // `DoOverlay=2` in `w_editor.c`.
+    expect(runtime.invoke(['sim', 'FlushStyle'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+    expect(runtime.invoke(['sim', 'DonDither'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+
+    expect(runtime.invoke(['sim', 'FlushStyle', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'DonDither', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay', '5'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '5',
+    });
+
+    expect(runtime.invoke(['sim', 'Tile', '2', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1', '2', '77'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '77',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '77',
+    });
+
+    expect(runtime.invoke(['sim', 'Fill', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '3', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(Array.from(state.mapTiles)).toEqual(new Array(12).fill(9));
+  });
+
+  it('updates dynamic map flags and kick scheduling only on dynamic writes and reset', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimMapDynamicOverlayMiscState({
+      dynamicData: [4],
+    });
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimMapDynamicOverlayMiscSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'DynamicData', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '1', '55'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '55',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '16', '333'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '333',
+    });
+    expect(runtime.invoke(['sim', 'ResetDynamic', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // `SimCmdDynamicData` sets `NewMapFlags[DYMAP]=1` and calls `Kick()` on write.
+    // `SimCmdResetDynamic` rewrites only indices `0..15` in `w_sim.c` and also kicks.
+    expect(state.newMapFlagsDynamic).toBe(1);
+    expect(state.dynamicData[0]).toBe(-99999);
+    expect(state.dynamicData[1]).toBe(99999);
+    expect(state.dynamicData[14]).toBe(-99999);
+    expect(state.dynamicData[15]).toBe(99999);
+    expect(state.dynamicData[16]).toBe(333);
+    expect(eventLog).toEqual(['kick', 'schedule', 'kick', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('enforces C-parity argc, map bounds, and integer validation rules', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimMapDynamicOverlayMiscSubcommandEntries({
+          state: createSimMapDynamicOverlayMiscState({
+            worldWidth: 4,
+            worldHeight: 3,
+          }),
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'FlushStyle', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim FlushStyle expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DoOverlay expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Tile expects argc 4 or 5, got 3',
+    });
+    expect(runtime.invoke(['sim', 'Tile', 'abc', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '-1', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected x in range 0..3 at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '0', '3'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected y in range 0..2 at argv[3]: 3',
+    });
+    expect(runtime.invoke(['sim', 'Fill', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Fill expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim DynamicData expects argc 3 or 4, got 2',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '32'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DynamicData expected an integer index in range 0..31 at argv[2]: 32',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '0', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DynamicData expected a 32-bit integer at argv[3]: abc',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'DoOverlay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+    // `headers/sim.h` provides `WORLD_X=120`, `WORLD_Y=100`; zero-initialized
+    // map storage means default `Map[0][0] == 0` until scripts mutate it.
+    expect(runtime.invoke(['sim', 'Tile', '0', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
     });
   });
 });

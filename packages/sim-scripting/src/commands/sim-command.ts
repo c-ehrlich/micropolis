@@ -1872,6 +1872,396 @@ export function createSimBudgetOptionsSubcommandEntries(
 }
 
 /**
+ * `sim` map/dynamic/overlay misc subcommands from `w_sim.c`.
+ * Mirrors explicit command registrations for:
+ * `FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`,
+ * and `ResetDynamic` in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export const SIM_MAP_DYNAMIC_OVERLAY_MISC_SUBCOMMAND_NAMES = [
+  'FlushStyle',
+  'DonDither',
+  'DoOverlay',
+  'Tile',
+  'Fill',
+  'DynamicData',
+  'ResetDynamic',
+] as const;
+
+/**
+ * Union of map/dynamic/overlay misc subcommand names from `w_sim.c`.
+ */
+export type SimMapDynamicOverlayMiscSubcommandName =
+  (typeof SIM_MAP_DYNAMIC_OVERLAY_MISC_SUBCOMMAND_NAMES)[number];
+
+const SIM_MAP_DEFAULT_WORLD_WIDTH = 120;
+const SIM_MAP_DEFAULT_WORLD_HEIGHT = 100;
+const SIM_DYNAMIC_DATA_LENGTH = 32;
+const SIM_RESET_DYNAMIC_LENGTH = 16;
+
+/**
+ * Mutable backing state for map/dynamic/overlay misc subcommands.
+ * Mirrors globals touched by these handlers in `ref/micropolis/src/sim/w_sim.c`:
+ * `Map`, `DynamicData`, `NewMapFlags[DYMAP]`, `FlushStyle`, `DonDither`,
+ * and `DoOverlay`.
+ * Difference from C: `Map[x][y]` is stored as a linear `Int32Array` with
+ * `index = x * worldHeight + y` for deterministic typed access.
+ */
+export interface SimMapDynamicOverlayMiscState {
+  worldWidth: number;
+  worldHeight: number;
+  mapTiles: Int16Array;
+  dynamicData: Int32Array;
+  newMapFlagsDynamic: number;
+  flushStyle: number;
+  donDither: number;
+  doOverlay: number;
+}
+
+/**
+ * Constructor options for `createSimMapDynamicOverlayMiscState`.
+ * Mirrors the C globals above while allowing deterministic overrides in tests.
+ */
+export interface CreateSimMapDynamicOverlayMiscStateOptions {
+  worldWidth?: number;
+  worldHeight?: number;
+  mapTiles?: Int16Array | readonly number[];
+  dynamicData?: Int32Array | readonly number[];
+  newMapFlagsDynamic?: number;
+  flushStyle?: number;
+  donDither?: number;
+  doOverlay?: number;
+}
+
+/**
+ * Constructor options for `createSimMapDynamicOverlayMiscSubcommandEntries`.
+ * Mirrors map/dynamic/overlay command wiring in `sim_command_init`
+ * (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimMapDynamicOverlayMiscSubcommandEntriesOptions {
+  state?: SimMapDynamicOverlayMiscState;
+  kickState?: SimKickState;
+  kickHooks?: SimKickHooks;
+}
+
+function normalizeInt32Array(
+  expectedLength: number,
+  source: Int32Array | readonly number[] | undefined,
+): Int32Array {
+  const normalized = new Int32Array(expectedLength);
+  if (source === undefined) {
+    return normalized;
+  }
+
+  const copyLength = Math.min(expectedLength, source.length);
+  for (let index = 0; index < copyLength; index += 1) {
+    const value = source[index];
+    if (value !== undefined) {
+      normalized[index] = value;
+    }
+  }
+  return normalized;
+}
+
+function normalizeInt16Array(
+  expectedLength: number,
+  source: Int16Array | readonly number[] | undefined,
+): Int16Array {
+  const normalized = new Int16Array(expectedLength);
+  if (source === undefined) {
+    return normalized;
+  }
+
+  const copyLength = Math.min(expectedLength, source.length);
+  for (let index = 0; index < copyLength; index += 1) {
+    const value = source[index];
+    if (value !== undefined) {
+      normalized[index] = value;
+    }
+  }
+  return normalized;
+}
+
+/**
+ * Creates mutable state for map/dynamic/overlay misc subcommands.
+ * Mirrors defaults initialized by C globals:
+ * - world size from `headers/sim.h` (`WORLD_X=120`, `WORLD_Y=100`)
+ * - `FlushStyle` from `ref/micropolis/src/sim/w_x.c` (`IS_LINUX` default `3`)
+ * - `DonDither` from `ref/micropolis/src/sim/s_scan.c` (`0`)
+ * - `DoOverlay` from `ref/micropolis/src/sim/w_editor.c` (`2`)
+ * - `Map` / `DynamicData` zero-initialized storage in C runtime
+ * Difference from C: callers may explicitly override world/map buffer sizes.
+ * Parity note: map storage uses `Int16Array` to mirror C `short Map[x][y]`.
+ */
+export function createSimMapDynamicOverlayMiscState(
+  options: CreateSimMapDynamicOverlayMiscStateOptions = {},
+): SimMapDynamicOverlayMiscState {
+  const worldWidth = options.worldWidth ?? SIM_MAP_DEFAULT_WORLD_WIDTH;
+  const worldHeight = options.worldHeight ?? SIM_MAP_DEFAULT_WORLD_HEIGHT;
+  const mapTileCount = worldWidth * worldHeight;
+
+  return {
+    worldWidth,
+    worldHeight,
+    mapTiles: normalizeInt16Array(mapTileCount, options.mapTiles),
+    dynamicData: normalizeInt32Array(SIM_DYNAMIC_DATA_LENGTH, options.dynamicData),
+    newMapFlagsDynamic: options.newMapFlagsDynamic ?? 0,
+    flushStyle: options.flushStyle ?? 3,
+    donDither: options.donDither ?? 0,
+    doOverlay: options.doOverlay ?? 2,
+  };
+}
+
+function validateSimMapOverlayAccessorArgCount(
+  argv: readonly string[],
+  name: 'FlushStyle' | 'DonDither' | 'DoOverlay' | 'DynamicData',
+): ScriptRuntimeResult | null {
+  if (argv.length === 2 || argv.length === 3) {
+    return null;
+  }
+
+  return makeScriptFailure(
+    new ScriptRuntimeError(
+      ScriptRuntimeErrorCode.InvalidArgCount,
+      `sim ${name} expects argc 2 or 3, got ${argv.length}`,
+    ),
+  );
+}
+
+function parseSimMapDynamicOverlayWriteInt(
+  argv: readonly string[],
+  name: SimMapDynamicOverlayMiscSubcommandName,
+  argIndex: number,
+): number | ScriptRuntimeResult {
+  const rawValue = argv[argIndex];
+  if (rawValue === undefined) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidArgCount,
+        `sim ${name} missing integer argument at argv[${argIndex}]`,
+      ),
+    );
+  }
+
+  const parsedValue = parseTclInt32(rawValue);
+  if (parsedValue === null) {
+    return makeScriptFailure(
+      new ScriptRuntimeError(
+        ScriptRuntimeErrorCode.InvalidInteger,
+        `sim ${name} expected a 32-bit integer at argv[${argIndex}]: ${rawValue}`,
+      ),
+    );
+  }
+
+  return parsedValue;
+}
+
+function createSimNonNegativeOverlayAccessorSubcommandHandler(
+  state: SimMapDynamicOverlayMiscState,
+  name: 'FlushStyle' | 'DonDither' | 'DoOverlay',
+  field: 'flushStyle' | 'donDither' | 'doOverlay',
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    const argCountError = validateSimMapOverlayAccessorArgCount(argv, name);
+    if (argCountError !== null) {
+      return argCountError;
+    }
+
+    if (argv.length === 3) {
+      const parsedValue = parseSimMapDynamicOverlayWriteInt(argv, name, 2);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+      if (parsedValue < 0) {
+        return makeScriptFailure(
+          new ScriptRuntimeError(
+            ScriptRuntimeErrorCode.InvalidInteger,
+            `sim ${name} expected a non-negative integer at argv[2]: ${parsedValue}`,
+          ),
+        );
+      }
+
+      state[field] = parsedValue;
+    }
+
+    return makeScriptSuccess(String(state[field]));
+  };
+}
+
+function toMapTileIndex(worldHeight: number, x: number, y: number): number {
+  return x * worldHeight + y;
+}
+
+function createSimTileSubcommandHandler(
+  state: SimMapDynamicOverlayMiscState,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 4 && argv.length !== 5) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim Tile expects argc 4 or 5, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedX = parseSimMapDynamicOverlayWriteInt(argv, 'Tile', 2);
+    if (typeof parsedX !== 'number') {
+      return parsedX;
+    }
+    if (parsedX < 0 || parsedX >= state.worldWidth) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim Tile expected x in range 0..${state.worldWidth - 1} at argv[2]: ${parsedX}`,
+        ),
+      );
+    }
+
+    const parsedY = parseSimMapDynamicOverlayWriteInt(argv, 'Tile', 3);
+    if (typeof parsedY !== 'number') {
+      return parsedY;
+    }
+    if (parsedY < 0 || parsedY >= state.worldHeight) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim Tile expected y in range 0..${state.worldHeight - 1} at argv[3]: ${parsedY}`,
+        ),
+      );
+    }
+
+    const mapIndex = toMapTileIndex(state.worldHeight, parsedX, parsedY);
+    if (argv.length === 5) {
+      const parsedTile = parseSimMapDynamicOverlayWriteInt(argv, 'Tile', 4);
+      if (typeof parsedTile !== 'number') {
+        return parsedTile;
+      }
+      state.mapTiles[mapIndex] = parsedTile;
+    }
+
+    return makeScriptSuccess(String(state.mapTiles[mapIndex] ?? 0));
+  };
+}
+
+function createSimFillSubcommandHandler(
+  state: SimMapDynamicOverlayMiscState,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim Fill expects argc 3, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedTile = parseSimMapDynamicOverlayWriteInt(argv, 'Fill', 2);
+    if (typeof parsedTile !== 'number') {
+      return parsedTile;
+    }
+
+    state.mapTiles.fill(parsedTile);
+    return makeScriptSuccess(String(parsedTile));
+  };
+}
+
+function createSimDynamicDataSubcommandHandler(
+  state: SimMapDynamicOverlayMiscState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return (argv: readonly string[]): ScriptRuntimeResult => {
+    if (argv.length !== 3 && argv.length !== 4) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidArgCount,
+          `sim DynamicData expects argc 3 or 4, got ${argv.length}`,
+        ),
+      );
+    }
+
+    const parsedIndex = parseSimMapDynamicOverlayWriteInt(argv, 'DynamicData', 2);
+    if (typeof parsedIndex !== 'number') {
+      return parsedIndex;
+    }
+    if (parsedIndex < 0 || parsedIndex >= SIM_DYNAMIC_DATA_LENGTH) {
+      return makeScriptFailure(
+        new ScriptRuntimeError(
+          ScriptRuntimeErrorCode.InvalidInteger,
+          `sim DynamicData expected an integer index in range 0..31 at argv[2]: ${parsedIndex}`,
+        ),
+      );
+    }
+
+    if (argv.length === 4) {
+      const parsedValue = parseSimMapDynamicOverlayWriteInt(argv, 'DynamicData', 3);
+      if (typeof parsedValue !== 'number') {
+        return parsedValue;
+      }
+
+      state.dynamicData[parsedIndex] = parsedValue;
+      state.newMapFlagsDynamic = 1;
+      runSimKick(kickState, kickHooks);
+    }
+
+    return makeScriptSuccess(String(state.dynamicData[parsedIndex] ?? 0));
+  };
+}
+
+function createSimResetDynamicSubcommandHandler(
+  state: SimMapDynamicOverlayMiscState,
+  kickState: SimKickState,
+  kickHooks: SimKickHooks,
+): SimSubcommandHandler {
+  return () => {
+    for (let index = 0; index < SIM_RESET_DYNAMIC_LENGTH; index += 1) {
+      state.dynamicData[index] = (index & 1) !== 0 ? 99999 : -99999;
+    }
+
+    state.newMapFlagsDynamic = 1;
+    runSimKick(kickState, kickHooks);
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds map/dynamic/overlay misc `sim` subcommand entries.
+ * Mirrors `SimCmdFlushStyle`, `SimCmdDonDither`, `SimCmdDoOverlay`,
+ * `SimCmdTile`, `SimCmdFill`, `SimCmdDynamicData`, and `SimCmdResetDynamic`
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: only dynamic-map writes (`DynamicData` set and `ResetDynamic`)
+ * set `NewMapFlags[DYMAP] = 1` and invoke `Kick()`.
+ */
+export function createSimMapDynamicOverlayMiscSubcommandEntries(
+  options: CreateSimMapDynamicOverlayMiscSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const state = options.state ?? createSimMapDynamicOverlayMiscState();
+  const kickState = options.kickState ?? createSimKickState();
+  const kickHooks = options.kickHooks ?? {};
+
+  return [
+    [
+      'FlushStyle',
+      createSimNonNegativeOverlayAccessorSubcommandHandler(state, 'FlushStyle', 'flushStyle'),
+    ] as const,
+    [
+      'DonDither',
+      createSimNonNegativeOverlayAccessorSubcommandHandler(state, 'DonDither', 'donDither'),
+    ] as const,
+    [
+      'DoOverlay',
+      createSimNonNegativeOverlayAccessorSubcommandHandler(state, 'DoOverlay', 'doOverlay'),
+    ] as const,
+    ['Tile', createSimTileSubcommandHandler(state)] as const,
+    ['Fill', createSimFillSubcommandHandler(state)] as const,
+    ['DynamicData', createSimDynamicDataSubcommandHandler(state, kickState, kickHooks)] as const,
+    ['ResetDynamic', createSimResetDynamicSubcommandHandler(state, kickState, kickHooks)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -1913,6 +2303,9 @@ export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
   ...createSimBudgetOptionsSubcommandEntries({
+    kickState: DEFAULT_SIM_KICK_STATE,
+  }),
+  ...createSimMapDynamicOverlayMiscSubcommandEntries({
     kickState: DEFAULT_SIM_KICK_STATE,
   }),
   ...createSimCityGameSetupSubcommandEntries(),

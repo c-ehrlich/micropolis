@@ -104,7 +104,7 @@ Use this exact loop:
     - percent math uses C-like integer behavior
     - update flags and callbacks are triggered in correct order
 
-- [ ] `P1.8` Implement map/dynamic/overlay misc subcommands.
+- [x] `P1.8` Implement map/dynamic/overlay misc subcommands.
   - C reference: `SimCmdTile`, `SimCmdFill`, `SimCmdDynamicData`, `SimCmdResetDynamic`, `SimCmdFlushStyle`, `SimCmdDoOverlay`, `SimCmdDonDither`
   - Done when:
     - all ranges and map bounds checks are covered
@@ -286,3 +286,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P1.5` by adding `sim` speed/delay/skip/rest subcommands with C-parity argc/range validation (`SimCmdSpeed`/`Delay`/`Skips`/`Skip`/`NeedRest`), `setSpeed` clamp behavior (`0..7` input to `0..3` effective speed), `setSkips` reset semantics, and `Kick` sequencing coverage in `sim-command` tests.
 - [x] `2026-02-07` Completed `P1.6` by adding `sim` city/game setup subcommands (`CityName`, `CityFileName`, `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`, `LoadScenario`), including configurable legacy `CityFileName` allocation-bug parity mode and C-mapped validation/side-effect tests.
 - [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.
+- [x] `2026-02-07` Completed `P1.8` by adding `sim` map/dynamic/overlay misc subcommands (`FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`, `ResetDynamic`) with C-parity arg/range/map-bounds checks, dynamic-map flag updates, and `Kick` coalescing coverage.
