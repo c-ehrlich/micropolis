@@ -28,6 +28,57 @@ Parity baseline for this package is the Micropolis integration surface in:
 4. `@city/sim-io` owns persistence format parity and file orchestration; integration does not parse or serialize city/scenario files.
 5. Cross-package composition must preserve one-way responsibilities: simulation logic in core, transport in integration, presentation in ui, persistence in io.
 
+## Hook Pathways (`makeSound`, messages, UI hooks)
+
+This section documents how the hooks connect across packages while keeping
+`@city/sim-core` as the single owner of simulation behavior.
+
+### 1) Sound pathway (`makeSound` -> `PlaySound`)
+
+Micropolis parity chain:
+
+1. Simulation code triggers `MakeSound(channel, id)` in C (`ref/micropolis/src/sim/w_sound.c`).
+2. Tcl receives `UIMakeSound ...` and `EchoPlaySound` emits `PlaySound <token>` to stdout (`ref/micropolis/res/micropolis.tcl`).
+3. Sugar bridge reads `PlaySound` and plays `<token>.wav` lowercased (`ref/micropolis/micropolisactivity.py`).
+
+TypeScript ownership split:
+
+- `@city/sim-core` decides when sound happens and what sound id/spec is emitted through `SimHooks.makeSound` (`packages/sim-core/src/core/sim-context.ts`).
+- `@city/sim-integration` only transports/parses Sugar stdout `PlaySound` lines and forwards the token (`packages/sim-integration/src/runtime.ts`, `packages/sim-integration/src/sugar/stdout-protocol.ts`).
+- `@city/sim-ui` (or host UI layer) chooses how to render/play audio.
+
+### 2) Message pathway (`sendMes` / `sendMesAt`)
+
+Micropolis parity chain:
+
+1. Simulation enqueues messages via `SendMes` / `SendMesAt` (`ref/micropolis/src/sim/s_msg.c`).
+2. `doMessage()` consumes `MessagePort`, handles picture-message requeue/expiry, and emits UI commands (`UISetMessage`, `UIShowPicture`) (`ref/micropolis/src/sim/s_msg.c`).
+3. `DoUpdateHeads` reaches `doMessage()` via `updateDate()` (`ref/micropolis/src/sim/w_update.c`).
+
+TypeScript ownership split:
+
+- `@city/sim-core` keeps queueing/consumption behavior and exposes delivery through `SimHooks.sendMes` / `SimHooks.sendMesAt` (`packages/sim-core/src/systems/messages.ts`, `packages/sim-core/src/systems/date-time.ts`).
+- `@city/sim-integration` does not maintain a second message queue, does not map message ids to strings, and does not implement message expiry policy.
+- `@city/sim-ui` displays text/pictures and applies presentation policy.
+
+### 3) Heads/UI pathway (`uiSet` keys)
+
+Micropolis parity chain:
+
+1. `DoUpdateHeads` computes funds/date/demand/options and emits Tcl UI setters (`UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`) (`ref/micropolis/src/sim/w_update.c`).
+
+TypeScript ownership split:
+
+- `@city/sim-core` computes and emits canonical `uiSet` keys/values (`packages/sim-core/src/systems/date-time.ts`).
+- `@city/sim-integration` does not reinterpret `uiSet` keys and does not own head-window state.
+- `@city/sim-ui` consumes `uiSet` outputs and updates view state/widgets.
+
+### Required non-duplication rule
+
+Composition code may wire core hooks into integration/runtime adapters, but it must
+treat integration as transport only. Do not reimplement `doMessage`/`DoUpdateHeads`
+semantics or sound/message decision logic outside `@city/sim-core`.
+
 ## Dependency Direction (Required)
 
 - `@city/sim-core`: no dependency on `@city/sim-integration`, `@city/sim-ui`, or `@city/sim-io`.
