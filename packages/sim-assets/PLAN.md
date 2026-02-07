@@ -79,7 +79,7 @@ Verification:
 - [ ] Re-run generator produces no diff.
 
 ### P2.2 Add parity verifier
-- [ ] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
+- [x] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
 - [ ] Assert all locked invariants and known-missing sets.
 
 Verification:
@@ -184,3 +184,4 @@ Verification:
 - [x] 2026-02-07: Completed P2.1 task to create `packages/sim-assets/scripts/gen-assets-manifest.mjs`; generator now scans canonical `ref/micropolis/{res,images,manual}` and emits deterministic `src/generated/assets-manifest.ts`.
 - [x] 2026-02-07: Completed P2.1 canonical-input scan task by implementing explicit `scanCanonicalInputs()` traversal of `ref/micropolis/{res,images,manual}` in `scripts/gen-assets-manifest.mjs`.
 - [x] 2026-02-07: Completed P2.1 deterministic-generation task by regenerating `packages/sim-assets/src/generated/assets-manifest.ts` with stable ordering from canonical `ref/micropolis/{res,images,manual}` inputs.
+- [x] 2026-02-07: Completed P2.2 task by creating `packages/sim-assets/scripts/verify-assets-parity.mjs` to validate locked asset parity invariants against `ref/micropolis`.
