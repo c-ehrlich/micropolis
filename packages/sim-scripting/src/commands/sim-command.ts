@@ -388,6 +388,171 @@ export function createSimReadOnlyGetterSubcommandEntries(
 }
 
 /**
+ * `sim` subcommands that map to `SIMCMD_CALL(...)` for session/redraw control.
+ * Mirrors `SIMCMD_CALL` entries in `ref/micropolis/src/sim/w_sim.c` that are
+ * part of the session/redraw cluster (`SaveCity`, `ReallyQuit`).
+ */
+export const SIM_SESSION_CONTROL_CALL_ONLY_SUBCOMMAND_NAMES = ['SaveCity', 'ReallyQuit'] as const;
+
+/**
+ * `sim` subcommands that map to `SIMCMD_CALL_KICK(...)` for session/redraw flow.
+ * Mirrors `SIMCMD_CALL_KICK` entries in `ref/micropolis/src/sim/w_sim.c`:
+ * `GameStarted`, redraw/update calls, budget redraw calls, and pause/resume.
+ */
+export const SIM_SESSION_CONTROL_CALL_AND_KICK_SUBCOMMAND_NAMES = [
+  'GameStarted',
+  'InitGame',
+  'UpdateHeads',
+  'UpdateMaps',
+  'UpdateEditors',
+  'RedrawMaps',
+  'RedrawEditors',
+  'UpdateGraphs',
+  'UpdateEvaluation',
+  'UpdateBudget',
+  'UpdateBudgetWindow',
+  'DoBudget',
+  'DoBudgetFromMenu',
+  'Pause',
+  'Resume',
+] as const;
+
+/**
+ * Union of session/redraw control `sim` subcommand names implemented for `P1.4`.
+ * Mirrors the `SIMCMD_CALL` + `SIMCMD_CALL_KICK` entries above plus explicit
+ * `SimCmdUpdate` in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type SimSessionControlSubcommandName =
+  | (typeof SIM_SESSION_CONTROL_CALL_ONLY_SUBCOMMAND_NAMES)[number]
+  | (typeof SIM_SESSION_CONTROL_CALL_AND_KICK_SUBCOMMAND_NAMES)[number]
+  | 'Update';
+
+/**
+ * Mutable `Kick` scheduling state for session/redraw subcommands.
+ * Mirrors `UpdateDelayed` in `ref/micropolis/src/sim/w_tk.c`, where `Kick()`
+ * only schedules one delayed update until the pending update is consumed.
+ */
+export interface SimKickState {
+  updateDelayed: boolean;
+}
+
+/**
+ * Hook callbacks used by `runSimKick`.
+ * Mirrors `Kick()` in `ref/micropolis/src/sim/w_tk.c`:
+ * `Kick()` side-effect (`onKick`) runs every call, while delayed update
+ * scheduling (`onScheduleDelayedUpdate`) runs only when `UpdateDelayed` flips
+ * from `0` to `1`.
+ */
+export interface SimKickHooks {
+  onKick?: () => void;
+  onScheduleDelayedUpdate?: () => void;
+}
+
+/**
+ * Creates mutable `Kick` scheduling state.
+ * Mirrors boot-time `UpdateDelayed = 0` initialization in
+ * `ref/micropolis/src/sim/s_init.c`.
+ */
+export function createSimKickState(initialUpdateDelayed = false): SimKickState {
+  return {
+    updateDelayed: initialUpdateDelayed,
+  };
+}
+
+/**
+ * Executes C-style `Kick()` behavior against mutable state.
+ * Mirrors `Kick()` in `ref/micropolis/src/sim/w_tk.c`:
+ * call the kick side effect, then schedule delayed update only when no delayed
+ * update is currently pending.
+ */
+export function runSimKick(kickState: SimKickState, hooks: SimKickHooks = {}): void {
+  hooks.onKick?.();
+  if (!kickState.updateDelayed) {
+    kickState.updateDelayed = true;
+    hooks.onScheduleDelayedUpdate?.();
+  }
+}
+
+/**
+ * Callback hooks for session control/redraw `sim` subcommands.
+ * Mirrors `SIMCMD_CALL`, `SIMCMD_CALL_KICK`, and `SimCmdUpdate` dispatch paths
+ * in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: command function pointers are modeled as typed callbacks.
+ */
+export interface SimSessionControlHooks extends SimKickHooks {
+  onCall?: (
+    name:
+      | (typeof SIM_SESSION_CONTROL_CALL_ONLY_SUBCOMMAND_NAMES)[number]
+      | (typeof SIM_SESSION_CONTROL_CALL_AND_KICK_SUBCOMMAND_NAMES)[number],
+  ) => void;
+  onUpdate?: () => void;
+}
+
+/**
+ * Constructor options for `createSimSessionControlSubcommandEntries`.
+ * Mirrors command registration wiring for session/redraw commands in
+ * `sim_command_init` (`ref/micropolis/src/sim/w_sim.c`).
+ */
+export interface CreateSimSessionControlSubcommandEntriesOptions {
+  hooks?: SimSessionControlHooks;
+  kickState?: SimKickState;
+}
+
+function createSimCallOnlySubcommandHandler(
+  hooks: SimSessionControlHooks,
+  name: (typeof SIM_SESSION_CONTROL_CALL_ONLY_SUBCOMMAND_NAMES)[number],
+): SimSubcommandHandler {
+  return () => {
+    hooks.onCall?.(name);
+    return makeScriptSuccess();
+  };
+}
+
+function createSimCallAndKickSubcommandHandler(
+  hooks: SimSessionControlHooks,
+  kickState: SimKickState,
+  name: (typeof SIM_SESSION_CONTROL_CALL_AND_KICK_SUBCOMMAND_NAMES)[number],
+): SimSubcommandHandler {
+  return () => {
+    hooks.onCall?.(name);
+    runSimKick(kickState, hooks);
+    return makeScriptSuccess();
+  };
+}
+
+function createSimUpdateSubcommandHandler(hooks: SimSessionControlHooks): SimSubcommandHandler {
+  return () => {
+    hooks.onUpdate?.();
+    return makeScriptSuccess();
+  };
+}
+
+/**
+ * Builds session control/redraw `sim` subcommand entries and `Kick` behavior.
+ * Mirrors `SIMCMD_CALL`, `SIMCMD_CALL_KICK`, and `SimCmdUpdate` in
+ * `ref/micropolis/src/sim/w_sim.c`, plus `Kick()` coalescing in
+ * `ref/micropolis/src/sim/w_tk.c`.
+ * Parity note: these handlers intentionally do not validate argc, matching the
+ * C macro expansions that ignore extra arguments for these call-only commands.
+ */
+export function createSimSessionControlSubcommandEntries(
+  options: CreateSimSessionControlSubcommandEntriesOptions = {},
+): readonly SimSubcommandEntry[] {
+  const hooks = options.hooks ?? {};
+  const kickState = options.kickState ?? createSimKickState();
+
+  return [
+    ...SIM_SESSION_CONTROL_CALL_ONLY_SUBCOMMAND_NAMES.map((name) => {
+      return [name, createSimCallOnlySubcommandHandler(hooks, name)] as const;
+    }),
+    ...SIM_SESSION_CONTROL_CALL_AND_KICK_SUBCOMMAND_NAMES.map((name) => {
+      return [name, createSimCallAndKickSubcommandHandler(hooks, kickState, name)] as const;
+    }),
+    ['Update', createSimUpdateSubcommandHandler(hooks)] as const,
+  ];
+}
+
+/**
  * Builds a case-sensitive `sim` subcommand table from ordered entries.
  * Mirrors repeated `HASHED_CMD(...)` registration writes in
  * `ref/micropolis/src/sim/w_sim.c` plus `Tcl_CreateHashEntry` behavior in
@@ -409,11 +574,14 @@ export function createSimSubcommandTable(
 
 /**
  * Default `sim` subcommand table.
- * Mirrors `sim_command_init` registration for accessor and read-only getter
- * commands from `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: includes `SIMCMD_ACCESS_INT(...)` plus read-only getters.
+ * Mirrors `sim_command_init` registration slices from
+ * `ref/micropolis/src/sim/w_sim.c` for:
+ * - session/redraw control (`SIMCMD_CALL`, `SIMCMD_CALL_KICK`, `SimCmdUpdate`)
+ * - accessor commands (`SIMCMD_ACCESS_INT(...)`)
+ * - read-only getter commands (`SIMCMD_GET_*` + explicit getters)
  */
 export const SIM_SUBCOMMAND_TABLE: SimSubcommandTable = createSimSubcommandTable([
+  ...createSimSessionControlSubcommandEntries(),
   ...createSimAccessorIntSubcommandEntries(createSimAccessorIntState()),
   ...createSimReadOnlyGetterSubcommandEntries(createSimReadOnlyGetterState()),
 ]);

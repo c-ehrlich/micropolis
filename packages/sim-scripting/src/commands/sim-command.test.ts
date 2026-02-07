@@ -7,8 +7,10 @@ import {
   createSimAccessorIntState,
   createSimAccessorIntSubcommandEntries,
   createSimCommandDispatcher,
+  createSimKickState,
   createSimReadOnlyGetterState,
   createSimReadOnlyGetterSubcommandEntries,
+  createSimSessionControlSubcommandEntries,
   createSimSubcommandTable,
   registerSimCommand,
 } from './sim-command.ts';
@@ -155,6 +157,131 @@ describe('sim accessor subcommands', () => {
       errorCode: ScriptRuntimeErrorCode.InvalidInteger,
       message: 'sim LakeLevel expected a 32-bit integer at argv[2]: 2147483648',
     });
+  });
+});
+
+describe('sim session control/redraw subcommands', () => {
+  it('routes call-only session commands through `SIMCMD_CALL`-style hooks without kick', () => {
+    const runtime = new ScriptRuntime();
+    const calls: string[] = [];
+    const kicks: string[] = [];
+    const delayedUpdates: string[] = [];
+    const kickState = createSimKickState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          kickState,
+          hooks: {
+            onCall: (name) => {
+              calls.push(name);
+            },
+            onKick: () => {
+              kicks.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              delayedUpdates.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(proc)` in `w_sim.c` does not validate argc and does not call
+    // `Kick()`, so extra args are ignored and no delayed update is scheduled.
+    expect(runtime.invoke(['sim', 'SaveCity'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'ReallyQuit', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(calls).toEqual(['SaveCity', 'ReallyQuit']);
+    expect(kicks).toEqual([]);
+    expect(delayedUpdates).toEqual([]);
+    expect(kickState.updateDelayed).toBe(false);
+  });
+
+  it('runs call+kick commands in C side-effect order and coalesces delayed update scheduling', () => {
+    const runtime = new ScriptRuntime();
+    const eventLog: string[] = [];
+    const kickState = createSimKickState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          kickState,
+          hooks: {
+            onCall: (name) => {
+              eventLog.push(`call:${name}`);
+            },
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'UpdateMaps'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'Pause', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // Mirrors `SIMCMD_CALL_KICK(proc)` in `w_sim.c` + `Kick()` in `w_tk.c`:
+    // proc() runs first, `Kick()` runs each call, delayed scheduling only on
+    // first transition from `UpdateDelayed=0` to `UpdateDelayed=1`.
+    expect(eventLog).toEqual(['call:UpdateMaps', 'kick', 'schedule', 'call:Pause', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('routes `Update` through `sim_update` hook without kick scheduling', () => {
+    const runtime = new ScriptRuntime();
+    const updates: string[] = [];
+    const kicks: string[] = [];
+    const delayedUpdates: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          hooks: {
+            onUpdate: () => {
+              updates.push('update');
+            },
+            onKick: () => {
+              kicks.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              delayedUpdates.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SimCmdUpdate` in `w_sim.c` directly calls `sim_update()` and also skips
+    // argc validation.
+    expect(runtime.invoke(['sim', 'Update'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'Update', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(updates).toEqual(['update', 'update']);
+    expect(kicks).toEqual([]);
+    expect(delayedUpdates).toEqual([]);
   });
 });
 
