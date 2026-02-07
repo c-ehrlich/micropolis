@@ -1,3 +1,5 @@
+import type { ParityMode } from '../types.ts';
+
 /**
  * Tokenized stdout line from the Sugar subprocess bridge.
  * Mirrors `_stdout_thread_function` parsing in
@@ -46,4 +48,32 @@ export function splitSugarStdoutWords(line: string): string[] {
   }
 
   return strippedLine.split(' ');
+}
+
+/**
+ * Extract `PlaySound` argument token with Micropolis strict-parity failure mode.
+ * Mirrors `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`,
+ * where `PlaySound` dispatch directly indexes `words[1]`.
+ * Parity note: in `strict` mode, missing token throws (Python `IndexError`
+ * equivalent), which surfaces fatal parsing behavior; non-`PlaySound` lines
+ * and non-strict missing-arg cases return `undefined`.
+ */
+export function getPlaySoundToken(
+  stdoutLine: SugarStdoutLine,
+  mode: ParityMode,
+): string | undefined {
+  if (stdoutLine.command !== 'PlaySound') {
+    return undefined;
+  }
+
+  const playSoundToken = stdoutLine.words[1];
+  if (playSoundToken !== undefined) {
+    return playSoundToken;
+  }
+
+  if (mode === 'strict') {
+    throw new RangeError('Malformed PlaySound line: missing words[1] token');
+  }
+
+  return undefined;
 }
