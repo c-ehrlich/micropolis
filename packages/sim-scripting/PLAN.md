@@ -54,7 +54,7 @@ Use this exact loop:
     - state shape supports sim/view/widget/sprite/callback references
     - registry tests cover add/get/remove and duplicate handling
 
-- [ ] `P0.5` Add bootstrap API.
+- [x] `P0.5` Add bootstrap API.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/bootstrap/create-sim-scripting-runtime.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/index.ts`
   - Done when:
     - runtime can be created from one entrypoint
@@ -277,3 +277,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P0.2` by adding Tcl-style runtime result codes, structured runtime errors, and unit tests for error/result mapping.
 - [x] `2026-02-07` Completed `P0.3` by adding `ScriptRuntime` command registration/invocation kernel and coverage for dispatch, unknown-command errors, and thrown-error normalization.
 - [x] `2026-02-07` Completed `P0.4` by adding typed scripting bridge state plus view/sprite/widget registries with duplicate-safe add/get/remove coverage.
+- [x] `2026-02-07` Completed `P0.5` by adding `createSimScriptingRuntime` bootstrap entrypoint, exporting it from package index, and covering base command registration hook flow with bootstrap tests.
