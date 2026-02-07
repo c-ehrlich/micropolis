@@ -36,7 +36,7 @@ Use this exact loop:
     - `pnpm -C /Users/cje/dev/city/packages/sim-scripting test` runs
     - one placeholder test passes
 
-- [ ] `P0.2` Add runtime result/error primitives.
+- [x] `P0.2` Add runtime result/error primitives.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/runtime/result-code.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/runtime/errors.ts`
   - Done when:
     - types exist for success/error returns
@@ -274,3 +274,4 @@ Use this exact loop:
 
 ## Execution Log
 - [x] `2026-02-07` Completed `P0.1` by adding package scripts, `vitest.config.ts`, and a passing placeholder test in `src/index.test.ts`.
+- [x] `2026-02-07` Completed `P0.2` by adding Tcl-style runtime result codes, structured runtime errors, and unit tests for error/result mapping.
