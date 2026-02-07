@@ -170,7 +170,7 @@ Use this exact loop:
     - `sprite <name> <type>` registers sprite command
     - type range check matches C (`1..OBJN-1`)
 
-- [ ] `P3.4` Implement sprite field accessors + `Init` + `Explode`.
+- [x] `P3.4` Implement sprite field accessors + `Init` + `Explode`.
   - Done when:
     - every accessor listed in spec works
     - `Init` pixel bounds checks are enforced
@@ -297,3 +297,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P3.1` by adding the `graphview` command family and typed graph state (`configure`, `position`, `size`, `Visible`, `Range`, `Mask`) with C-parity validation from `w_graph.c`, including `Range` (`10|120`) and `Mask` (`0..63`) constraints plus `NewGraph` redraw-flag side effects.
 - [x] `2026-02-07` Completed `P3.2` by adding the `dateview` command family and typed date state (`configure`, `position`, `size`, `Visible`, `Reset`, `Set`) with C-parity validation from `w_date.c`, including month/year range checks and redraw scheduling hooks on `Reset`/`Set`.
 - [x] `2026-02-07` Completed `P3.3` by adding the `sprite` top-level factory command (`sprite <name> <type>`) plus per-sprite case-sensitive subcommand dispatch scaffolding from `w_sprite.c`, with Tcl-style type parsing and strict `1..OBJN-1` (`1..8`) validation parity.
+- [x] `2026-02-07` Completed `P3.4` by porting all `sprite` field accessors and `Init`/`Explode` subcommands from `w_sprite.c`, including Tcl-style integer parsing, `WORLD_X/Y` pixel-bound checks (`0..1919`, `0..1599`), type-specific `InitSprite` defaults, and `ExplodeSprite` frame/message parity coverage.
