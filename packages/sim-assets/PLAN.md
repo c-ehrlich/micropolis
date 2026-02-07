@@ -54,10 +54,10 @@ Use this as an agent runbook: do one unchecked task, verify it, check it off, re
 ## Phase 1: Close Skeleton Gaps
 
 ### P1.1 Update stale package docs
-- [ ] Replace `packages/sim-assets/TODO.md` stub text with current package intent and link to this plan.
+- [x] Replace `packages/sim-assets/TODO.md` stub text with current package intent and link to this plan.
 
 Verification:
-- [ ] `pnpm -C /Users/cje/dev/city/packages/sim-assets typecheck`
+- [x] `pnpm -C /Users/cje/dev/city/packages/sim-assets typecheck`
 
 ### P1.2 Add package test harness
 - [ ] Add `vitest` config for `sim-assets`.
@@ -177,4 +177,4 @@ Verification:
 
 ## Execution Log
 - [x] 2026-02-07: Audited current `sim-assets` state. Conclusion: existing module skeleton is directionally correct and should be retained; next work is generator/tests/resource-loader completion plus derived PNG export pipeline.
-
+- [x] 2026-02-07: Completed P1.1 by replacing `TODO.md` stub with package intent + `PLAN.md` link; verified with package typecheck.
