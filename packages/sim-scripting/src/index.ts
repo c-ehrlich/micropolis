@@ -1,4 +1,5 @@
 export * from './bootstrap/create-sim-scripting-runtime.ts';
+export * from './commands/sim-command.ts';
 export * from './runtime/errors.ts';
 export * from './runtime/result-code.ts';
 export * from './runtime/script-runtime.ts';

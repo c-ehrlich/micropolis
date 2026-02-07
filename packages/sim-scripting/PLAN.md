@@ -61,7 +61,7 @@ Use this exact loop:
     - bootstrap test verifies base command registration hook flow
 
 ## Phase 1: `sim` command (core)
-- [ ] `P1.1` Add `sim` command dispatcher and subcommand table.
+- [x] `P1.1` Add `sim` command dispatcher and subcommand table.
   - C reference: `ref/micropolis/src/sim/w_sim.c` (`SimCmd`, hash dispatch)
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/commands/sim-command.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/commands/sim-command.test.ts`
   - Done when:
@@ -278,3 +278,4 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P0.3` by adding `ScriptRuntime` command registration/invocation kernel and coverage for dispatch, unknown-command errors, and thrown-error normalization.
 - [x] `2026-02-07` Completed `P0.4` by adding typed scripting bridge state plus view/sprite/widget registries with duplicate-safe add/get/remove coverage.
 - [x] `2026-02-07` Completed `P0.5` by adding `createSimScriptingRuntime` bootstrap entrypoint, exporting it from package index, and covering base command registration hook flow with bootstrap tests.
+- [x] `2026-02-07` Completed `P1.1` by adding `sim` command registration/dispatch helpers, a case-sensitive subcommand table scaffold, and tests for dispatch plus typed missing/unknown-subcommand failures.
