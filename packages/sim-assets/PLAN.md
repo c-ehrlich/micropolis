@@ -165,7 +165,7 @@ Verification:
 - [ ] Intentional stale manifest causes failure.
 
 ### P6.2 Add derived-image drift gate
-- [ ] Add check for deterministic derived PNG export output.
+- [x] Add check for deterministic derived PNG export output.
 
 Verification:
 - [ ] Intentional stale PNG set causes failure.
@@ -206,3 +206,4 @@ Verification:
 - [x] 2026-02-07: Completed P5.2 helper-export task by adding `packages/sim-assets/src/sim-ui.ts` exports for editor tool icon bitmaps, `stri.356` string-resource references, tool sound token/file mappings, and tool help-doc id/html helpers, with parity tests in `packages/sim-assets/src/sim-ui.test.ts`.
 - [x] 2026-02-07: Completed P5.2 canonical-key/derived-overlay task by adding `resolveSimUiToolIconAssetLookup` in `packages/sim-assets/src/sim-ui.ts` to return canonical `ref/micropolis/images/*.xpm` tool icon keys with optional derived PNG path lookup, plus coverage in `packages/sim-assets/src/sim-ui.test.ts`.
 - [x] 2026-02-07: Completed P6.1 manifest drift gate task by adding `packages/sim-assets/scripts/check-manifest-drift.mjs` and `package.json` wiring to regenerate `src/generated/assets-manifest.ts` and fail when regeneration changes bytes.
+- [x] 2026-02-07: Completed P6.2 derived-image drift gate task by adding `packages/sim-assets/scripts/check-derived-image-drift.mjs` plus `scripts/check-derived-image-drift.test.ts`, wiring `package.json`, and asserting deterministic export snapshots fail on stale checked-in PNG bytes.
