@@ -35,7 +35,7 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 
 ## Task Checklist
 
-- [ ] **4.1 Implement host factory and mode switching in web app**
+- [x] **4.1 Implement host factory and mode switching in web app**
   - Goal: Add one explicit host selection path (`LocalHost` vs `DoHost`) without UI branching by business logic.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/src/main.tsx`
@@ -180,3 +180,4 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 ## Execution Log
 
 - [ ] Add dated entries as tasks complete.
+- 2026-02-08: Completed task 4.1 by adding a centralized `apps/web` host factory with env/config mode selection (`local` vs `do`), introducing host-agnostic runtime wiring bound only to `CoreHost`, wiring `apps/web/src/main.tsx` through the new factory/runtime path, and adding focused tests that verify equivalent lifecycle wiring behavior across both host modes.
