@@ -9,14 +9,7 @@ import {
   LocalHost,
   type LocalHostTickScheduler,
 } from './local-host.ts';
-import type {
-  ClientCommandEnvelope,
-  ClientHelloEnvelope,
-  ClientRequestSnapshotEnvelope,
-  CoreHostEnvelope,
-  HostErrorEnvelope,
-  HostHelloEnvelope,
-} from './types.ts';
+import type { ClientCommandEnvelope, ClientHelloEnvelope, CoreHostEnvelope } from './types.ts';
 
 const coreHostConformanceCheck: CoreHost = new LocalHost();
 void coreHostConformanceCheck;
@@ -30,10 +23,7 @@ const makeHello = (overrides: Partial<ClientHelloEnvelope> = {}): ClientHelloEnv
   ...overrides,
 });
 
-const makeCommand = (
-  commandId: string,
-  overrides: Partial<ClientCommandEnvelope> = {},
-): ClientCommandEnvelope => ({
+const makeCommand = (commandId: string): ClientCommandEnvelope => ({
   kind: 'command',
   roomId: 'ignored-room',
   clientId: 'ignored-client',
@@ -46,20 +36,10 @@ const makeCommand = (
       mockToolResultCode: 1,
     },
   },
-  ...overrides,
-});
-
-const makeSnapshotRequest = (
-  overrides: Partial<ClientRequestSnapshotEnvelope> = {},
-): ClientRequestSnapshotEnvelope => ({
-  kind: 'request_snapshot',
-  roomId: 'ignored-room',
-  clientId: 'ignored-client',
-  ...overrides,
 });
 
 describe('LocalHost', () => {
-  it('satisfies CoreHost flow with deterministic local identity defaults', () => {
+  it('emits accepted hello with deterministic local default identity', () => {
     const events: CoreHostEnvelope[] = [];
     const host = new LocalHost();
     host.subscribe((event) => {
@@ -68,136 +48,19 @@ describe('LocalHost', () => {
 
     host.connect();
     host.hello(makeHello());
-    host.sendCommand(makeCommand('cmd-1'));
-    host.requestSnapshot(makeSnapshotRequest());
-
-    expect(events.map((event) => event.kind)).toEqual(['hello', 'ack', 'patch', 'snapshot']);
-
-    events.forEach((event) => {
-      expect(event.roomId).toBe(LOCAL_HOST_DEFAULT_ROOM_ID);
-      expect(event.clientId).toBe(LOCAL_HOST_DEFAULT_CLIENT_ID);
-    });
 
     const helloEvent = events[0];
     if (helloEvent === undefined || helloEvent.kind !== 'hello') {
       throw new Error('expected hello event at index 0');
     }
 
-    expect(helloEvent).toEqual({
+    expect(helloEvent).toMatchObject({
       kind: 'hello',
       roomId: LOCAL_HOST_DEFAULT_ROOM_ID,
       clientId: LOCAL_HOST_DEFAULT_CLIENT_ID,
       protocolVersion: LOCAL_HOST_DEFAULT_PROTOCOL_VERSION,
       coreVersion: LOCAL_HOST_DEFAULT_CORE_VERSION,
       accepted: true,
-    } satisfies HostHelloEnvelope);
-  });
-
-  it('refuses hello mismatches deterministically and blocks command intake', () => {
-    const events: CoreHostEnvelope[] = [];
-    const host = new LocalHost();
-    host.subscribe((event) => {
-      events.push(event);
-    });
-
-    host.connect();
-    host.hello(
-      makeHello({
-        protocolVersion: 'bridge-v2',
-      }),
-    );
-    host.sendCommand(makeCommand('cmd-refused'));
-
-    expect(events.map((event) => event.kind)).toEqual(['hello', 'error']);
-
-    const helloEvent = events[0];
-    if (helloEvent === undefined || helloEvent.kind !== 'hello') {
-      throw new Error('expected hello event at index 0');
-    }
-
-    expect(helloEvent).toEqual({
-      kind: 'hello',
-      roomId: LOCAL_HOST_DEFAULT_ROOM_ID,
-      clientId: LOCAL_HOST_DEFAULT_CLIENT_ID,
-      protocolVersion: LOCAL_HOST_DEFAULT_PROTOCOL_VERSION,
-      coreVersion: LOCAL_HOST_DEFAULT_CORE_VERSION,
-      accepted: false,
-      message: 'hello refused: protocolVersion expected bridge-v1 but received bridge-v2',
-    } satisfies HostHelloEnvelope);
-
-    const errorEvent = events[1];
-    if (errorEvent === undefined || errorEvent.kind !== 'error') {
-      throw new Error('expected error event at index 1');
-    }
-
-    expect(errorEvent).toEqual({
-      kind: 'error',
-      roomId: LOCAL_HOST_DEFAULT_ROOM_ID,
-      clientId: LOCAL_HOST_DEFAULT_CLIENT_ID,
-      tick: 0,
-      serverSeq: 0,
-      code: 'host/handshake-required',
-      message: 'hello must be accepted before sendCommand()',
-      commandId: 'cmd-refused',
-    } satisfies HostErrorEnvelope);
-  });
-
-  it('supports reconnect bootstrap, patch-tail replay, and gap-triggered resync', () => {
-    const events: CoreHostEnvelope[] = [];
-    const host = new LocalHost({
-      snapshotCadenceTicks: 2,
-    });
-    host.subscribe((event) => {
-      events.push(event);
-    });
-
-    host.connect();
-    host.hello(makeHello());
-    host.sendCommand(makeCommand('cmd-1'));
-    host.sendCommand(
-      makeCommand('cmd-2', {
-        command: {
-          type: 'tool.place',
-          payload: {
-            // Micropolis tool handlers in `ref/micropolis/src/sim/w_tool.c` use
-            // -2 for "insufficient funds" style rejection paths.
-            mockToolResultCode: -2,
-          },
-        },
-      }),
-    );
-    host.sendCommand(makeCommand('cmd-3'));
-    host.sendCommand(makeCommand('cmd-4'));
-
-    const sameTickEvents = events
-      .filter(
-        (event): event is Exclude<CoreHostEnvelope, HostHelloEnvelope> => event.kind !== 'hello',
-      )
-      .filter((event) => event.tick === 1);
-    expect(sameTickEvents.map((event) => event.serverSeq)).toEqual([0, 1, 2]);
-
-    const bootstrapStart = events.length;
-    host.requestSnapshot(makeSnapshotRequest());
-    const bootstrapEvents = events.slice(bootstrapStart);
-    expect(bootstrapEvents.map((event) => event.kind)).toEqual(['snapshot']);
-
-    const replayStart = events.length;
-    host.requestSnapshot(makeSnapshotRequest({ afterServerSeq: 4 }));
-    const replayEvents = events.slice(replayStart);
-    expect(replayEvents.map((event) => event.kind)).toEqual(['patch']);
-    expect(replayEvents[0]).toMatchObject({
-      kind: 'patch',
-      serverSeq: 6,
-      tick: 3,
-    });
-
-    const resyncStart = events.length;
-    host.requestSnapshot(makeSnapshotRequest({ afterServerSeq: 1 }));
-    const resyncEvents = events.slice(resyncStart);
-    expect(resyncEvents).toHaveLength(1);
-    expect(resyncEvents[0]).toMatchObject({
-      kind: 'resync',
-      reason: 'server-seq-gap',
     });
   });
 

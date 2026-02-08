@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./host-conformance-suite": "./src/host-conformance-suite.ts"
   },
   "types": "./src/index.ts",
   "scripts": {

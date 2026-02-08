@@ -139,7 +139,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - UI can implement pending visuals without guessing host semantics.
 
-- [ ] **1.6 Create host conformance test suite reusable by LocalHost and DoHost**
+- [x] **1.6 Create host conformance test suite reusable by LocalHost and DoHost**
   - Goal: Define a shared behavior test suite any host implementation must pass.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -190,3 +190,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 - 2026-02-08: Completed task 1.3 by implementing a deterministic `LocalHost` on `MockAuthorityEngine` with strict `hello` lockstep/version refusal semantics, default local identity (`local-room`/`local-client`), and local tick scheduling hooks with CoreHost conformance tests.
 - 2026-02-08: Completed task 1.4 by adding deterministic snapshot baseline cadence, `serverSeq`-indexed patch-tail replay for `request_snapshot`, and forced gap/ahead `resync` handling in both `MockAuthorityEngine` and `LocalHost` with reconnect-focused tests.
 - 2026-02-08: Completed task 1.5 by defining canonical reject code/reason payloads (with pending-visual rollback directives), keeping expected denials on `reject` vs host/runtime faults on `error`, and adding `commandId` outcome-correlation helpers plus lifecycle/idempotency tests.
+- 2026-02-08: Completed task 1.6 by adding a reusable host conformance suite module with adapter hooks (handshake, ordering, idempotency, snapshot/resync), adding a deterministic `MockHost` `CoreHost` adapter, and running the shared suite against both `MockHost` and `LocalHost`.
