@@ -40,7 +40,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 
 ## Task Checklist
 
-- [ ] **0.1 Create `@city/core-bridge` package scaffold**
+- [x] **0.1 Create `@city/core-bridge` package scaffold**
   - Goal: Add package folder, `package.json`, `tsconfig.json`, `src/index.ts`, and baseline scripts.
   - Files to read first:
     - `/Users/cje/dev/city/pnpm-workspace.yaml`
@@ -195,4 +195,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 
 ## Execution Log
 
-- [ ] Add dated entries as tasks complete.
+- [2026-02-08] Completed task 0.1 by scaffolding `packages/core-bridge` with `package.json`, `tsconfig.json`, baseline `lint`/`typecheck` scripts, and a placeholder `src/index.ts` bridge surface export.

@@ -1,0 +1,12 @@
+{
+  "name": "@city/core-bridge",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "pnpm -w eslint packages/core-bridge/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
