@@ -111,6 +111,7 @@ export interface CoreHostAckEvent {
   type: 'ack';
   mode: HostMode;
   commandId: string;
+  tick: number;
   serverSeq: number;
 }
 
@@ -126,6 +127,7 @@ export interface CoreHostRejectEvent {
   commandId: string;
   code: CoreHostRejectCode;
   message: string;
+  tick: number;
   serverSeq: number;
 }
 
@@ -141,7 +143,45 @@ export interface CoreHostPatchEvent {
   mode: HostMode;
   commandId: string;
   placements: ReadonlyArray<CoreHostPlacement>;
+  tick: number;
   serverSeq: number;
+}
+
+/**
+ * Snapshot placement payload used to rebuild authoritative client projection.
+ * Mirrors reconnect/recovery baseline requirements from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: command-correlated placement payloads are a TypeScript bridge
+ * fixture for Stage 4 runtime recovery tests.
+ */
+export interface CoreHostSnapshotPlacement extends CoreHostPlacement {
+  commandId: string;
+}
+
+/**
+ * Snapshot event emitted during reconnect/resync recovery.
+ * Mirrors snapshot-baseline recovery intent from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: explicit `baseServerSeq` is a TypeScript bridge invariant helper.
+ */
+export interface CoreHostSnapshotEvent {
+  type: 'snapshot';
+  mode: HostMode;
+  tick: number;
+  baseServerSeq: number;
+  placements: ReadonlyArray<CoreHostSnapshotPlacement>;
+}
+
+/**
+ * Resync directive event emitted when the host requires snapshot recovery.
+ * Mirrors server-initiated recovery intent from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: this envelope is bridge-level and has no 1:1 C equivalent.
+ */
+export interface CoreHostResyncEvent {
+  type: 'resync';
+  mode: HostMode;
+  reason: string;
 }
 
 /**
@@ -156,6 +196,8 @@ export type CoreHostEvent =
   | CoreHostAckEvent
   | CoreHostRejectEvent
   | CoreHostPatchEvent
+  | CoreHostSnapshotEvent
+  | CoreHostResyncEvent
   | CoreHostErrorEvent;
 
 /**
@@ -176,5 +218,12 @@ export interface CoreHost {
   connect(): void;
   disconnect(): void;
   sendCommand(command: CoreHostCommand): void;
+  /**
+   * Request an authoritative snapshot baseline and optional sequenced replay tail.
+   * Mirrors reconnect/recovery snapshot requests mapped from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: this explicit method is a bridge-level TypeScript transport seam.
+   */
+  requestSnapshot(lastAppliedServerSeq?: number): void;
   subscribe(listener: CoreHostEventListener): () => void;
 }

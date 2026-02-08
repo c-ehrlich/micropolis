@@ -1,9 +1,13 @@
 import type {
   CoreHost,
+  CoreHostAckEvent,
   CoreHostCommand,
   CoreHostEvent,
   CoreHostEventListener,
+  CoreHostPatchEvent,
   CoreHostPlacement,
+  CoreHostRejectEvent,
+  CoreHostSnapshotPlacement,
 } from './core-host';
 import { HELLO_VERSION_MISMATCH_CODE, validateHelloCompatibility } from './handshake';
 
@@ -66,6 +70,9 @@ export interface GameRuntimeState {
   readonly pendingCommands: ReadonlyArray<string>;
   readonly pendingPlacements: ReadonlyArray<PendingVisualPlacement>;
   readonly committedPlacements: ReadonlyArray<CommittedPlacement>;
+  readonly lastAppliedServerSeq: number;
+  readonly lastAppliedTick: number;
+  readonly isResyncing: boolean;
   readonly commandLifecycleLog: ReadonlyArray<string>;
 }
 
@@ -176,6 +183,9 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     pendingCommands: [],
     pendingPlacements: [],
     committedPlacements: [],
+    lastAppliedServerSeq: 0,
+    lastAppliedTick: 0,
+    isResyncing: false,
     commandLifecycleLog: [],
   };
   let started = false;
@@ -222,6 +232,71 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
       return;
     }
 
+    if (event.type === 'snapshot') {
+      appliedPatchPlacements.clear();
+      for (const placement of event.placements) {
+        appliedPatchPlacements.add(toPlacementKey(placement.commandId, placement));
+      }
+
+      updateState((current) => ({
+        ...current,
+        pendingCommands: [],
+        pendingPlacements: [],
+        committedPlacements: event.placements.map(toCommittedPlacement),
+        lastAppliedServerSeq: event.baseServerSeq,
+        lastAppliedTick: event.tick,
+        isResyncing: false,
+        commandLifecycleLog: [
+          ...current.commandLifecycleLog,
+          `snapshot:${event.baseServerSeq}@${event.tick}`,
+        ],
+      }));
+      return;
+    }
+
+    if (event.type === 'resync') {
+      if (!state.isResyncing) {
+        updateState((current) => ({
+          ...current,
+          isResyncing: true,
+          commandLifecycleLog: [...current.commandLifecycleLog, `resync:host:${event.reason}`],
+        }));
+      }
+      host.requestSnapshot(state.lastAppliedServerSeq);
+      return;
+    }
+
+    if (isSequencedEvent(event)) {
+      const staleServerSeq = event.serverSeq <= state.lastAppliedServerSeq;
+      const staleTick = event.tick < state.lastAppliedTick;
+      if (staleServerSeq || staleTick) {
+        updateState((current) => ({
+          ...current,
+          commandLifecycleLog: [
+            ...current.commandLifecycleLog,
+            `stale-drop:${event.type}:${event.serverSeq}@${event.tick}`,
+          ],
+        }));
+        return;
+      }
+
+      const expectedServerSeq = state.lastAppliedServerSeq + 1;
+      if (event.serverSeq > expectedServerSeq) {
+        if (!state.isResyncing) {
+          updateState((current) => ({
+            ...current,
+            isResyncing: true,
+            commandLifecycleLog: [
+              ...current.commandLifecycleLog,
+              `resync-request:gap:expected=${expectedServerSeq}:received=${event.serverSeq}`,
+            ],
+          }));
+          host.requestSnapshot(state.lastAppliedServerSeq);
+        }
+        return;
+      }
+    }
+
     if (event.type === 'ack') {
       updateState((current) => ({
         ...current,
@@ -231,6 +306,9 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         pendingPlacements: current.pendingPlacements.filter(
           (placement) => placement.commandId !== event.commandId,
         ),
+        lastAppliedServerSeq: event.serverSeq,
+        lastAppliedTick: event.tick,
+        isResyncing: false,
         commandLifecycleLog: [...current.commandLifecycleLog, `ack:${event.commandId}`],
       }));
       return;
@@ -245,6 +323,9 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         pendingPlacements: current.pendingPlacements.filter(
           (placement) => placement.commandId !== event.commandId,
         ),
+        lastAppliedServerSeq: event.serverSeq,
+        lastAppliedTick: event.tick,
+        isResyncing: false,
         commandLifecycleLog: [
           ...current.commandLifecycleLog,
           `reject:${event.commandId}:${event.code}`,
@@ -272,6 +353,9 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         return {
           ...current,
           committedPlacements,
+          lastAppliedServerSeq: event.serverSeq,
+          lastAppliedTick: event.tick,
+          isResyncing: false,
           commandLifecycleLog,
         };
       });
@@ -383,5 +467,27 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     getState(): GameRuntimeState {
       return state;
     },
+  };
+}
+
+function isSequencedEvent(
+  event: CoreHostEvent,
+): event is CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent {
+  return event.type === 'ack' || event.type === 'reject' || event.type === 'patch';
+}
+
+function toPlacementKey(
+  commandId: string,
+  placement: CoreHostPlacement | CoreHostSnapshotPlacement,
+): string {
+  return `${commandId}:${placement.tool}:${placement.x},${placement.y}`;
+}
+
+function toCommittedPlacement(placement: CoreHostSnapshotPlacement): CommittedPlacement {
+  return {
+    commandId: placement.commandId,
+    tool: placement.tool,
+    x: placement.x,
+    y: placement.y,
   };
 }

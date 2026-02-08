@@ -71,6 +71,28 @@ export class DoHost implements CoreHost {
     });
   }
 
+  public requestSnapshot(lastAppliedServerSeq = 0): void {
+    if (!this.connected) {
+      this.emitEvent({
+        type: 'error',
+        mode: this.mode,
+        code: 'HOST_NOT_CONNECTED',
+        message: 'cannot request snapshot before connect',
+      });
+      return;
+    }
+
+    queueMicrotask(() => {
+      if (!this.connected) {
+        return;
+      }
+      const events = this.commandAuthority.createSnapshotReplay(lastAppliedServerSeq);
+      for (const event of events) {
+        this.emitEvent(event);
+      }
+    });
+  }
+
   public subscribe(listener: CoreHostEventListener): () => void {
     this.listeners.add(listener);
     return () => {
