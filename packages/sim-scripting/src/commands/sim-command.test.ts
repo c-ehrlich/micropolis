@@ -1,0 +1,1970 @@
+import { describe, expect, it } from 'vitest';
+
+import { makeScriptSuccess, ScriptRuntimeErrorCode } from '../runtime/errors.ts';
+import { ScriptResultCode } from '../runtime/result-code.ts';
+import { ScriptRuntime } from '../runtime/script-runtime.ts';
+import {
+  createSimAccessorIntState,
+  createSimAccessorIntSubcommandEntries,
+  createSimBudgetOptionsState,
+  createSimBudgetOptionsSubcommandEntries,
+  createSimCityGameSetupState,
+  createSimCityGameSetupSubcommandEntries,
+  createSimCommandDispatcher,
+  createSimDefaultSubcommandEntries,
+  createSimDisastersSpriteGoalUtilityState,
+  createSimDisastersSpriteGoalUtilitySubcommandEntries,
+  createSimKickState,
+  createSimLegacyExtraState,
+  createSimLegacyExtraSubcommandEntries,
+  createSimMapDynamicOverlayMiscState,
+  createSimMapDynamicOverlayMiscSubcommandEntries,
+  createSimNetworkingSubcommandEntries,
+  createSimReadOnlyGetterState,
+  createSimReadOnlyGetterSubcommandEntries,
+  createSimSessionControlSubcommandEntries,
+  createSimSpeedDelayControlState,
+  createSimSpeedDelayControlSubcommandEntries,
+  createSimSubcommandTable,
+  createSimUrlBrowserRandomDollarsUtilitySubcommandEntries,
+  registerSimCommand,
+} from './sim-command.ts';
+
+describe('sim command dispatcher', () => {
+  it('dispatches `sim <Subcommand>` using a case-sensitive subcommand table', () => {
+    // Mirrors `SimCmd` + `Tcl_FindHashEntry(&SimCmds, argv[1])` dispatch in
+    // `ref/micropolis/src/sim/w_sim.c`, where keys are registered by exact case.
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable([
+        [
+          'Speed',
+          (argv) => {
+            return makeScriptSuccess(`Speed=${argv[2] ?? ''}`);
+          },
+        ],
+      ]),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed', '3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'Speed=3',
+    });
+  });
+
+  it('returns an arg-count error when `sim` is invoked without argv[1]', () => {
+    const simDispatcher = createSimCommandDispatcher(createSimSubcommandTable());
+
+    expect(simDispatcher(['sim'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim command requires a subcommand in argv[1]',
+    });
+  });
+
+  it('returns a typed unknown-subcommand error when lookup misses', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable([['Speed', () => makeScriptSuccess('3')]]),
+    );
+
+    expect(runtime.invoke(['sim', 'speed'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.UnknownSubcommand,
+      message: 'unknown sim subcommand: speed',
+    });
+  });
+
+  it('overwrites duplicate subcommand registrations using last-entry-wins semantics', () => {
+    // Mirrors `HASHED_CMD` + `Tcl_CreateHashEntry` behavior in
+    // `ref/micropolis/src/sim/headers/macros.h`: duplicate command names update
+    // existing hash entry `clientData`.
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable([
+        ['Speed', () => makeScriptSuccess('first')],
+        ['Speed', () => makeScriptSuccess('second')],
+      ]),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'second',
+    });
+  });
+});
+
+describe('sim default subcommand entries', () => {
+  it('keeps CAM, NET, and legacy extras unregistered when feature flags are disabled', () => {
+    // Mirrors `sim_command_init` in `w_sim.c`, where `#ifdef CAM` / `#ifdef NET`
+    // blocks are skipped when those build flags are absent.
+    const entries = createSimDefaultSubcommandEntries({
+      camSubcommandEntries: [['JustCam', () => makeScriptSuccess('cam')]],
+      netSubcommandEntries: [['ListenTo', () => makeScriptSuccess('net')]],
+      legacyExtraSubcommandEntries: [['HeatSteps', () => makeScriptSuccess('legacy')]],
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('JustCam')).toBe(false);
+    expect(table.has('ListenTo')).toBe(false);
+    expect(table.has('HeatSteps')).toBe(false);
+  });
+
+  it('registers CAM, NET, and legacy extras only when their flags are enabled', () => {
+    const entries = createSimDefaultSubcommandEntries({
+      featureFlags: {
+        CAM: true,
+        NET: true,
+        legacyExtras: true,
+      },
+      camSubcommandEntries: [['JustCam', () => makeScriptSuccess('cam')]],
+      netSubcommandEntries: [['ListenTo', () => makeScriptSuccess('net')]],
+      legacyExtraSubcommandEntries: [['HeatSteps', () => makeScriptSuccess('legacy')]],
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('JustCam')).toBe(true);
+    expect(table.has('ListenTo')).toBe(true);
+    expect(table.has('HeatSteps')).toBe(true);
+  });
+
+  it('registers built-in legacy extras when `legacyExtras` is enabled without overrides', () => {
+    const entries = createSimDefaultSubcommandEntries({
+      featureFlags: {
+        legacyExtras: true,
+      },
+    });
+    const table = createSimSubcommandTable(entries);
+
+    expect(table.has('HeatSteps')).toBe(true);
+    expect(table.has('HeatFlow')).toBe(true);
+    expect(table.has('HeatRule')).toBe(true);
+  });
+});
+
+describe('sim accessor subcommands', () => {
+  it('supports read/write access for every `SIMCMD_ACCESS_INT` subcommand', () => {
+    const runtime = new ScriptRuntime();
+    const accessorState = createSimAccessorIntState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimAccessorIntSubcommandEntries(accessorState)),
+    );
+
+    // Default values come from Micropolis globals:
+    // `s_gen.c` (terrain levels), `w_tool.c` (tool/vote fields), `w_editor.c` (BobHeight).
+    const cases = [
+      { name: 'LakeLevel', initial: '-1', next: '11' },
+      { name: 'TreeLevel', initial: '-1', next: '12' },
+      { name: 'CurveLevel', initial: '-1', next: '13' },
+      { name: 'CreateIsland', initial: '-1', next: '14' },
+      { name: 'OverRide', initial: '0', next: '15' },
+      { name: 'Expensive', initial: '1000', next: '16' },
+      { name: 'Players', initial: '1', next: '17' },
+      { name: 'Votes', initial: '0', next: '18' },
+      { name: 'BobHeight', initial: '8', next: '19' },
+      { name: 'PendingTool', initial: '-1', next: '20' },
+      { name: 'PendingX', initial: '0', next: '21' },
+      { name: 'PendingY', initial: '0', next: '22' },
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(runtime.invoke(['sim', testCase.name])).toEqual({
+        code: ScriptResultCode.Ok,
+        value: testCase.initial,
+      });
+      expect(runtime.invoke(['sim', testCase.name, testCase.next])).toEqual({
+        code: ScriptResultCode.Ok,
+        value: testCase.next,
+      });
+      expect(runtime.invoke(['sim', testCase.name])).toEqual({
+        code: ScriptResultCode.Ok,
+        value: testCase.next,
+      });
+    }
+  });
+
+  it('returns an arg-count error when an accessor is called with argc outside 2..3', () => {
+    const runtime = new ScriptRuntime();
+    const accessorState = createSimAccessorIntState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimAccessorIntSubcommandEntries(accessorState)),
+    );
+
+    expect(runtime.invoke(['sim', 'LakeLevel', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim LakeLevel expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('returns an integer-parse error when accessor set value is invalid', () => {
+    const runtime = new ScriptRuntime();
+    const accessorState = createSimAccessorIntState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimAccessorIntSubcommandEntries(accessorState)),
+    );
+
+    expect(runtime.invoke(['sim', 'LakeLevel', '12.5'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim LakeLevel expected a 32-bit integer at argv[2]: 12.5',
+    });
+    expect(runtime.invoke(['sim', 'LakeLevel', '2147483648'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim LakeLevel expected a 32-bit integer at argv[2]: 2147483648',
+    });
+  });
+});
+
+describe('sim session control/redraw subcommands', () => {
+  it('routes call-only session commands through `SIMCMD_CALL`-style hooks without kick', () => {
+    const runtime = new ScriptRuntime();
+    const calls: string[] = [];
+    const kicks: string[] = [];
+    const delayedUpdates: string[] = [];
+    const kickState = createSimKickState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          kickState,
+          hooks: {
+            onCall: (name) => {
+              calls.push(name);
+            },
+            onKick: () => {
+              kicks.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              delayedUpdates.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(proc)` in `w_sim.c` does not validate argc and does not call
+    // `Kick()`, so extra args are ignored and no delayed update is scheduled.
+    expect(runtime.invoke(['sim', 'SaveCity'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'ReallyQuit', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(calls).toEqual(['SaveCity', 'ReallyQuit']);
+    expect(kicks).toEqual([]);
+    expect(delayedUpdates).toEqual([]);
+    expect(kickState.updateDelayed).toBe(false);
+  });
+
+  it('runs call+kick commands in C side-effect order and coalesces delayed update scheduling', () => {
+    const runtime = new ScriptRuntime();
+    const eventLog: string[] = [];
+    const kickState = createSimKickState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          kickState,
+          hooks: {
+            onCall: (name) => {
+              eventLog.push(`call:${name}`);
+            },
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'UpdateMaps'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'Pause', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // Mirrors `SIMCMD_CALL_KICK(proc)` in `w_sim.c` + `Kick()` in `w_tk.c`:
+    // proc() runs first, `Kick()` runs each call, delayed scheduling only on
+    // first transition from `UpdateDelayed=0` to `UpdateDelayed=1`.
+    expect(eventLog).toEqual(['call:UpdateMaps', 'kick', 'schedule', 'call:Pause', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('routes `Update` through `sim_update` hook without kick scheduling', () => {
+    const runtime = new ScriptRuntime();
+    const updates: string[] = [];
+    const kicks: string[] = [];
+    const delayedUpdates: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSessionControlSubcommandEntries({
+          hooks: {
+            onUpdate: () => {
+              updates.push('update');
+            },
+            onKick: () => {
+              kicks.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              delayedUpdates.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SimCmdUpdate` in `w_sim.c` directly calls `sim_update()` and also skips
+    // argc validation.
+    expect(runtime.invoke(['sim', 'Update'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'Update', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(updates).toEqual(['update', 'update']);
+    expect(kicks).toEqual([]);
+    expect(delayedUpdates).toEqual([]);
+  });
+});
+
+describe('sim speed/delay/skip/rest control subcommands', () => {
+  it('applies C-parity speed clamp/setters and kick behavior for speed, skips, and delay', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimSpeedDelayControlState();
+    const kickState = createSimKickState();
+    const kickEvents: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimSpeedDelayControlSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              kickEvents.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              kickEvents.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `sim.c` initializes `sim_delay` to `50`, and `sim_init` + `setSpeed(0)`
+    // produces effective speed `0` (`sim.c` / `w_util.c`).
+    expect(runtime.invoke(['sim', 'Delay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '50',
+    });
+    expect(runtime.invoke(['sim', 'Speed'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `SimCmdSpeed` accepts `0..7`, then `setSpeed` clamps to `0..3`.
+    expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+    expect(state.simMetaSpeed).toBe(3);
+    expect(state.simSpeed).toBe(3);
+
+    // `SimCmdSkips` calls `setSkips`, which always resets `sim_skip` to `0`.
+    expect(runtime.invoke(['sim', 'Skip', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(runtime.invoke(['sim', 'Skips', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'Skip'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    expect(runtime.invoke(['sim', 'Delay', '12'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '12',
+    });
+    expect(runtime.invoke(['sim', 'NeedRest', '-2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-2',
+    });
+
+    // `SimCmdSpeed`, `SimCmdSkips`, and `SimCmdDelay` call `Kick()`; `Skip` and
+    // `NeedRest` do not. Delayed scheduling coalesces after first kick.
+    expect(kickEvents).toEqual(['kick', 'schedule', 'kick', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('returns effective speed 0 when paused, matching `setSpeed` pause semantics', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimSpeedDelayControlState({
+      // `sim.c` pause globals are interpreted by `setSpeed` in `w_util.c`.
+      simPaused: true,
+      simPausedSpeed: 3,
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimSpeedDelayControlSubcommandEntries({ state })),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(state.simMetaSpeed).toBe(2);
+    expect(state.simPausedSpeed).toBe(2);
+    expect(state.simSpeed).toBe(0);
+  });
+
+  it('enforces C-parity argc and range validation rules for speed/delay/skip/rest controls', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimSpeedDelayControlSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'Speed', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Speed expected an integer in range 0..7 at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Speed', '8'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Speed expected an integer in range 0..7 at argv[2]: 8',
+    });
+    expect(runtime.invoke(['sim', 'Skips', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Skips expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Skip', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Skip expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Delay', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Delay expected a non-negative integer at argv[2]: -1',
+    });
+
+    // `SimCmdNeedRest` only does `Tcl_GetInt`, so negatives are valid.
+    expect(runtime.invoke(['sim', 'NeedRest', '-9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-9',
+    });
+
+    expect(runtime.invoke(['sim', 'Delay', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Delay expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'NeedRest', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim NeedRest expected a 32-bit integer at argv[2]: abc',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'Speed', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+  });
+});
+
+describe('sim legacy extra subcommands', () => {
+  it('matches C get/set semantics for HeatSteps, HeatFlow, and HeatRule', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimLegacyExtraState();
+    const kickState = createSimKickState();
+    const kickEvents: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimLegacyExtraSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              kickEvents.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              kickEvents.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // Defaults come from `sim.c`: `heat_steps=0`, `heat_flow=-7`, `heat_rule=0`.
+    expect(runtime.invoke(['sim', 'HeatSteps'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-7',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    expect(runtime.invoke(['sim', 'HeatSteps', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow', '-19'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-19',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    expect(state).toEqual({
+      heatSteps: 4,
+      heatFlow: -19,
+      heatRule: 1,
+    });
+
+    // `SimCmdHeatSteps` calls `Kick()` in `w_sim.c`; `HeatFlow`/`HeatRule` do not.
+    expect(kickEvents).toEqual(['kick', 'schedule']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('enforces C-parity argc and integer validation for heat extras', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime, createSimSubcommandTable(createSimLegacyExtraSubcommandEntries()));
+
+    expect(runtime.invoke(['sim', 'HeatSteps', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HeatSteps expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'HeatFlow', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HeatFlow expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'HeatRule', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim HeatRule expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('is added to default `sim` registration only when `legacyExtras` is enabled', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDefaultSubcommandEntries({
+          featureFlags: {
+            legacyExtras: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'HeatFlow'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-7',
+    });
+  });
+});
+
+describe('sim city/game setup subcommands', () => {
+  it('matches C get/set semantics for city name, file name, game level, and year', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimCityGameSetupState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimCityGameSetupSubcommandEntries({ state })),
+    );
+
+    // `sim_init` in `sim.c` sets `StartingYear=1900` and `CityTime=50`;
+    // `CurrentYear()` in `w_util.c` computes `(CityTime / 48) + StartingYear`.
+    expect(runtime.invoke(['sim', 'Year'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1901',
+    });
+    expect(runtime.invoke(['sim', 'CityName'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'CityFileName'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+
+    // `setCityName` in `w_util.c` converts non-alnum bytes to `_`.
+    expect(runtime.invoke(['sim', 'CityName', 'New City!'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'New_City_',
+    });
+
+    expect(runtime.invoke(['sim', 'CityFileName', '/tmp/newcity.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '/tmp/newcity.cty',
+    });
+    expect(runtime.invoke(['sim', 'CityFileName', ''])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // `SetGameLevelFunds` in `w_util.c` maps levels to funds:
+    // level 0 => 20000, level 1 => 10000, level 2 => 5000.
+    expect(runtime.invoke(['sim', 'GameLevel', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+    expect(state.totalFunds).toBe(5000);
+
+    // `SetYear` in `w_util.c` clamps below `StartingYear`.
+    expect(runtime.invoke(['sim', 'Year', '1890'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1900',
+    });
+    expect(runtime.invoke(['sim', 'Year', '1930'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1930',
+    });
+  });
+
+  it('routes load/generate entries through C-parity call signatures', () => {
+    const runtime = new ScriptRuntime();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimCityGameSetupSubcommandEntries({
+          hooks: {
+            onGenerateNewCity: () => {
+              events.push('generate:new');
+            },
+            onGenerateSomeCity: (seed) => {
+              events.push(`generate:seed:${seed}`);
+            },
+            onLoadCity: (path) => {
+              events.push(`load:city:${path}`);
+            },
+            onLoadScenario: (scenarioId) => {
+              events.push(`load:scenario:${scenarioId}`);
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(GenerateNewCity)` in `w_sim.c` does not validate argc.
+    expect(runtime.invoke(['sim', 'GenerateNewCity', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', '42'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'LoadCity', '/tmp/city.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'LoadScenario', '3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(events).toEqual([
+      'generate:new',
+      'generate:seed:42',
+      'load:city:/tmp/city.cty',
+      'load:scenario:3',
+    ]);
+  });
+
+  it('supports configurable legacy `CityFileName` allocation bug behavior', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimCityGameSetupSubcommandEntries({
+          parity: {
+            // `SimCmdCityFileName` allocates `strlen(argv[0]) + 1` in `w_sim.c`.
+            legacyCityFileNameAllocationBug: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'CityFileName', '/tmp/long-name.cty'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '/tm',
+    });
+  });
+
+  it('enforces C-parity argc/integer/range validation for setup handlers', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimCityGameSetupSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'CityName', 'a', 'b'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim CityName expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel', '3'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GameLevel expected an integer in range 0..2 at argv[2]: 3',
+    });
+    expect(runtime.invoke(['sim', 'GameLevel', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GameLevel expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'Year', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Year expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim GenerateSomeCity expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim GenerateSomeCity expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'LoadCity'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim LoadCity expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'LoadScenario', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim LoadScenario expected a 32-bit integer at argv[2]: oops',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'GameLevel'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'GenerateSomeCity', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+  });
+});
+
+describe('sim budget/options subcommands', () => {
+  it('applies budget setters with C-parity integer math and side-effect order', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimBudgetOptionsState({
+      // `w_budget.c` writes `FireSpend = (fireMaxValue * percent) / 100`,
+      // and equivalent formulas for police/road, using C integer division.
+      fireMaxValue: 333,
+      policeMaxValue: 201,
+      roadMaxValue: 999,
+    });
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimBudgetOptionsSubcommandEntries({
+          state,
+          kickState,
+          hooks: {
+            onDrawBudgetWindow: () => {
+              eventLog.push('drawBudgetWindow');
+            },
+            onUpdateFundEffects: () => {
+              eventLog.push('updateFundEffects');
+            },
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `sim_init` (`sim.c`) sets funds to 5000 then `SetGameLevelFunds(0)`,
+    // yielding `TotalFunds = 20000`.
+    expect(runtime.invoke(['sim', 'Funds'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20000',
+    });
+    expect(runtime.invoke(['sim', 'Funds', '1234'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1234',
+    });
+    expect(state.mustUpdateFunds).toBe(1);
+
+    expect(runtime.invoke(['sim', 'TaxRate', '19'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '19',
+    });
+
+    expect(runtime.invoke(['sim', 'FireFund', '25'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '25',
+    });
+    expect(runtime.invoke(['sim', 'PoliceFund', '33'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '33',
+    });
+    expect(runtime.invoke(['sim', 'RoadFund', '99'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '99',
+    });
+
+    expect(state.fireSpend).toBe(83);
+    expect(state.policeSpend).toBe(66);
+    expect(state.roadSpend).toBe(989);
+
+    // `SimCmdTaxRate` runs `drawBudgetWindow(); Kick();`
+    // and fund-percent commands run `UpdateFundEffects(); Kick();`.
+    expect(eventLog).toEqual([
+      'kick',
+      'schedule',
+      'drawBudgetWindow',
+      'kick',
+      'updateFundEffects',
+      'kick',
+      'updateFundEffects',
+      'kick',
+      'updateFundEffects',
+      'kick',
+    ]);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('matches option toggle semantics, including `Disasters` inversion and `AutoBudget` order', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimBudgetOptionsState();
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimBudgetOptionsSubcommandEntries({
+          state,
+          kickState,
+          hooks: {
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+            onUpdateBudget: () => {
+              eventLog.push('updateBudget');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `NoDisasters = 0` in `sim.c`, and `SimCmdDisasters` returns
+    // `NoDisasters ? 0 : 1`, so default command result is `1`.
+    expect(runtime.invoke(['sim', 'Disasters'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+
+    expect(runtime.invoke(['sim', 'AutoBudget', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'AutoGoto', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'AutoBulldoze', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'Disasters', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'Disasters', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    expect(runtime.invoke(['sim', 'Sound', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DoAnimation', '-2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-2',
+    });
+    expect(runtime.invoke(['sim', 'DoMessages', '-3'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-3',
+    });
+    expect(runtime.invoke(['sim', 'DoNotices', '-4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '-4',
+    });
+
+    expect(state.autoBudget).toBe(0);
+    expect(state.autoGo).toBe(0);
+    expect(state.autoBulldoze).toBe(0);
+    expect(state.noDisasters).toBe(0);
+    expect(state.userSoundOn).toBe(0);
+    expect(state.doAnimation).toBe(-2);
+    expect(state.doMessages).toBe(-3);
+    expect(state.doNotices).toBe(-4);
+    expect(state.mustUpdateOptions).toBe(1);
+
+    // `SimCmdAutoBudget` order in `w_sim.c` is `Kick(); UpdateBudget();`.
+    expect(eventLog).toEqual([
+      'kick',
+      'schedule',
+      'updateBudget',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+      'kick',
+    ]);
+  });
+
+  it('enforces C-parity argc/range/integer validation for budget/options handlers', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimBudgetOptionsSubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'Funds', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Funds expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'TaxRate', '21'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim TaxRate expected an integer in range 0..20 at argv[2]: 21',
+    });
+    expect(runtime.invoke(['sim', 'FireFund', '101'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim FireFund expected an integer in range 0..100 at argv[2]: 101',
+    });
+    expect(runtime.invoke(['sim', 'AutoGoto', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim AutoGoto expected an integer in range 0..1 at argv[2]: 2',
+    });
+    expect(runtime.invoke(['sim', 'DoMessages', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DoMessages expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'AutoBudget', '0', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim AutoBudget expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'Funds'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20000',
+    });
+    expect(runtime.invoke(['sim', 'AutoBudget'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    // `InitFundingLevel` in `w_budget.c` initializes percent fields to `1.0`,
+    // and handlers return `(int)(percent * 100.0)`.
+    expect(runtime.invoke(['sim', 'FireFund'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '100',
+    });
+  });
+});
+
+describe('sim map/dynamic/overlay misc subcommands', () => {
+  it('matches C-parity map and overlay get/set behavior for `Tile`, `Fill`, and overlay accessors', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimMapDynamicOverlayMiscState({
+      worldWidth: 4,
+      worldHeight: 3,
+      // `Map[x][y]` in `s_alloc.c` uses x-major layout (`Map[i] = base + i*WORLD_Y`),
+      // mirrored here as `index = x * worldHeight + y`.
+      mapTiles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimMapDynamicOverlayMiscSubcommandEntries({ state })),
+    );
+
+    // Defaults mirror C globals:
+    // `FlushStyle=3` for Linux builds in `w_x.c`,
+    // `DonDither=0` in `s_scan.c`,
+    // `DoOverlay=2` in `w_editor.c`.
+    expect(runtime.invoke(['sim', 'FlushStyle'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '3',
+    });
+    expect(runtime.invoke(['sim', 'DonDither'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+
+    expect(runtime.invoke(['sim', 'FlushStyle', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'DonDither', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay', '5'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '5',
+    });
+
+    expect(runtime.invoke(['sim', 'Tile', '2', '1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '7',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1', '2', '77'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '77',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '77',
+    });
+
+    expect(runtime.invoke(['sim', 'Fill', '9'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '3', '2'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '9',
+    });
+    expect(Array.from(state.mapTiles)).toEqual(new Array(12).fill(9));
+  });
+
+  it('updates dynamic map flags and kick scheduling only on dynamic writes and reset', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimMapDynamicOverlayMiscState({
+      dynamicData: [4],
+    });
+    const kickState = createSimKickState();
+    const eventLog: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimMapDynamicOverlayMiscSubcommandEntries({
+          state,
+          kickState,
+          kickHooks: {
+            onKick: () => {
+              eventLog.push('kick');
+            },
+            onScheduleDelayedUpdate: () => {
+              eventLog.push('schedule');
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'DynamicData', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '1', '55'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '55',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '16', '333'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '333',
+    });
+    expect(runtime.invoke(['sim', 'ResetDynamic', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    // `SimCmdDynamicData` sets `NewMapFlags[DYMAP]=1` and calls `Kick()` on write.
+    // `SimCmdResetDynamic` rewrites only indices `0..15` in `w_sim.c` and also kicks.
+    expect(state.newMapFlagsDynamic).toBe(1);
+    expect(state.dynamicData[0]).toBe(-99999);
+    expect(state.dynamicData[1]).toBe(99999);
+    expect(state.dynamicData[14]).toBe(-99999);
+    expect(state.dynamicData[15]).toBe(99999);
+    expect(state.dynamicData[16]).toBe(333);
+    expect(eventLog).toEqual(['kick', 'schedule', 'kick', 'kick']);
+    expect(kickState.updateDelayed).toBe(true);
+  });
+
+  it('enforces C-parity argc, map bounds, and integer validation rules', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimMapDynamicOverlayMiscSubcommandEntries({
+          state: createSimMapDynamicOverlayMiscState({
+            worldWidth: 4,
+            worldHeight: 3,
+          }),
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'FlushStyle', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim FlushStyle expects argc 2 or 3, got 4',
+    });
+    expect(runtime.invoke(['sim', 'DoOverlay', '-1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DoOverlay expected a non-negative integer at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Tile expects argc 4 or 5, got 3',
+    });
+    expect(runtime.invoke(['sim', 'Tile', 'abc', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '-1', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected x in range 0..3 at argv[2]: -1',
+    });
+    expect(runtime.invoke(['sim', 'Tile', '0', '3'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Tile expected y in range 0..2 at argv[3]: 3',
+    });
+    expect(runtime.invoke(['sim', 'Fill', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Fill expected a 32-bit integer at argv[2]: abc',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim DynamicData expects argc 3 or 4, got 2',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '32'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DynamicData expected an integer index in range 0..31 at argv[2]: 32',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '0', 'abc'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim DynamicData expected a 32-bit integer at argv[3]: abc',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'DoOverlay'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '2',
+    });
+    // `headers/sim.h` provides `WORLD_X=120`, `WORLD_Y=100`; zero-initialized
+    // map storage means default `Map[0][0] == 0` until scripts mutate it.
+    expect(runtime.invoke(['sim', 'Tile', '0', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    expect(runtime.invoke(['sim', 'DynamicData', '0'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+  });
+});
+
+describe('sim disasters/sprite-goal utility subcommands', () => {
+  it('routes disaster creators through `SIMCMD_CALL`-style hooks and ignores argc', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+          hooks: {
+            onMakeFire: () => {
+              events.push('MakeFire');
+            },
+            onMakeFlood: () => {
+              events.push('MakeFlood');
+            },
+            onMakeTornado: () => {
+              events.push('MakeTornado');
+            },
+            onMakeEarthquake: () => {
+              events.push('MakeEarthquake');
+            },
+            onMakeMonster: () => {
+              events.push('MakeMonster');
+              state.godSprite = {
+                destX: 0,
+                destY: 0,
+                control: -1,
+                count: 0,
+              };
+            },
+            onMakeMeltdown: () => {
+              events.push('MakeMeltdown');
+            },
+            onFireBomb: () => {
+              events.push('FireBomb');
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SIMCMD_CALL(proc)` in `w_sim.c` does not validate argc.
+    expect(runtime.invoke(['sim', 'MakeFire', 'ignored'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeFlood'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeTornado', 'x', 'y'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeEarthquake', 'x', 'y'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeMonster', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MakeMeltdown', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'FireBomb', 'x'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(events).toEqual([
+      'MakeFire',
+      'MakeFlood',
+      'MakeTornado',
+      'MakeEarthquake',
+      'MakeMonster',
+      'MakeMeltdown',
+      'FireBomb',
+    ]);
+    expect(state.godSprite).not.toBeNull();
+  });
+
+  it('matches GOD/COP sprite lookup-create flow for `MonsterGoal` and `HelicopterGoal`', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    const events: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+          hooks: {
+            onMakeMonster: () => {
+              events.push('MakeMonster');
+              state.godSprite = {
+                destX: 111,
+                destY: 222,
+                control: -1,
+                count: 0,
+              };
+            },
+            onGenerateCopter: (x, y) => {
+              // Mirrors `GenerateCopter(x, y)` call in `SimCmdHelicopterGoal`
+              // from `w_sim.c`, which is only invoked when COP is missing.
+              events.push(`GenerateCopter:${x},${y}`);
+              state.copSprite = {
+                destX: 333,
+                destY: 444,
+                control: -1,
+                count: 0,
+              };
+            },
+          },
+        }),
+      ),
+    );
+
+    // `SimCmdMonsterGoal` in `w_sim.c` runs:
+    // GetSprite(GOD) -> MakeMonster() -> GetSprite(GOD) -> write goal fields.
+    expect(runtime.invoke(['sim', 'MonsterGoal', '321', '654'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite).toEqual({
+      destX: 321,
+      destY: 654,
+      // Magic values are from `SimCmdMonsterGoal` in `w_sim.c`.
+      control: -2,
+      count: -1,
+    });
+
+    // Existing GOD sprite path should skip make/create call.
+    expect(runtime.invoke(['sim', 'MonsterGoal', '111', '222'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(events).toEqual(['MakeMonster']);
+    expect(state.godSprite).toEqual({
+      destX: 111,
+      destY: 222,
+      control: -2,
+      count: -1,
+    });
+
+    // `SimCmdHelicopterGoal` uses:
+    // GetSprite(COP) -> GenerateCopter(x,y) -> GetSprite(COP) -> set dest.
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '70', '80'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(events).toEqual(['MakeMonster', 'GenerateCopter:70,80']);
+    expect(state.copSprite).toEqual({
+      destX: 70,
+      destY: 80,
+      control: -1,
+      count: 0,
+    });
+  });
+
+  it('enforces `MonsterDirection` range and uses C-parity monster creation fallback', () => {
+    const runtime = new ScriptRuntime();
+    const state = createSimDisastersSpriteGoalUtilityState();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          state,
+        }),
+      ),
+    );
+
+    // With no hook, this adapter auto-creates GOD sprite state so command
+    // parity stays deterministic for the C flow:
+    // GetSprite(GOD) -> MakeMonster() -> GetSprite(GOD) -> set control.
+    expect(runtime.invoke(['sim', 'MonsterDirection', '-1'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite?.control).toBe(-1);
+    expect(runtime.invoke(['sim', 'MonsterDirection', '7'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(state.godSprite?.control).toBe(7);
+
+    expect(runtime.invoke(['sim', 'MonsterDirection', '-2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected direction in range -1..7 at argv[2]: -2',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '8'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected direction in range -1..7 at argv[2]: 8',
+    });
+  });
+
+  it('returns a typed internal error when create callbacks fail to provide sprites', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDisastersSpriteGoalUtilitySubcommandEntries({
+          hooks: {
+            onMakeMonster: () => {
+              // Intentionally leaves state without GOD sprite.
+            },
+            onGenerateCopter: () => {
+              // Intentionally leaves state without COP sprite.
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'MonsterGoal', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim MonsterGoal could not create a GOD sprite',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '0'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim MonsterDirection could not create a GOD sprite',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '3', '4'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.Internal,
+      message: 'sim HelicopterGoal could not create a COP sprite',
+    });
+  });
+
+  it('enforces C-parity argc and integer validation for sprite-goal utilities', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimDisastersSpriteGoalUtilitySubcommandEntries()),
+    );
+
+    expect(runtime.invoke(['sim', 'MonsterGoal', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MonsterGoal expects argc 4, got 3',
+    });
+    expect(runtime.invoke(['sim', 'MonsterGoal', 'a', '1'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterGoal expected a 32-bit integer at argv[2]: a',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '1', 'b'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HelicopterGoal expected a 32-bit integer at argv[3]: b',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MonsterDirection expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', 'c'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim MonsterDirection expected a 32-bit integer at argv[2]: c',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'MakeEarthquake'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MonsterGoal', '12', '34'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'MonsterDirection', '4'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+    expect(runtime.invoke(['sim', 'HelicopterGoal', '56', '78'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+  });
+});
+
+describe('sim URL/browser/random/dollars utility subcommands', () => {
+  it('quotes URLs using C byte-escape rules and enforces byte-length limits', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimUrlBrowserRandomDollarsUtilitySubcommandEntries()),
+    );
+
+    // Mirrors `SimCmdQuoteURL` in `w_sim.c`:
+    // spaces -> '+', and '+', '%', '&', '<', '>', '"', "'", and control bytes
+    // are escaped as `%XX` with uppercase hex digits.
+    expect(runtime.invoke(['sim', 'QuoteURL', `Hello world+%&<>"'\n`])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'Hello+world%2B%25%26%3C%3E%22%27%0A',
+    });
+
+    expect(runtime.invoke(['sim', 'QuoteURL'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim QuoteURL expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'QuoteURL', 'a'.repeat(256)])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim QuoteURL expected argv[2] byte length <= 255, got 256',
+    });
+  });
+
+  it('builds the legacy Netscape shell command shape for `OpenWebBrowser` and returns result code', () => {
+    const runtime = new ScriptRuntime();
+    const calls: string[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          hooks: {
+            onOpenWebBrowser: (shellCommand) => {
+              calls.push(shellCommand);
+              return 42;
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'https://example.com/docs?q=abc'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '42',
+    });
+    expect(calls).toEqual(["netscape -no-about-splash 'https://example.com/docs?q=abc' &"]);
+
+    expect(runtime.invoke(['sim', 'OpenWebBrowser'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim OpenWebBrowser expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'a'.repeat(256)])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim OpenWebBrowser expected argv[2] byte length <= 255, got 256',
+    });
+  });
+
+  it('matches `Rand` command contract for argc, integer parsing, and optional max argument', () => {
+    const runtime = new ScriptRuntime();
+    const randCalls: number[] = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          hooks: {
+            onRand: (maxInclusive) => {
+              randCalls.push(maxInclusive);
+              return maxInclusive + 10;
+            },
+            onRand16: () => 54321,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'Rand', '0x000A'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '20',
+    });
+    // `SimCmdRand` calls `Rand(short range)` in `s_sim.c`, so `65536` truncates
+    // to signed 16-bit `0` before range math.
+    expect(runtime.invoke(['sim', 'Rand', '65536'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '10',
+    });
+    expect(runtime.invoke(['sim', 'Rand'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '54321',
+    });
+    expect(randCalls).toEqual([10, 0]);
+
+    expect(runtime.invoke(['sim', 'Rand', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim Rand expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'Rand', '1', '2'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Rand expects argc 2 or 3, got 4',
+    });
+  });
+
+  it('supports corrected and legacy `Dollars` formatting modes', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimUrlBrowserRandomDollarsUtilitySubcommandEntries()),
+    );
+
+    // `makeDollarDecimalStr` in `w_util.c` inserts commas every three chars.
+    expect(runtime.invoke(['sim', 'Dollars', '123456789'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$123,456,789',
+    });
+    expect(runtime.invoke(['sim', 'Dollars'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Dollars expects argc 3, got 2',
+    });
+
+    const legacyRuntime = new ScriptRuntime();
+    registerSimCommand(
+      legacyRuntime,
+      createSimSubcommandTable(
+        createSimUrlBrowserRandomDollarsUtilitySubcommandEntries({
+          parity: {
+            // `SimCmdDollars` in `w_sim.c` formats `argv[1]` ("Dollars").
+            legacyDollarsLiteralFormat: true,
+          },
+        }),
+      ),
+    );
+
+    expect(legacyRuntime.invoke(['sim', 'Dollars'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$D,oll,ars',
+    });
+    expect(legacyRuntime.invoke(['sim', 'Dollars', '1000'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim Dollars expects argc 2 in legacy mode, got 3',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    expect(runtime.invoke(['sim', 'QuoteURL', 'a b'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'a+b',
+    });
+    expect(runtime.invoke(['sim', 'OpenWebBrowser', 'https://example.com'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '1',
+    });
+    expect(runtime.invoke(['sim', 'Dollars', '1000'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '$1,000',
+    });
+
+    const randResult = runtime.invoke(['sim', 'Rand']);
+    expect(randResult.code).toBe(ScriptResultCode.Ok);
+    if (randResult.code === ScriptResultCode.Ok) {
+      const parsedRand = Number(randResult.value);
+      // `Rand16()` in `s_sim.c` returns the `sim_rand()` 16-bit range [0..65535].
+      expect(Number.isInteger(parsedRand)).toBe(true);
+      expect(parsedRand).toBeGreaterThanOrEqual(0);
+      expect(parsedRand).toBeLessThanOrEqual(65535);
+    }
+  });
+});
+
+describe('sim optional networking subcommands', () => {
+  it('implements `ListenTo` and `HearFrom` with NET callback hook flow', () => {
+    const runtime = new ScriptRuntime();
+    const listenedPorts: number[] = [];
+    const heardSockets: number[] = [];
+    const handledPackets: Array<{ socket: number; ipAddress: string; bytes: number[] }> = [];
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimNetworkingSubcommandEntries({
+          hooks: {
+            onListenTo: (port) => {
+              listenedPorts.push(port);
+              return 42.9;
+            },
+            onHearFrom: (socket) => {
+              heardSockets.push(socket);
+              return [
+                { ipAddress: '127.0.0.1', bytes: [0, 1, 255] },
+                { ipAddress: '10.0.0.2', bytes: [9, 8] },
+              ];
+            },
+            onHandlePacket: (socket, ipAddress, bytes) => {
+              handledPackets.push({ socket, ipAddress, bytes: [...bytes] });
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'ListenTo', '3210'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '42',
+    });
+    // `SimCmdHearFrom` in `w_sim.c` requires `argv[2]` to start with lowercase
+    // `"file"` and parses the suffix with `Tcl_GetInt`.
+    expect(runtime.invoke(['sim', 'HearFrom', 'file42'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+
+    expect(listenedPorts).toEqual([3210]);
+    expect(heardSockets).toEqual([42]);
+    expect(handledPackets).toEqual([
+      { socket: 42, ipAddress: '127.0.0.1', bytes: [0, 1, 255] },
+      { socket: 42, ipAddress: '10.0.0.2', bytes: [9, 8] },
+    ]);
+  });
+
+  it('enforces `ListenTo` and `HearFrom` argc/integer parsing rules from `w_sim.c`', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime, createSimSubcommandTable(createSimNetworkingSubcommandEntries()));
+
+    expect(runtime.invoke(['sim', 'ListenTo'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim ListenTo expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'ListenTo', 'oops'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim ListenTo expected a 32-bit integer at argv[2]: oops',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim HearFrom expects argc 3, got 2',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom', 'File9'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HearFrom expected argv[2] in form file<int>: File9',
+    });
+    expect(runtime.invoke(['sim', 'HearFrom', 'file9x'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidInteger,
+      message: 'sim HearFrom expected argv[2] in form file<int>: file9x',
+    });
+  });
+
+  it('is included in default `sim` entries when NET feature is enabled', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(
+        createSimDefaultSubcommandEntries({
+          featureFlags: {
+            NET: true,
+          },
+        }),
+      ),
+    );
+
+    expect(runtime.invoke(['sim', 'ListenTo', '123'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '0',
+    });
+    // `SimCmdHearFrom` accepts `file<sock>` where `<sock>` uses `Tcl_GetInt`
+    // parsing, including leading-zero numeric forms from C.
+    expect(runtime.invoke(['sim', 'HearFrom', 'file017'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '',
+    });
+  });
+});
+
+describe('sim read-only getter subcommands', () => {
+  it('returns formatted string values for read-only getter commands', () => {
+    const runtime = new ScriptRuntime();
+    const getterState = createSimReadOnlyGetterState({
+      Displays: '{display0} {display1}',
+      WorldX: 120,
+      WorldY: 100,
+      LandValue: 21,
+      Traffic: 22,
+      Crime: 23,
+      Unemployment: 24,
+      Fires: 25,
+      Pollution: 26,
+      PolMaxX: 2,
+      PolMaxY: 3,
+      TrafMaxX: 27,
+      TrafMaxY: 28,
+      MeltX: 4,
+      MeltY: 5,
+      CrimeMaxX: 6,
+      CrimeMaxY: 7,
+      CenterX: 8,
+      CenterY: 9,
+      FloodX: 10,
+      FloodY: 11,
+      CrashX: 12,
+      CrashY: 13,
+      Platform: 'unix',
+      Version: '4.0',
+      MultiPlayerMode: 1,
+      SugarMode: 1,
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimReadOnlyGetterSubcommandEntries(getterState)),
+    );
+
+    // `w_sim.c` formats these coordinate getters as `(tile << 4) + 8`.
+    const cases = [
+      { name: 'Displays', value: '{display0} {display1}' },
+      { name: 'WorldX', value: '120' },
+      { name: 'WorldY', value: '100' },
+      { name: 'LandValue', value: '21' },
+      { name: 'Traffic', value: '22' },
+      { name: 'Crime', value: '23' },
+      { name: 'Unemployment', value: '24' },
+      { name: 'Fires', value: '25' },
+      { name: 'Pollution', value: '26' },
+      { name: 'PolMaxX', value: String((2 << 4) + 8) },
+      { name: 'PolMaxY', value: String((3 << 4) + 8) },
+      { name: 'TrafMaxX', value: '27' },
+      { name: 'TrafMaxY', value: '28' },
+      { name: 'MeltX', value: String((4 << 4) + 8) },
+      { name: 'MeltY', value: String((5 << 4) + 8) },
+      { name: 'CrimeMaxX', value: String((6 << 4) + 8) },
+      { name: 'CrimeMaxY', value: String((7 << 4) + 8) },
+      { name: 'CenterX', value: String((8 << 4) + 8) },
+      { name: 'CenterY', value: String((9 << 4) + 8) },
+      { name: 'FloodX', value: String((10 << 4) + 8) },
+      { name: 'FloodY', value: String((11 << 4) + 8) },
+      { name: 'CrashX', value: String((12 << 4) + 8) },
+      { name: 'CrashY', value: String((13 << 4) + 8) },
+      { name: 'Platform', value: 'unix' },
+      { name: 'Version', value: '4.0' },
+      { name: 'MultiPlayerMode', value: '1' },
+      { name: 'SugarMode', value: '1' },
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(runtime.invoke(['sim', testCase.name])).toEqual({
+        code: ScriptResultCode.Ok,
+        value: testCase.value,
+      });
+    }
+  });
+
+  it('enforces argc only for getters that validate argc in `w_sim.c`', () => {
+    const runtime = new ScriptRuntime();
+    const getterState = createSimReadOnlyGetterState({
+      Displays: '{display0}',
+      Platform: 'unix',
+      Version: '4.0',
+    });
+    registerSimCommand(
+      runtime,
+      createSimSubcommandTable(createSimReadOnlyGetterSubcommandEntries(getterState)),
+    );
+
+    // `SIMCMD_GET_STR(Displays)` and `SimCmdPlatform/SimCmdVersion` skip argc
+    // checks in `w_sim.c`, while explicit getters like `WorldX` require argc 2.
+    expect(runtime.invoke(['sim', 'Displays', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '{display0}',
+    });
+    expect(runtime.invoke(['sim', 'Platform', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: 'unix',
+    });
+    expect(runtime.invoke(['sim', 'Version', 'extra'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '4.0',
+    });
+    expect(runtime.invoke(['sim', 'WorldX', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim WorldX expects argc 2, got 3',
+    });
+    expect(runtime.invoke(['sim', 'MultiPlayerMode', 'extra'])).toEqual({
+      code: ScriptResultCode.Error,
+      errorCode: ScriptRuntimeErrorCode.InvalidArgCount,
+      message: 'sim MultiPlayerMode expects argc 2, got 3',
+    });
+  });
+
+  it('is included in the default `sim` subcommand table registration', () => {
+    const runtime = new ScriptRuntime();
+    registerSimCommand(runtime);
+
+    // Defaults match `headers/sim.h` (`WORLD_X=120`, `WORLD_Y=100`) and
+    // coordinate getters in `w_sim.c` use `(tile << 4) + 8`, so tile `0` => `8`.
+    expect(runtime.invoke(['sim', 'WorldX'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '120',
+    });
+    expect(runtime.invoke(['sim', 'WorldY'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '100',
+    });
+    expect(runtime.invoke(['sim', 'PolMaxX'])).toEqual({
+      code: ScriptResultCode.Ok,
+      value: '8',
+    });
+  });
+});

@@ -54,69 +54,69 @@ Use this exact loop:
     - state shape supports sim/view/widget/sprite/callback references
     - registry tests cover add/get/remove and duplicate handling
 
-- [ ] `P0.5` Add bootstrap API.
+- [x] `P0.5` Add bootstrap API.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/bootstrap/create-sim-scripting-runtime.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/index.ts`
   - Done when:
     - runtime can be created from one entrypoint
     - bootstrap test verifies base command registration hook flow
 
 ## Phase 1: `sim` command (core)
-- [ ] `P1.1` Add `sim` command dispatcher and subcommand table.
+- [x] `P1.1` Add `sim` command dispatcher and subcommand table.
   - C reference: `ref/micropolis/src/sim/w_sim.c` (`SimCmd`, hash dispatch)
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/commands/sim-command.ts`, `/Users/cje/dev/city/packages/sim-scripting/src/commands/sim-command.test.ts`
   - Done when:
     - `sim <Subcommand>` dispatch works
     - unknown subcommand error matches expected shape
 
-- [ ] `P1.2` Implement accessor read/write subcommands.
+- [x] `P1.2` Implement accessor read/write subcommands.
   - C reference: `SIMCMD_ACCESS_INT(...)` entries in `w_sim.c`
   - Done when:
     - each accessor supports get and set
     - bad argc/parse failures return error
 
-- [ ] `P1.3` Implement read-only getter subcommands.
+- [x] `P1.3` Implement read-only getter subcommands.
   - C reference: `SIMCMD_GET_INT`, `SIMCMD_GET_STR`, explicit getters in `w_sim.c`
   - Done when:
     - getters return formatted string values
     - coordinate getters use `(tile << 4) + 8` where required
 
-- [ ] `P1.4` Implement session control/redraw subcommands and `Kick` hook.
+- [x] `P1.4` Implement session control/redraw subcommands and `Kick` hook.
   - C reference: `SIMCMD_CALL`, `SIMCMD_CALL_KICK` groups
   - Done when:
     - call-only commands trigger hook
     - call+kick commands also schedule delayed update
 
-- [ ] `P1.5` Implement speed/delay/skip/rest controls.
+- [x] `P1.5` Implement speed/delay/skip/rest controls.
   - C reference: `SimCmdSpeed`, `SimCmdDelay`, `SimCmdSkips`, `SimCmdSkip`, `SimCmdNeedRest`
   - Done when:
     - arg validation/ranges match C
     - speed accepts `0..7` and returns clamped speed
 
-- [ ] `P1.6` Implement city/game setup subcommands.
+- [x] `P1.6` Implement city/game setup subcommands.
   - C reference: `SimCmdCityName`, `SimCmdCityFileName`, `SimCmdGameLevel`, `SimCmdYear`, load/generate entries
   - Done when:
     - `CityName`, `CityFileName`, `GameLevel`, `Year` semantics match spec/C
     - parity mode supports `CityFileName` legacy bug behavior
 
-- [ ] `P1.7` Implement budget/options subcommands.
+- [x] `P1.7` Implement budget/options subcommands.
   - C reference: `SimCmdFunds`, `SimCmdTaxRate`, `SimCmdRoadFund`, `SimCmdFireFund`, `SimCmdPoliceFund`, options toggles
   - Done when:
     - percent math uses C-like integer behavior
     - update flags and callbacks are triggered in correct order
 
-- [ ] `P1.8` Implement map/dynamic/overlay misc subcommands.
+- [x] `P1.8` Implement map/dynamic/overlay misc subcommands.
   - C reference: `SimCmdTile`, `SimCmdFill`, `SimCmdDynamicData`, `SimCmdResetDynamic`, `SimCmdFlushStyle`, `SimCmdDoOverlay`, `SimCmdDonDither`
   - Done when:
     - all ranges and map bounds checks are covered
     - dynamic map flag updates and kick behavior are correct
 
-- [ ] `P1.9` Implement disasters/sprite-goal utility subcommands.
+- [x] `P1.9` Implement disasters/sprite-goal utility subcommands.
   - C reference: `SimCmdMonsterGoal`, `SimCmdMonsterDirection`, `SimCmdHelicopterGoal`, disaster creators
   - Done when:
     - sprite lookup/create behavior follows C flow
     - direction range checks enforced
 
-- [ ] `P1.10` Implement URL/browser/random/dollars utilities.
+- [x] `P1.10` Implement URL/browser/random/dollars utilities.
   - C reference: `SimCmdQuoteURL`, `SimCmdOpenWebBrowser`, `SimCmdRand`, `SimCmdDollars`
   - Done when:
     - URL quoting behavior matches byte escaping rules
@@ -124,120 +124,120 @@ Use this exact loop:
     - `Dollars` behavior matches compatibility mode expectation
 
 ## Phase 2: `editorview` and `mapview`
-- [ ] `P2.1` Add `editorview` command family shell (`configure/position/size`).
+- [x] `P2.1` Add `editorview` command family shell (`configure/position/size`).
   - C references: `w_editor.c`, shared specs in `w_tk.c`
   - Done when:
     - handlers parse args and set/get state correctly
 
-- [ ] `P2.2` Implement editor tool and pan commands.
+- [x] `P2.2` Implement editor tool and pan commands.
   - Commands: `Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`
   - Done when:
     - pan delta math and `Kick` behavior are tested
     - tile/view coordinate conversions are covered
 
-- [ ] `P2.3` Implement editor mode/visibility/auto commands.
+- [x] `P2.3` Implement editor mode/visibility/auto commands.
   - Commands: `AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`
   - Done when:
     - auto-go state transitions match expected C behavior
 
-- [ ] `P2.4` Add `mapview` command family shell (`configure/position/size`).
+- [x] `P2.4` Add `mapview` command family shell (`configure/position/size`).
   - C reference: `w_map.c`
   - Done when:
     - parse/set/get behavior tested
 
-- [ ] `P2.5` Implement map pan/track/state/visibility commands.
+- [x] `P2.5` Implement map pan/track/state/visibility commands.
   - Commands: `MapState`, `ShowEditors`, `PanStart`, `PanTo`, `Visible`, `ViewAt`
   - Done when:
     - `16/3` and `*16/3` conversion logic is tested
     - `ViewAt` returns current placeholder behavior
 
 ## Phase 3: `graphview`, `dateview`, `sprite`
-- [ ] `P3.1` Implement `graphview` commands and state.
+- [x] `P3.1` Implement `graphview` commands and state.
   - Commands: `configure`, `position`, `size`, `Visible`, `Range`, `Mask`
   - Done when:
     - `Range` restricted to `10|120`
     - mask range validated (`0..63`)
 
-- [ ] `P3.2` Implement `dateview` commands and state.
+- [x] `P3.2` Implement `dateview` commands and state.
   - Commands: `configure`, `position`, `size`, `Visible`, `Reset`, `Set`
   - Done when:
     - month/year ranges enforced
     - redraw scheduling hook called on `Reset`/`Set`
 
-- [ ] `P3.3` Implement `sprite` creation and dispatch.
+- [x] `P3.3` Implement `sprite` creation and dispatch.
   - C reference: `w_sprite.c`
   - Done when:
     - `sprite <name> <type>` registers sprite command
     - type range check matches C (`1..OBJN-1`)
 
-- [ ] `P3.4` Implement sprite field accessors + `Init` + `Explode`.
+- [x] `P3.4` Implement sprite field accessors + `Init` + `Explode`.
   - Done when:
     - every accessor listed in spec works
     - `Init` pixel bounds checks are enforced
 
 ## Phase 4: `piemenu` and `interval`
-- [ ] `P4.1` Implement `piemenu` state model and command shell.
+- [x] `P4.1` Implement `piemenu` state model and command shell.
   - Commands: `configure`, `add`, `delete`, `entryconfigure`, `index`
   - Done when:
     - entry creation/deletion/configuration state is covered by tests
 
-- [ ] `P4.2` Implement `piemenu` activation/invocation/posting commands.
+- [x] `P4.2` Implement `piemenu` activation/invocation/posting commands.
   - Commands: `activate`, `invoke`, `show`, `pending`, `defer`, `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`
   - Done when:
     - index parsing modes (`active`, `last`, `none`, `@x,y`, label match) are tested
 
-- [ ] `P4.3` Implement `interval` command family.
+- [x] `P4.3` Implement `interval` command family.
   - Commands: `configure`, `get`, `set`, `reset`
   - Done when:
     - min/max swap, clamp, and disabled behavior match C logic
 
 ## Phase 5: Callback bridge (`UI*`)
-- [ ] `P5.1` Add callback dispatcher and registration API.
+- [x] `P5.1` Add callback dispatcher and registration API.
   - Files: `/Users/cje/dev/city/packages/sim-scripting/src/callbacks/ui-callbacks.ts`
   - Done when:
     - callbacks can be registered/overridden and invoked by name
 
-- [ ] `P5.2` Implement startup/lifecycle callbacks.
+- [x] `P5.2` Implement startup/lifecycle callbacks.
   - Procedures: `UIStartMicropolis`, `UIPlayNewCity`, `UIReallyStartGame`, `UIStartLoad`, `UIStartScenario`, `UINewGame`, `DoStopMicropolis`
   - Done when:
     - invocation contracts and argument passing are tested
 
-- [ ] `P5.3` Implement file I/O callbacks.
+- [x] `P5.3` Implement file I/O callbacks.
   - Procedures: `UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`
   - Done when:
     - success/failure callback emission is deterministic
 
-- [ ] `P5.4` Implement status/budget/evaluation callbacks.
+- [x] `P5.4` Implement status/budget/evaluation callbacks.
   - Procedures: `UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`
   - Done when:
     - all callback argument orders match spec
 
-- [ ] `P5.5` Implement message/notice/autogoto callbacks.
+- [x] `P5.5` Implement message/notice/autogoto callbacks.
   - Procedures: `UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`
   - Done when:
     - picture/text flow and autogoto coordinate conversion are tested
 
-- [ ] `P5.6` Implement tool/sound callbacks.
+- [x] `P5.6` Implement tool/sound callbacks.
   - Procedures: `UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`
   - Done when:
     - wildcard tool callback mapping is covered by tests
 
 ## Phase 6: Optional features and source deltas
-- [ ] `P6.1` Add feature flags for `CAM`, `NET`, and `legacyExtras`.
+- [x] `P6.1` Add feature flags for `CAM`, `NET`, and `legacyExtras`.
   - Done when:
     - command registration is controlled by flags
 
-- [ ] `P6.2` Implement optional `camview` command family.
+- [x] `P6.2` Implement optional `camview` command family.
   - C reference: `w_cam.c`
   - Done when:
     - documented subcommands are supported in feature-on mode
 
-- [ ] `P6.3` Implement optional networking commands and `HandlePacket`.
+- [x] `P6.3` Implement optional networking commands and `HandlePacket`.
   - C reference: `w_net.c`
   - Done when:
     - `sim ListenTo`, `sim HearFrom`, and packet callback contract are tested
 
-- [ ] `P6.4` Implement source-delta extras in `legacyExtras`.
+- [x] `P6.4` Implement source-delta extras in `legacyExtras`.
   - Extras: `sim HeatSteps`, `sim HeatFlow`, `sim HeatRule`, `UIDidGenerateNewCity`, `DropFireBombs`
   - Done when:
     - extras are unavailable by default and available when `legacyExtras=true`
@@ -277,3 +277,38 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P0.2` by adding Tcl-style runtime result codes, structured runtime errors, and unit tests for error/result mapping.
 - [x] `2026-02-07` Completed `P0.3` by adding `ScriptRuntime` command registration/invocation kernel and coverage for dispatch, unknown-command errors, and thrown-error normalization.
 - [x] `2026-02-07` Completed `P0.4` by adding typed scripting bridge state plus view/sprite/widget registries with duplicate-safe add/get/remove coverage.
+- [x] `2026-02-07` Completed `P0.5` by adding `createSimScriptingRuntime` bootstrap entrypoint, exporting it from package index, and covering base command registration hook flow with bootstrap tests.
+- [x] `2026-02-07` Completed `P1.1` by adding `sim` command registration/dispatch helpers, a case-sensitive subcommand table scaffold, and tests for dispatch plus typed missing/unknown-subcommand failures.
+- [x] `2026-02-07` Repaired `P1.1` by adding `createSimSubcommandTable` with C-style duplicate overwrite semantics (`HASHED_CMD`/`Tcl_CreateHashEntry`) and coverage that validates last-registration-wins dispatch.
+- [x] `2026-02-07` Completed `P1.2` by porting all `SIMCMD_ACCESS_INT(...)` `sim` subcommands with C-defaulted backing state, read/write accessor behavior, and tests for get/set plus argc and integer-parse failure paths.
+- [x] `2026-02-07` Completed `P1.3` by porting `sim` read-only getter subcommands (`SIMCMD_GET_STR` + explicit getters), adding tile-center coordinate conversion parity for the required getter set, and covering formatted-return/argc-parity behavior in `sim-command` tests.
+- [x] `2026-02-07` Completed `P1.4` by adding session/redraw `sim` call and call+`Kick` subcommands (`SIMCMD_CALL`/`SIMCMD_CALL_KICK` parity), implementing `Kick` delayed-update coalescing hooks (`UpdateDelayed` behavior), and adding tests for side-effect order plus no-kick `Update`.
+- [x] `2026-02-07` Completed `P1.5` by adding `sim` speed/delay/skip/rest subcommands with C-parity argc/range validation (`SimCmdSpeed`/`Delay`/`Skips`/`Skip`/`NeedRest`), `setSpeed` clamp behavior (`0..7` input to `0..3` effective speed), `setSkips` reset semantics, and `Kick` sequencing coverage in `sim-command` tests.
+- [x] `2026-02-07` Completed `P1.6` by adding `sim` city/game setup subcommands (`CityName`, `CityFileName`, `GameLevel`, `Year`, `GenerateNewCity`, `GenerateSomeCity`, `LoadCity`, `LoadScenario`), including configurable legacy `CityFileName` allocation-bug parity mode and C-mapped validation/side-effect tests.
+- [x] `2026-02-07` Completed `P1.7` by adding `sim` budget/options subcommands (`Funds`, `TaxRate`, `FireFund`, `PoliceFund`, `RoadFund`, `AutoBudget`, `AutoGoto`, `AutoBulldoze`, `Disasters`, `Sound`, `DoAnimation`, `DoMessages`, `DoNotices`) with C-parity integer-percent math, update-flag transitions, and callback ordering coverage.
+- [x] `2026-02-07` Completed `P1.8` by adding `sim` map/dynamic/overlay misc subcommands (`FlushStyle`, `DonDither`, `DoOverlay`, `Tile`, `Fill`, `DynamicData`, `ResetDynamic`) with C-parity arg/range/map-bounds checks, dynamic-map flag updates, and `Kick` coalescing coverage.
+- [x] `2026-02-07` Completed `P1.9` by adding disaster creator and sprite-goal utility `sim` subcommands (`MakeFire`, `MakeFlood`, `MakeTornado`, `MakeEarthquake`, `MakeMonster`, `MakeMeltdown`, `FireBomb`, `MonsterGoal`, `HelicopterGoal`, `MonsterDirection`) with C-style call/no-argc behavior, GOD/COP lookup-create-lookup parity flow, and direction range/error-path coverage.
+- [x] `2026-02-07` Completed `P6.1` by adding runtime feature flags (`CAM`, `NET`, `legacyExtras`), flag-gated default command registration plumbing, and tests that verify optional command slices register only when enabled.
+- [x] `2026-02-07` Completed `P1.10` by adding `sim` URL/browser/random/dollars utilities (`QuoteURL`, `OpenWebBrowser`, `Rand`, `Dollars`) with C-mapped byte-escaping and command-string behavior, signed-16-bit `Rand(short)` range parity, and configurable legacy `Dollars` literal-format compatibility mode.
+- [x] `2026-02-07` Completed `P2.1` by adding the `editorview` command-family shell (`configure`, `position`, `size`), including top-level view-command creation/registration, C-style argc + Tcl-integer parsing parity from `w_editor.c`/`w_tk.c`, and colocated unit coverage for set/get/error paths.
+- [x] `2026-02-07` Completed `P2.2` by adding `editorview` pan/tool subcommands (`Pan`, `PanStart`, `PanTo`, `PanBy`, `ToolDown`, `ToolDrag`, `ToolUp`, `DoTool`) with C-mapped pan clamp/delta logic from `w_editor.c`/`w_x.c`, command-level kick coalescing parity, and colocated tests covering kick behavior plus view/pixel and tile command coordinate semantics.
+- [x] `2026-02-07` Completed `P2.3` by adding `editorview` mode/visibility/auto commands (`AutoGoto`, `AutoGoing`, `AutoGoal`, `AutoSpeed`, `Visible`, `ToolState`, `ToolMode`, `Sound`, `Skip`, `Update`, `ShowMe`, `Follow`, `ShowOverlay`, `OverlayMode`, `DynamicFilter`) with C-parity state transitions from `w_editor.c`/`w_x.c` and colocated tests covering auto-go threshold/flag behavior plus follow lookup/pan updates.
+- [x] `2026-02-07` Completed `P2.4` by adding the `mapview` command-family shell (`configure`, `position`, `size`), including top-level `mapview pathName ?options?` command creation/registration, Tcl-style integer parsing and argc parity for `MapCmdposition`/`MapCmdsize`, and colocated tests covering configure/set/get, case-sensitive unknown-subcommand errors, and default map-size initialization from `MAP_W/MAP_H`.
+- [x] `2026-02-07` Completed `P2.5` by adding `mapview` pan/track/state/visibility subcommands (`MapState`, `ShowEditors`, `PanStart`, `PanTo`, `Visible`, `ViewAt`) with C-parity `*3/16` hit-box and `*16/3` pan-delta integer math from `w_map.c`, `Kick()` sequencing for `MapState`/`PanTo`, and placeholder `ViewAt` behavior coverage.
+- [x] `2026-02-07` Completed `P3.1` by adding the `graphview` command family and typed graph state (`configure`, `position`, `size`, `Visible`, `Range`, `Mask`) with C-parity validation from `w_graph.c`, including `Range` (`10|120`) and `Mask` (`0..63`) constraints plus `NewGraph` redraw-flag side effects.
+- [x] `2026-02-07` Completed `P3.2` by adding the `dateview` command family and typed date state (`configure`, `position`, `size`, `Visible`, `Reset`, `Set`) with C-parity validation from `w_date.c`, including month/year range checks and redraw scheduling hooks on `Reset`/`Set`.
+- [x] `2026-02-07` Completed `P3.3` by adding the `sprite` top-level factory command (`sprite <name> <type>`) plus per-sprite case-sensitive subcommand dispatch scaffolding from `w_sprite.c`, with Tcl-style type parsing and strict `1..OBJN-1` (`1..8`) validation parity.
+- [x] `2026-02-07` Completed `P3.4` by porting all `sprite` field accessors and `Init`/`Explode` subcommands from `w_sprite.c`, including Tcl-style integer parsing, `WORLD_X/Y` pixel-bound checks (`0..1919`, `0..1599`), type-specific `InitSprite` defaults, and `ExplodeSprite` frame/message parity coverage.
+- [x] `2026-02-07` Completed `P4.1` by adding `piemenu` state + command shell (`configure`, `add`, `delete`, `entryconfigure`, `index`) with C-mapped defaults/option parsing from `w_piem.c` and colocated state-transition/index-resolution tests.
+- [x] `2026-02-07` Completed `P4.2` by implementing `piemenu` activation/invocation/posting subcommands (`activate`, `invoke`, `show`, `pending`, `defer`, `post`, `unpost`, `grab`, `ungrab`, `distance`, `direction`) with C-mapped `w_piem.c` state transitions, `CalcPieMenuItem`-style cursor delta math for `@x,y` indexing, and colocated parity tests for posting flow, script hooks, and distance/direction rounding.
+- [x] `2026-02-07` Completed `P4.3` by adding the `interval` command family (`configure`, `get`, `set`, `reset`) with C-mapped defaults and option handling from `w_inter.c`/`w_tk.c`, including `SetInterval`-parity min/max swap + directional clamp logic, disabled-state `set` no-op behavior, and colocated tests covering reset/tick-sign normalization/error paths.
+- [x] `2026-02-07` Completed `P5.1` by adding `src/callbacks/ui-callbacks.ts` with callback registration/override helpers plus a runtime-backed callback dispatcher (`name -> reference -> invoke`) and colocated tests that cover direct-name dispatch parity and last-registration-wins remapping behavior.
+- [x] `2026-02-07` Completed `P5.2` by adding startup/lifecycle callback helpers (`UIStartMicropolis`, `UIPlayNewCity`, `UIReallyStartGame`, `UIStartLoad`, `UIStartScenario`, `UINewGame`, `DoStopMicropolis`) with C-mapped argument shaping from `w_tk.c`/`w_stubs.c`/`w_util.c` and colocated invocation-contract tests.
+- [x] `2026-02-07` Completed `P5.3` by adding file I/O callback helpers (`UISaveCityAs`, `UIDidSaveCity`, `UIDidntSaveCity`, `UIDidLoadCity`, `UIDidntLoadCity`, `UIDidLoadScenario`) mapped to `s_fileio.c` `Eval`/`sprintf` flows, with deterministic success/failure callback-name emission and message-argv parity tests.
+- [x] `2026-02-07` Completed `P5.4` by adding status/budget/evaluation callback helpers (`UISetFunds`, `UISetDate`, `UISetDemand`, `UISetOptions`, `UISetSpeed`, `UISetGameLevel`, `UISetCityName`, `UISetMapState`, `UIShowBudgetAndWait`, `UIUpdateBudget`, `UISetBudget`, `UISetBudgetValues`, `UISetEvaluation`) with C-mapped `%d`/bitfield coercion parity from `w_update.c`/`w_util.c`/`w_budget.c`/`w_eval.c` and colocated argv-order tests.
+- [x] `2026-02-07` Repaired `P5.4` by updating `UISetBudgetValues` percent coercion to accept C-style `0..1` funding ratios (`(int)(ratio * 100)` parity from `w_budget.c`) while keeping `0..100` caller compatibility, and adding callback tests for ratio-input argv output ordering.
+- [x] `2026-02-07` Completed `P5.5` by adding message/notice/autogoto callback helpers (`UISetMessage`, `UIPopUpMessage`, `UIShowPicture`, `UIShowZoneStatus`, `UIAutoGoto`, `UILoseGame`, `UIWinGame`) with C-mapped `%d` argument coercion from `s_msg.c`/`w_tool.c`/`w_util.c`, optional Tcl-parity callback args, and colocated tests covering picture/text callback flow plus tile-to-pixel autogoto conversion parity.
+- [x] `2026-02-07` Completed `P5.6` by adding tool/sound callback helpers (`UIDidTool*`, `UISetToolState`, `DoPendTool`, `UIDidPan`, `UIDidStopPan`, `UIEarthQuake`, `UIInitializeSound`, `UIShutDownSound`, `UIMakeSound`, `UIMakeSoundOn`, `UIStartSound`, `UIStopSound`, `UISoundOff`), implementing wildcard callback remap resolution (`UIDidTool*`) with exact-match precedence, and adding colocated parity tests for callback argv shape.
+- [x] `2026-02-07` Completed `P6.2` by adding the optional `camview` command family (`configure`, `position`, `size`, `Visible`, `StoreColor`, `NewCam`, `DeleteCam`, `RandomizeCam`, `ConfigCam`, `FindCam`, `FindSomeCam`) with CAM-flag-gated default registration, C-mapped `w_cam.c`/`g_cam.c` parsing and camera-list semantics, and colocated unit coverage for lifecycle/error/parity behavior.
+- [x] `2026-02-07` Completed `P6.3` by adding optional NET `sim` subcommands (`ListenTo`, `HearFrom`) with `w_sim.c` arg/`file<sock>` parsing parity, default NET-enabled registration wiring, `HandlePacket` callback dispatch formatting parity from `w_net.c` (`%3d ` byte list), and colocated tests for command and packet-callback contracts.
+- [x] `2026-02-07` Completed `P6.4` by adding built-in `legacyExtras` support for source-delta `sim` heat commands (`HeatSteps`, `HeatFlow`, `HeatRule`) with `w_sim.c`/`sim.c` defaults and `Kick()` parity, wiring those entries into flag-gated default registration, and adding source-delta callback helpers/tests for `UIDidGenerateNewCity` (`s_gen.c`) and `DropFireBombs` (`w_stubs.c`).
