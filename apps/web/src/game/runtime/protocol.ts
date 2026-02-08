@@ -48,11 +48,59 @@ export interface Stage2ToolCommand {
 }
 
 /**
- * Stage 2 client command union for this UI milestone.
- * Mirrors Micropolis tool command dispatch in `ref/micropolis/src/sim/w_tool.c`.
- * Difference: only the Stage 2 core tool subset is modeled here.
+ * Stage 2 simulation speed values exposed in the simple UI controls.
+ * Mirrors `setSpeed` clamping behavior in `ref/micropolis/src/sim/w_util.c`
+ * and `SimCmdSpeed` input behavior in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: Stage 2 UI only exposes the playable range 1..3.
  */
-export type Stage2ClientCommand = Stage2ToolCommand;
+export type Stage2SimSpeed = 1 | 2 | 3;
+
+/**
+ * Pause simulation command routed through host authority.
+ * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
+ */
+export interface Stage2PauseSimCommand {
+  kind: 'sim-control';
+  control: 'pause';
+}
+
+/**
+ * Resume simulation command routed through host authority.
+ * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
+ */
+export interface Stage2PlaySimCommand {
+  kind: 'sim-control';
+  control: 'play';
+}
+
+/**
+ * Set simulation speed command routed through host authority.
+ * Mirrors `setSpeed` + `SimCmdSpeed` in
+ * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface Stage2SetSpeedSimCommand {
+  kind: 'sim-control';
+  control: 'set-speed';
+  speed: Stage2SimSpeed;
+}
+
+/**
+ * Stage 2 simulation control command union.
+ * Mirrors pause/resume/speed control paths in
+ * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type Stage2SimControlCommand =
+  | Stage2PauseSimCommand
+  | Stage2PlaySimCommand
+  | Stage2SetSpeedSimCommand;
+
+/**
+ * Stage 2 client command union for this UI milestone.
+ * Mirrors Micropolis command dispatch in `ref/micropolis/src/sim/w_tool.c`
+ * and `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: this keeps the Stage 2 subset only (tools + sim controls).
+ */
+export type Stage2ClientCommand = Stage2ToolCommand | Stage2SimControlCommand;
 
 /**
  * Tool footprint metadata used for pending visuals and placement validation.
@@ -275,6 +323,32 @@ export function isStage2ToolCommand(command: unknown): command is Stage2ToolComm
     typeof candidate.x === 'number' &&
     typeof candidate.y === 'number'
   );
+}
+
+/**
+ * Returns true when a client payload is a Stage 2 simulation control command.
+ * Mirrors command dispatch guards for speed/pause/resume in
+ * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
+ */
+export function isStage2SimControlCommand(command: unknown): command is Stage2SimControlCommand {
+  if (command === null || typeof command !== 'object') {
+    return false;
+  }
+
+  const candidate = command as Partial<Stage2SimControlCommand>;
+  if (candidate.kind !== 'sim-control' || typeof candidate.control !== 'string') {
+    return false;
+  }
+
+  if (candidate.control === 'pause' || candidate.control === 'play') {
+    return true;
+  }
+
+  if (candidate.control === 'set-speed') {
+    return candidate.speed === 1 || candidate.speed === 2 || candidate.speed === 3;
+  }
+
+  return false;
 }
 
 /**

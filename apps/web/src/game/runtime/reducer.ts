@@ -1,4 +1,9 @@
 import {
+  createInitialRuntimeHudState,
+  projectRuntimeHudState,
+  type RuntimeHudState,
+} from './hud-state.ts';
+import {
   createInitialRuntimeMapState,
   projectRuntimeMapState,
   type RuntimeMapState,
@@ -53,6 +58,7 @@ export interface WebRuntimeState {
   lastAppliedServerSeq: number;
   lastAppliedTick: number;
   mapState: RuntimeMapState;
+  hudState: RuntimeHudState;
   pendingTools: readonly PendingToolCommandVisual[];
   lastRejectReason: string | null;
 }
@@ -114,6 +120,7 @@ export function createInitialWebRuntimeState(
     lastAppliedServerSeq: 0,
     lastAppliedTick: 0,
     mapState: createInitialRuntimeMapState(),
+    hudState: createInitialRuntimeHudState(),
     pendingTools: [],
     lastRejectReason: null,
   };
@@ -204,6 +211,7 @@ export function reduceHostEnvelope(
     envelope.kind === 'snapshot' ? 'ready' : envelope.kind === 'resync' ? 'resyncing' : state.phase;
   const settledState = settlePendingToolCommand(state, envelope);
   const mapState = projectRuntimeMapState(settledState.mapState, envelope);
+  const hudState = projectRuntimeHudState(settledState.hudState, envelope);
 
   return {
     state: {
@@ -212,6 +220,7 @@ export function reduceHostEnvelope(
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
       mapState,
+      hudState,
     },
     outcome: 'applied',
     effect: { kind: 'none' },

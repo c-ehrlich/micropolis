@@ -183,4 +183,114 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().pendingTools).toHaveLength(0);
     expect(runtime.getState().lastRejectReason).toBe('out-of-bounds');
   });
+
+  it('projects HUD state from snapshot/patch host events', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: {
+          width: 1,
+          height: 1,
+          tiles: [0],
+        },
+        hud: {
+          fundsLabel: 'Funds: $19,850',
+          date: { label: 'Mar 1900', month: 2, year: 1900 },
+          demand: { r: 4, c: -2, i: 1 },
+          speed: 3,
+        },
+        messages: [{ id: 14, text: 'Residents demand police stations.' }],
+      },
+    });
+
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      payload: {
+        hud: {
+          speed: 0,
+          message: {
+            // C `SendMes`/`SendMesAt` ids are integer message indexes.
+            id: 16,
+            text: 'Taxes are too high.',
+          },
+        },
+      },
+    });
+
+    expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,850');
+    expect(runtime.getState().hudState.dateLabel).toBe('Mar 1900');
+    expect(runtime.getState().hudState.demandR).toBe(4);
+    expect(runtime.getState().hudState.demandC).toBe(-2);
+    expect(runtime.getState().hudState.demandI).toBe(1);
+    expect(runtime.getState().hudState.speed).toBe(0);
+    expect(runtime.getState().hudState.messages.map((message) => message.id)).toEqual([14, 16]);
+  });
+
+  it('routes sim-control commands through host without creating pending tool overlays', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+
+    runtime.sendCommand('cmd-pause', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+    runtime.sendCommand('cmd-speed', {
+      kind: 'sim-control',
+      control: 'set-speed',
+      // `setSpeed` in `w_util.c` accepts integer speed values in the playable 1..3 range.
+      speed: 2,
+    });
+
+    expect(runtime.getState().pendingTools).toHaveLength(0);
+    expect(host.sent).toContainEqual({
+      kind: 'command',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      commandId: 'cmd-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    expect(host.sent).toContainEqual({
+      kind: 'command',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      commandId: 'cmd-speed',
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 2,
+      },
+    });
+  });
 });

@@ -100,7 +100,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Tool interactions are playable and command-correlated.
 
-- [ ] **2.4 Implement HUD and simulation controls**
+- [x] **2.4 Implement HUD and simulation controls**
   - Goal: Show funds/date/demand/messages and allow pause/play/speed interactions through host commands.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/systems/messages.ts`
@@ -213,3 +213,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - 2026-02-08: Completed 2.1 by adding `apps/web` host-client runtime lifecycle + envelope reducer with mandatory `hello` negotiation, `serverSeq`/`tick` tracking, and web runtime stale/gap routing tests.
 - 2026-02-08: Completed 2.2 by adding Stage 2 canvas map rendering in `apps/web`, projecting authoritative snapshot+patch payloads into runtime map state, applying map deltas only after in-order envelope acceptance, and adding map progression/stale-drop tests plus manual smoke steps.
 - 2026-02-08: Completed 2.3 by adding Stage 2 tool command UI (road/rail/wire/bulldoze/R/C/I), emitting command envelopes with `commandId`, implementing visual-only pending lifecycle (enqueue on send, settle on `ack`, rollback on `reject`), extending local demo host ack/reject/idempotency behavior, and adding pending lifecycle plus duplicate-correlation runtime tests.
+- 2026-02-08: Completed 2.4 by extending Stage 2 web runtime protocol/state with host-projected HUD scalars and message feed, adding pause/play/set-speed command handling routed through host envelopes, implementing HUD + simulation controls + message log UI in `apps/web`, and adding HUD projection/runtime/route boundary tests (including no direct sim-core mutation imports in route components).
