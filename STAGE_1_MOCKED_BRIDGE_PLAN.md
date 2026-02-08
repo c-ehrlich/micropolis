@@ -36,7 +36,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 
 ## Task Checklist
 
-- [ ] **1.1 Define `CoreHost` interface in a bridge-owned location**
+- [x] **1.1 Define `CoreHost` interface in a bridge-owned location**
   - Goal: Create stable host API consumed by UI independent of transport.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -185,3 +185,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 ## Execution Log
 
 - [ ] Add dated entries as tasks complete.
+- 2026-02-08: Completed task 1.1 by adding `@city/core-bridge` with canonical envelope types, a bridge-owned `CoreHost` interface, and compile-time contract coverage.
