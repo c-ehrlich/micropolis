@@ -13,7 +13,9 @@ function collectLifecycle(mode: HostMode): Array<'connected' | 'disconnected'> {
   const runtime = createGameRuntime(createCoreHost({ mode }));
   const eventTypes: Array<'connected' | 'disconnected'> = [];
   runtime.subscribe((event) => {
-    eventTypes.push(event.type);
+    if (event.type === 'connected' || event.type === 'disconnected') {
+      eventTypes.push(event.type);
+    }
   });
   runtime.start();
   runtime.stop();

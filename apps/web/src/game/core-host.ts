@@ -1,3 +1,5 @@
+import type { HelloPayload } from './handshake';
+
 /**
  * Host mode selector for web authority transport.
  * Maps to Micropolis NET gating in `ref/micropolis/src/sim/w_sim.c`
@@ -7,22 +9,69 @@
 export type HostMode = 'local' | 'do';
 
 /**
- * Lifecycle event emitted by `CoreHost` implementations.
- * Mirrors the authoritative runtime connect/disconnect boundary implied by the
- * `sim` command transport entry points in `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: event envelopes are a TypeScript runtime helper and do not exist in C.
+ * Connection event emitted by `CoreHost` implementations.
+ * Mirrors the authoritative runtime connect boundary implied by
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: typed event envelopes are a TypeScript bridge helper.
  */
-export interface CoreHostLifecycleEvent {
-  type: 'connected' | 'disconnected';
+export interface CoreHostConnectedEvent {
+  type: 'connected';
   mode: HostMode;
 }
 
 /**
- * Listener callback for `CoreHost` lifecycle events.
+ * Disconnect event emitted by `CoreHost` implementations.
+ * Mirrors the authoritative runtime disconnect boundary implied by
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: typed event envelopes are a TypeScript bridge helper.
+ */
+export interface CoreHostDisconnectedEvent {
+  type: 'disconnected';
+  mode: HostMode;
+}
+
+/**
+ * Host handshake payload event emitted during startup.
+ * Mirrors startup handoff expectations mapped from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: the bridge `hello` envelope is intentionally higher-level than C glue.
+ */
+export interface CoreHostHelloEvent {
+  type: 'hello';
+  mode: HostMode;
+  payload: HelloPayload;
+}
+
+/**
+ * Non-protocol host fault event emitted for unexpected failures.
+ * Mirrors runtime-fault reporting intent mapped from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: explicit code/message fields are a TypeScript UX hardening seam.
+ */
+export interface CoreHostErrorEvent {
+  type: 'error';
+  mode: HostMode;
+  code: string;
+  message: string;
+}
+
+/**
+ * Event emitted by `CoreHost` implementations.
+ * Mirrors transport + startup lifecycle expectations mapped from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+export type CoreHostEvent =
+  | CoreHostConnectedEvent
+  | CoreHostDisconnectedEvent
+  | CoreHostHelloEvent
+  | CoreHostErrorEvent;
+
+/**
+ * Listener callback for `CoreHost` events.
  * Mirrors transport lifecycle observer needs around Micropolis runtime command routing
  * in `ref/micropolis/src/sim/w_sim.c`.
  */
-export type CoreHostLifecycleListener = (event: CoreHostLifecycleEvent) => void;
+export type CoreHostEventListener = (event: CoreHostEvent) => void;
 
 /**
  * Host contract consumed by the web runtime.
@@ -34,5 +83,5 @@ export interface CoreHost {
   readonly mode: HostMode;
   connect(): void;
   disconnect(): void;
-  subscribe(listener: CoreHostLifecycleListener): () => void;
+  subscribe(listener: CoreHostEventListener): () => void;
 }

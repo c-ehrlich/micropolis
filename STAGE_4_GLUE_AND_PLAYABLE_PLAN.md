@@ -54,7 +54,7 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
   - Done criteria:
     - Host selection is centralized and test-covered.
 
-- [ ] **4.2 Unify bootstrapping and handshake failure UX**
+- [x] **4.2 Unify bootstrapping and handshake failure UX**
   - Goal: Ensure both hosts follow the same startup and error-handling behavior for `hello`/version mismatch.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_0_CONTRACT_FREEZE_PLAN.md`
@@ -181,3 +181,4 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed task 4.1 by adding a centralized `apps/web` host factory with env/config mode selection (`local` vs `do`), introducing host-agnostic runtime wiring bound only to `CoreHost`, wiring `apps/web/src/main.tsx` through the new factory/runtime path, and adding focused tests that verify equivalent lifecycle wiring behavior across both host modes.
+- 2026-02-08: Completed task 4.2 by centralizing web runtime bootstrap state transitions around a shared `hello` handshake validator, unifying LocalHost/DoHost startup event flow (`connected` -> `hello`) with deterministic mismatch diagnostics, rendering explicit user-facing handshake/runtime status in `apps/web/src/routes/index.tsx`, and adding focused runtime tests that cover successful handshake plus version-mismatch failure paths in both host modes.

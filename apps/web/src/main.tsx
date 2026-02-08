@@ -2,8 +2,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { createCoreHost } from './game/host-factory';
-import { createGameRuntime } from './game/runtime';
+import { gameRuntime } from './game/runtime-instance';
 import { routeTree } from './routeTree.gen';
 
 const router = createRouter({ routeTree });
@@ -19,7 +18,6 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 
-const gameRuntime = createGameRuntime(createCoreHost());
 gameRuntime.start();
 window.addEventListener(
   'beforeunload',
