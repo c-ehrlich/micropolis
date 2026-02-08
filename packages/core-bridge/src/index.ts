@@ -22,8 +22,19 @@ export function getCoreBridgeScaffold(): CoreBridgeScaffold {
 }
 
 export * from './command-outcome.ts';
-export * from './core-host.ts';
+export type {
+  CoreHost as Stage1CoreHost,
+  CoreHostEventListener as Stage1CoreHostEventListener,
+  CoreHostResult as Stage1CoreHostResult,
+  CoreHostUnsubscribe as Stage1CoreHostUnsubscribe,
+} from './core-host.ts';
 export * from './fixtures.ts';
+export * from './host.ts';
+export {
+  defineCoreHostConformanceSuite,
+  type HostConformanceCreateOptions,
+  type HostConformanceSuiteAdapter,
+} from './host-conformance-suite.ts';
 export * from './local-host.ts';
 export * from './mock-authority-engine.ts';
 export * from './mock-host.ts';

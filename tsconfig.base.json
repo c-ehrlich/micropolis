@@ -9,6 +9,11 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "module": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@city/core-bridge": ["packages/core-bridge/src/index.ts"],
+      "@city/sim-integration": ["packages/sim-integration/src/index.ts"]
+    },
     "noEmit": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
