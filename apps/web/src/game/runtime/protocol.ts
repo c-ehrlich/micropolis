@@ -28,6 +28,62 @@ export const DEFAULT_PROTOCOL_VERSION = 'v1';
 export const DEFAULT_CORE_VERSION = 'stage-2';
 
 /**
+ * Stage 2 tool identifiers exposed in the simple playable toolbar.
+ * Mirrors tool state names from `ref/micropolis/src/sim/w_tool.c` (`roadState`,
+ * `rrState`, `wireState`, `dozeState`, `residentialState`,
+ * `commercialState`, `industrialState`).
+ */
+export type Stage2ToolName = 'road' | 'rail' | 'wire' | 'bulldoze' | 'res' | 'com' | 'ind';
+
+/**
+ * High-level Stage 2 tool placement command sent through `command` envelopes.
+ * Mirrors `DoTool`/`do_tool` command intent in `ref/micropolis/src/sim/w_tool.c`.
+ * Difference: this is typed bridge payload data instead of Tcl command strings.
+ */
+export interface Stage2ToolCommand {
+  kind: 'tool';
+  tool: Stage2ToolName;
+  x: number;
+  y: number;
+}
+
+/**
+ * Stage 2 client command union for this UI milestone.
+ * Mirrors Micropolis tool command dispatch in `ref/micropolis/src/sim/w_tool.c`.
+ * Difference: only the Stage 2 core tool subset is modeled here.
+ */
+export type Stage2ClientCommand = Stage2ToolCommand;
+
+/**
+ * Tool footprint metadata used for pending visuals and placement validation.
+ * Mirrors `toolSize[]` and `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c`.
+ */
+export interface Stage2ToolSpec {
+  tool: Stage2ToolName;
+  label: string;
+  size: number;
+  offset: number;
+  pendingColor: string;
+}
+
+/**
+ * Stage 2 tool metadata table.
+ * Mirrors `toolSize[]`/`toolOffset[]` entries from `ref/micropolis/src/sim/w_tool.c`
+ * for road, rail, wire, bulldoze, residential, commercial, and industrial tools.
+ */
+export const STAGE2_TOOL_SPECS: readonly Stage2ToolSpec[] = [
+  { tool: 'road', label: 'Road', size: 1, offset: 0, pendingColor: '#f6d365' },
+  { tool: 'rail', label: 'Rail', size: 1, offset: 0, pendingColor: '#c3aed6' },
+  { tool: 'wire', label: 'Wire', size: 1, offset: 0, pendingColor: '#93c5fd' },
+  { tool: 'bulldoze', label: 'Bulldoze', size: 1, offset: 0, pendingColor: '#fca5a5' },
+  { tool: 'res', label: 'R', size: 3, offset: 1, pendingColor: '#86efac' },
+  { tool: 'com', label: 'C', size: 3, offset: 1, pendingColor: '#7dd3fc' },
+  { tool: 'ind', label: 'I', size: 3, offset: 1, pendingColor: '#fde047' },
+] as const;
+
+const STAGE2_TOOL_NAME_SET = new Set<Stage2ToolName>(STAGE2_TOOL_SPECS.map((spec) => spec.tool));
+
+/**
  * Host -> client hello envelope for version/identity negotiation.
  * Mirrors command-gating intent in `ref/micropolis/src/sim/w_sim.c`; this is
  * intentionally an explicit typed handshake message rather than Tcl command IO.
@@ -158,7 +214,7 @@ export interface ClientCommandEnvelope {
   roomId: string;
   clientId: string;
   commandId: string;
-  command: unknown;
+  command: Stage2ClientCommand;
 }
 
 /**
@@ -200,6 +256,40 @@ export interface CoreHost {
 export interface CoreHostConnection {
   send(envelope: ClientEnvelope): void;
   disconnect(): void;
+}
+
+/**
+ * Returns true when a client payload is a Stage 2 tool command.
+ * Mirrors tool command dispatch guards in `ref/micropolis/src/sim/w_tool.c`.
+ */
+export function isStage2ToolCommand(command: unknown): command is Stage2ToolCommand {
+  if (command === null || typeof command !== 'object') {
+    return false;
+  }
+
+  const candidate = command as Partial<Stage2ToolCommand>;
+  return (
+    candidate.kind === 'tool' &&
+    typeof candidate.tool === 'string' &&
+    STAGE2_TOOL_NAME_SET.has(candidate.tool as Stage2ToolName) &&
+    typeof candidate.x === 'number' &&
+    typeof candidate.y === 'number'
+  );
+}
+
+/**
+ * Looks up Stage 2 tool metadata for a tool id.
+ * Mirrors toolbar-to-tool-state lookup intent from `setWandState` in
+ * `ref/micropolis/src/sim/w_tool.c`, adapted for typed web metadata.
+ */
+export function getStage2ToolSpec(tool: Stage2ToolName): Stage2ToolSpec {
+  for (const spec of STAGE2_TOOL_SPECS) {
+    if (spec.tool === tool) {
+      return spec;
+    }
+  }
+
+  throw new Error(`Unknown Stage 2 tool spec for "${tool}"`);
 }
 
 /**

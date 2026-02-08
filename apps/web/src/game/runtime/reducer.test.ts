@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_LOCAL_CLIENT_ID, DEFAULT_LOCAL_ROOM_ID, type HostEnvelope } from './protocol.ts';
-import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
+import {
+  DEFAULT_LOCAL_CLIENT_ID,
+  DEFAULT_LOCAL_ROOM_ID,
+  type HostEnvelope,
+  type Stage2ToolCommand,
+} from './protocol.ts';
+import {
+  createInitialWebRuntimeState,
+  enqueuePendingToolCommandVisual,
+  reduceHostEnvelope,
+} from './reducer.ts';
 
 /**
  * Builds a valid accepted hello envelope for deterministic Stage 2 runtime tests.
@@ -16,6 +25,19 @@ function createAcceptedHelloEnvelope(): HostEnvelope {
     protocolVersion: 'v1',
     coreVersion: 'stage-2',
     accepted: true,
+  };
+}
+
+/**
+ * Creates a deterministic Stage 2 tool command fixture used in pending tests.
+ * Mirrors tool intent routing for `DoTool` in `ref/micropolis/src/sim/w_tool.c`.
+ */
+function createToolCommand(tool: Stage2ToolCommand['tool']): Stage2ToolCommand {
+  return {
+    kind: 'tool',
+    tool,
+    x: 10,
+    y: 10,
   };
 }
 
@@ -115,5 +137,102 @@ describe('reduceHostEnvelope', () => {
       reason: 'sequence-gap',
       fromServerSeq: 2,
     });
+  });
+
+  it('creates pending command visuals and settles them on ack', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const withPending = enqueuePendingToolCommandVisual(
+      afterHello,
+      'cmd-road',
+      createToolCommand('road'),
+    );
+
+    expect(withPending.pendingTools).toHaveLength(1);
+    expect(withPending.pendingTools[0]?.commandId).toBe('cmd-road');
+
+    const afterAck = reduceHostEnvelope(withPending, {
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      commandId: 'cmd-road',
+    });
+
+    expect(afterAck.outcome).toBe('applied');
+    expect(afterAck.state.pendingTools).toHaveLength(0);
+    expect(afterAck.state.lastRejectReason).toBeNull();
+  });
+
+  it('rolls back pending visual markers on reject', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const withPending = enqueuePendingToolCommandVisual(
+      afterHello,
+      'cmd-out-of-bounds',
+      createToolCommand('res'),
+    );
+
+    const afterReject = reduceHostEnvelope(withPending, {
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      commandId: 'cmd-out-of-bounds',
+      reason: 'out-of-bounds',
+    });
+
+    expect(afterReject.outcome).toBe('applied');
+    expect(afterReject.state.pendingTools).toHaveLength(0);
+    expect(afterReject.state.lastRejectReason).toBe('out-of-bounds');
+  });
+
+  it('correlates duplicate command outcomes by commandId without settling other pending markers', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const withFirst = enqueuePendingToolCommandVisual(
+      afterHello,
+      'cmd-1',
+      createToolCommand('road'),
+    );
+    const withSecond = enqueuePendingToolCommandVisual(
+      withFirst,
+      'cmd-2',
+      createToolCommand('rail'),
+    );
+
+    const afterFirstAck = reduceHostEnvelope(withSecond, {
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      commandId: 'cmd-1',
+    }).state;
+    const afterDuplicateAck = reduceHostEnvelope(afterFirstAck, {
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-1',
+    }).state;
+    const afterDuplicateReject = reduceHostEnvelope(afterDuplicateAck, {
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 3,
+      commandId: 'cmd-1',
+      reason: 'duplicate',
+    }).state;
+
+    expect(afterFirstAck.pendingTools.map((pending) => pending.commandId)).toEqual(['cmd-2']);
+    expect(afterDuplicateAck.pendingTools.map((pending) => pending.commandId)).toEqual(['cmd-2']);
+    expect(afterDuplicateReject.pendingTools.map((pending) => pending.commandId)).toEqual([
+      'cmd-2',
+    ]);
   });
 });

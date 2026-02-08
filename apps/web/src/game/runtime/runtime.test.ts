@@ -129,4 +129,58 @@ describe('createWebHostRuntime', () => {
       fromServerSeq: 2,
     });
   });
+
+  it('creates pending visuals on sendCommand and settles them on ack/reject', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+
+    runtime.sendCommand('cmd-road', {
+      kind: 'tool',
+      tool: 'road',
+      x: 8,
+      y: 8,
+    });
+
+    expect(runtime.getState().pendingTools.map((pending) => pending.commandId)).toEqual([
+      'cmd-road',
+    ]);
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      commandId: 'cmd-road',
+    });
+    expect(runtime.getState().pendingTools).toHaveLength(0);
+
+    runtime.sendCommand('cmd-reject', {
+      kind: 'tool',
+      tool: 'res',
+      x: 0,
+      y: 0,
+    });
+    expect(runtime.getState().pendingTools).toHaveLength(1);
+
+    host.emit({
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-reject',
+      reason: 'out-of-bounds',
+    });
+    expect(runtime.getState().pendingTools).toHaveLength(0);
+    expect(runtime.getState().lastRejectReason).toBe('out-of-bounds');
+  });
 });

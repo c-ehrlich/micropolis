@@ -8,6 +8,9 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   type HostEnvelope,
   isSequencedHostEnvelope,
+  isStage2ToolCommand,
+  type Stage2ClientCommand,
+  type Stage2ToolCommand,
 } from './protocol.ts';
 
 /**
@@ -24,6 +27,18 @@ export type WebRuntimePhase =
   | 'failed';
 
 /**
+ * Visual-only pending tool marker tracked by `commandId`.
+ * Mirrors the pending tool UX intent behind `DoPendTool` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ * Difference: Stage 2 stores pending markers in client runtime state instead
+ * of driving Tcl callbacks directly.
+ */
+export interface PendingToolCommandVisual {
+  commandId: string;
+  command: Stage2ToolCommand;
+}
+
+/**
  * Mutable state projection for Stage 2 host-client runtime behavior.
  * Mirrors authoritative update tracking intent from
  * `ref/micropolis/src/sim/w_update.c`; this is intentionally a bridge-client
@@ -38,6 +53,8 @@ export interface WebRuntimeState {
   lastAppliedServerSeq: number;
   lastAppliedTick: number;
   mapState: RuntimeMapState;
+  pendingTools: readonly PendingToolCommandVisual[];
+  lastRejectReason: string | null;
 }
 
 /**
@@ -65,7 +82,8 @@ export type WebRuntimeReducerOutcome =
   | 'dropped-stale'
   | 'gap-detected'
   | 'ignored-until-hello'
-  | 'hello-rejected';
+  | 'hello-rejected'
+  | 'pending-enqueued';
 
 /**
  * Result object returned by envelope reduction.
@@ -96,6 +114,36 @@ export function createInitialWebRuntimeState(
     lastAppliedServerSeq: 0,
     lastAppliedTick: 0,
     mapState: createInitialRuntimeMapState(),
+    pendingTools: [],
+    lastRejectReason: null,
+  };
+}
+
+/**
+ * Adds a visual-only pending marker for a newly sent Stage 2 tool command.
+ * Mirrors `DoPendTool` pending command UI behavior in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ * Difference: this only tracks a local marker and does not mutate authoritative
+ * map state, which still arrives via host `patch`/`snapshot` envelopes.
+ */
+export function enqueuePendingToolCommandVisual(
+  state: WebRuntimeState,
+  commandId: string,
+  command: Stage2ClientCommand,
+): WebRuntimeState {
+  if (!isStage2ToolCommand(command)) {
+    return state;
+  }
+
+  const hasCommand = state.pendingTools.some((pending) => pending.commandId === commandId);
+  if (hasCommand) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTools: [...state.pendingTools, { commandId, command }],
+    lastRejectReason: null,
   };
 }
 
@@ -154,11 +202,12 @@ export function reduceHostEnvelope(
 
   const phase =
     envelope.kind === 'snapshot' ? 'ready' : envelope.kind === 'resync' ? 'resyncing' : state.phase;
-  const mapState = projectRuntimeMapState(state.mapState, envelope);
+  const settledState = settlePendingToolCommand(state, envelope);
+  const mapState = projectRuntimeMapState(settledState.mapState, envelope);
 
   return {
     state: {
-      ...state,
+      ...settledState,
       phase,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
@@ -229,4 +278,35 @@ function getHelloRejectionReason(
   }
 
   return null;
+}
+
+/**
+ * Settles client-side pending tool markers after host command outcomes.
+ * Mirrors `DoTool` plus pending tool completion intent in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ * Difference: Stage 2 rollback is purely visual (remove pending marker) while
+ * authoritative map rollback remains host-owned through envelope streams.
+ */
+function settlePendingToolCommand(state: WebRuntimeState, envelope: HostEnvelope): WebRuntimeState {
+  if (envelope.kind !== 'ack' && envelope.kind !== 'reject') {
+    return state;
+  }
+
+  const pendingTools = state.pendingTools.filter(
+    (pending) => pending.commandId !== envelope.commandId,
+  );
+  const nextRejectReason = envelope.kind === 'reject' ? envelope.reason : state.lastRejectReason;
+
+  if (
+    pendingTools.length === state.pendingTools.length &&
+    nextRejectReason === state.lastRejectReason
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingTools,
+    lastRejectReason: nextRejectReason,
+  };
 }

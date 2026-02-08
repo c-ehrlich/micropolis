@@ -6,9 +6,11 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
+  type Stage2ClientCommand,
 } from './protocol.ts';
 import {
   createInitialWebRuntimeState,
+  enqueuePendingToolCommandVisual,
   reduceHostEnvelope,
   type WebRuntimeReducerOutcome,
   type WebRuntimeState,
@@ -46,7 +48,7 @@ export interface CreateWebHostRuntimeOptions {
 export interface WebHostRuntime {
   connect(): void;
   disconnect(): void;
-  sendCommand(commandId: string, command: unknown): void;
+  sendCommand(commandId: string, command: Stage2ClientCommand): void;
   requestSnapshot(reason?: 'manual' | 'resync'): void;
   getState(): WebRuntimeState;
   subscribe(listener: (event: WebRuntimeEvent) => void): () => void;
@@ -143,6 +145,7 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
           ...state,
           phase: 'disconnected',
           handshakeComplete: false,
+          pendingTools: [],
         },
         'applied',
       );
@@ -150,6 +153,11 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
     sendCommand(commandId, command) {
       if (connection === undefined) {
         throw new Error('Cannot send command before connect()');
+      }
+
+      const nextState = enqueuePendingToolCommandVisual(state, commandId, command);
+      if (nextState !== state) {
+        setState(nextState, 'pending-enqueued');
       }
 
       connection.send({

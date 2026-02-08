@@ -79,7 +79,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Map updates reflect host output without full redraw dependence.
 
-- [ ] **2.3 Implement tool command UI and pending-visual lifecycle**
+- [x] **2.3 Implement tool command UI and pending-visual lifecycle**
   - Goal: Support core tools and pending state flow from command send through `ack/reject`.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/actions/tool-actions.ts`
@@ -212,3 +212,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed 2.1 by adding `apps/web` host-client runtime lifecycle + envelope reducer with mandatory `hello` negotiation, `serverSeq`/`tick` tracking, and web runtime stale/gap routing tests.
 - 2026-02-08: Completed 2.2 by adding Stage 2 canvas map rendering in `apps/web`, projecting authoritative snapshot+patch payloads into runtime map state, applying map deltas only after in-order envelope acceptance, and adding map progression/stale-drop tests plus manual smoke steps.
+- 2026-02-08: Completed 2.3 by adding Stage 2 tool command UI (road/rail/wire/bulldoze/R/C/I), emitting command envelopes with `commandId`, implementing visual-only pending lifecycle (enqueue on send, settle on `ack`, rollback on `reject`), extending local demo host ack/reject/idempotency behavior, and adding pending lifecycle plus duplicate-correlation runtime tests.
