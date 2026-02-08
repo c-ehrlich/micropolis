@@ -22,7 +22,7 @@
       "city": "happisle.cty",
       "actions": "happisle-core-replay.actions.json",
       "seed": 3405691582,
-      "expectedReplayHash": 2007288253
+      "expectedReplayHash": 3208013524
     }
   ]
 }

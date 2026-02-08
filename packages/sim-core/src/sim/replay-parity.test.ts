@@ -17,6 +17,7 @@ import { createSimContext, type SimContext } from '../core/sim-context.ts';
 import { createSimState, type SimState } from '../core/sim-state.ts';
 import { applyLoadNormalization, decodeCityFileForMap, readCityMeta } from '../io/cty.ts';
 import { hashBytes, hashInt16, hashScalars, hashUint16, mixHashes } from '../io/hash.ts';
+import { collectTax } from '../systems/budget.ts';
 import { doPowerScan, pushPowerStack, setZPowerAt } from '../systems/power.ts';
 import { decTrafficMem } from '../systems/traffic.ts';
 import { decROGMem } from '../systems/zones.ts';
@@ -519,6 +520,7 @@ function markMapDirtyFlags(flags: ReadonlyArray<SimMapFlag>, state: SimState): v
 function createOracleSubsetSystems(): SimPhaseSystems {
   return {
     clearCensus: (state) => clearCensusOracleSubset(state),
+    collectTax,
     mapScan: mapScanOracleSubset,
     decTrafficMem,
     decROGMem,
