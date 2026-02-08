@@ -16,18 +16,18 @@ Use this as an agent runbook: do one unchecked task, verify it, check it off, re
 - [x] Existing direction is correct: typed metadata-first API with C/Tcl parity JSDoc.
 
 ### Implemented but incomplete
-- [ ] `resource-loader.ts` currently formats paths and cache keys but does not yet load bytes from disk or cache file contents.
-- [ ] `string-table.ts` parsing exists but has no parity tests against `stri.*` fixtures yet.
-- [ ] `tiles.ts` header parser exists but has no fixture-based parity tests yet.
-- [ ] `help-docs.ts` currently has filename helper types only; no `help.tcl`/`manual` inventory implementation yet.
-- [ ] `catalog.ts` composition exists, but currently depends on caller-provided data (no generated manifests yet).
+- [x] `resource-loader.ts` currently formats paths and cache keys but does not yet load bytes from disk or cache file contents.
+- [x] `string-table.ts` parsing exists but has no parity tests against `stri.*` fixtures yet.
+- [x] `tiles.ts` header parser exists but has no fixture-based parity tests yet.
+- [x] `help-docs.ts` currently has filename helper types only; no `help.tcl`/`manual` inventory implementation yet.
+- [x] `catalog.ts` composition exists, but currently depends on caller-provided data (no generated manifests yet).
 
 ### Missing package infrastructure
-- [ ] No `scripts/gen-assets-manifest.mjs` yet.
-- [ ] No `scripts/verify-assets-parity.mjs` yet.
-- [ ] No `src/generated/` manifests yet.
-- [ ] No `sim-assets` test files yet.
-- [ ] `TODO.md` still says this package is a stub and must be updated.
+- [x] No `scripts/gen-assets-manifest.mjs` yet.
+- [x] No `scripts/verify-assets-parity.mjs` yet.
+- [x] No `src/generated/` manifests yet.
+- [x] No `sim-assets` test files yet.
+- [x] `TODO.md` still says this package is a stub and must be updated.
 
 ## Locked Source References
 - [x] `ref/micropolis/spec/resources/SPEC.md`
@@ -42,14 +42,14 @@ Use this as an agent runbook: do one unchecked task, verify it, check it off, re
 - [x] `ref/micropolis/micropolisactivity.py`
 
 ## Invariants To Enforce in Tests
-- [ ] `TILE_COUNT === 960`
-- [ ] `tiles.xpm` header: `16 15360 14 1`
-- [ ] `tilesbw.xpm` header: `16 15360 2 1`
-- [ ] `tilessm.xpm` header: `4 2880 14 1`
-- [ ] `stri` line counts: 202=20, 219=27, 301=64, 356=19
-- [ ] `snro.111..888` each size: 27120 bytes
-- [ ] sprite frame counts: 1:5, 2:8, 3:11, 4:8, 5:16, 6:3, 7:6, 8:4
-- [ ] known missing Tcl bitmap refs remain explicit: `micropolisl`, `splashscreen`
+- [x] `TILE_COUNT === 960`
+- [x] `tiles.xpm` header: `16 15360 14 1`
+- [x] `tilesbw.xpm` header: `16 15360 2 1`
+- [x] `tilessm.xpm` header: `4 2880 14 1`
+- [x] `stri` line counts: 202=20, 219=27, 301=64, 356=19
+- [x] `snro.111..888` each size: 27120 bytes
+- [x] sprite frame counts: 1:5, 2:8, 3:11, 4:8, 5:16, 6:3, 7:6, 8:4
+- [x] known missing Tcl bitmap refs remain explicit: `micropolisl`, `splashscreen`
 
 ## Phase 1: Close Skeleton Gaps
 
@@ -75,15 +75,15 @@ Verification:
 - [x] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
 
 Verification:
-- [ ] Generator runs successfully.
-- [ ] Re-run generator produces no diff.
+- [x] Generator runs successfully.
+- [x] Re-run generator produces no diff.
 
 ### P2.2 Add parity verifier
 - [x] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
 - [x] Assert all locked invariants and known-missing sets.
 
 Verification:
-- [ ] Verifier exits 0 on current reference assets.
+- [x] Verifier exits 0 on current reference assets.
 
 ## Phase 3: Complete Runtime Helpers
 
@@ -93,28 +93,28 @@ Verification:
 - [x] Return deterministic error shape for missing resource files.
 
 Verification:
-- [ ] Add `resource-loader.test.ts` with cache hit/miss and missing-file assertions.
+- [x] Add `resource-loader.test.ts` with cache hit/miss and missing-file assertions.
 
 ### P3.2 Harden string-table parity
 - [x] Ensure parser/lookup semantics are documented against `GetIndString` behavior.
 - [x] Add `string-table.test.ts` with fixture assertions for `stri.202/.219/.301/.356`.
 
 Verification:
-- [ ] String-table tests pass.
+- [x] String-table tests pass.
 
 ### P3.3 Harden tile and sprite parity
 - [x] Add `tiles.test.ts` reading actual XPM headers from canonical assets.
 - [x] Add `sprites.test.ts` verifying frame manifests against discovered `obj*-*.xpm` files.
 
 Verification:
-- [ ] Tile and sprite tests pass.
+- [x] Tile and sprite tests pass.
 
 ### P3.4 Build help catalog implementation
 - [x] Implement `help-docs` inventory builders (help ids, manual html ids, missing/extra sets).
 - [x] Add `help-docs.test.ts` with deterministic missing/extra assertions.
 
 Verification:
-- [ ] Help-doc tests pass.
+- [x] Help-doc tests pass.
 
 ## Phase 4: Derived PNG Export Pipeline
 
@@ -123,7 +123,7 @@ Verification:
 - [x] Define manifest mapping canonical source path -> derived PNG path.
 
 Verification:
-- [ ] Contract documented in package README.
+- [x] Contract documented in package README.
 
 ### P4.2 Implement conversion script
 - [x] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
@@ -131,15 +131,15 @@ Verification:
 - [x] Keep conversion deterministic and idempotent.
 
 Verification:
-- [ ] Export script runs cleanly.
-- [ ] Second run yields no diff.
+- [x] Export script runs cleanly.
+- [x] Second run yields no diff.
 
 ### P4.3 Enforce canonical/derived separation
 - [x] Ensure runtime metadata always points to canonical identity keys.
 - [x] Ensure derived PNG paths are optional overlays, not replacements for canonical IDs.
 
 Verification:
-- [ ] Add tests proving canonical IDs remain stable regardless of derived export.
+- [x] Add tests proving canonical IDs remain stable regardless of derived export.
 
 ## Phase 5: Integration Hooks
 
@@ -147,14 +147,14 @@ Verification:
 - [x] Export helpers for scenario/resource resolution to avoid duplicate constants in `sim-io`.
 
 Verification:
-- [ ] `sim-io` typecheck passes with helper usage.
+- [x] `sim-io` typecheck passes with helper usage.
 
 ### P5.2 `sim-ui` integration
 - [x] Export helpers for tool icons, string resources, sound token mapping, and help docs.
 - [x] Support canonical asset key + optional derived PNG path lookup.
 
 Verification:
-- [ ] `sim-ui` typecheck passes with helper usage.
+- [x] `sim-ui` typecheck passes with helper usage.
 
 ## Phase 6: CI Drift Gates
 
@@ -162,18 +162,18 @@ Verification:
 - [x] Add script/check that regenerates manifests and fails on diff.
 
 Verification:
-- [ ] Intentional stale manifest causes failure.
+- [x] Intentional stale manifest causes failure.
 
 ### P6.2 Add derived-image drift gate
 - [x] Add check for deterministic derived PNG export output.
 
 Verification:
-- [ ] Intentional stale PNG set causes failure.
+- [x] Intentional stale PNG set causes failure.
 
 ## Completion Criteria
-- [ ] All tasks above are checked.
-- [ ] Repo gates pass: `pnpm typecheck`, `pnpm lint`, `pnpm format`.
-- [ ] `git status` shows only intended changes.
+- [x] All tasks above are checked.
+- [x] Repo gates pass: `pnpm typecheck`, `pnpm lint`, `pnpm format`.
+- [x] `git status` shows only intended changes.
 
 ## Execution Log
 - [x] 2026-02-07: Audited current `sim-assets` state. Conclusion: existing module skeleton is directionally correct and should be retained; next work is generator/tests/resource-loader completion plus derived PNG export pipeline.
@@ -207,3 +207,4 @@ Verification:
 - [x] 2026-02-07: Completed P5.2 canonical-key/derived-overlay task by adding `resolveSimUiToolIconAssetLookup` in `packages/sim-assets/src/sim-ui.ts` to return canonical `ref/micropolis/images/*.xpm` tool icon keys with optional derived PNG path lookup, plus coverage in `packages/sim-assets/src/sim-ui.test.ts`.
 - [x] 2026-02-07: Completed P6.1 manifest drift gate task by adding `packages/sim-assets/scripts/check-manifest-drift.mjs` and `package.json` wiring to regenerate `src/generated/assets-manifest.ts` and fail when regeneration changes bytes.
 - [x] 2026-02-07: Completed P6.2 derived-image drift gate task by adding `packages/sim-assets/scripts/check-derived-image-drift.mjs` plus `scripts/check-derived-image-drift.test.ts`, wiring `package.json`, and asserting deterministic export snapshots fail on stale checked-in PNG bytes.
+- [x] 2026-02-08: Completed remaining verification/bookkeeping sweep by rerunning manifest generation/parity/export checks, confirming deterministic reruns and drift-gate tests (`check-manifest-drift`/`check-derived-image-drift`), validating `sim-io` + `sim-ui` typechecks, and re-ticking all remaining checklist items.
