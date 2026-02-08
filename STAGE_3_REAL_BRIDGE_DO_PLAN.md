@@ -100,7 +100,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - Reconnect path can recover without full replay from genesis.
 
-- [ ] **3.4 Implement DO adapter package scaffold and room authority mapping**
+- [x] **3.4 Implement DO adapter package scaffold and room authority mapping**
   - Goal: Create `packages/sim-do-adapter` for DO plumbing and map one room/city to one DO instance.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/index.ts`
@@ -208,3 +208,4 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 - [x] 2026-02-08: Completed task 3.1 by introducing canonical bridge-owned envelope/command/handshake types in `@city/core-bridge`, updating `@city/sim-integration` multiplayer runtime contracts to import those types, and adding compile-time drift assertions/tests to enforce single-source protocol ownership.
 - [x] 2026-02-08: Completed task 3.2 by adding an authoritative per-room multiplayer runtime in `@city/sim-integration` with room registry contexts, deterministic per-room command queue ordering, per-room `commandId` idempotency dedupe, and ordered `ack`/`reject`/`error` plus downstream `patch`/`snapshot` envelope emissions carrying monotonic `tick` and `serverSeq`, with focused tests for acceptance, rejection, dedupe, and deterministic ordering.
 - [x] 2026-02-08: Completed task 3.3 by adding snapshot + patch-tail persistence contracts in `@city/sim-integration` multiplayer types, wiring authoritative runtime hooks for persistence-backed room bootstrap (`snapshot` + replay tail by `serverSeq`), adding configurable snapshot cadence with a Stage-locked default of 64 ticks plus tail truncation hooks, and adding focused tests for persisted bootstrap replay and post-truncation sequence continuity.
+- [x] 2026-02-08: Completed task 3.4 by scaffolding `@city/sim-do-adapter` with package-level `typecheck`/`lint`/`test` scripts, implementing a room-scoped `RoomDoAdapter` that maps one room to one deterministic DO authority key, wiring websocket open/message/close entrypoints to `@city/sim-integration` runtime APIs (`connectClient`/`receiveCommand`/`disconnectClient`), bridging DO alarms to authoritative `tick(nowMs)`, and adding focused adapter unit tests for routing and room-authority fanout behavior.

@@ -1,5 +1,8 @@
 {
   "name": "@city/sim-integration",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }
