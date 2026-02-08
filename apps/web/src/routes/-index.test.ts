@@ -2,7 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import ROUTE_SOURCE from './index.tsx?raw';
 
-describe('stage 2 route boundaries', () => {
+describe('web route runtime boundaries', () => {
+  it('keeps a top-level runtime view toggle so Stage 4 and Stage 2 panels are both reachable', () => {
+    expect(ROUTE_SOURCE).toContain('Stage 4 Runtime (Default)');
+    expect(ROUTE_SOURCE).toContain('Stage 2 Demo Map');
+  });
+
+  it('wires Stage 4 panel state from the shared runtime singleton', () => {
+    expect(ROUTE_SOURCE).toContain('gameRuntime.subscribeState');
+    expect(ROUTE_SOURCE).toContain('describeRuntimeStatus');
+    expect(ROUTE_SOURCE).toContain("type: 'tool-command'");
+    expect(ROUTE_SOURCE).toContain('gameRuntime.sendCommand');
+    expect(ROUTE_SOURCE).toContain('Authoritative Placement Map');
+  });
+
   it('does not import sim-core directly from UI route components', () => {
     // Stage plan rule: UI must consume host/runtime envelopes and avoid direct
     // simulation mutation entry points.
