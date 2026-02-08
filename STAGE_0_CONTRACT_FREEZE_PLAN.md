@@ -169,7 +169,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Protocol ownership is practically enforceable by tests.
 
-- [ ] **0.7 Publish Stage 0 alignment notes**
+- [x] **0.7 Publish Stage 0 alignment notes**
   - Goal: Record final protocol decisions and unresolved questions in repo docs for Stage 1 consumers.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -201,3 +201,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 - [2026-02-08] Completed task 0.4 by adding sequencing state helpers and invariant decision APIs in `packages/core-bridge/src/sequencing.ts` (strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, gap/tick-regression resync), exporting sequencing contracts from `packages/core-bridge/src/index.ts`, and adding table-driven coverage in `packages/core-bridge/src/sequencing.test.ts`.
 - [2026-02-08] Completed task 0.5 by adding `packages/core-bridge/fixtures/` canonical happy/edge JSON fixtures with a manifest, implementing typed fixture loading utilities in `packages/core-bridge/src/fixtures.ts`, exporting fixture APIs via `packages/core-bridge/src/index.ts`, and adding schema/sequencing/handshake-backed fixture validation coverage in `packages/core-bridge/src/fixtures.test.ts`.
 - [2026-02-08] Completed task 0.6 by adding `packages/sim-integration/src/bridge-contract.ts` bridge-owned envelope aliases, adding cross-package conformance/runtime wiring coverage in `packages/sim-integration/src/bridge-contract.test.ts` using `@city/core-bridge` contracts, documenting migration points in `packages/sim-integration/INTEGRATION-CONTRACT.md`, and exporting bridge contract seams from `packages/sim-integration/src/index.ts`.
+- [2026-02-08] Completed task 0.7 by publishing `STAGE_0_ALIGNMENT_NOTES.md` with the frozen Stage 0 v1 envelope inventory, handshake and sequencing invariants, and direct links to canonical fixtures/tests (`packages/core-bridge/src/*.test.ts`, `packages/core-bridge/fixtures/manifest.json`, `packages/sim-integration/src/bridge-contract.test.ts`) for Stage 1+ implementation baselines.
