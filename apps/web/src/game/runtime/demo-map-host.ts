@@ -882,9 +882,7 @@ export class DemoMapHost implements CoreHost {
   }
 }
 
-function tryDecodeImportedCity(
-  cityBytes: Uint8Array,
-): {
+function tryDecodeImportedCity(cityBytes: Uint8Array): {
   mapTiles: Uint16Array;
   cityTime: number;
   totalFunds: number;
