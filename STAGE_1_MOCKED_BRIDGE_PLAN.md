@@ -118,7 +118,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - Client simulation harness can recover from dropped events deterministically.
 
-- [ ] **1.5 Add command rejection and pending-visual support hooks**
+- [x] **1.5 Add command rejection and pending-visual support hooks**
   - Goal: Make host outcomes explicit for UI pending visuals and rollback UX.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/WORKING_GAME_PLAN.md`
@@ -189,3 +189,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 - 2026-02-08: Completed task 1.2 by adding a deterministic in-memory `MockAuthorityEngine` in `@city/core-bridge` with ordered `ack/reject/patch/snapshot/resync/error` emission, `tick`/`serverSeq` stamping, and duplicate `commandId` idempotency tests.
 - 2026-02-08: Completed task 1.3 by implementing a deterministic `LocalHost` on `MockAuthorityEngine` with strict `hello` lockstep/version refusal semantics, default local identity (`local-room`/`local-client`), and local tick scheduling hooks with CoreHost conformance tests.
 - 2026-02-08: Completed task 1.4 by adding deterministic snapshot baseline cadence, `serverSeq`-indexed patch-tail replay for `request_snapshot`, and forced gap/ahead `resync` handling in both `MockAuthorityEngine` and `LocalHost` with reconnect-focused tests.
+- 2026-02-08: Completed task 1.5 by defining canonical reject code/reason payloads (with pending-visual rollback directives), keeping expected denials on `reject` vs host/runtime faults on `error`, and adding `commandId` outcome-correlation helpers plus lifecycle/idempotency tests.

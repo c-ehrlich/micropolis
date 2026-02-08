@@ -7,10 +7,13 @@ import type {
   HostAckEnvelope,
   HostErrorEnvelope,
   HostPatchEnvelope,
+  HostRejectCode,
   HostRejectEnvelope,
+  HostRejectReason,
   HostResyncEnvelope,
   HostSnapshotEnvelope,
 } from './types.ts';
+import { HOST_REJECT_CODE, HOST_REJECT_REASON } from './types.ts';
 
 const DEFAULT_ROOM_ID = 'local-room';
 const DEFAULT_CLIENT_ID = 'local-client';
@@ -31,11 +34,18 @@ interface AppliedCommandRecord {
 
 interface RejectedCommandRecord {
   kind: 'rejected';
-  code: string;
+  code: HostRejectCode;
+  reason: HostRejectReason;
   message: string;
 }
 
 type CommandRecord = AppliedCommandRecord | RejectedCommandRecord;
+
+interface CommandRejectionDecision {
+  code: HostRejectCode;
+  reason: HostRejectReason;
+  message: string;
+}
 
 /**
  * Deterministic configuration for `MockAuthorityEngine`.
@@ -135,7 +145,15 @@ export class MockAuthorityEngine {
 
       return {
         duplicate: true,
-        events: [this.createReject(envelope.commandId, existing.code, existing.message, this.tick)],
+        events: [
+          this.createReject(
+            envelope.commandId,
+            existing.code,
+            existing.reason,
+            existing.message,
+            this.tick,
+          ),
+        ],
       };
     }
 
@@ -144,6 +162,7 @@ export class MockAuthorityEngine {
       this.commandRecords.set(envelope.commandId, {
         kind: 'rejected',
         code: rejection.code,
+        reason: rejection.reason,
         message: rejection.message,
       });
       return {
@@ -152,6 +171,7 @@ export class MockAuthorityEngine {
           this.createReject(
             envelope.commandId,
             rejection.code,
+            rejection.reason,
             rejection.message,
             this.tick,
             envelope,
@@ -271,12 +291,11 @@ export class MockAuthorityEngine {
     };
   }
 
-  private decideRejection(
-    envelope: ClientCommandEnvelope,
-  ): { code: string; message: string } | undefined {
+  private decideRejection(envelope: ClientCommandEnvelope): CommandRejectionDecision | undefined {
     if (this.rejectCommandTypes.has(envelope.command.type)) {
       return {
-        code: 'mock/rejected-command-type',
+        code: HOST_REJECT_CODE.MOCK_REJECTED_COMMAND_TYPE,
+        reason: HOST_REJECT_REASON.COMMAND_TYPE_REJECTED,
         message: `command type "${envelope.command.type}" is configured to reject`,
       };
     }
@@ -288,18 +307,28 @@ export class MockAuthorityEngine {
 
     if (toolResultCode === -1) {
       return {
-        code: 'tool/out-of-bounds',
+        code: HOST_REJECT_CODE.TOOL_OUT_OF_BOUNDS,
+        reason: HOST_REJECT_REASON.OUT_OF_BOUNDS,
         message: 'tool placement out of bounds',
       };
     }
     if (toolResultCode === -2) {
       return {
-        code: 'tool/no-funds',
+        code: HOST_REJECT_CODE.TOOL_NO_FUNDS,
+        reason: HOST_REJECT_REASON.INSUFFICIENT_FUNDS,
         message: 'tool placement rejected due to insufficient funds',
       };
     }
+    if (toolResultCode === -3) {
+      return {
+        code: HOST_REJECT_CODE.TOOL_PENDING_APPROVAL,
+        reason: HOST_REJECT_REASON.PENDING_APPROVAL,
+        message: 'tool placement requires multiplayer approval',
+      };
+    }
     return {
-      code: 'tool/reject',
+      code: HOST_REJECT_CODE.TOOL_RULE_REJECT,
+      reason: HOST_REJECT_REASON.RULES,
       message: 'tool placement rejected by authority',
     };
   }
@@ -320,7 +349,8 @@ export class MockAuthorityEngine {
 
   private createReject(
     commandId: string,
-    code: string,
+    code: HostRejectCode,
+    reason: HostRejectReason,
     message: string,
     tick: number,
     identity?: BridgeEnvelopeIdentity,
@@ -333,6 +363,13 @@ export class MockAuthorityEngine {
       commandId,
       code,
       message,
+      reject: {
+        reason,
+        pendingVisual: {
+          action: 'rollback',
+          commandId,
+        },
+      },
     };
   }
 

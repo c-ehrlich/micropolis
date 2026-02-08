@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MockAuthorityEngine } from './mock-authority-engine.ts';
+import { HOST_REJECT_CODE, HOST_REJECT_REASON } from './types.ts';
 import type {
   ClientCommandEnvelope,
   ClientRequestSnapshotEnvelope,
@@ -80,6 +81,24 @@ describe('MockAuthorityEngine', () => {
     ]);
     expect(firstRun.map((event) => event.serverSeq)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(firstRun.map((event) => event.tick)).toEqual([1, 1, 1, 1, 1, 1]);
+
+    const rejectEvent = firstRun[2];
+    if (rejectEvent === undefined || rejectEvent.kind !== 'reject') {
+      throw new Error('expected reject event at index 2');
+    }
+
+    expect(rejectEvent).toMatchObject({
+      kind: 'reject',
+      commandId: 'cmd-2',
+      code: HOST_REJECT_CODE.TOOL_NO_FUNDS,
+      reject: {
+        reason: HOST_REJECT_REASON.INSUFFICIENT_FUNDS,
+        pendingVisual: {
+          action: 'rollback',
+          commandId: 'cmd-2',
+        },
+      },
+    });
   });
 
   it('keeps duplicate commandId handling idempotent (ack/reject replay without reapply)', () => {

@@ -98,16 +98,82 @@ export interface HostAckEnvelope extends BridgeEnvelopeIdentity, BridgeEnvelopeS
 }
 
 /**
+ * Canonical host reject codes for expected command denials.
+ * Mirrors tool return-code branches in `ref/micropolis/src/sim/w_tool.c`
+ * (`-1`, `-2`, `-3`) and projects them into stable bridge identifiers.
+ * Parity note: string codes are intentionally different from C integer returns
+ * so clients can branch deterministically without transport-specific parsing.
+ */
+export const HOST_REJECT_CODE = {
+  TOOL_OUT_OF_BOUNDS: 'tool/out-of-bounds',
+  TOOL_NO_FUNDS: 'tool/no-funds',
+  TOOL_RULE_REJECT: 'tool/reject',
+  TOOL_PENDING_APPROVAL: 'tool/pending-approval',
+  MOCK_REJECTED_COMMAND_TYPE: 'mock/rejected-command-type',
+} as const;
+
+/**
+ * Canonical host reject reason tags for rollback UX.
+ * Mirrors expected tool-denial classes in `ref/micropolis/src/sim/w_tool.c`
+ * (bounds/funds/pending approval) while exposing typed UI-facing categories.
+ * Parity note: these labels are bridge-level metadata, not a 1:1 C enum.
+ */
+export const HOST_REJECT_REASON = {
+  OUT_OF_BOUNDS: 'out-of-bounds',
+  INSUFFICIENT_FUNDS: 'insufficient-funds',
+  RULES: 'rules',
+  PENDING_APPROVAL: 'pending-approval',
+  COMMAND_TYPE_REJECTED: 'command-type-rejected',
+} as const;
+
+/**
+ * Union of canonical host reject code values.
+ * Mirrors `HOST_REJECT_CODE` mapping and keeps envelope code branching strict.
+ */
+export type HostRejectCode = (typeof HOST_REJECT_CODE)[keyof typeof HOST_REJECT_CODE];
+
+/**
+ * Union of canonical host reject reason values.
+ * Mirrors `HOST_REJECT_REASON` mapping for typed reject semantics.
+ */
+export type HostRejectReason = (typeof HOST_REJECT_REASON)[keyof typeof HOST_REJECT_REASON];
+
+/**
+ * Pending-visual rollback directive carried with expected command denials.
+ * Mirrors pending-tool UX intent in `ToolDown`/`DoPendTool` from
+ * `ref/micropolis/src/sim/w_tool.c`.
+ * Parity note: this explicit payload is intentionally different from C's
+ * direct UI callback side effect so host-driven bridge UIs can stay transport
+ * agnostic.
+ */
+export interface HostRejectPendingVisualDirective {
+  action: 'rollback';
+  commandId: string;
+}
+
+/**
+ * Structured reject payload for UI rollback and messaging semantics.
+ * Mirrors expected command-denial handling from `ref/micropolis/src/sim/w_tool.c`
+ * plus bridge-level pending visual coordination.
+ */
+export interface HostRejectPayload {
+  reason: HostRejectReason;
+  pendingVisual: HostRejectPendingVisualDirective;
+}
+
+/**
  * Expected command denial envelope.
  * Mirrors failure branches from command validation in `w_sim.c` command
  * handlers (argument/range checks returning `TCL_ERROR`).
- * Parity note: reject reason codes are a typed bridge-layer projection.
+ * Parity note: reject reason codes and rollback directives are a typed
+ * bridge-layer projection.
  */
 export interface HostRejectEnvelope extends BridgeEnvelopeIdentity, BridgeEnvelopeSequence {
   kind: 'reject';
   commandId: string;
-  code: string;
+  code: HostRejectCode;
   message: string;
+  reject: HostRejectPayload;
 }
 
 /**
