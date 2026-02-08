@@ -22,10 +22,10 @@ Use this exact loop:
 
 ## Global Constraints Checklist
 
-- [ ] Add JSDoc on every new exported function/class, citing the Micropolis source and whether it is 1:1 or intentionally different.
-- [ ] Default runtime behavior is parity-first (`strict`) and any intentional hardening is behind an explicit opt-in mode.
-- [ ] Keep Node APIs behind adapters so browser/runtime-specific code is isolated.
-- [ ] Place tests next to implementation files (`foo.ts` -> `foo.test.ts`).
+- [x] Add JSDoc on every new exported function/class, citing the Micropolis source and whether it is 1:1 or intentionally different.
+- [x] Default runtime behavior is parity-first (`strict`) and any intentional hardening is behind an explicit opt-in mode.
+- [x] Keep Node APIs behind adapters so browser/runtime-specific code is isolated.
+- [x] Place tests next to implementation files (`foo.ts` -> `foo.test.ts`).
 
 ## Phase 1: Package Foundation
 
@@ -33,7 +33,7 @@ Use this exact loop:
 - [x] Create `src/runtime.ts` with `createIntegrationRuntime(options)` skeleton and no-op feature wiring.
 - [x] Update `src/index.ts` to export the new public API.
 - [x] Add `src/runtime.test.ts` to verify runtime creation and feature flag defaults.
-- [ ] Checkpoint: `pnpm --filter @city/sim-integration typecheck` and `pnpm --filter @city/sim-integration test` pass.
+- [x] Checkpoint: package-level typecheck and tests pass (validated via `pnpm exec tsc --noEmit -p packages/sim-integration/tsconfig.json` and `pnpm exec vitest run $(rg --files packages/sim-integration/src -g '*.test.ts')` since this package has no local pnpm scripts).
 
 ## Phase 2: Sugar Outbound Command Bridge
 
@@ -49,7 +49,7 @@ Use this exact loop:
 - [x] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
 - [x] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
 - [x] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
-- [ ] Checkpoint: all Sugar outbound tests pass.
+- [x] Checkpoint: all Sugar outbound tests pass.
 
 ## Phase 3: Sugar Stdout Protocol (`PlaySound`)
 
@@ -61,7 +61,7 @@ Use this exact loop:
 - [x] repeated spaces creating empty tokens
 - [x] missing argument behavior in strict and safe modes
 - [x] Ensure sound hook receives lowercased sound name for wav mapping parity.
-- [ ] Checkpoint: stdout protocol tests pass in both modes.
+- [x] Checkpoint: stdout protocol tests pass in both modes.
 
 ## Phase 4: TTY Command Buffer + Channel
 
@@ -75,7 +75,7 @@ Use this exact loop:
 - [x] emit prompt exactly `sim:\n` after each command in tty mode
 - [x] emit initial prompt exactly `sim:\n` when tty channel starts
 - [x] Add `src/tty/stdin-channel.test.ts` for all branches above.
-- [ ] Checkpoint: tty tests pass with deterministic prompt transcript snapshots.
+- [x] Checkpoint: tty tests pass with deterministic prompt transcript snapshots.
 
 ## Phase 5: NET UDP Hooks
 
@@ -86,14 +86,14 @@ Use this exact loop:
 - [x] Format each byte as `%3d ` equivalent (fixed width + trailing space).
 - [x] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
 - [x] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
-- [ ] Checkpoint: UDP tests pass for strict and safe modes.
+- [x] Checkpoint: UDP tests pass for strict and safe modes.
 
 ## Phase 6: Node Adapters
 
 - [x] Create `src/adapters/node-process.ts` for stdin/stdout wiring abstractions.
 - [x] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
 - [x] Add adapter tests with fakes/mocks only (no real network required).
-- [ ] Checkpoint: adapter tests pass and no direct Node dependency leaks outside adapters.
+- [x] Checkpoint: adapter tests pass and no direct Node dependency leaks outside adapters.
 
 ## Phase 7: Runtime Orchestration
 
@@ -109,26 +109,26 @@ Use this exact loop:
 - [x] tty-only
 - [x] net-only
 - [x] sugar+tty+net
-- [ ] Checkpoint: integration tests pass with deterministic event logs.
+- [x] Checkpoint: integration tests pass with deterministic event logs.
 
 ## Phase 8: Cross-Package Contract
 
 - [x] Add `INTEGRATION-CONTRACT.md` describing ownership boundaries with `@city/sim-core`, `@city/sim-ui`, and `@city/sim-io`.
 - [x] Document how `makeSound`/message/UI hook pathways are connected without duplicating sim-core responsibilities.
 - [x] Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks.
-- [ ] Checkpoint: docs and contract tests pass.
+- [x] Checkpoint: docs and contract tests pass.
 
 ## Final Acceptance Checklist
 
-- [ ] `@city/sim-integration` is no longer a stub and exports a working runtime.
-- [ ] Sugar command transport is parity-tested.
-- [ ] TTY stdin behavior matches expected prompt/eval flow.
-- [ ] UDP hook behavior and callback formatting are parity-tested.
-- [ ] strict vs safe behavior differences are documented and tested.
-- [ ] Run full required checks:
-- [ ] `pnpm typecheck`
-- [ ] `pnpm lint`
-- [ ] `pnpm format`
+- [x] `@city/sim-integration` is no longer a stub and exports a working runtime.
+- [x] Sugar command transport is parity-tested.
+- [x] TTY stdin behavior matches expected prompt/eval flow.
+- [x] UDP hook behavior and callback formatting are parity-tested.
+- [x] strict vs safe behavior differences are documented and tested.
+- [x] Run full required checks:
+- [x] `pnpm typecheck`
+- [x] `pnpm lint`
+- [x] `pnpm format`
 
 ## Execution Log
 
@@ -193,3 +193,5 @@ Use this exact loop:
 - [x] 2026-02-07: Completed Phase 8 task `Add INTEGRATION-CONTRACT.md describing ownership boundaries with @city/sim-core, @city/sim-ui, and @city/sim-io` by adding `packages/sim-integration/INTEGRATION-CONTRACT.md` with explicit ownership matrix, layering rules, dependency direction, and Micropolis parity source mapping (`micropolisactivity.py`, `w_tk.c`, `w_sim.c`, `w_net.c`).
 - [x] 2026-02-07: Completed Phase 8 task `Document how makeSound/message/UI hook pathways are connected without duplicating sim-core responsibilities` by extending `packages/sim-integration/INTEGRATION-CONTRACT.md` with source-mapped pathway docs for Micropolis `MakeSound` -> `PlaySound`, `SendMes`/`doMessage`, and `DoUpdateHeads`/`UISet*` flows, and explicit non-duplication ownership rules across `@city/sim-core`, `@city/sim-integration`, and `@city/sim-ui`.
 - [x] 2026-02-07: Completed Phase 8 task `Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks` by adding `src/adapters/sim-core-hooks.ts` (`createSimCoreSoundHookAdapter`) and `src/adapters/sim-core-hooks.test.ts` with compile-time contract assertions against `@city/sim-core` `RealtimeCallbacks` plus runtime wiring verification into `createIntegrationRuntime` sound-token handling.
+- [x] 2026-02-08: Verified and checked remaining global constraints/checkpoints by auditing source docs and boundaries (`rg -n "from 'node:" packages/sim-integration/src` confirms Node imports are adapter-scoped), then running package-specific validation via `pnpm exec tsc --noEmit -p packages/sim-integration/tsconfig.json` and `pnpm exec vitest run $(rg --files packages/sim-integration/src -g '*.test.ts')` (74 tests passing across Sugar/TTY/NET/runtime/adapter/contract suites).
+- [x] 2026-02-08: Ran workspace completion gates at repo root (`pnpm typecheck`, `pnpm lint`, and `pnpm format`) and confirmed all passed in this worktree.
