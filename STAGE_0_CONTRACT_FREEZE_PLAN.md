@@ -62,7 +62,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - Package is discovered by workspace and lint/typecheck succeeds.
     - No runtime protocol details yet, only scaffold.
 
-- [ ] **0.2 Define v1 envelope and field contracts**
+- [x] **0.2 Define v1 envelope and field contracts**
   - Goal: Introduce canonical envelope types for `hello`, `command`, `ack`, `reject`, `patch`, `snapshot`, `resync`, `presence`, `error`, `ping`, `request_snapshot`, and freeze concrete payload schemas.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -196,3 +196,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 ## Execution Log
 
 - [2026-02-08] Completed task 0.1 by scaffolding `packages/core-bridge` with `package.json`, `tsconfig.json`, baseline `lint`/`typecheck` scripts, and a placeholder `src/index.ts` bridge surface export.
+- [2026-02-08] Completed task 0.2 by adding frozen v1 envelope contracts in `packages/core-bridge/src/types.ts` (including concrete `command`/`patch`/`snapshot` payload schemas and required identity/order/version fields), exporting them via `packages/core-bridge/src/index.ts`, and adding compile-time contract coverage in `packages/core-bridge/src/types.test.ts`.

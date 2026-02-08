@@ -20,3 +20,5 @@ export function getCoreBridgeScaffold(): CoreBridgeScaffold {
     stage: 'stage-0-contract-freeze',
   };
 }
+
+export * from './types.ts';
