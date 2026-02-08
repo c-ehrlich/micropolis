@@ -5,8 +5,17 @@ import type {
 } from '@city/core-bridge';
 import { describe, expect, it } from 'vitest';
 
-import { type AuthoritativeCommandDecision, createAuthoritativeRoomRuntime } from './runtime.ts';
-import type { IntegrationBroadcaster } from './types.ts';
+import {
+  type AuthoritativeCommandDecision,
+  createAuthoritativeRoomRuntime,
+  DEFAULT_SNAPSHOT_CADENCE_TICKS,
+} from './runtime.ts';
+import type {
+  IntegrationBroadcaster,
+  IntegrationPatchTailEvent,
+  IntegrationPersistedSnapshot,
+  IntegrationSnapshotPatchTailPersistence,
+} from './types.ts';
 
 interface TestCommandPayload {
   type: string;
@@ -372,6 +381,198 @@ describe('authoritative room runtime', () => {
     expect(captured.clientEvents).toEqual([]);
     expect(captured.roomEvents).toEqual([]);
   });
+
+  it('bootstraps replay from persisted snapshot plus patch tail filtered by serverSeq', async () => {
+    const captured = createCapturedBroadcaster<TestPatchPayload, TestSnapshotPayload>();
+    const persistence = createInMemorySnapshotPatchTailPersistence();
+    const persistedSnapshot: IntegrationPersistedSnapshot<TestSnapshotPayload> = {
+      roomId: 'room-bootstrap',
+      tick: 64,
+      serverSeq: 10,
+      payload: { snapshotId: 'snapshot-persisted' },
+    };
+    const persistedTail: ReadonlyArray<
+      IntegrationPatchTailEvent<TestPatchPayload, TestSnapshotPayload>
+    > = [
+      {
+        kind: 'patch',
+        roomId: 'room-bootstrap',
+        tick: 65,
+        serverSeq: 12,
+        payload: { patchId: 'patch-after-12' },
+      },
+      {
+        kind: 'snapshot',
+        roomId: 'room-bootstrap',
+        tick: 66,
+        serverSeq: 15,
+        payload: { snapshotId: 'snapshot-after-15' },
+      },
+    ];
+    persistence.seed('room-bootstrap', persistedSnapshot, persistedTail);
+
+    const runtime = createAuthoritativeRoomRuntime<
+      TestCommandPayload,
+      TestPatchPayload,
+      TestSnapshotPayload
+    >({
+      broadcaster: captured.broadcaster,
+      persistence: persistence.adapter,
+      applyCommand() {
+        return { kind: 'ack' };
+      },
+      createSnapshotPayload() {
+        return { snapshotId: 'snapshot-factory' };
+      },
+    });
+
+    const bootstrap = await runtime.bootstrapReplay('room-bootstrap', 11);
+
+    expect(bootstrap.snapshot).toEqual<BridgeServerSnapshotEnvelope<TestSnapshotPayload>>({
+      kind: 'snapshot',
+      roomId: 'room-bootstrap',
+      tick: 64,
+      serverSeq: 10,
+      payload: { snapshotId: 'snapshot-persisted' },
+    });
+    expect(bootstrap.replayTail).toEqual(persistedTail);
+    expect(persistence.calls.loadSnapshot).toEqual([{ roomId: 'room-bootstrap' }]);
+    expect(persistence.calls.loadPatchTail).toEqual([
+      { roomId: 'room-bootstrap', afterServerSeq: 10 },
+    ]);
+  });
+
+  it('truncates patch tail at snapshot cadence and preserves serverSeq continuity for replay', async () => {
+    const captured = createCapturedBroadcaster<TestPatchPayload, TestSnapshotPayload>();
+    const persistence = createInMemorySnapshotPatchTailPersistence();
+    let appliedPatchNumber = 0;
+
+    const runtime = createAuthoritativeRoomRuntime<
+      TestCommandPayload,
+      TestPatchPayload,
+      TestSnapshotPayload
+    >({
+      broadcaster: captured.broadcaster,
+      persistence: persistence.adapter,
+      snapshotCadenceTicks: 2,
+      applyCommand() {
+        appliedPatchNumber += 1;
+        return {
+          kind: 'ack',
+          patches: [{ patchId: `patch-${appliedPatchNumber}` }],
+        };
+      },
+      createSnapshotPayload(roomId, tick) {
+        return { snapshotId: `${roomId}@${tick}` };
+      },
+    });
+
+    await runtime.connectClient('room-tail', 'client-tail');
+    await runtime.receiveCommand(
+      createCommand({
+        roomId: 'room-tail',
+        clientId: 'client-tail',
+        commandId: 'cmd-1',
+        sentAtMs: 10,
+        type: 'first',
+      }),
+    );
+    await runtime.tick(100);
+    await runtime.tick(101);
+    await runtime.receiveCommand(
+      createCommand({
+        roomId: 'room-tail',
+        clientId: 'client-tail',
+        commandId: 'cmd-2',
+        sentAtMs: 20,
+        type: 'second',
+      }),
+    );
+    await runtime.tick(102);
+
+    const restarted = createAuthoritativeRoomRuntime<
+      TestCommandPayload,
+      TestPatchPayload,
+      TestSnapshotPayload
+    >({
+      broadcaster: captured.broadcaster,
+      persistence: persistence.adapter,
+      snapshotCadenceTicks: 2,
+      applyCommand() {
+        return { kind: 'ack' };
+      },
+      createSnapshotPayload(roomId, tick) {
+        return { snapshotId: `${roomId}@${tick}` };
+      },
+    });
+    const bootstrap = await restarted.bootstrapReplay('room-tail', 0);
+
+    expect(bootstrap.snapshot).toEqual<BridgeServerSnapshotEnvelope<TestSnapshotPayload>>({
+      kind: 'snapshot',
+      roomId: 'room-tail',
+      tick: 2,
+      // Sequence value `2` is the first command's room patch (`serverSeq=2`)
+      // after its client ack (`serverSeq=1`) in the deterministic room stream.
+      serverSeq: 2,
+      payload: { snapshotId: 'room-tail@2' },
+    });
+    expect(bootstrap.replayTail).toEqual([
+      {
+        kind: 'patch',
+        roomId: 'room-tail',
+        tick: 3,
+        // Sequence value `4` preserves monotonic room stream continuity
+        // after the second command ack consumes `serverSeq=3`.
+        serverSeq: 4,
+        payload: { patchId: 'patch-2' },
+      },
+    ]);
+    expect(persistence.calls.truncatePatchTail).toEqual([
+      { roomId: 'room-tail', throughServerSeq: 2 },
+    ]);
+    expect(persistence.calls.loadPatchTail).toContainEqual({
+      roomId: 'room-tail',
+      afterServerSeq: 2,
+    });
+  });
+
+  it('uses the stage default snapshot cadence of 64 ticks when not configured', async () => {
+    const captured = createCapturedBroadcaster<TestPatchPayload, TestSnapshotPayload>();
+    const persistence = createInMemorySnapshotPatchTailPersistence();
+    const runtime = createAuthoritativeRoomRuntime<
+      TestCommandPayload,
+      TestPatchPayload,
+      TestSnapshotPayload
+    >({
+      broadcaster: captured.broadcaster,
+      persistence: persistence.adapter,
+      applyCommand() {
+        return { kind: 'ack' };
+      },
+      createSnapshotPayload(roomId, tick) {
+        return { snapshotId: `${roomId}@${tick}` };
+      },
+    });
+
+    await runtime.connectClient('room-cadence', 'client-cadence');
+    for (let tick = 1; tick < DEFAULT_SNAPSHOT_CADENCE_TICKS; tick += 1) {
+      await runtime.tick(100 + tick);
+    }
+    expect(persistence.calls.saveSnapshot).toEqual([]);
+
+    await runtime.tick(100 + DEFAULT_SNAPSHOT_CADENCE_TICKS);
+    expect(persistence.calls.saveSnapshot).toEqual([
+      {
+        roomId: 'room-cadence',
+        snapshot: {
+          roomId: 'room-cadence',
+          tick: DEFAULT_SNAPSHOT_CADENCE_TICKS,
+          serverSeq: 0,
+          payload: { snapshotId: `room-cadence@${DEFAULT_SNAPSHOT_CADENCE_TICKS}` },
+        },
+      },
+    ]);
+  });
 });
 
 function createCapturedBroadcaster<TPatchPayload, TSnapshotPayload>(): {
@@ -443,4 +644,85 @@ async function runDeterministicOrderingScenario(
       (event): event is Extract<BridgeServerEnvelope, { kind: 'ack' }> => event.kind === 'ack',
     )
     .map((event) => event.payload.commandId);
+}
+
+function createInMemorySnapshotPatchTailPersistence(): {
+  adapter: IntegrationSnapshotPatchTailPersistence<TestPatchPayload, TestSnapshotPayload>;
+  seed: (
+    roomId: string,
+    snapshot: IntegrationPersistedSnapshot<TestSnapshotPayload> | null,
+    tail: ReadonlyArray<IntegrationPatchTailEvent<TestPatchPayload, TestSnapshotPayload>>,
+  ) => void;
+  calls: {
+    loadSnapshot: Array<{ roomId: string }>;
+    loadPatchTail: Array<{ roomId: string; afterServerSeq: number }>;
+    saveSnapshot: Array<{
+      roomId: string;
+      snapshot: IntegrationPersistedSnapshot<TestSnapshotPayload>;
+    }>;
+    appendPatchTail: Array<{
+      roomId: string;
+      events: ReadonlyArray<IntegrationPatchTailEvent<TestPatchPayload, TestSnapshotPayload>>;
+    }>;
+    truncatePatchTail: Array<{ roomId: string; throughServerSeq: number }>;
+  };
+} {
+  const snapshots = new Map<string, IntegrationPersistedSnapshot<TestSnapshotPayload>>();
+  const tails = new Map<
+    string,
+    IntegrationPatchTailEvent<TestPatchPayload, TestSnapshotPayload>[]
+  >();
+  const calls = {
+    loadSnapshot: [] as Array<{ roomId: string }>,
+    loadPatchTail: [] as Array<{ roomId: string; afterServerSeq: number }>,
+    saveSnapshot: [] as Array<{
+      roomId: string;
+      snapshot: IntegrationPersistedSnapshot<TestSnapshotPayload>;
+    }>,
+    appendPatchTail: [] as Array<{
+      roomId: string;
+      events: ReadonlyArray<IntegrationPatchTailEvent<TestPatchPayload, TestSnapshotPayload>>;
+    }>,
+    truncatePatchTail: [] as Array<{ roomId: string; throughServerSeq: number }>,
+  };
+
+  return {
+    adapter: {
+      async loadSnapshot(roomId) {
+        calls.loadSnapshot.push({ roomId });
+        return snapshots.get(roomId) ?? null;
+      },
+      async loadPatchTail(roomId, afterServerSeq) {
+        calls.loadPatchTail.push({ roomId, afterServerSeq });
+        return (tails.get(roomId) ?? []).filter((event) => event.serverSeq > afterServerSeq);
+      },
+      async saveSnapshot(roomId, snapshot) {
+        calls.saveSnapshot.push({ roomId, snapshot });
+        snapshots.set(roomId, snapshot);
+      },
+      async appendPatchTail(roomId, events) {
+        calls.appendPatchTail.push({ roomId, events });
+        const existing = tails.get(roomId) ?? [];
+        existing.push(...events);
+        tails.set(roomId, existing);
+      },
+      async truncatePatchTail(roomId, throughServerSeq) {
+        calls.truncatePatchTail.push({ roomId, throughServerSeq });
+        const existing = tails.get(roomId) ?? [];
+        tails.set(
+          roomId,
+          existing.filter((event) => event.serverSeq > throughServerSeq),
+        );
+      },
+    },
+    seed(roomId, snapshot, tail) {
+      if (snapshot === null) {
+        snapshots.delete(roomId);
+      } else {
+        snapshots.set(roomId, snapshot);
+      }
+      tails.set(roomId, [...tail]);
+    },
+    calls,
+  };
 }

@@ -4,8 +4,12 @@ import type {
   IntegrationClientId,
   IntegrationCommandId,
   IntegrationMultiplayerRuntime,
+  IntegrationPatchTailEvent,
+  IntegrationPersistedSnapshot,
+  IntegrationReplayBootstrap,
   IntegrationRoomId,
   IntegrationServerSnapshotEnvelope,
+  IntegrationSnapshotPatchTailPersistence,
 } from './types.ts';
 
 interface QueuedCommand<TCommandPayload> {
@@ -34,14 +38,26 @@ type ProcessedCommandOutcome =
   | ProcessedCommandRejectOutcome
   | ProcessedCommandErrorOutcome;
 
-interface RoomRuntimeContext<TCommandPayload> {
+interface RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload> {
   roomId: IntegrationRoomId;
   tick: number;
   serverSeq: number;
   connectedClients: Set<IntegrationClientId>;
   pendingCommands: QueuedCommand<TCommandPayload>[];
   processedCommands: Map<IntegrationCommandId, ProcessedCommandOutcome>;
+  patchTail: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>[];
+  persistedSnapshot: IntegrationPersistedSnapshot<TSnapshotPayload> | null;
+  lastSnapshotTick: number;
+  bootstrapPromise: Promise<void> | null;
 }
+
+/**
+ * Default snapshot persistence cadence for authoritative room runtime ticks.
+ * Mirrors periodic baseline-save intent around Micropolis save/load lifecycle
+ * in `ref/micropolis/src/sim/s_fileio.c`, with an intentionally explicit
+ * bridge-runtime default cadence instead of ad-hoc UI/file triggers.
+ */
+export const DEFAULT_SNAPSHOT_CADENCE_TICKS = 64;
 
 /**
  * Accepted authoritative command result.
@@ -132,6 +148,8 @@ export interface AuthoritativeRoomRuntimeOptions<
   applyCommand: AuthoritativeCommandHandler<TCommandPayload, TPatchPayload, TSnapshotPayload>;
   createSnapshotPayload?: AuthoritativeSnapshotFactory<TSnapshotPayload>;
   initialTick?: number;
+  persistence?: IntegrationSnapshotPatchTailPersistence<TPatchPayload, TSnapshotPayload>;
+  snapshotCadenceTicks?: number;
 }
 
 /**
@@ -175,8 +193,12 @@ class AuthoritativeRoomRuntimeImpl<
   TSnapshotPayload,
   TPresencePayload
 > {
-  private readonly rooms = new Map<IntegrationRoomId, RoomRuntimeContext<TCommandPayload>>();
+  private readonly rooms = new Map<
+    IntegrationRoomId,
+    RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>
+  >();
   private nextReceiveOrder = 0;
+  private readonly snapshotCadenceTicks: number;
 
   constructor(
     private readonly options: AuthoritativeRoomRuntimeOptions<
@@ -185,10 +207,12 @@ class AuthoritativeRoomRuntimeImpl<
       TSnapshotPayload,
       TPresencePayload
     >,
-  ) {}
+  ) {
+    this.snapshotCadenceTicks = normalizeSnapshotCadenceTicks(options.snapshotCadenceTicks);
+  }
 
   async connectClient(roomId: IntegrationRoomId, clientId: IntegrationClientId): Promise<void> {
-    const room = this.getOrCreateRoom(roomId);
+    const room = await this.getOrCreateRoom(roomId);
     room.connectedClients.add(clientId);
   }
 
@@ -197,11 +221,12 @@ class AuthoritativeRoomRuntimeImpl<
     if (room === undefined) {
       return;
     }
+    await this.ensureRoomBootstrapped(room);
     room.connectedClients.delete(clientId);
   }
 
   async receiveCommand(command: IntegrationClientCommandEnvelope<TCommandPayload>): Promise<void> {
-    const room = this.getOrCreateRoom(command.roomId);
+    const room = await this.getOrCreateRoom(command.roomId);
     room.pendingCommands.push({
       command,
       receivedOrder: this.nextReceiveOrder,
@@ -212,25 +237,29 @@ class AuthoritativeRoomRuntimeImpl<
   async tick(nowMs: number): Promise<void> {
     const roomIds = [...this.rooms.keys()].sort(compareText);
     for (const roomId of roomIds) {
-      const room = this.getOrCreateRoom(roomId);
-      room.tick += 1;
-
-      if (room.pendingCommands.length === 0) {
+      const room = this.rooms.get(roomId);
+      if (room === undefined) {
         continue;
       }
+      await this.ensureRoomBootstrapped(room);
+      room.tick += 1;
 
-      const queuedCommands = [...room.pendingCommands].sort(compareQueuedCommands);
-      room.pendingCommands.length = 0;
-      for (const queued of queuedCommands) {
-        await this.processQueuedCommand(room, queued.command, nowMs);
+      if (room.pendingCommands.length > 0) {
+        const queuedCommands = [...room.pendingCommands].sort(compareQueuedCommands);
+        room.pendingCommands.length = 0;
+        for (const queued of queuedCommands) {
+          await this.processQueuedCommand(room, queued.command, nowMs);
+        }
       }
+
+      await this.persistSnapshotOnCadence(room);
     }
   }
 
   async getSnapshot(
     roomId: IntegrationRoomId,
   ): Promise<IntegrationServerSnapshotEnvelope<TSnapshotPayload>> {
-    const room = this.getOrCreateRoom(roomId);
+    const room = await this.getOrCreateRoom(roomId);
     const payload = await this.createSnapshotPayload(room.roomId, room.tick);
     return {
       kind: 'snapshot',
@@ -241,26 +270,91 @@ class AuthoritativeRoomRuntimeImpl<
     };
   }
 
-  private getOrCreateRoom(roomId: IntegrationRoomId): RoomRuntimeContext<TCommandPayload> {
+  async bootstrapReplay(
+    roomId: IntegrationRoomId,
+    afterServerSeq: number,
+  ): Promise<IntegrationReplayBootstrap<TPatchPayload, TSnapshotPayload>> {
+    const room = await this.getOrCreateRoom(roomId);
+    const snapshot = await this.getOrCreateBootstrapSnapshot(room);
+    const replayStartSeq = Math.max(afterServerSeq, snapshot.serverSeq);
+    const replayTail = room.patchTail.filter((event) => event.serverSeq > replayStartSeq);
+    return {
+      snapshot: toSnapshotEnvelope(snapshot),
+      replayTail,
+    };
+  }
+
+  private async getOrCreateRoom(
+    roomId: IntegrationRoomId,
+  ): Promise<RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>> {
     const room = this.rooms.get(roomId);
     if (room !== undefined) {
+      await this.ensureRoomBootstrapped(room);
       return room;
     }
 
-    const created: RoomRuntimeContext<TCommandPayload> = {
+    const initialTick = this.options.initialTick ?? 0;
+    const created: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload> = {
       roomId,
-      tick: this.options.initialTick ?? 0,
+      tick: initialTick,
       serverSeq: 0,
       connectedClients: new Set<IntegrationClientId>(),
       pendingCommands: [],
       processedCommands: new Map<IntegrationCommandId, ProcessedCommandOutcome>(),
+      patchTail: [],
+      persistedSnapshot: null,
+      lastSnapshotTick: initialTick,
+      bootstrapPromise: null,
     };
+    created.bootstrapPromise = this.bootstrapRoomFromPersistence(created);
     this.rooms.set(roomId, created);
+    await this.ensureRoomBootstrapped(created);
     return created;
   }
 
+  private async ensureRoomBootstrapped(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+  ): Promise<void> {
+    if (room.bootstrapPromise === null) {
+      return;
+    }
+    await room.bootstrapPromise;
+    room.bootstrapPromise = null;
+  }
+
+  private async bootstrapRoomFromPersistence(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+  ): Promise<void> {
+    const persistence = this.options.persistence;
+    if (persistence === undefined) {
+      return;
+    }
+
+    const persistedSnapshot = await persistence.loadSnapshot(room.roomId);
+    if (persistedSnapshot !== null) {
+      if (persistedSnapshot.roomId !== room.roomId) {
+        throw new Error(
+          `snapshot room mismatch for ${room.roomId}: received ${persistedSnapshot.roomId}`,
+        );
+      }
+      room.persistedSnapshot = persistedSnapshot;
+      room.lastSnapshotTick = persistedSnapshot.tick;
+      room.tick = Math.max(room.tick, persistedSnapshot.tick);
+      room.serverSeq = Math.max(room.serverSeq, persistedSnapshot.serverSeq);
+    }
+
+    const persistedTail = await persistence.loadPatchTail(room.roomId, room.serverSeq);
+    assertPatchTailContinuity(room.roomId, room.serverSeq, persistedTail);
+    room.patchTail.push(...persistedTail);
+    const lastPersistedTailEvent = persistedTail.at(-1);
+    if (lastPersistedTailEvent !== undefined) {
+      room.tick = Math.max(room.tick, lastPersistedTailEvent.tick);
+      room.serverSeq = Math.max(room.serverSeq, lastPersistedTailEvent.serverSeq);
+    }
+  }
+
   private async processQueuedCommand(
-    room: RoomRuntimeContext<TCommandPayload>,
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
     command: IntegrationClientCommandEnvelope<TCommandPayload>,
     nowMs: number,
   ): Promise<void> {
@@ -301,23 +395,11 @@ class AuthoritativeRoomRuntimeImpl<
       this.emitAck(room, command);
 
       for (const patchPayload of decision.patches ?? []) {
-        this.options.broadcaster.sendToRoom(room.roomId, {
-          kind: 'patch',
-          roomId: room.roomId,
-          tick: room.tick,
-          serverSeq: this.nextServerSeq(room),
-          payload: patchPayload,
-        });
+        await this.emitPatch(room, patchPayload);
       }
 
       if (decision.snapshot !== undefined) {
-        this.options.broadcaster.sendToRoom(room.roomId, {
-          kind: 'snapshot',
-          roomId: room.roomId,
-          tick: room.tick,
-          serverSeq: this.nextServerSeq(room),
-          payload: decision.snapshot,
-        });
+        await this.emitSnapshot(room, decision.snapshot);
       }
     } catch (error: unknown) {
       const errorOutcome: ProcessedCommandErrorOutcome = {
@@ -331,7 +413,7 @@ class AuthoritativeRoomRuntimeImpl<
   }
 
   private emitPriorOutcome(
-    room: RoomRuntimeContext<TCommandPayload>,
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
     command: IntegrationClientCommandEnvelope<TCommandPayload>,
     outcome: ProcessedCommandOutcome,
   ): void {
@@ -349,7 +431,7 @@ class AuthoritativeRoomRuntimeImpl<
   }
 
   private emitAck(
-    room: RoomRuntimeContext<TCommandPayload>,
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
     command: IntegrationClientCommandEnvelope<TCommandPayload>,
   ): void {
     this.options.broadcaster.sendToClient(command.clientId, {
@@ -364,7 +446,7 @@ class AuthoritativeRoomRuntimeImpl<
   }
 
   private emitReject(
-    room: RoomRuntimeContext<TCommandPayload>,
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
     command: IntegrationClientCommandEnvelope<TCommandPayload>,
     reason: string,
     code?: string,
@@ -383,7 +465,7 @@ class AuthoritativeRoomRuntimeImpl<
   }
 
   private emitError(
-    room: RoomRuntimeContext<TCommandPayload>,
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
     command: IntegrationClientCommandEnvelope<TCommandPayload>,
     message: string,
     code?: string,
@@ -401,6 +483,96 @@ class AuthoritativeRoomRuntimeImpl<
     });
   }
 
+  private async emitPatch(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+    payload: TPatchPayload,
+  ): Promise<void> {
+    const event: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload> = {
+      kind: 'patch',
+      roomId: room.roomId,
+      tick: room.tick,
+      serverSeq: this.nextServerSeq(room),
+      payload,
+    };
+    this.options.broadcaster.sendToRoom(room.roomId, event);
+    await this.recordPatchTailEvent(room, event);
+  }
+
+  private async emitSnapshot(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+    payload: TSnapshotPayload,
+  ): Promise<void> {
+    const event: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload> = {
+      kind: 'snapshot',
+      roomId: room.roomId,
+      tick: room.tick,
+      serverSeq: this.nextServerSeq(room),
+      payload,
+    };
+    this.options.broadcaster.sendToRoom(room.roomId, event);
+    await this.recordPatchTailEvent(room, event);
+  }
+
+  private async recordPatchTailEvent(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+    event: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>,
+  ): Promise<void> {
+    const lastEvent = room.patchTail.at(-1);
+    if (lastEvent !== undefined && event.serverSeq <= lastEvent.serverSeq) {
+      throw new Error(
+        `patch-tail sequence regression for ${room.roomId}: ${event.serverSeq} <= ${lastEvent.serverSeq}`,
+      );
+    }
+    room.patchTail.push(event);
+
+    if (this.options.persistence !== undefined) {
+      await this.options.persistence.appendPatchTail(room.roomId, [event]);
+    }
+  }
+
+  private async persistSnapshotOnCadence(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+  ): Promise<void> {
+    const persistence:
+      | IntegrationSnapshotPatchTailPersistence<TPatchPayload, TSnapshotPayload>
+      | undefined = this.options.persistence;
+    if (persistence === undefined) {
+      return;
+    }
+
+    if (room.tick - room.lastSnapshotTick < this.snapshotCadenceTicks) {
+      return;
+    }
+
+    const snapshot: IntegrationPersistedSnapshot<TSnapshotPayload> = {
+      roomId: room.roomId,
+      tick: room.tick,
+      serverSeq: room.serverSeq,
+      payload: await this.createSnapshotPayload(room.roomId, room.tick),
+    };
+
+    await persistence.saveSnapshot(room.roomId, snapshot);
+    await persistence.truncatePatchTail(room.roomId, snapshot.serverSeq);
+    room.persistedSnapshot = snapshot;
+    room.lastSnapshotTick = snapshot.tick;
+    room.patchTail = room.patchTail.filter((event) => event.serverSeq > snapshot.serverSeq);
+  }
+
+  private async getOrCreateBootstrapSnapshot(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+  ): Promise<IntegrationPersistedSnapshot<TSnapshotPayload>> {
+    if (room.persistedSnapshot !== null) {
+      return room.persistedSnapshot;
+    }
+
+    return {
+      roomId: room.roomId,
+      tick: room.tick,
+      serverSeq: room.serverSeq,
+      payload: await this.createSnapshotPayload(room.roomId, room.tick),
+    };
+  }
+
   private async createSnapshotPayload(
     roomId: IntegrationRoomId,
     tick: number,
@@ -411,10 +583,57 @@ class AuthoritativeRoomRuntimeImpl<
     return undefined as TSnapshotPayload;
   }
 
-  private nextServerSeq(room: RoomRuntimeContext<TCommandPayload>): number {
+  private nextServerSeq(
+    room: RoomRuntimeContext<TCommandPayload, TPatchPayload, TSnapshotPayload>,
+  ): number {
     room.serverSeq += 1;
     return room.serverSeq;
   }
+}
+
+function toSnapshotEnvelope<TSnapshotPayload>(
+  snapshot: IntegrationPersistedSnapshot<TSnapshotPayload>,
+): IntegrationServerSnapshotEnvelope<TSnapshotPayload> {
+  return {
+    kind: 'snapshot',
+    roomId: snapshot.roomId,
+    tick: snapshot.tick,
+    serverSeq: snapshot.serverSeq,
+    payload: snapshot.payload,
+  };
+}
+
+function assertPatchTailContinuity<TPatchPayload, TSnapshotPayload>(
+  roomId: IntegrationRoomId,
+  startingServerSeq: number,
+  tail: ReadonlyArray<IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>>,
+): void {
+  let priorServerSeq = startingServerSeq;
+  let priorTick = Number.NEGATIVE_INFINITY;
+
+  for (const event of tail) {
+    if (event.roomId !== roomId) {
+      throw new Error(`patch-tail room mismatch for ${roomId}: received ${event.roomId}`);
+    }
+    if (event.serverSeq <= priorServerSeq) {
+      throw new Error(
+        `patch-tail sequence regression for ${roomId}: ${event.serverSeq} <= ${priorServerSeq}`,
+      );
+    }
+    if (event.tick < priorTick) {
+      throw new Error(`patch-tail tick regression for ${roomId}: ${event.tick} < ${priorTick}`);
+    }
+    priorServerSeq = event.serverSeq;
+    priorTick = event.tick;
+  }
+}
+
+function normalizeSnapshotCadenceTicks(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_SNAPSHOT_CADENCE_TICKS;
+  if (!Number.isInteger(resolved) || resolved < 1) {
+    throw new Error(`snapshotCadenceTicks must be a positive integer, received ${resolved}`);
+  }
+  return resolved;
 }
 
 function compareQueuedCommands<TCommandPayload>(

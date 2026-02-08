@@ -8,6 +8,8 @@ import type {
 import { describe, expectTypeOf, it } from 'vitest';
 
 import type {
+  IntegrationPatchTailEvent,
+  IntegrationReplayBootstrap,
   IntegrationClientCommandEnvelope,
   IntegrationClientEnvelope,
   IntegrationHelloPayload,
@@ -26,9 +28,14 @@ describe('multiplayer contract bridge alignment', () => {
     type Runtime = IntegrationMultiplayerRuntime;
     type ReceivedCommand = Parameters<Runtime['receiveCommand']>[0];
     type SnapshotEnvelope = Awaited<ReturnType<Runtime['getSnapshot']>>;
+    type ReplayBootstrap = Awaited<ReturnType<Runtime['bootstrapReplay']>>;
 
     expectTypeOf<ReceivedCommand>().toEqualTypeOf<BridgeClientCommandEnvelope>();
     expectTypeOf<ReceivedCommand>().toEqualTypeOf<IntegrationClientCommandEnvelope>();
     expectTypeOf<SnapshotEnvelope>().toEqualTypeOf<BridgeServerSnapshotEnvelope>();
+    expectTypeOf<ReplayBootstrap>().toEqualTypeOf<IntegrationReplayBootstrap>();
+    expectTypeOf<ReplayBootstrap['replayTail']>().toEqualTypeOf<
+      ReadonlyArray<IntegrationPatchTailEvent>
+    >();
   });
 });

@@ -6,6 +6,7 @@ import type {
   BridgeHelloPayload,
   BridgeRoomId,
   BridgeServerEnvelope,
+  BridgeServerPatchEnvelope,
   BridgeServerSnapshotEnvelope,
 } from '@city/core-bridge';
 
@@ -86,6 +87,85 @@ export interface IntegrationPersistence {
 }
 
 /**
+ * Persisted snapshot checkpoint for reconnect/bootstrap.
+ * Mirrors save/load checkpoint intent in `loadFile`/`saveFile` lifecycle
+ * handling in `ref/micropolis/src/sim/s_fileio.c` and post-load runtime
+ * bootstrap sequencing in `ref/micropolis/src/sim/s_init.c`.
+ * Parity note: this is intentionally room-scoped and adapter-driven rather
+ * than direct filesystem globals from C.
+ */
+export interface IntegrationPersistedSnapshot<TSnapshotPayload = unknown> {
+  roomId: IntegrationRoomId;
+  tick: number;
+  serverSeq: number;
+  payload: TSnapshotPayload;
+}
+
+/**
+ * Persisted patch-tail patch event for reconnect replay.
+ * Mirrors incremental post-baseline update intent from Micropolis simulation
+ * progression (`ref/micropolis/src/sim/s_sim.c`) with bridge envelope shape.
+ */
+export type IntegrationPatchTailPatchEvent<TPatchPayload = unknown> =
+  BridgeServerPatchEnvelope<TPatchPayload>;
+
+/**
+ * Persisted patch-tail snapshot event for reconnect replay.
+ * Mirrors baseline refresh events in the same authoritative stream used for
+ * replay (`ref/micropolis/src/sim/s_sim.c`), represented in bridge envelopes.
+ */
+export type IntegrationPatchTailSnapshotEvent<TSnapshotPayload = unknown> =
+  BridgeServerSnapshotEnvelope<TSnapshotPayload>;
+
+/**
+ * Persisted patch-tail event union replayed after snapshot bootstrap.
+ * Parity note: TypeScript replay storage is additive versus C, which keeps
+ * live runtime buffers and file snapshots instead of explicit tail logs.
+ */
+export type IntegrationPatchTailEvent<TPatchPayload = unknown, TSnapshotPayload = unknown> =
+  | IntegrationPatchTailPatchEvent<TPatchPayload>
+  | IntegrationPatchTailSnapshotEvent<TSnapshotPayload>;
+
+/**
+ * Persistence adapter contract for snapshot checkpoint + patch-tail replay.
+ * Mirrors Micropolis save/load lifecycle intent from `ref/micropolis/src/sim/s_fileio.c`,
+ * but intentionally uses explicit room-scoped adapter hooks instead of direct
+ * global file operations.
+ */
+export interface IntegrationSnapshotPatchTailPersistence<
+  TPatchPayload = unknown,
+  TSnapshotPayload = unknown,
+> {
+  loadSnapshot(
+    roomId: IntegrationRoomId,
+  ): Promise<IntegrationPersistedSnapshot<TSnapshotPayload> | null>;
+  loadPatchTail(
+    roomId: IntegrationRoomId,
+    afterServerSeq: number,
+  ): Promise<ReadonlyArray<IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>>>;
+  saveSnapshot(
+    roomId: IntegrationRoomId,
+    snapshot: IntegrationPersistedSnapshot<TSnapshotPayload>,
+  ): Promise<void>;
+  appendPatchTail(
+    roomId: IntegrationRoomId,
+    events: ReadonlyArray<IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>>,
+  ): Promise<void>;
+  truncatePatchTail(roomId: IntegrationRoomId, throughServerSeq: number): Promise<void>;
+}
+
+/**
+ * Snapshot + patch-tail bootstrap payload returned for reconnect recovery.
+ * Mirrors `loadFile` checkpoint + subsequent simulated progression in
+ * `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: explicit tail replay by `serverSeq` is additive for bridge-v1.
+ */
+export interface IntegrationReplayBootstrap<TPatchPayload = unknown, TSnapshotPayload = unknown> {
+  snapshot: IntegrationServerSnapshotEnvelope<TSnapshotPayload>;
+  replayTail: ReadonlyArray<IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>>;
+}
+
+/**
  * Broadcast abstraction used by `@city/sim-integration` authority runtime.
  * Mirrors transport fanout intent from Micropolis NET integration pathways
  * (`ref/micropolis/src/sim/w_net.c`) while remaining adapter-driven.
@@ -115,7 +195,7 @@ export interface IntegrationBroadcaster<
  */
 export interface IntegrationMultiplayerRuntime<
   TCommandPayload = unknown,
-  _TPatchPayload = unknown,
+  TPatchPayload = unknown,
   TSnapshotPayload = unknown,
   _TPresencePayload = unknown,
 > {
@@ -126,6 +206,17 @@ export interface IntegrationMultiplayerRuntime<
   getSnapshot(
     roomId: IntegrationRoomId,
   ): Promise<IntegrationServerSnapshotEnvelope<TSnapshotPayload>>;
+  /**
+   * Build reconnect bootstrap data by replaying persisted tail events newer
+   * than the requested `serverSeq`.
+   * Mirrors checkpoint+incremental recovery intent from `loadFile` bootstrap in
+   * `ref/micropolis/src/sim/s_fileio.c`, with bridge replay semantics that are
+   * intentionally additive versus C.
+   */
+  bootstrapReplay(
+    roomId: IntegrationRoomId,
+    afterServerSeq: number,
+  ): Promise<IntegrationReplayBootstrap<TPatchPayload, TSnapshotPayload>>;
 }
 
 type _AssertExactType<TLeft, TRight> =
