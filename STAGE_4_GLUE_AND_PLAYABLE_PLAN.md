@@ -152,7 +152,7 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
   - Done criteria:
     - Play sessions are stable and responsive on baseline desktop hardware.
 
-- [ ] **4.7 Playable sign-off and release checklist**
+- [x] **4.7 Playable sign-off and release checklist**
   - Goal: Provide final acceptance report and explicit go/no-go criteria.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -186,3 +186,4 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 - 2026-02-08: Completed task 4.4 by extending `apps/web` host/runtime glue with strict `tick + serverSeq` sequencing guards, stale-event drop handling, gap-triggered snapshot resync requests, and snapshot baseline application semantics; adding host-side snapshot replay support for local/do shims; and adding a host-mode matrix runtime black-box suite that validates same-tick ordering by `serverSeq`, stale-drop + gap-resync recovery, and reconnect recovery through snapshot + patch tail replay.
 - 2026-02-08: Completed task 4.5 by adding integrated runtime save/load/scenario smoke coverage in `apps/web/src/game/runtime.persistence.test.ts`, re-running Stage 2 persistence flows under a `LocalHost`/`DoHost` runtime matrix, validating deterministic load->save stabilization semantics from `s_fileio.c` plus scenario boot constants from `LoadScenario`, and documenting the current host-specific limitation that Stage 4 host shims still use shared in-memory deterministic authority (no host-side durable persistence yet), so persistence validation currently runs through shared `sim-io` orchestration while runtime host mode is connected.
 - 2026-02-08: Completed task 4.6 by running a focused map-update performance/stability pass: optimized `packages/sim-core` `DoubleBufferMapStore` with lazy per-layer tick preparation plus guarded write bounds, added `NewMap`/`NewMapFlags`-aware redraw planning with patch-driven dirty-rectangle invalidation aligned to `w_map.c`/`g_map.c` map mode semantics, added long-run 4096-tick soak coverage for deterministic patch replay stability, and recorded pre/post benchmark metrics plus soak outcomes in `STAGE_4_PERFORMANCE_AND_STABILITY_NOTES.md`.
+- 2026-02-08: Completed task 4.7 by producing `STAGE_4_PLAYABLE_SIGNOFF_CHECKLIST.md` as the final Stage 4 acceptance artifact with explicit go/no-go criteria, an evidence-linked checklist for protocol/host parity/gameplay/persistence/test status, and a known-issues register with severity and ownership; also marked task 4.7 complete in this plan.
