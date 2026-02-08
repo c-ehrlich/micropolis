@@ -28,6 +28,18 @@ Parity baseline for this package is the Micropolis integration surface in:
 4. `@city/sim-io` owns persistence format parity and file orchestration; integration does not parse or serialize city/scenario files.
 5. Cross-package composition must preserve one-way responsibilities: simulation logic in core, transport in integration, presentation in ui, persistence in io.
 
+## Stage 3 Finalization Notes
+
+Stage 3 migration decisions and legacy-adapter status are recorded in:
+
+- `packages/sim-integration/STAGE_3_MIGRATION_NOTES.md`
+
+Summary:
+
+1. `@city/core-bridge` is the finalized protocol owner (`CoreHost`, envelopes, handshake, sequencing).
+2. `@city/sim-do-adapter` owns DO/websocket/alarm transport boundaries.
+3. Legacy Sugar/TTY/UDP adapters in `@city/sim-integration` remain available, but isolated behind feature flags and treated as optional compatibility surfaces rather than authoritative bridge-v1 runtime transport.
+
 ## Hook Pathways (`makeSound`, messages, UI hooks)
 
 This section documents how the hooks connect across packages while keeping

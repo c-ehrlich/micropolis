@@ -177,7 +177,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - DO runtime remains consistent across client churn and retries.
 
-- [ ] **3.8 Publish Stage 3 migration notes and legacy adapter status**
+- [x] **3.8 Publish Stage 3 migration notes and legacy adapter status**
   - Goal: Document bridge ownership finalization and legacy adapter boundaries.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/INTEGRATION-CONTRACT.md`
@@ -212,3 +212,4 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 - [x] 2026-02-08: Completed task 3.5 by hardening `@city/sim-do-adapter` websocket protocol handling with strict `hello` lockstep enforcement (bridge-v1 protocol/core payload match), adding validated JSON/binary envelope decode utilities that map wire payloads to canonical `@city/core-bridge` envelope types, denying pre-hello mutating `command` envelopes via bridge `reject` responses, routing protocol/authority/handshake mismatches through bridge `error` responses, and adding focused adapter tests for valid handshake, mismatch refusal, and pre-hello command denial.
 - [x] 2026-02-08: Completed task 3.6 by adding a bridge-owned `CoreHost` contract in `@city/core-bridge`, implementing `DoHost` and `LocalHost` wrappers in `@city/sim-do-adapter` with pluggable DO transport adapters, adding an in-memory transport harness for adapter-host composition, and adding a shared host conformance suite that runs against both hosts (handshake gating, ordered ack/patch/snapshot flow, duplicate `commandId` idempotency, and multi-client ordering/idempotency behavior).
 - [x] 2026-02-08: Completed task 3.7 by hardening `RoomDoAdapter` reconnect semantics with deterministic server-initiated `resync` directives for reconnect and hello-incompatibility paths, adding reconnect bootstrap replay via `bootstrapReplay` with adapter-level patch-tail ordering (`serverSeq`) and stale/drop filtering, adding optional DO `presence` join/leave event emission for handshaken client churn, and extending adapter/host tests with dropped-packet reconnect recovery and multi-client presence churn coverage.
+- [x] 2026-02-08: Completed task 3.8 by publishing `packages/sim-integration/STAGE_3_MIGRATION_NOTES.md` with bridge ownership finalization decisions, explicit optional/isolated legacy Sugar/TTY/UDP adapter status (mapped to `ref/micropolis/micropolisactivity.py` and `ref/micropolis/src/sim/w_tk.c` parity boundaries), documented Stage 3 known gaps for Stage 4 handoff, and linked these notes from `packages/sim-integration/INTEGRATION-CONTRACT.md`.
