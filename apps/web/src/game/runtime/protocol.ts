@@ -95,12 +95,81 @@ export type Stage2SimControlCommand =
   | Stage2SetSpeedSimCommand;
 
 /**
+ * New-city lifecycle command routed through host authority.
+ * Mirrors `DoNewCity` reset intent in `ref/micropolis/src/sim/s_init.c` and
+ * lifecycle dispatch in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface Stage2NewCityCommand {
+  kind: 'city-lifecycle';
+  action: 'new-city';
+}
+
+/**
+ * Stage 2 city lifecycle command union.
+ * Mirrors high-level city lifecycle command handling in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type Stage2CityLifecycleCommand = Stage2NewCityCommand;
+
+/**
+ * Save/export city command routed through host authority.
+ * Mirrors `SaveCityAs` flow in `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: browser flow exports bytes to the user rather than writing
+ * directly to a host filesystem path.
+ */
+export interface Stage2SaveCityCommand {
+  kind: 'city-io';
+  action: 'save-city';
+  fileName: string;
+}
+
+/**
+ * Load/import city command routed through host authority.
+ * Mirrors `LoadCity` in `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: browser flow passes in-memory bytes instead of host-side file IO.
+ */
+export interface Stage2LoadCityCommand {
+  kind: 'city-io';
+  action: 'load-city';
+  fileName: string;
+  cityBytes: Uint8Array;
+}
+
+/**
+ * Stage 2 persistence command union.
+ * Mirrors save/load lifecycle intent in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export type Stage2CityIoCommand = Stage2SaveCityCommand | Stage2LoadCityCommand;
+
+/**
+ * Scenario-start command routed through host authority.
+ * Mirrors `LoadScenario(short s)` entry in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export interface Stage2LoadScenarioCommand {
+  kind: 'scenario';
+  action: 'load-scenario';
+  scenarioId: number;
+}
+
+/**
+ * Stage 2 scenario command union.
+ * Mirrors scenario entry handling in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export type Stage2ScenarioCommand = Stage2LoadScenarioCommand;
+
+/**
  * Stage 2 client command union for this UI milestone.
  * Mirrors Micropolis command dispatch in `ref/micropolis/src/sim/w_tool.c`
  * and `ref/micropolis/src/sim/w_sim.c`.
- * Difference: this keeps the Stage 2 subset only (tools + sim controls).
+ * Difference: this keeps the Stage 2 subset only (tools, sim controls, and
+ * city lifecycle/persistence/scenario commands).
  */
-export type Stage2ClientCommand = Stage2ToolCommand | Stage2SimControlCommand;
+export type Stage2ClientCommand =
+  | Stage2ToolCommand
+  | Stage2SimControlCommand
+  | Stage2CityLifecycleCommand
+  | Stage2CityIoCommand
+  | Stage2ScenarioCommand;
 
 /**
  * Tool footprint metadata used for pending visuals and placement validation.
@@ -349,6 +418,64 @@ export function isStage2SimControlCommand(command: unknown): command is Stage2Si
   }
 
   return false;
+}
+
+/**
+ * Returns true when a client payload is a Stage 2 city lifecycle command.
+ * Mirrors city lifecycle command gatekeeping in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export function isStage2CityLifecycleCommand(
+  command: unknown,
+): command is Stage2CityLifecycleCommand {
+  if (command === null || typeof command !== 'object') {
+    return false;
+  }
+
+  const candidate = command as Partial<Stage2CityLifecycleCommand>;
+  return candidate.kind === 'city-lifecycle' && candidate.action === 'new-city';
+}
+
+/**
+ * Returns true when a client payload is a Stage 2 city IO command.
+ * Mirrors save/load command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export function isStage2CityIoCommand(command: unknown): command is Stage2CityIoCommand {
+  if (command === null || typeof command !== 'object') {
+    return false;
+  }
+
+  const candidate = command as Partial<Stage2CityIoCommand>;
+  if (candidate.kind !== 'city-io' || typeof candidate.action !== 'string') {
+    return false;
+  }
+
+  if (candidate.action === 'save-city') {
+    return typeof candidate.fileName === 'string';
+  }
+
+  if (candidate.action === 'load-city') {
+    return typeof candidate.fileName === 'string' && candidate.cityBytes instanceof Uint8Array;
+  }
+
+  return false;
+}
+
+/**
+ * Returns true when a client payload is a Stage 2 scenario command.
+ * Mirrors `LoadScenario` command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export function isStage2ScenarioCommand(command: unknown): command is Stage2ScenarioCommand {
+  if (command === null || typeof command !== 'object') {
+    return false;
+  }
+
+  const candidate = command as Partial<Stage2ScenarioCommand>;
+  return (
+    candidate.kind === 'scenario' &&
+    candidate.action === 'load-scenario' &&
+    typeof candidate.scenarioId === 'number' &&
+    Number.isFinite(candidate.scenarioId)
+  );
 }
 
 /**

@@ -14,4 +14,11 @@ describe('stage 2 route boundaries', () => {
     expect(ROUTE_SOURCE).toContain("kind: 'sim-control'");
     expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
   });
+
+  it('keeps city save/load/scenario interactions routed through runtime command envelopes', () => {
+    expect(ROUTE_SOURCE).toContain("kind: 'city-io'");
+    expect(ROUTE_SOURCE).toContain("kind: 'city-lifecycle'");
+    expect(ROUTE_SOURCE).toContain("kind: 'scenario'");
+    expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
+  });
 });

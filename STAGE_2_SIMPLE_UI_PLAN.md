@@ -122,7 +122,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - User can control sim and observe key city telemetry.
 
-- [ ] **2.5 Add save/load/scenario flows in browser**
+- [x] **2.5 Add save/load/scenario flows in browser**
   - Goal: Support new city, save/export, load/import, and scenario entry from MVP.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-io/src/load.ts`
@@ -214,3 +214,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - 2026-02-08: Completed 2.2 by adding Stage 2 canvas map rendering in `apps/web`, projecting authoritative snapshot+patch payloads into runtime map state, applying map deltas only after in-order envelope acceptance, and adding map progression/stale-drop tests plus manual smoke steps.
 - 2026-02-08: Completed 2.3 by adding Stage 2 tool command UI (road/rail/wire/bulldoze/R/C/I), emitting command envelopes with `commandId`, implementing visual-only pending lifecycle (enqueue on send, settle on `ack`, rollback on `reject`), extending local demo host ack/reject/idempotency behavior, and adding pending lifecycle plus duplicate-correlation runtime tests.
 - 2026-02-08: Completed 2.4 by extending Stage 2 web runtime protocol/state with host-projected HUD scalars and message feed, adding pause/play/set-speed command handling routed through host envelopes, implementing HUD + simulation controls + message log UI in `apps/web`, and adding HUD projection/runtime/route boundary tests (including no direct sim-core mutation imports in route components).
+- 2026-02-08: Completed 2.5 by adding Stage 2 browser city lifecycle/persistence/scenario command flows (`new-city`, `save-city`, `load-city`, `load-scenario`) through runtime envelopes, extracting a dedicated local demo host module with Micropolis-aligned `s_fileio.c` metadata constants, wiring route controls for new/save/load/scenario entry, and adding web-runtime save/load round-trip plus scenario boot smoke tests.
