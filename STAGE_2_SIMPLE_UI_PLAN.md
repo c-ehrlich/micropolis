@@ -37,7 +37,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 
 ## Task Checklist
 
-- [ ] **2.1 Build web host-client runtime module**
+- [x] **2.1 Build web host-client runtime module**
   - Goal: Add a client runtime in `apps/web` that connects to `CoreHost`, handles handshake, and centralizes envelope processing.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/src/main.tsx`
@@ -210,3 +210,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 ## Execution Log
 
 - [ ] Add dated entries as tasks complete.
+- 2026-02-08: Completed 2.1 by adding `apps/web` host-client runtime lifecycle + envelope reducer with mandatory `hello` negotiation, `serverSeq`/`tick` tracking, and web runtime stale/gap routing tests.
