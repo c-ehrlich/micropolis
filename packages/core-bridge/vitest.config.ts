@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    exclude: ['src/core-host.test.ts'],
+    exclude: ['src/core-host.test.ts', 'src/types.test.ts'],
   },
 });

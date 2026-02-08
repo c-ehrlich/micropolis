@@ -1,0 +1,13 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "request_snapshot",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "payload": {
+      "reason": "reconnect",
+      "afterServerSeq": 1026,
+      "sentAtMs": 1700000000000
+    }
+  }
+}

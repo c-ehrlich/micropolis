@@ -1,0 +1,15 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "ack",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-1000",
+    "tick": 256,
+    "serverSeq": 1024,
+    "payload": {
+      "deduplicated": false,
+      "commandType": "tool_apply"
+    }
+  }
+}

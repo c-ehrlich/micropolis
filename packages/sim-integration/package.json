@@ -1,5 +1,13 @@
 {
   "name": "@city/sim-integration",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "pnpm -w eslint packages/sim-integration/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root packages/sim-integration"
+  }
 }

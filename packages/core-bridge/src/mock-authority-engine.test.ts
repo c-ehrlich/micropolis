@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { MockAuthorityEngine } from './mock-authority-engine.ts';
-import { HOST_REJECT_CODE, HOST_REJECT_REASON } from './types.ts';
 import type {
   ClientCommandEnvelope,
   ClientRequestSnapshotEnvelope,
@@ -12,6 +11,7 @@ import type {
   HostResyncEnvelope,
   HostSnapshotEnvelope,
 } from './types.ts';
+import { HOST_REJECT_CODE, HOST_REJECT_REASON } from './types.ts';
 
 type SequencedMockEvent =
   | HostAckEnvelope

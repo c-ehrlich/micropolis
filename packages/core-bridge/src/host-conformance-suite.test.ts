@@ -1,3 +1,4 @@
+import { defineCoreHostConformanceSuite } from './host-conformance-suite.ts';
 import {
   LOCAL_HOST_DEFAULT_CLIENT_ID,
   LOCAL_HOST_DEFAULT_CORE_VERSION,
@@ -6,7 +7,6 @@ import {
   LocalHost,
 } from './local-host.ts';
 import { MockHost } from './mock-host.ts';
-import { defineCoreHostConformanceSuite } from './host-conformance-suite.ts';
 
 defineCoreHostConformanceSuite({
   suiteName: 'MockHost',

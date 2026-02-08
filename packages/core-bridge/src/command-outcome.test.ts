@@ -8,8 +8,8 @@ import {
   LOCAL_HOST_DEFAULT_ROOM_ID,
   LocalHost,
 } from './local-host.ts';
-import { HOST_REJECT_REASON } from './types.ts';
 import type { ClientCommandEnvelope, ClientHelloEnvelope, CoreHostEnvelope } from './types.ts';
+import { HOST_REJECT_REASON } from './types.ts';
 
 const makeHello = (overrides: Partial<ClientHelloEnvelope> = {}): ClientHelloEnvelope => ({
   kind: 'hello',

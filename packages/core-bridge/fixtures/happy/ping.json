@@ -1,0 +1,12 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "ping",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "payload": {
+      "pingId": "ping-0001",
+      "sentAtMs": 1700000000256
+    }
+  }
+}

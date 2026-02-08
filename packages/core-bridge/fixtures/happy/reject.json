@@ -1,0 +1,16 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "reject",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-1001",
+    "tick": 256,
+    "serverSeq": 1025,
+    "payload": {
+      "code": "insufficient_funds",
+      "message": "Not enough funds for requested build action.",
+      "retryable": true
+    }
+  }
+}
