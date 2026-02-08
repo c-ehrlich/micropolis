@@ -8,12 +8,12 @@ import type {
 import { describe, expectTypeOf, it } from 'vitest';
 
 import type {
-  IntegrationPatchTailEvent,
-  IntegrationReplayBootstrap,
   IntegrationClientCommandEnvelope,
   IntegrationClientEnvelope,
   IntegrationHelloPayload,
   IntegrationMultiplayerRuntime,
+  IntegrationPatchTailEvent,
+  IntegrationReplayBootstrap,
   IntegrationServerEnvelope,
 } from './types.ts';
 

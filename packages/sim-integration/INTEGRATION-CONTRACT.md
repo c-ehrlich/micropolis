@@ -40,6 +40,24 @@ Summary:
 2. `@city/sim-do-adapter` owns DO/websocket/alarm transport boundaries.
 3. Legacy Sugar/TTY/UDP adapters in `@city/sim-integration` remain available, but isolated behind feature flags and treated as optional compatibility surfaces rather than authoritative bridge-v1 runtime transport.
 
+## Historical Stage 0 Migration Points
+
+The Stage 0 contract owner is `@city/core-bridge`. Migration in `@city/sim-integration`
+converged on that package for protocol definitions:
+
+1. Use `packages/sim-integration/src/bridge-contract.ts` as the migration seam;
+   it aliases integration-facing envelope types directly to `@city/core-bridge`
+   (`IntegrationBridgeClientEnvelopeV1` / `IntegrationBridgeServerEnvelopeV1`).
+2. Command ingress boundaries (TTY/NET/Sugar adapters) normalize incoming
+   protocol intents into bridge-owned client envelopes before runtime orchestration.
+3. Outbound authoritative events are emitted as bridge-owned server envelopes
+   with explicit `tick` + `serverSeq` ordering metadata.
+4. Version/schema checks use bridge-owned validators (`validateCoreBridgeV1HelloEnvelope`,
+   `validateCoreBridgeV1CommandEnvelope`, `validateCoreBridgeV1Handshake`) rather
+   than package-local protocol validators.
+5. Stale/gap ordering behavior uses bridge-owned sequencing helpers to keep
+   apply/drop/resync semantics consistent across local and DO hosts.
+
 ## Hook Pathways (`makeSound`, messages, UI hooks)
 
 This section documents how the hooks connect across packages while keeping

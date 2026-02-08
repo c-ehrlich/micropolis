@@ -1,0 +1,49 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "patch",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 257,
+    "serverSeq": 1026,
+    "payload": {
+      "mapDeltas": [
+        {
+          "x": 10,
+          "y": 12,
+          "tile": 66
+        },
+        {
+          "x": 10,
+          "y": 13,
+          "tile": 66
+        }
+      ],
+      "hud": {
+        "funds": 18200,
+        "date": {
+          "year": 1901,
+          "month": 6
+        },
+        "demand": {
+          "residential": 12,
+          "commercial": -8,
+          "industrial": 4
+        },
+        "simSpeed": 3
+      },
+      "messageFeed": [
+        {
+          "messageId": 101,
+          "text": "Road construction completed.",
+          "tick": 257
+        }
+      ],
+      "lifecycle": [
+        {
+          "kind": "sim_resumed"
+        }
+      ]
+    }
+  }
+}

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { createIntegrationRuntime } from '../runtime.ts';
 import {
-  SugarStdoutMalformedLineError,
   getPlaySoundToken,
   parseSugarStdoutLine,
+  SugarStdoutMalformedLineError,
 } from './stdout-protocol.ts';
 
 describe('stdout PlaySound token parsing parity', () => {

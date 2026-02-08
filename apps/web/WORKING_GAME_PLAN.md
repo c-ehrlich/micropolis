@@ -141,3 +141,10 @@ Mitigation: central hook reducer in web app, with state snapshot dev panel while
 3. HUD/messages.
 4. Save/load/scenarios.
 5. Realtime objects + perf pass.
+
+## Stage 2 Map Smoke Steps (Task 2.2)
+
+1. Run `pnpm --filter @city/web dev`.
+2. Open the app at the local Vite URL and confirm a color-tile map appears after handshake.
+3. Watch the map for at least 5 seconds and verify small regions update continuously (patch draw), not a full-canvas flash every tick.
+4. Confirm the status line `seq` counter increments monotonically as map tiles change.

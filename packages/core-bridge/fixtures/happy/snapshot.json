@@ -1,0 +1,47 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "snapshot",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 257,
+    "serverSeq": 1027,
+    "payload": {
+      "map": {
+        "width": 4,
+        "height": 3,
+        "tiles": [0, 66, 66, 0, 0, 66, 66, 0, 0, 0, 0, 0]
+      },
+      "hud": {
+        "funds": 18200,
+        "date": {
+          "year": 1901,
+          "month": 6
+        },
+        "demand": {
+          "residential": 12,
+          "commercial": -8,
+          "industrial": 4
+        },
+        "simSpeed": 3,
+        "messageFeed": [
+          {
+            "messageId": 101,
+            "text": "Road construction completed.",
+            "tick": 257
+          }
+        ]
+      },
+      "lifecycle": {
+        "mode": "running",
+        "cityName": "Fixture City",
+        "scenarioId": null
+      },
+      "replay": {
+        "snapshotTick": 257,
+        "appliedServerSeq": 1026,
+        "patchTailStartServerSeq": 1020
+      }
+    }
+  }
+}

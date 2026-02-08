@@ -36,7 +36,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 
 ## Task Checklist
 
-- [ ] **1.1 Define `CoreHost` interface in a bridge-owned location**
+- [x] **1.1 Define `CoreHost` interface in a bridge-owned location**
   - Goal: Create stable host API consumed by UI independent of transport.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -57,7 +57,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - UI can type against `CoreHost` without importing runtime internals.
 
-- [ ] **1.2 Implement deterministic mock authority engine**
+- [x] **1.2 Implement deterministic mock authority engine**
   - Goal: Add an in-memory authority simulator that emits `ack/reject/patch/snapshot/resync/error` deterministically.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/actions/tool-actions.ts`
@@ -78,7 +78,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - Mock engine can drive UI workflows without real sim runtime.
 
-- [ ] **1.3 Implement `LocalHost` skeleton on top of mock engine**
+- [x] **1.3 Implement `LocalHost` skeleton on top of mock engine**
   - Goal: Provide a concrete local host implementation that satisfies `CoreHost`.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -99,7 +99,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - `LocalHost` can be instantiated and exercised without UI.
 
-- [ ] **1.4 Add resync and snapshot replay mechanics to mock/local host**
+- [x] **1.4 Add resync and snapshot replay mechanics to mock/local host**
   - Goal: Model reconnect behavior (`request_snapshot` and server `resync`) before DO work starts.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -118,7 +118,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - Client simulation harness can recover from dropped events deterministically.
 
-- [ ] **1.5 Add command rejection and pending-visual support hooks**
+- [x] **1.5 Add command rejection and pending-visual support hooks**
   - Goal: Make host outcomes explicit for UI pending visuals and rollback UX.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/WORKING_GAME_PLAN.md`
@@ -139,7 +139,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - UI can implement pending visuals without guessing host semantics.
 
-- [ ] **1.6 Create host conformance test suite reusable by LocalHost and DoHost**
+- [x] **1.6 Create host conformance test suite reusable by LocalHost and DoHost**
   - Goal: Define a shared behavior test suite any host implementation must pass.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -158,7 +158,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - Stage 3 can plug DoHost into the same suite.
 
-- [ ] **1.7 Document Stage 1 API usage for UI and runtime tracks**
+- [x] **1.7 Document Stage 1 API usage for UI and runtime tracks**
   - Goal: Publish integration notes so parallel tracks can consume host/bridge surfaces consistently.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_2_SIMPLE_UI_PLAN.md` (after created)
@@ -185,3 +185,10 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 ## Execution Log
 
 - [ ] Add dated entries as tasks complete.
+- 2026-02-08: Completed task 1.1 by adding `@city/core-bridge` with canonical envelope types, a bridge-owned `CoreHost` interface, and compile-time contract coverage.
+- 2026-02-08: Completed task 1.2 by adding a deterministic in-memory `MockAuthorityEngine` in `@city/core-bridge` with ordered `ack/reject/patch/snapshot/resync/error` emission, `tick`/`serverSeq` stamping, and duplicate `commandId` idempotency tests.
+- 2026-02-08: Completed task 1.3 by implementing a deterministic `LocalHost` on `MockAuthorityEngine` with strict `hello` lockstep/version refusal semantics, default local identity (`local-room`/`local-client`), and local tick scheduling hooks with CoreHost conformance tests.
+- 2026-02-08: Completed task 1.4 by adding deterministic snapshot baseline cadence, `serverSeq`-indexed patch-tail replay for `request_snapshot`, and forced gap/ahead `resync` handling in both `MockAuthorityEngine` and `LocalHost` with reconnect-focused tests.
+- 2026-02-08: Completed task 1.5 by defining canonical reject code/reason payloads (with pending-visual rollback directives), keeping expected denials on `reject` vs host/runtime faults on `error`, and adding `commandId` outcome-correlation helpers plus lifecycle/idempotency tests.
+- 2026-02-08: Completed task 1.6 by adding a reusable host conformance suite module with adapter hooks (handshake, ordering, idempotency, snapshot/resync), adding a deterministic `MockHost` `CoreHost` adapter, and running the shared suite against both `MockHost` and `LocalHost`.
+- 2026-02-08: Completed task 1.7 by publishing `STAGE_1_API_USAGE.md` with Stage 2 UI and Stage 3 runtime integration guidance for `CoreHost`, documented command/reject/resync event flows, and references to canonical exports plus conformance/behavior tests.
