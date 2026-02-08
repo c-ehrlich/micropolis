@@ -112,7 +112,7 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
   - Done criteria:
     - Recovery and ordering behavior are robust under failure conditions.
 
-- [ ] **4.5 Validate save/load/scenario behavior in integrated runtime**
+- [x] **4.5 Validate save/load/scenario behavior in integrated runtime**
   - Goal: Confirm persistence and scenario boot continue to work after host switchability glue.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-io/src/load.ts`
@@ -184,3 +184,4 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 - 2026-02-08: Completed task 4.2 by centralizing web runtime bootstrap state transitions around a shared `hello` handshake validator, unifying LocalHost/DoHost startup event flow (`connected` -> `hello`) with deterministic mismatch diagnostics, rendering explicit user-facing handshake/runtime status in `apps/web/src/routes/index.tsx`, and adding focused runtime tests that cover successful handshake plus version-mismatch failure paths in both host modes.
 - 2026-02-08: Completed task 4.3 by extending `apps/web` `CoreHost`/runtime command lifecycle glue with deterministic client pending-visual tracking (`pending` before host response), host-emitted `ack`/`reject`/authoritative `patch` events shared by both `LocalHost` and `DoHost`, duplicate `commandId` idempotent retry handling (`ack` without re-apply), and host-mode matrix tests that capture identical deterministic lifecycle logs for successful and rejected placement flows while verifying no speculative authoritative client commit before `patch`.
 - 2026-02-08: Completed task 4.4 by extending `apps/web` host/runtime glue with strict `tick + serverSeq` sequencing guards, stale-event drop handling, gap-triggered snapshot resync requests, and snapshot baseline application semantics; adding host-side snapshot replay support for local/do shims; and adding a host-mode matrix runtime black-box suite that validates same-tick ordering by `serverSeq`, stale-drop + gap-resync recovery, and reconnect recovery through snapshot + patch tail replay.
+- 2026-02-08: Completed task 4.5 by adding integrated runtime save/load/scenario smoke coverage in `apps/web/src/game/runtime.persistence.test.ts`, re-running Stage 2 persistence flows under a `LocalHost`/`DoHost` runtime matrix, validating deterministic load->save stabilization semantics from `s_fileio.c` plus scenario boot constants from `LoadScenario`, and documenting the current host-specific limitation that Stage 4 host shims still use shared in-memory deterministic authority (no host-side durable persistence yet), so persistence validation currently runs through shared `sim-io` orchestration while runtime host mode is connected.
