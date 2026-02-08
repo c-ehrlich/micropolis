@@ -21,7 +21,12 @@ export function getCoreBridgeScaffold(): CoreBridgeScaffold {
   };
 }
 
+export * from './command-outcome.ts';
+export * from './core-host.ts';
 export * from './fixtures.ts';
+export * from './local-host.ts';
+export * from './mock-authority-engine.ts';
+export * from './mock-host.ts';
 export * from './sequencing.ts';
 export * from './types.ts';
 export * from './validation.ts';

@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./host-conformance-suite": "./src/host-conformance-suite.ts"
   },
+  "types": "./src/index.ts",
   "scripts": {
     "lint": "pnpm -w eslint packages/core-bridge/src packages/core-bridge/vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
