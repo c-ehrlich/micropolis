@@ -11,7 +11,11 @@ import { describe, expect, it } from 'vitest';
 import { DoHost } from './do-host.ts';
 import { createInMemoryDoHostTransport } from './in-memory-do-host-transport.ts';
 import { LocalHost } from './local-host.ts';
-import { DEFAULT_DO_HELLO_PAYLOAD, RoomDoAdapter } from './room-do-adapter.ts';
+import {
+  DEFAULT_DO_HELLO_PAYLOAD,
+  type DoWebSocketOutboundMessage,
+  RoomDoAdapter,
+} from './room-do-adapter.ts';
 
 interface TestCommandPayload {
   action: 'apply' | 'reject';
@@ -31,7 +35,12 @@ type TestServerEnvelope = BridgeServerEnvelope<TestPatchPayload, TestSnapshotPay
 type TestCoreHost = CoreHost<TestCommandPayload, TestPatchPayload, TestSnapshotPayload>;
 
 interface HostConformanceHarness {
-  createHost(clientId: string): TestCoreHost;
+  createHost(
+    clientId: string,
+    options?: {
+      dropOutboundMessage?: (message: DoWebSocketOutboundMessage) => boolean;
+    },
+  ): TestCoreHost;
   tick(nowMs?: number): Promise<void>;
 }
 
@@ -214,6 +223,54 @@ function runHostConformanceSuite(name: string, hostKind: HostKind): void {
       );
       expect(duplicateAcksFromA).toHaveLength(2);
     });
+
+    it('recovers via server-initiated resync after a dropped patch and reconnect', async () => {
+      const harness = createHostConformanceHarness(hostKind);
+      let hasDroppedPatch = false;
+      const host = harness.createHost('client-a', {
+        dropOutboundMessage(message) {
+          const envelope = parseServerEnvelopeMessage(message);
+          if (envelope.kind === 'patch' && !hasDroppedPatch) {
+            hasDroppedPatch = true;
+            return true;
+          }
+          return false;
+        },
+      });
+      const events: TestServerEnvelope[] = [];
+      host.subscribe((event) => {
+        events.push(event);
+      });
+
+      await host.connect();
+      await host.sendHello();
+      await host.sendCommand({
+        commandId: 'cmd-drop',
+        payload: { action: 'apply' },
+        sentAtMs: 100,
+      });
+      await harness.tick(500);
+      await host.disconnect();
+
+      await host.connect();
+      await host.sendHello();
+      await host.requestSnapshot();
+
+      expect(hasDroppedPatch).toBe(true);
+      const resyncEvent = events.find(
+        (event): event is Extract<TestServerEnvelope, { kind: 'resync' }> =>
+          event.kind === 'resync' && event.payload.reason === 'reconnect requires snapshot replay',
+      );
+      expect(resyncEvent).toBeDefined();
+      const latestSnapshot = [...events]
+        .reverse()
+        .find(
+          (event): event is Extract<TestServerEnvelope, { kind: 'snapshot' }> =>
+            event.kind === 'snapshot',
+        );
+      expect(latestSnapshot).toBeDefined();
+      expect(latestSnapshot?.payload.appliedCommandIds).toContain('cmd-drop');
+    });
   });
 }
 
@@ -227,10 +284,11 @@ function createHostConformanceHarness(hostKind: HostKind): HostConformanceHarnes
   });
 
   return {
-    createHost(clientId) {
+    createHost(clientId, options) {
       const transport = createInMemoryDoHostTransport({
         adapter,
         clientId,
+        dropOutboundMessage: options?.dropOutboundMessage,
       });
       if (hostKind === 'local') {
         return new LocalHost<TestCommandPayload, TestPatchPayload, TestSnapshotPayload>({
@@ -430,4 +488,11 @@ function assertStrictlyIncreasingServerSeq(events: ReadonlyArray<TestServerEnvel
     }
     previous = event.serverSeq;
   }
+}
+
+function parseServerEnvelopeMessage(message: DoWebSocketOutboundMessage): TestServerEnvelope {
+  if (typeof message !== 'string') {
+    throw new Error('expected JSON string payload');
+  }
+  return JSON.parse(message) as TestServerEnvelope;
 }

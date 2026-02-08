@@ -23,6 +23,14 @@ export interface InMemoryDoHostTransportOptions<
 > {
   adapter: RoomDoAdapter<TCommandPayload, TPatchPayload, TSnapshotPayload, TPresencePayload>;
   clientId: IntegrationClientId;
+  /**
+   * Optional outbound-drop predicate used to simulate packet loss.
+   * Mirrors datagram loss characteristics from UDP pathways in
+   * `ref/micropolis/src/sim/w_net.c`.
+   * Parity note: this is an intentional test harness hook and is not part of
+   * Micropolis C transport APIs.
+   */
+  dropOutboundMessage?: (message: DoWebSocketOutboundMessage) => boolean;
 }
 
 /**
@@ -57,6 +65,9 @@ export function createInMemoryDoHostTransport<
       onMessage = handleMessage;
       const socket: DoWebSocketLike = {
         send(message) {
+          if (options.dropOutboundMessage?.(message) === true) {
+            return;
+          }
           onMessage?.(message);
         },
       };

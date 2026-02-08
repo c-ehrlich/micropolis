@@ -7,6 +7,7 @@ import type {
 import type {
   IntegrationBroadcaster,
   IntegrationMultiplayerRuntime,
+  IntegrationReplayBootstrap,
   IntegrationServerEnvelope,
 } from '@city/sim-integration';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,7 @@ import {
   createDoRoomAuthorityBinding,
   decodeClientEnvelopeFromJson,
   DEFAULT_DO_HELLO_PAYLOAD,
+  type DoPresencePayload,
   type DoWebSocketLike,
   type DoWebSocketOutboundMessage,
   mapRoomToDurableObjectName,
@@ -40,6 +42,7 @@ interface TestRuntimeHarness {
   receiveCommandCalls: BridgeClientCommandEnvelope<TestCommandPayload>[];
   tickCalls: number[];
   getSnapshotCalls: string[];
+  bootstrapReplayCalls: Array<{ roomId: string; afterServerSeq: number }>;
   requireBroadcaster: () => IntegrationBroadcaster<TestPatchPayload, TestSnapshotPayload>;
   getLastSnapshot: () => BridgeServerSnapshotEnvelope<TestSnapshotPayload>;
 }
@@ -174,7 +177,15 @@ describe('room do adapter', () => {
       }),
     );
 
-    const mismatchError = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0));
+    const mismatchResync = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0));
+    expect(mismatchResync).toMatchObject({
+      kind: 'resync',
+      roomId: 'room-a',
+      payload: {
+        reason: 'hello payload mismatch',
+      },
+    });
+    const mismatchError = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 1));
     expect(mismatchError).toMatchObject({
       kind: 'error',
       roomId: 'room-a',
@@ -182,7 +193,7 @@ describe('room do adapter', () => {
         code: 'HELLO_VERSION_MISMATCH',
       },
     });
-    const rejectAfterMismatch = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 1));
+    const rejectAfterMismatch = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 2));
     expect(rejectAfterMismatch).toMatchObject({
       kind: 'reject',
       roomId: 'room-a',
@@ -236,6 +247,16 @@ describe('room do adapter', () => {
     const clientBSocket = createFakeSocket();
     await harness.adapter.handleWebSocketOpen('client-a', clientASocket);
     await harness.adapter.handleWebSocketOpen('client-b', clientBSocket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-b',
+    });
+    clientASocket.messages.length = 0;
+    clientBSocket.messages.length = 0;
 
     const broadcaster = harness.requireBroadcaster();
     const ackEvent: IntegrationServerEnvelope<TestPatchPayload, TestSnapshotPayload> = {
@@ -271,6 +292,166 @@ describe('room do adapter', () => {
     expect(JSON.parse(requireStringMessage(requireMessageAt(clientBSocket.messages, 0)))).toEqual(
       patchEvent,
     );
+  });
+
+  it('emits presence join/leave events for handshaken client churn when enabled', async () => {
+    const harness = createRuntimeHarness({
+      presenceEnabled: true,
+    });
+    const clientASocket = createFakeSocket();
+    const clientBSocket = createFakeSocket();
+
+    await harness.adapter.handleWebSocketOpen('client-a', clientASocket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
+    await harness.adapter.handleWebSocketOpen('client-b', clientBSocket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-b',
+    });
+    await harness.adapter.handleWebSocketClose('client-b');
+
+    const presenceEventsForA = clientASocket.messages
+      .map((message) => parseServerEnvelopeMessage(message))
+      .filter(
+        (event): event is Extract<BridgeServerEnvelope, { kind: 'presence' }> =>
+          event.kind === 'presence',
+      );
+    expect(presenceEventsForA).toHaveLength(3);
+    expect(presenceEventsForA.map((event) => event.payload as DoPresencePayload)).toEqual<
+      DoPresencePayload[]
+    >([
+      {
+        kind: 'join',
+        clientId: 'client-a',
+        connectedClientIds: ['client-a'],
+      },
+      {
+        kind: 'join',
+        clientId: 'client-b',
+        connectedClientIds: ['client-a', 'client-b'],
+      },
+      {
+        kind: 'leave',
+        clientId: 'client-b',
+        connectedClientIds: ['client-a'],
+      },
+    ]);
+  });
+
+  it('emits reconnect resync and replays bootstrap tail in serverSeq order with stale-drop filtering', async () => {
+    const harness = createRuntimeHarness({
+      bootstrapReplay: {
+        snapshot: {
+          kind: 'snapshot',
+          roomId: 'room-a',
+          tick: 5,
+          serverSeq: 20,
+          payload: {
+            snapshotId: 'bootstrap-snapshot',
+          },
+        },
+        replayTail: [
+          {
+            kind: 'patch',
+            roomId: 'room-a',
+            tick: 5,
+            serverSeq: 20,
+            payload: { patchId: 'stale-same-seq' },
+          },
+          {
+            kind: 'patch',
+            roomId: 'room-a',
+            tick: 7,
+            serverSeq: 22,
+            payload: { patchId: 'patch-22' },
+          },
+          {
+            kind: 'patch',
+            roomId: 'room-a',
+            tick: 4,
+            serverSeq: 21,
+            payload: { patchId: 'stale-tick-regression' },
+          },
+          {
+            kind: 'patch',
+            roomId: 'room-a',
+            tick: 6,
+            serverSeq: 21,
+            payload: { patchId: 'patch-21' },
+          },
+        ],
+      },
+    });
+    const initialSocket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', initialSocket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
+    await harness.adapter.handleWebSocketClose('client-a');
+
+    const reconnectSocket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', reconnectSocket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
+
+    const reconnectResync = parseServerEnvelopeMessage(
+      requireMessageAt(reconnectSocket.messages, 1),
+    );
+    expect(reconnectResync).toMatchObject({
+      kind: 'resync',
+      payload: {
+        reason: 'reconnect requires snapshot replay',
+      },
+    });
+
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'request_snapshot',
+        roomId: 'room-a',
+        clientId: 'client-a',
+      }),
+    );
+
+    expect(harness.bootstrapReplayCalls).toEqual([{ roomId: 'room-a', afterServerSeq: 0 }]);
+    const replayedEvents = reconnectSocket.messages
+      .slice(2)
+      .map((message) => parseServerEnvelopeMessage(message));
+    expect(replayedEvents).toEqual([
+      {
+        kind: 'snapshot',
+        roomId: 'room-a',
+        tick: 5,
+        serverSeq: 20,
+        payload: {
+          snapshotId: 'bootstrap-snapshot',
+        },
+      },
+      {
+        kind: 'patch',
+        roomId: 'room-a',
+        tick: 6,
+        serverSeq: 21,
+        payload: {
+          patchId: 'patch-21',
+        },
+      },
+      {
+        kind: 'patch',
+        roomId: 'room-a',
+        tick: 7,
+        serverSeq: 22,
+        payload: {
+          patchId: 'patch-22',
+        },
+      },
+    ]);
   });
 
   it('returns protocol error envelopes for websocket messages that target a different room authority', async () => {
@@ -365,12 +546,19 @@ describe('room do adapter', () => {
  * dispatch in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this harness is intentionally adapter-level and transport-free.
  */
-function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRuntimeHarness {
+function createRuntimeHarness(
+  options: {
+    nowMs?: () => number;
+    presenceEnabled?: boolean;
+    bootstrapReplay?: IntegrationReplayBootstrap<TestPatchPayload, TestSnapshotPayload>;
+  } = {},
+): TestRuntimeHarness {
   const connectCalls: Array<{ roomId: string; clientId: string }> = [];
   const disconnectCalls: Array<{ roomId: string; clientId: string }> = [];
   const receiveCommandCalls: BridgeClientCommandEnvelope<TestCommandPayload>[] = [];
   const tickCalls: number[] = [];
   const getSnapshotCalls: string[] = [];
+  const bootstrapReplayCalls: Array<{ roomId: string; afterServerSeq: number }> = [];
   let nextServerSeq = 10;
   let snapshotToReturn: BridgeServerSnapshotEnvelope<TestSnapshotPayload> = {
     kind: 'snapshot',
@@ -385,6 +573,19 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
   let capturedBroadcaster:
     | IntegrationBroadcaster<TestPatchPayload, TestSnapshotPayload>
     | undefined;
+  const bootstrapReplayDefault: IntegrationReplayBootstrap<TestPatchPayload, TestSnapshotPayload> =
+    options.bootstrapReplay ?? {
+      snapshot: {
+        kind: 'snapshot',
+        roomId: 'room-a',
+        tick: 3,
+        serverSeq: 10,
+        payload: {
+          snapshotId: 'snapshot-bootstrap',
+        },
+      },
+      replayTail: [],
+    };
   const runtime: IntegrationMultiplayerRuntime<
     TestCommandPayload,
     TestPatchPayload,
@@ -416,14 +617,16 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
       };
       return snapshotToReturn;
     },
-    async bootstrapReplay() {
-      throw new Error('bootstrapReplay is not used in this adapter-routing test harness');
+    async bootstrapReplay(roomId, afterServerSeq) {
+      bootstrapReplayCalls.push({ roomId, afterServerSeq });
+      return bootstrapReplayDefault;
     },
   };
 
   const adapter = new RoomDoAdapter<TestCommandPayload, TestPatchPayload, TestSnapshotPayload>({
     roomId: 'room-a',
     nowMs: options.nowMs,
+    presenceEnabled: options.presenceEnabled,
     createRuntime(broadcaster) {
       capturedBroadcaster = broadcaster;
       return runtime;
@@ -437,6 +640,7 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
     receiveCommandCalls,
     tickCalls,
     getSnapshotCalls,
+    bootstrapReplayCalls,
     requireBroadcaster() {
       if (capturedBroadcaster === undefined) {
         throw new Error('runtime broadcaster was not captured');

@@ -3,6 +3,7 @@ import type {
   IntegrationBroadcaster,
   IntegrationClientId,
   IntegrationMultiplayerRuntime,
+  IntegrationPatchTailEvent,
   IntegrationRoomId,
   IntegrationServerEnvelope,
 } from '@city/sim-integration';
@@ -69,6 +70,41 @@ export type DoRoomRuntimeFactory<
 >;
 
 /**
+ * Presence event kind emitted by the DO adapter for room membership churn.
+ * Mirrors buddy join/leave intent from Sugar presence callbacks in
+ * `ref/micropolis/micropolisactivity.py`.
+ * Parity note: this is intentionally bridge-v1 room/client metadata and not a
+ * 1:1 Sugar buddy payload.
+ */
+export type DoPresenceEventKind = 'join' | 'leave';
+
+/**
+ * Default presence payload emitted by `RoomDoAdapter` when no custom payload
+ * mapper is provided.
+ * Mirrors presence lifecycle intent from Sugar buddy appeared/disappeared
+ * callbacks in `ref/micropolis/micropolisactivity.py`.
+ * Parity note: this is a bridge-v1 room-membership payload and intentionally
+ * different from Sugar's key/nick/color/address buddy schema.
+ */
+export interface DoPresencePayload {
+  kind: DoPresenceEventKind;
+  clientId: IntegrationClientId;
+  connectedClientIds: ReadonlyArray<IntegrationClientId>;
+}
+
+/**
+ * Payload factory used to map adapter presence context into bridge `presence`
+ * envelope payloads.
+ * Mirrors presence callback payload adaptation intent from Sugar integration in
+ * `ref/micropolis/micropolisactivity.py`.
+ * Parity note: this mapper is intentionally adapter-configurable and not a
+ * direct C/Python struct.
+ */
+export type DoPresencePayloadFactory<TPresencePayload> = (
+  payload: DoPresencePayload,
+) => TPresencePayload;
+
+/**
  * WebSocket and alarm wiring options for one DO-backed room authority.
  * Mirrors transport-event entry points from Micropolis NET command flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
@@ -93,6 +129,8 @@ export interface DoRoomAdapterOptions<
     event: IntegrationServerEnvelope<TPatchPayload, TSnapshotPayload, TPresencePayload>,
   ) => DoWebSocketOutboundMessage;
   expectedHelloPayload?: BridgeHelloPayload;
+  presenceEnabled?: boolean;
+  createPresencePayload?: DoPresencePayloadFactory<TPresencePayload>;
   nowMs?: () => number;
 }
 
@@ -107,6 +145,15 @@ export const DEFAULT_DO_HELLO_PAYLOAD: BridgeHelloPayload = {
   protocolVersion: 'bridge-v1',
   coreVersion: '0.0.0',
 };
+
+/**
+ * Default setting for DO adapter room presence fanout.
+ * Mirrors opt-in presence wiring intent from Sugar buddy hooks in
+ * `ref/micropolis/micropolisactivity.py`.
+ * Parity note: room presence events are additive bridge-v1 behavior and can be
+ * disabled to match legacy single-client/non-presence flows.
+ */
+export const DEFAULT_DO_PRESENCE_ENABLED = false;
 
 /**
  * Map one room/city ID to one deterministic Durable Object name.
@@ -148,6 +195,8 @@ export class RoomDoAdapter<
 > {
   private readonly socketsByClientId = new Map<IntegrationClientId, DoWebSocketLike>();
   private readonly handshakenClientIds = new Set<IntegrationClientId>();
+  private readonly knownClientIds = new Set<IntegrationClientId>();
+  private readonly resyncRequiredClientIds = new Set<IntegrationClientId>();
   private readonly runtime: IntegrationMultiplayerRuntime<
     TCommandPayload,
     TPatchPayload,
@@ -161,6 +210,8 @@ export class RoomDoAdapter<
     event: IntegrationServerEnvelope<TPatchPayload, TSnapshotPayload, TPresencePayload>,
   ) => DoWebSocketOutboundMessage;
   private readonly expectedHelloPayload: BridgeHelloPayload;
+  private readonly presenceEnabled: boolean;
+  private readonly createPresencePayload: DoPresencePayloadFactory<TPresencePayload>;
   private readonly nowMs: () => number;
 
   /**
@@ -180,6 +231,8 @@ export class RoomDoAdapter<
     this.decodeClientEnvelope = options.decodeClientEnvelope ?? decodeClientEnvelopeFromJson;
     this.encodeServerEnvelope = options.encodeServerEnvelope ?? encodeServerEnvelopeAsJson;
     this.expectedHelloPayload = options.expectedHelloPayload ?? DEFAULT_DO_HELLO_PAYLOAD;
+    this.presenceEnabled = options.presenceEnabled ?? DEFAULT_DO_PRESENCE_ENABLED;
+    this.createPresencePayload = options.createPresencePayload ?? createDefaultPresencePayload;
     this.nowMs = options.nowMs ?? Date.now;
     this.runtime = options.createRuntime(this.createBroadcaster());
   }
@@ -200,6 +253,9 @@ export class RoomDoAdapter<
    * Parity note: this is client-id keyed instead of file descriptor keyed.
    */
   async handleWebSocketOpen(clientId: IntegrationClientId, socket: DoWebSocketLike): Promise<void> {
+    if (this.knownClientIds.has(clientId)) {
+      this.resyncRequiredClientIds.add(clientId);
+    }
     this.socketsByClientId.set(clientId, socket);
     this.handshakenClientIds.delete(clientId);
     await this.runtime.connectClient(this.options.roomId, clientId);
@@ -258,8 +314,13 @@ export class RoomDoAdapter<
     }
 
     if (envelope.kind === 'request_snapshot') {
-      const snapshot = await this.runtime.getSnapshot(this.options.roomId);
-      this.sendToClient(clientId, snapshot);
+      if (this.resyncRequiredClientIds.has(clientId)) {
+        await this.sendReconnectBootstrap(clientId);
+        this.resyncRequiredClientIds.delete(clientId);
+      } else {
+        const snapshot = await this.runtime.getSnapshot(this.options.roomId);
+        this.sendToClient(clientId, snapshot);
+      }
       return;
     }
 
@@ -277,9 +338,15 @@ export class RoomDoAdapter<
    * Parity note: disconnect is idempotent and keyed by `clientId`.
    */
   async handleWebSocketClose(clientId: IntegrationClientId): Promise<void> {
+    const hadCompletedHello = this.handshakenClientIds.delete(clientId);
     this.socketsByClientId.delete(clientId);
-    this.handshakenClientIds.delete(clientId);
     await this.runtime.disconnectClient(this.options.roomId, clientId);
+    if (!hadCompletedHello) {
+      return;
+    }
+
+    this.resyncRequiredClientIds.add(clientId);
+    await this.emitPresenceEvent('leave', clientId);
   }
 
   /**
@@ -357,7 +424,10 @@ export class RoomDoAdapter<
     event: IntegrationServerEnvelope<TPatchPayload, TSnapshotPayload, TPresencePayload>,
   ): void {
     const encoded = this.encodeServerEnvelope(event);
-    for (const socket of this.socketsByClientId.values()) {
+    for (const [clientId, socket] of this.socketsByClientId.entries()) {
+      if (!this.handshakenClientIds.has(clientId)) {
+        continue;
+      }
       socket.send(encoded);
     }
   }
@@ -373,6 +443,7 @@ export class RoomDoAdapter<
     payload: BridgeHelloPayload,
   ): Promise<void> {
     if (this.handshakenClientIds.has(clientId)) {
+      await this.sendResyncDirective(clientId, 'hello handshake already completed');
       await this.sendProtocolError(
         clientId,
         'hello handshake already completed for this connection',
@@ -382,6 +453,8 @@ export class RoomDoAdapter<
     }
 
     if (!isStrictHelloMatch(payload, this.expectedHelloPayload)) {
+      this.resyncRequiredClientIds.add(clientId);
+      await this.sendResyncDirective(clientId, 'hello payload mismatch');
       await this.sendProtocolError(
         clientId,
         `hello payload mismatch: expected protocol=${this.expectedHelloPayload.protocolVersion}, core=${this.expectedHelloPayload.coreVersion}`,
@@ -391,6 +464,7 @@ export class RoomDoAdapter<
     }
 
     this.handshakenClientIds.add(clientId);
+    this.knownClientIds.add(clientId);
     const position = await this.reserveEnvelopePosition();
     this.sendToClient(clientId, {
       kind: 'hello',
@@ -400,6 +474,10 @@ export class RoomDoAdapter<
       serverSeq: position.serverSeq,
       payload: this.expectedHelloPayload,
     });
+    await this.emitPresenceEvent('join', clientId);
+    if (this.resyncRequiredClientIds.has(clientId)) {
+      await this.sendResyncDirective(clientId, 'reconnect requires snapshot replay');
+    }
   }
 
   /**
@@ -478,6 +556,81 @@ export class RoomDoAdapter<
         code,
       },
     });
+  }
+
+  /**
+   * Emit a server-initiated `resync` directive to force reconnect/bootstrap.
+   * Mirrors authoritative recovery intent from bridge reconnect planning over
+   * Micropolis transport flows in `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: explicit `resync` envelopes are additive bridge-v1 behavior.
+   */
+  private async sendResyncDirective(clientId: IntegrationClientId, reason: string): Promise<void> {
+    const position = await this.reserveEnvelopePosition();
+    this.sendToClient(clientId, {
+      kind: 'resync',
+      roomId: this.options.roomId,
+      tick: position.tick,
+      serverSeq: position.serverSeq,
+      payload: {
+        reason,
+      },
+    });
+  }
+
+  /**
+   * Emit one room-scoped join/leave presence event for DO client churn.
+   * Mirrors buddy appeared/disappeared lifecycle intent in
+   * `ref/micropolis/micropolisactivity.py`.
+   * Parity note: bridge presence payloads are intentionally room/client based.
+   */
+  private async emitPresenceEvent(
+    kind: DoPresenceEventKind,
+    clientId: IntegrationClientId,
+  ): Promise<void> {
+    if (!this.presenceEnabled) {
+      return;
+    }
+    const position = await this.reserveEnvelopePosition();
+    const connectedClientIds = [...this.handshakenClientIds].sort(compareText);
+    this.sendToRoom({
+      kind: 'presence',
+      roomId: this.options.roomId,
+      tick: position.tick,
+      serverSeq: position.serverSeq,
+      payload: this.createPresencePayload({
+        kind,
+        clientId,
+        connectedClientIds,
+      }),
+    });
+  }
+
+  /**
+   * Replay reconnect bootstrap events in deterministic order after a resync.
+   * Mirrors snapshot-baseline + forward-update recovery intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: replay-tail sorting and stale/drop filtering are adapter-level
+   * hardening over runtime/persistence guarantees.
+   */
+  private async sendReconnectBootstrap(clientId: IntegrationClientId): Promise<void> {
+    const bootstrap = await this.runtime.bootstrapReplay(this.options.roomId, 0);
+    this.sendToClient(clientId, bootstrap.snapshot);
+
+    const sortedTail = [...bootstrap.replayTail].sort(compareReplayEventsByServerSeq);
+    let priorServerSeq = bootstrap.snapshot.serverSeq;
+    let priorTick = bootstrap.snapshot.tick;
+    for (const event of sortedTail) {
+      assertSameRoomAuthority(this.options.roomId, event.roomId);
+      if (event.serverSeq <= priorServerSeq) {
+        continue;
+      }
+      if (event.tick < priorTick) {
+        continue;
+      }
+      priorServerSeq = event.serverSeq;
+      priorTick = event.tick;
+      this.sendToClient(clientId, event);
+    }
   }
 
   /**
@@ -639,6 +792,33 @@ function requireFiniteNumberField(
     throw new Error(`${label}.${key} must be a finite number`);
   }
   return value;
+}
+
+function createDefaultPresencePayload<TPresencePayload>(
+  payload: DoPresencePayload,
+): TPresencePayload {
+  return payload as TPresencePayload;
+}
+
+function compareReplayEventsByServerSeq<TPatchPayload, TSnapshotPayload>(
+  left: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>,
+  right: IntegrationPatchTailEvent<TPatchPayload, TSnapshotPayload>,
+): number {
+  const byServerSeq = left.serverSeq - right.serverSeq;
+  if (byServerSeq !== 0) {
+    return byServerSeq;
+  }
+  return left.tick - right.tick;
+}
+
+function compareText(left: string, right: string): number {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
 }
 
 /**
