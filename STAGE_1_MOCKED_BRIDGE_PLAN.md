@@ -78,7 +78,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - Mock engine can drive UI workflows without real sim runtime.
 
-- [ ] **1.3 Implement `LocalHost` skeleton on top of mock engine**
+- [x] **1.3 Implement `LocalHost` skeleton on top of mock engine**
   - Goal: Provide a concrete local host implementation that satisfies `CoreHost`.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -187,3 +187,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed task 1.1 by adding `@city/core-bridge` with canonical envelope types, a bridge-owned `CoreHost` interface, and compile-time contract coverage.
 - 2026-02-08: Completed task 1.2 by adding a deterministic in-memory `MockAuthorityEngine` in `@city/core-bridge` with ordered `ack/reject/patch/snapshot/resync/error` emission, `tick`/`serverSeq` stamping, and duplicate `commandId` idempotency tests.
+- 2026-02-08: Completed task 1.3 by implementing a deterministic `LocalHost` on `MockAuthorityEngine` with strict `hello` lockstep/version refusal semantics, default local identity (`local-room`/`local-client`), and local tick scheduling hooks with CoreHost conformance tests.
