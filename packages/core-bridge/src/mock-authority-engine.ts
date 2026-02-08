@@ -14,10 +14,15 @@ import type {
 
 const DEFAULT_ROOM_ID = 'local-room';
 const DEFAULT_CLIENT_ID = 'local-client';
+const DEFAULT_SNAPSHOT_CADENCE_TICKS = 64;
 
 interface MockAuthoritySnapshotState {
   appliedCommandCount: number;
   lastAppliedCommandId: string | undefined;
+}
+
+interface MockAuthoritySnapshotBaseline {
+  stateServerSeq: number;
 }
 
 interface AppliedCommandRecord {
@@ -45,6 +50,14 @@ export interface MockAuthorityEngineOptions {
   initialTick?: number;
   initialServerSeq?: number;
   rejectCommandTypes?: ReadonlyArray<string>;
+  /**
+   * Snapshot baseline rebuild cadence in authoritative ticks.
+   * Mirrors periodic checkpoint intent used for reconnect recovery in
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: this explicit bridge cadence is intentionally different from
+   * C's in-process runtime state ownership.
+   */
+  snapshotCadenceTicks?: number;
 }
 
 /**
@@ -58,6 +71,17 @@ export interface MockAuthorityCommandResult {
 }
 
 /**
+ * Deterministic result for `request_snapshot` handling.
+ * Mirrors reconnect recovery intent from `ref/micropolis/spec/integration/SPEC.md`,
+ * where clients either bootstrap from snapshot, replay a patch tail, or are
+ * instructed to resync when sequence gaps are detected.
+ */
+export interface MockAuthoritySnapshotRequestResult {
+  mode: 'snapshot' | 'patch-tail' | 'resync';
+  events: ReadonlyArray<HostSnapshotEnvelope | HostPatchEnvelope | HostResyncEnvelope>;
+}
+
+/**
  * In-memory deterministic authority simulator for Stage 1 host workflows.
  * Mirrors command outcome semantics from `ref/micropolis/src/sim/w_tool.c`
  * and authoritative tick sequencing mindset from `ref/micropolis/src/sim/s_sim.c`.
@@ -68,10 +92,14 @@ export class MockAuthorityEngine {
   private readonly identity: BridgeEnvelopeIdentity;
   private readonly rejectCommandTypes: ReadonlySet<string>;
   private readonly commandRecords = new Map<string, CommandRecord>();
+  private readonly snapshotCadenceTicks: number;
+  private readonly patchTail: HostPatchEnvelope[] = [];
   private tick: number;
   private nextServerSeq: number;
+  private latestServerSeq: number;
   private appliedCommandCount = 0;
   private lastAppliedCommandId: string | undefined;
+  private snapshotBaseline: MockAuthoritySnapshotBaseline;
 
   constructor(options: MockAuthorityEngineOptions = {}) {
     this.identity = {
@@ -80,7 +108,12 @@ export class MockAuthorityEngine {
     };
     this.tick = options.initialTick ?? 0;
     this.nextServerSeq = options.initialServerSeq ?? 0;
+    this.latestServerSeq = this.nextServerSeq - 1;
     this.rejectCommandTypes = new Set(options.rejectCommandTypes ?? []);
+    this.snapshotCadenceTicks = normalizeSnapshotCadenceTicks(options.snapshotCadenceTicks);
+    this.snapshotBaseline = {
+      stateServerSeq: this.latestServerSeq,
+    };
   }
 
   /**
@@ -134,9 +167,52 @@ export class MockAuthorityEngine {
 
     const ack = this.createAck(envelope.commandId, this.tick, envelope);
     const patch = this.createPatch(this.tick, envelope);
+    this.patchTail.push(patch);
+    this.maybeRebuildSnapshotBaseline(patch.serverSeq);
     return {
       duplicate: false,
       events: [ack, patch],
+    };
+  }
+
+  /**
+   * Resolve one snapshot request into bootstrap snapshot, patch-tail replay,
+   * or resync when the requested replay window is no longer available.
+   * Mirrors recovery sequencing intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  handleSnapshotRequest(
+    envelope: ClientRequestSnapshotEnvelope,
+  ): MockAuthoritySnapshotRequestResult {
+    const afterServerSeq = envelope.afterServerSeq;
+    if (afterServerSeq === undefined) {
+      return {
+        mode: 'snapshot',
+        events: [this.createSnapshot(envelope)],
+      };
+    }
+
+    if (afterServerSeq > this.latestServerSeq) {
+      return {
+        mode: 'resync',
+        events: [this.requestResync('server-seq-ahead', envelope)],
+      };
+    }
+
+    if (afterServerSeq < this.snapshotBaseline.stateServerSeq) {
+      return {
+        mode: 'resync',
+        events: [this.requestResync('server-seq-gap', envelope)],
+      };
+    }
+
+    const replayEvents = this.patchTail
+      .filter((patch) => patch.serverSeq > afterServerSeq)
+      .map((patch) => this.retargetPatchIdentity(patch, envelope))
+      .sort((left, right) => left.serverSeq - right.serverSeq);
+    return {
+      mode: 'patch-tail',
+      events: replayEvents,
     };
   }
 
@@ -270,6 +346,16 @@ export class MockAuthorityEngine {
     };
   }
 
+  private retargetPatchIdentity(
+    patch: HostPatchEnvelope,
+    identity?: BridgeEnvelopeIdentity,
+  ): HostPatchEnvelope {
+    return {
+      ...patch,
+      ...this.resolveIdentity(identity),
+    };
+  }
+
   private buildPatchPayload(envelope: ClientCommandEnvelope): CorePatchPayload {
     return {
       type: 'mock.command.applied',
@@ -300,12 +386,41 @@ export class MockAuthorityEngine {
     };
   }
 
+  private maybeRebuildSnapshotBaseline(stateServerSeq: number): void {
+    if (this.tick <= 0 || this.tick % this.snapshotCadenceTicks !== 0) {
+      return;
+    }
+
+    this.snapshotBaseline = {
+      stateServerSeq,
+    };
+    this.trimPatchTail();
+  }
+
+  private trimPatchTail(): void {
+    const oldestRetainedServerSeq = this.snapshotBaseline.stateServerSeq + 1;
+    while (
+      this.patchTail[0] !== undefined &&
+      this.patchTail[0].serverSeq < oldestRetainedServerSeq
+    ) {
+      this.patchTail.shift();
+    }
+  }
+
   private claimServerSeq(): number {
     const serverSeq = this.nextServerSeq;
     this.nextServerSeq += 1;
+    this.latestServerSeq = serverSeq;
     return serverSeq;
   }
 }
+
+const normalizeSnapshotCadenceTicks = (value: number | undefined): number => {
+  if (value === undefined || !Number.isInteger(value) || value <= 0) {
+    return DEFAULT_SNAPSHOT_CADENCE_TICKS;
+  }
+  return value;
+};
 
 const readMockToolResultCode = (payload: unknown): number | undefined => {
   if (typeof payload !== 'object' || payload === null) {

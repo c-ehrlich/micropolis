@@ -99,7 +99,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - `LocalHost` can be instantiated and exercised without UI.
 
-- [ ] **1.4 Add resync and snapshot replay mechanics to mock/local host**
+- [x] **1.4 Add resync and snapshot replay mechanics to mock/local host**
   - Goal: Model reconnect behavior (`request_snapshot` and server `resync`) before DO work starts.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -188,3 +188,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 - 2026-02-08: Completed task 1.1 by adding `@city/core-bridge` with canonical envelope types, a bridge-owned `CoreHost` interface, and compile-time contract coverage.
 - 2026-02-08: Completed task 1.2 by adding a deterministic in-memory `MockAuthorityEngine` in `@city/core-bridge` with ordered `ack/reject/patch/snapshot/resync/error` emission, `tick`/`serverSeq` stamping, and duplicate `commandId` idempotency tests.
 - 2026-02-08: Completed task 1.3 by implementing a deterministic `LocalHost` on `MockAuthorityEngine` with strict `hello` lockstep/version refusal semantics, default local identity (`local-room`/`local-client`), and local tick scheduling hooks with CoreHost conformance tests.
+- 2026-02-08: Completed task 1.4 by adding deterministic snapshot baseline cadence, `serverSeq`-indexed patch-tail replay for `request_snapshot`, and forced gap/ahead `resync` handling in both `MockAuthorityEngine` and `LocalHost` with reconnect-focused tests.

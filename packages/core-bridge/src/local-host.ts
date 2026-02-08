@@ -75,6 +75,14 @@ export interface LocalHostOptions extends MockAuthorityEngineOptions {
   tickIntervalMs?: number;
   tickScheduler?: LocalHostTickScheduler;
   onTick?: LocalHostTickListener;
+  /**
+   * Snapshot baseline rebuild cadence forwarded to `MockAuthorityEngine`.
+   * Mirrors reconnect checkpoint cadence intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: explicit cadence configuration is a bridge-host abstraction,
+   * not a direct Micropolis C runtime field.
+   */
+  snapshotCadenceTicks?: number;
 }
 
 const DEFAULT_TICK_SCHEDULER: LocalHostTickScheduler = {
@@ -126,6 +134,7 @@ export class LocalHost implements CoreHost {
       initialTick: options.initialTick,
       initialServerSeq: options.initialServerSeq,
       rejectCommandTypes: options.rejectCommandTypes,
+      snapshotCadenceTicks: options.snapshotCadenceTicks,
     });
   }
 
@@ -195,13 +204,15 @@ export class LocalHost implements CoreHost {
       return;
     }
 
-    const snapshot = this.authority.createSnapshot({
+    const replay = this.authority.handleSnapshotRequest({
       kind: 'request_snapshot',
       ...this.identity,
       afterServerSeq: envelope.afterServerSeq,
     });
 
-    this.emit(snapshot);
+    replay.events.forEach((event) => {
+      this.emit(event);
+    });
   }
 
   subscribe(listener: CoreHostEventListener): CoreHostUnsubscribe {

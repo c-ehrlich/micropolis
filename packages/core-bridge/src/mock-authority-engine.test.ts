@@ -39,10 +39,13 @@ const makeCommand = (
   },
 });
 
-const makeSnapshotRequest = (): ClientRequestSnapshotEnvelope => ({
+const makeSnapshotRequest = (
+  overrides: Partial<ClientRequestSnapshotEnvelope> = {},
+): ClientRequestSnapshotEnvelope => ({
   kind: 'request_snapshot',
   roomId: 'room-a',
   clientId: 'client-a',
+  ...overrides,
 });
 
 const recordScenario = (): SequencedMockEvent[] => {
@@ -120,6 +123,57 @@ describe('MockAuthorityEngine', () => {
         appliedCommandCount: 1,
         lastAppliedCommandId: 'dup-apply',
       },
+    });
+  });
+
+  it('replays patch tail by serverSeq and boots with snapshot when no replay cursor is provided', () => {
+    const engine = new MockAuthorityEngine({
+      roomId: 'room-a',
+      clientId: 'client-a',
+      snapshotCadenceTicks: 64,
+    });
+
+    engine.processCommand(makeCommand('cmd-1', 1));
+    engine.processCommand(makeCommand('cmd-2', 1));
+    engine.processCommand(makeCommand('cmd-3', 1));
+    engine.processCommand(makeCommand('cmd-4', 1));
+
+    const bootstrap = engine.handleSnapshotRequest(makeSnapshotRequest());
+    expect(bootstrap.mode).toBe('snapshot');
+    expect(bootstrap.events).toHaveLength(1);
+    expect(bootstrap.events[0]?.kind).toBe('snapshot');
+
+    const replay = engine.handleSnapshotRequest(makeSnapshotRequest({ afterServerSeq: 3 }));
+    expect(replay.mode).toBe('patch-tail');
+    expect(replay.events.map((event) => event.kind)).toEqual(['patch', 'patch']);
+    expect(replay.events.map((event) => event.serverSeq)).toEqual([5, 7]);
+  });
+
+  it('emits resync when replay cursor is ahead or falls behind the retained patch tail', () => {
+    const engine = new MockAuthorityEngine({
+      roomId: 'room-a',
+      clientId: 'client-a',
+      snapshotCadenceTicks: 2,
+    });
+
+    engine.processCommand(makeCommand('cmd-1', 1));
+    engine.processCommand(makeCommand('cmd-2', 1));
+    engine.processCommand(makeCommand('cmd-3', 1));
+
+    const gap = engine.handleSnapshotRequest(makeSnapshotRequest({ afterServerSeq: 1 }));
+    expect(gap.mode).toBe('resync');
+    expect(gap.events).toHaveLength(1);
+    expect(gap.events[0]).toMatchObject({
+      kind: 'resync',
+      reason: 'server-seq-gap',
+    });
+
+    const ahead = engine.handleSnapshotRequest(makeSnapshotRequest({ afterServerSeq: 99 }));
+    expect(ahead.mode).toBe('resync');
+    expect(ahead.events).toHaveLength(1);
+    expect(ahead.events[0]).toMatchObject({
+      kind: 'resync',
+      reason: 'server-seq-ahead',
     });
   });
 });

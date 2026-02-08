@@ -142,6 +142,65 @@ describe('LocalHost', () => {
     } satisfies HostErrorEnvelope);
   });
 
+  it('supports reconnect bootstrap, patch-tail replay, and gap-triggered resync', () => {
+    const events: CoreHostEnvelope[] = [];
+    const host = new LocalHost({
+      snapshotCadenceTicks: 2,
+    });
+    host.subscribe((event) => {
+      events.push(event);
+    });
+
+    host.connect();
+    host.hello(makeHello());
+    host.sendCommand(makeCommand('cmd-1'));
+    host.sendCommand(
+      makeCommand('cmd-2', {
+        command: {
+          type: 'tool.place',
+          payload: {
+            // Micropolis tool handlers in `ref/micropolis/src/sim/w_tool.c` use
+            // -2 for "insufficient funds" style rejection paths.
+            mockToolResultCode: -2,
+          },
+        },
+      }),
+    );
+    host.sendCommand(makeCommand('cmd-3'));
+    host.sendCommand(makeCommand('cmd-4'));
+
+    const sameTickEvents = events
+      .filter(
+        (event): event is Exclude<CoreHostEnvelope, HostHelloEnvelope> => event.kind !== 'hello',
+      )
+      .filter((event) => event.tick === 1);
+    expect(sameTickEvents.map((event) => event.serverSeq)).toEqual([0, 1, 2]);
+
+    const bootstrapStart = events.length;
+    host.requestSnapshot(makeSnapshotRequest());
+    const bootstrapEvents = events.slice(bootstrapStart);
+    expect(bootstrapEvents.map((event) => event.kind)).toEqual(['snapshot']);
+
+    const replayStart = events.length;
+    host.requestSnapshot(makeSnapshotRequest({ afterServerSeq: 4 }));
+    const replayEvents = events.slice(replayStart);
+    expect(replayEvents.map((event) => event.kind)).toEqual(['patch']);
+    expect(replayEvents[0]).toMatchObject({
+      kind: 'patch',
+      serverSeq: 6,
+      tick: 3,
+    });
+
+    const resyncStart = events.length;
+    host.requestSnapshot(makeSnapshotRequest({ afterServerSeq: 1 }));
+    const resyncEvents = events.slice(resyncStart);
+    expect(resyncEvents).toHaveLength(1);
+    expect(resyncEvents[0]).toMatchObject({
+      kind: 'resync',
+      reason: 'server-seq-gap',
+    });
+  });
+
   it('supports explicit identity overrides and local tick scheduler hooks', () => {
     const startedIntervals: number[] = [];
     const intervalCallbacks: Array<() => void> = [];

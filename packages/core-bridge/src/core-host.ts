@@ -64,6 +64,9 @@ export interface CoreHost {
   /**
    * Request a fresh authoritative snapshot for bootstrap/recovery.
    * Mirrors integration recovery intent around command/NET boundaries.
+   * Parity note: hosted implementations may answer with a snapshot baseline,
+   * a patch-tail replay stream, or a resync directive depending on
+   * `afterServerSeq` availability.
    */
   requestSnapshot(envelope: ClientRequestSnapshotEnvelope): CoreHostResult;
   /**
