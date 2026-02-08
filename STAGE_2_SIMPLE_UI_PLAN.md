@@ -162,7 +162,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - UI recovers from dropped/out-of-order streams predictably.
 
-- [ ] **2.7 Add end-to-end playable smoke tests for LocalHost mode**
+- [x] **2.7 Add end-to-end playable smoke tests for LocalHost mode**
   - Goal: Capture user-level playable flow in automated tests.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/src/__tests__/basic.test.ts`
@@ -216,3 +216,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - 2026-02-08: Completed 2.4 by extending Stage 2 web runtime protocol/state with host-projected HUD scalars and message feed, adding pause/play/set-speed command handling routed through host envelopes, implementing HUD + simulation controls + message log UI in `apps/web`, and adding HUD projection/runtime/route boundary tests (including no direct sim-core mutation imports in route components).
 - 2026-02-08: Completed 2.5 by adding Stage 2 browser city lifecycle/persistence/scenario command flows (`new-city`, `save-city`, `load-city`, `load-scenario`) through runtime envelopes, extracting a dedicated local demo host module with Micropolis-aligned `s_fileio.c` metadata constants, wiring route controls for new/save/load/scenario entry, and adding web-runtime save/load round-trip plus scenario boot smoke tests.
 - 2026-02-08: Completed 2.6 by adding a reconnect-aware Stage 2 runtime state machine (`reconnecting`/`resyncing`), auto-requesting `request_snapshot` on reconnect and server `resync` directives, safely clearing pending tool visuals during resync entry, allowing snapshot rebase before ordered patch-tail apply, wiring reconnect/resync controls in the Stage 2 route UX, and adding reconnect + server-resync ordering tests.
+- 2026-02-08: Completed 2.7 by replacing the Stage 2 web placeholder test with deterministic LocalHost playable smoke coverage for start-city -> tool placement -> ambient tick/HUD projection -> save/load round-trip, plus repeated-run determinism assertions to guard against flaky behavior.
