@@ -148,7 +148,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Fixtures can be consumed by other packages for cross-package conformance tests.
 
-- [ ] **0.6 Add cross-package contract conformance tests**
+- [x] **0.6 Add cross-package contract conformance tests**
   - Goal: Ensure `sim-integration` and future host implementations can consume bridge contracts without drift.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/index.ts`
@@ -200,3 +200,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 - [2026-02-08] Completed task 0.3 by adding runtime command/hello schema validators and strict lockstep handshake checks in `packages/core-bridge/src/validation.ts`, exporting validation APIs via `packages/core-bridge/src/index.ts`, adding validator unit coverage in `packages/core-bridge/src/validation.test.ts`, and wiring package test support in `packages/core-bridge/package.json` and `packages/core-bridge/vitest.config.ts`.
 - [2026-02-08] Completed task 0.4 by adding sequencing state helpers and invariant decision APIs in `packages/core-bridge/src/sequencing.ts` (strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, gap/tick-regression resync), exporting sequencing contracts from `packages/core-bridge/src/index.ts`, and adding table-driven coverage in `packages/core-bridge/src/sequencing.test.ts`.
 - [2026-02-08] Completed task 0.5 by adding `packages/core-bridge/fixtures/` canonical happy/edge JSON fixtures with a manifest, implementing typed fixture loading utilities in `packages/core-bridge/src/fixtures.ts`, exporting fixture APIs via `packages/core-bridge/src/index.ts`, and adding schema/sequencing/handshake-backed fixture validation coverage in `packages/core-bridge/src/fixtures.test.ts`.
+- [2026-02-08] Completed task 0.6 by adding `packages/sim-integration/src/bridge-contract.ts` bridge-owned envelope aliases, adding cross-package conformance/runtime wiring coverage in `packages/sim-integration/src/bridge-contract.test.ts` using `@city/core-bridge` contracts, documenting migration points in `packages/sim-integration/INTEGRATION-CONTRACT.md`, and exporting bridge contract seams from `packages/sim-integration/src/index.ts`.
