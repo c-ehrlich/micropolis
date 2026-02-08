@@ -32,90 +32,90 @@ Use this exact loop:
 - [x] Create `src/types.ts` with core integration types (`ParityMode`, feature flags, Sugar buddy shape, TTY evaluator result, UDP hooks).
 - [x] Create `src/runtime.ts` with `createIntegrationRuntime(options)` skeleton and no-op feature wiring.
 - [x] Update `src/index.ts` to export the new public API.
-- [ ] Add `src/runtime.test.ts` to verify runtime creation and feature flag defaults.
+- [x] Add `src/runtime.test.ts` to verify runtime creation and feature flag defaults.
 - [ ] Checkpoint: `pnpm --filter @city/sim-integration typecheck` and `pnpm --filter @city/sim-integration test` pass.
 
 ## Phase 2: Sugar Outbound Command Bridge
 
-- [ ] Create `src/sugar/quote-tcl.ts` implementing `QuoteTCL` parity (`"` -> `\\"` only).
-- [ ] Add `src/sugar/quote-tcl.test.ts` for parity cases (quotes only; no backslash/braces escaping).
-- [ ] Create `src/sugar/activity-bridge.ts` to serialize outbound commands with trailing `\n`:
-- [ ] `SugarStartUp "<uri>"`
-- [ ] `SugarNickName "<nick>"`
-- [ ] `SugarShare`
-- [ ] `SugarQuit`
-- [ ] `SugarActivate`
-- [ ] `SugarDeactivate`
-- [ ] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
-- [ ] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
-- [ ] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
+- [x] Create `src/sugar/quote-tcl.ts` implementing `QuoteTCL` parity (`"` -> `\\"` only).
+- [x] Add `src/sugar/quote-tcl.test.ts` for parity cases (quotes only; no backslash/braces escaping).
+- [x] Create `src/sugar/activity-bridge.ts` to serialize outbound commands with trailing `\n`:
+- [x] `SugarStartUp "<uri>"`
+- [x] `SugarNickName "<nick>"`
+- [x] `SugarShare`
+- [x] `SugarQuit`
+- [x] `SugarActivate`
+- [x] `SugarDeactivate`
+- [x] `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"`
+- [x] `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"`
+- [x] Add `src/sugar/activity-bridge.test.ts` covering exact string output and buddy fallback field ordering.
 - [ ] Checkpoint: all Sugar outbound tests pass.
 
 ## Phase 3: Sugar Stdout Protocol (`PlaySound`)
 
-- [ ] Create `src/sugar/stdout-protocol.ts` for line parsing using explicit `split(' ')` parity.
-- [ ] Implement strict-mode behavior for malformed `PlaySound` lines (missing arg should surface parity failure behavior).
-- [ ] Implement safe-mode behavior for malformed lines (return typed error; do not kill processing).
-- [ ] Add `src/sugar/stdout-protocol.test.ts` covering:
-- [ ] normal `PlaySound Name`
-- [ ] repeated spaces creating empty tokens
-- [ ] missing argument behavior in strict and safe modes
-- [ ] Ensure sound hook receives lowercased sound name for wav mapping parity.
+- [x] Create `src/sugar/stdout-protocol.ts` for line parsing using explicit `split(' ')` parity.
+- [x] Implement strict-mode behavior for malformed `PlaySound` lines (missing arg should surface parity failure behavior).
+- [x] Implement safe-mode behavior for malformed lines (return typed error; do not kill processing).
+- [x] Add `src/sugar/stdout-protocol.test.ts` covering:
+- [x] normal `PlaySound Name`
+- [x] repeated spaces creating empty tokens
+- [x] missing argument behavior in strict and safe modes
+- [x] Ensure sound hook receives lowercased sound name for wav mapping parity.
 - [ ] Checkpoint: stdout protocol tests pass in both modes.
 
 ## Phase 4: TTY Command Buffer + Channel
 
-- [ ] Create `src/tty/command-buffer.ts` to assemble multiline commands (`Tcl_AssembleCmd` equivalent behavior target).
-- [ ] Add `src/tty/command-buffer.test.ts` for continuation and completion behavior.
-- [ ] Create `src/tty/stdin-channel.ts` implementing `StdinProc` parity:
-- [ ] EOF + no partial + tty => trigger exit callback
-- [ ] EOF + no partial + non-tty => disable further reads
-- [ ] EOF + partial => treat as empty line and continue
-- [ ] print result when `(result != ok) || sim_tty`
-- [ ] emit prompt exactly `sim:\n` after each command in tty mode
-- [ ] emit initial prompt exactly `sim:\n` when tty channel starts
-- [ ] Add `src/tty/stdin-channel.test.ts` for all branches above.
+- [x] Create `src/tty/command-buffer.ts` to assemble multiline commands (`Tcl_AssembleCmd` equivalent behavior target).
+- [x] Add `src/tty/command-buffer.test.ts` for continuation and completion behavior.
+- [x] Create `src/tty/stdin-channel.ts` implementing `StdinProc` parity:
+- [x] EOF + no partial + tty => trigger exit callback
+- [x] EOF + no partial + non-tty => disable further reads
+- [x] EOF + partial => treat as empty line and continue
+- [x] print result when `(result != ok) || sim_tty`
+- [x] emit prompt exactly `sim:\n` after each command in tty mode
+- [x] emit initial prompt exactly `sim:\n` when tty channel starts
+- [x] Add `src/tty/stdin-channel.test.ts` for all branches above.
 - [ ] Checkpoint: tty tests pass with deterministic prompt transcript snapshots.
 
 ## Phase 5: NET UDP Hooks
 
-- [ ] Create `src/net/udp-hooks.ts` implementing `listenTo(port)` parity interface.
-- [ ] Implement `hearFrom(fileSock)` parsing with exact `file<sock>` prefix requirement.
-- [ ] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
-- [ ] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
-- [ ] Format each byte as `%3d ` equivalent (fixed width + trailing space).
-- [ ] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
-- [ ] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
+- [x] Create `src/net/udp-hooks.ts` implementing `listenTo(port)` parity interface.
+- [x] Implement `hearFrom(fileSock)` parsing with exact `file<sock>` prefix requirement.
+- [x] Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK).
+- [x] Emit callback string exactly: `HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}`.
+- [x] Format each byte as `%3d ` equivalent (fixed width + trailing space).
+- [x] Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling).
+- [x] Add `src/net/udp-hooks.test.ts` for parser and formatter exactness.
 - [ ] Checkpoint: UDP tests pass for strict and safe modes.
 
 ## Phase 6: Node Adapters
 
-- [ ] Create `src/adapters/node-process.ts` for stdin/stdout wiring abstractions.
-- [ ] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
-- [ ] Add adapter tests with fakes/mocks only (no real network required).
+- [x] Create `src/adapters/node-process.ts` for stdin/stdout wiring abstractions.
+- [x] Create `src/adapters/node-udp.ts` for UDP socket abstraction.
+- [x] Add adapter tests with fakes/mocks only (no real network required).
 - [ ] Checkpoint: adapter tests pass and no direct Node dependency leaks outside adapters.
 
 ## Phase 7: Runtime Orchestration
 
-- [ ] Wire Sugar, TTY, and NET modules into `createIntegrationRuntime`.
-- [ ] Expose runtime API methods:
-- [ ] `handleInputLine(line)`
-- [ ] `handleOutputLine(line)`
-- [ ] `share()`, `focusIn()`, `focusOut()`, `quit()`
-- [ ] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
-- [ ] `listenTo(port)`, `hearFrom(fileSock)`
-- [ ] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
-- [ ] sugar-only
-- [ ] tty-only
-- [ ] net-only
-- [ ] sugar+tty+net
+- [x] Wire Sugar, TTY, and NET modules into `createIntegrationRuntime`.
+- [x] Expose runtime API methods:
+- [x] `handleInputLine(line)`
+- [x] `handleOutputLine(line)`
+- [x] `share()`, `focusIn()`, `focusOut()`, `quit()`
+- [x] `buddyAppeared(buddy)`, `buddyDisappeared(buddy)`
+- [x] `listenTo(port)`, `hearFrom(fileSock)`
+- [x] Add `src/runtime.integration.test.ts` for mixed-feature scenarios:
+- [x] sugar-only
+- [x] tty-only
+- [x] net-only
+- [x] sugar+tty+net
 - [ ] Checkpoint: integration tests pass with deterministic event logs.
 
 ## Phase 8: Cross-Package Contract
 
-- [ ] Add `INTEGRATION-CONTRACT.md` describing ownership boundaries with `@city/sim-core`, `@city/sim-ui`, and `@city/sim-io`.
-- [ ] Document how `makeSound`/message/UI hook pathways are connected without duplicating sim-core responsibilities.
-- [ ] Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks.
+- [x] Add `INTEGRATION-CONTRACT.md` describing ownership boundaries with `@city/sim-core`, `@city/sim-ui`, and `@city/sim-io`.
+- [x] Document how `makeSound`/message/UI hook pathways are connected without duplicating sim-core responsibilities.
+- [x] Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks.
 - [ ] Checkpoint: docs and contract tests pass.
 
 ## Final Acceptance Checklist
@@ -131,6 +131,65 @@ Use this exact loop:
 - [ ] `pnpm format`
 
 ## Execution Log
+
 - [x] 2026-02-07: Implemented `src/types.ts` with parity-mode, feature-flag, Sugar buddy, TTY evaluator result, and UDP hook type contracts; added source-linked JSDoc to Micropolis integration files.
 - [x] 2026-02-07: Added `src/runtime.ts` with `createIntegrationRuntime(options)` scaffold, strict-default mode and feature normalization, plus feature-gated Sugar/TTY/NET no-op runtime methods for phased wiring.
 - [x] 2026-02-07: Updated `src/index.ts` to export the integration runtime and integration type surface as the package public API.
+- [x] 2026-02-07: Added `src/runtime.test.ts` to verify runtime creation defaults (`strict`, all features off) and partial feature override normalization behavior.
+- [x] 2026-02-07: Added `src/sugar/quote-tcl.ts` with a 1:1 `QuoteTCL` parity implementation (`"` escaped to `\\"` only) and source-mapped JSDoc to `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Added `src/sugar/quote-tcl.test.ts` with Micropolis `QuoteTCL` parity coverage confirming quote-only escaping (no backslash/braces escaping).
+- [x] 2026-02-07: Added `src/sugar/activity-bridge.ts` to serialize Sugar outbound commands with trailing `\n` (startup, nickname, share/quit/focus, buddy add/del) including Micropolis-style buddy props/getter fallback ordering; added `src/sugar/activity-bridge.test.ts` for exact command output parity.
+- [x] 2026-02-07: Completed Phase 2 task `SugarStartUp "<uri>"` by verifying/exporting `serializeSugarStartUpCommand` parity with `send_process('SugarStartUp "' + QuoteTCL(uri) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarNickName "<nick>"` by verifying/exporting `serializeSugarNickNameCommand` parity with `send_process('SugarNickName "' + QuoteTCL(nick) + '"\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarShare` by verifying/exporting `serializeSugarShareCommand` parity with `share()` -> `send_process('SugarShare\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarQuit` by verifying/exporting `serializeSugarQuitCommand` parity with `quit_process()` -> `send_process('SugarQuit\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarActivate` by verifying/exporting `serializeSugarActivateCommand` parity with `_focus_in_cb()` -> `send_process('SugarActivate\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarDeactivate` by verifying/exporting `serializeSugarDeactivateCommand` parity with `_focus_out_cb()` -> `send_process('SugarDeactivate\n')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyAddCommand` emits `SugarBuddyAdd "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_appeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"` by verifying `serializeSugarBuddyDelCommand` emits `SugarBuddyDel "<key>" "<nick>" "<color>" "<address>"\n` with Micropolis `_buddy_disappeared_cb` field precedence (props first, fallback to getters) from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 2 task `Add src/sugar/activity-bridge.test.ts covering exact string output and buddy fallback field ordering` by validating exact outbound command strings (including `\n` and `QuoteTCL` quoting) and full getter-fallback call ordering parity against `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Completed Phase 3 task `Create src/sugar/stdout-protocol.ts for line parsing using explicit split(' ') parity` by adding a parity tokenizer/line parser that mirrors `line.strip().split(' ')` semantics from `ref/micropolis/micropolisactivity.py` and `ref/micropolis/spec/integration/SPEC.md`.
+- [x] 2026-02-07: Completed Phase 3 task `Implement strict-mode behavior for malformed PlaySound lines` by adding `getPlaySoundToken` in `src/sugar/stdout-protocol.ts` so strict mode throws on missing `words[1]`, matching the parity failure surface described for `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py` and `ref/micropolis/spec/integration/SPEC.md`.
+- [x] 2026-02-07: Repaired strict-mode `PlaySound` malformed-line parity by changing the thrown strict error to `RangeError('list index out of range')`, preserving fatal failure semantics while matching Python `IndexError` text from `self.play_sound(words[1])` in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Repaired strict-mode `PlaySound` parity surfacing in `src/runtime.ts` by routing `handleOutputLine` through `parseSugarStdoutLine` + `getPlaySoundToken`, so malformed `PlaySound` lines throw through runtime handling like `_stdout_thread_function` does in `ref/micropolis/micropolisactivity.py`; added `src/runtime.test.ts` coverage for strict malformed-line failure and valid token dispatch.
+- [x] 2026-02-07: Implemented safe-mode malformed `PlaySound` handling by returning typed `SugarStdoutMalformedLineError` (`PLAY_SOUND_MISSING_ARGUMENT`) from `getPlaySoundToken` instead of throwing, and updated runtime handling/tests so malformed lines are non-fatal and later stdout lines continue processing.
+- [x] 2026-02-07: Completed Phase 3 task `Add src/sugar/stdout-protocol.test.ts covering` by adding parity tests for normal `PlaySound Name`, explicit-space empty-token behavior, strict/safe missing-argument handling, and lowercase sound-hook delivery parity with `play_sound(name.lower() + '.wav')` from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `normal PlaySound Name` after verifying `parseSugarStdoutLine('PlaySound Bulldozer')` and `getPlaySoundToken(..., 'strict')` parity with `_stdout_thread_function` (`words = line.strip().split(' ')`; `self.play_sound(words[1])`) in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `repeated spaces creating empty tokens` after verifying `parseSugarStdoutLine('PlaySound   Bulldozer')` preserves explicit-space empty tokens (`['PlaySound', '', '', 'Bulldozer']`) and `getPlaySoundToken(..., 'strict')` returns `words[1] === ''`, matching `line.strip().split(' ')` parity in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `missing argument behavior in strict and safe modes` by confirming strict mode throws `RangeError('list index out of range')` (Python `IndexError` parity for `words[1]`) and safe mode returns `SugarStdoutMalformedLineError('PLAY_SOUND_MISSING_ARGUMENT')` non-fatally in `src/sugar/stdout-protocol.ts` and `src/runtime.ts`, mirroring/parity-hardening `_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 3 task `Ensure sound hook receives lowercased sound name for wav mapping parity` by confirming `createIntegrationRuntime(...).handleOutputLine('PlaySound Bulldozer')` delivers `bulldozer` to `onSoundToken`, matching `play_sound(name.lower() + '.wav')` behavior in `ref/micropolis/micropolisactivity.py`; validated with `packages/sim-integration/src/runtime.test.ts` and `packages/sim-integration/src/sugar/stdout-protocol.test.ts`.
+- [x] 2026-02-07: Completed Phase 4 task `Create src/tty/command-buffer.ts` by adding `TtyCommandBuffer.assemble(string)` as a parity-first port of `Tcl_AssembleCmd` command assembly (`ref/micropolis/src/tcl/tclassem.c`) with Tcl word parsing/backslash continuation behavior derived from `TclWordEnd`/`QuoteEnd`/`VarNameEnd`/`Tcl_Backslash` (`ref/micropolis/src/tcl/tclparse.c`) for `StdinProc` multiline input handling in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `Add src/tty/command-buffer.test.ts for continuation and completion behavior` by adding parity tests for brace and backslash-newline continuations plus zero-length forced completion, matching `Tcl_AssembleCmd` command assembly behavior in `ref/micropolis/src/tcl/tclassem.c` and `StdinProc` usage in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `Create src/tty/stdin-channel.ts implementing StdinProc parity` by adding `StdinChannel` + `TTY_PROMPT` in `packages/sim-integration/src/tty/stdin-channel.ts` to mirror `ref/micropolis/src/sim/w_tk.c` `StdinProc`/startup semantics (EOF handling with `gotPartial`, tty vs non-tty read shutdown, `Tcl_AssembleCmd`-style buffering, `(result != TCL_OK) || sim_tty` result printing, and exact `sim:\n` prompt emission).
+- [x] 2026-02-07: Completed Phase 4 task `EOF + no partial + tty => trigger exit callback` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` calls `onExit(0)` when `isTty` is true and no partial command is buffered, matching `if (!gotPartial && sim_tty) sim_exit(0);` in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `EOF + no partial + non-tty => disable further reads` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` in non-tty mode calls the read-disable hook, flips `isReadEnabled()` false, and ignores subsequent input, matching `Tk_DeleteFileHandler(0)` behavior in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `EOF + partial => treat as empty line and continue` by adding `src/tty/stdin-channel.test.ts` coverage that validates `consumeLine(null)` after a partial line evaluates the buffered command (forced completion via empty input) instead of exiting/disabling reads, matching `line[0] = 0;` + `Tcl_AssembleCmd(buffer, line)` + eval flow in `StdinProc` from `ref/micropolis/src/sim/w_tk.c` and empty-string forced completion semantics in `ref/micropolis/src/tcl/tclassem.c`.
+- [x] 2026-02-07: Completed Phase 4 task `print result when (result != ok) || sim_tty` by validating `StdinChannel.consumeLine` result-output gating against `StdinProc` in `ref/micropolis/src/sim/w_tk.c` (`if (*tk_mainInterp->result != 0) { if ((result != TCL_OK) || sim_tty) printf("%s\\n", tk_mainInterp->result); }`) via non-tty success suppression, non-tty error printing, and tty success printing tests in `src/tty/stdin-channel.test.ts`.
+- [x] 2026-02-07: Completed Phase 4 task `emit prompt exactly sim:\n after each command in tty mode` by adding `src/tty/stdin-channel.test.ts` coverage that validates `StdinChannel.consumeLine` emits the exact `sim:\n` prompt once per completed tty command, matching post-eval `printf("sim:\\n"); fflush(stdout);` in `StdinProc` from `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `emit initial prompt exactly sim:\n when tty channel starts` by enforcing one-time startup prompt emission in `StdinChannel.start()` and adding `src/tty/stdin-channel.test.ts` coverage for exact `sim:\n` output parity with `if (sim_tty) printf("sim:\\n");` in `tk_main` from `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 4 task `Add src/tty/stdin-channel.test.ts for all branches above` by validating EOF tty/non-tty handling, partial-EOF continuation, result print gating (`(result != TCL_OK) || sim_tty`), and exact `sim:\n` startup/post-command prompts against `StdinProc` and `tk_main` in `ref/micropolis/src/sim/w_tk.c`.
+- [x] 2026-02-07: Completed Phase 5 task `Create src/net/udp-hooks.ts implementing listenTo(port) parity interface` by adding `createUdpHookRuntime(...).listenTo(port)` as an adapter-backed parity port of `udp_listen` in `ref/micropolis/src/sim/w_net.c` (socket/setup/fcntl/open-file order, `SO_REUSEADDR`, and `0` return on setup failure), with focused tests in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Implement hearFrom(fileSock) parsing with exact file<sock> prefix requirement` by adding `createUdpHookRuntime(...).hearFrom(fileSock)` parsing that mirrors `SimCmdHearFrom` char-by-char `file` prefix checks and integer parsing of `argv[2] + 4` from `ref/micropolis/src/sim/w_sim.c`, then forwarding parsed sockets to the UDP hear adapter with hear-phase error reporting on malformed tokens.
+- [x] 2026-02-07: Completed Phase 5 task `Implement nonblocking receive loop parity (continue on EINTR, stop on EWOULDBLOCK)` by porting `udp_hear` loop control from `ref/micropolis/src/sim/w_net.c` into `createUdpHookRuntime(...).hearFrom(fileSock)` using adapter-driven receive results (`eintr` retry, `wouldBlock` stop, other errors report `recvfrom` and return), with focused parity tests in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Emit callback string exactly: HandlePacket <sock> {<ip>} {<byte0> <byte1> ...}` by surfacing packet recv results through `hooks.onPacketCommand` in `createUdpHookRuntime(...).hearFrom(fileSock)` and emitting `HandlePacket ${sock} {${ip}} {${bytes}}` command-shape strings mirroring `sprintf(cmd, "HandlePacket %d {%s} {", ...)` + `Eval(cmd)` flow in `ref/micropolis/src/sim/w_net.c`; added focused callback-shape coverage in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Format each byte as %3d equivalent (fixed width + trailing space)` by updating UDP packet command formatting in `src/net/udp-hooks.ts` to emit each byte as `%3d ` (right-aligned width 3 plus trailing space), matching the `for` loop `sprintf(cp, "%3d ", buf[i]); cp += 4;` behavior in `ref/micropolis/src/sim/w_net.c`; updated `src/net/udp-hooks.test.ts` expectation for exact spacing parity.
+- [x] 2026-02-07: Completed Phase 5 task `Implement strict mode port/address quirks; safe mode fixes (initialized addr length + normalized port handling)` by adding parity-mode wiring to `createUdpHookRuntime` in `src/net/udp-hooks.ts`: strict mode now preserves `udp_listen` no-`htons` port quirk and leaves `udp_hear` recv address length uninitialized-equivalent (`undefined` adapter input), while safe mode normalizes listen ports to unsigned 16-bit and passes initialized `sockaddr_in` length (`16`) per robust behavior noted in `ref/micropolis/spec/integration/SPEC.md`; added focused strict/safe coverage in `src/net/udp-hooks.test.ts`.
+- [x] 2026-02-07: Completed Phase 5 task `Add src/net/udp-hooks.test.ts for parser and formatter exactness` by extending `src/net/udp-hooks.test.ts` with exact `SimCmdHearFrom` parser coverage (signed `file<sock>` integers and 32-bit bounds) and exact `udp_hear` formatter coverage (`len==0` produces `{}` and `%3d ` width/trailing spacing for each byte) mapped to `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
+- [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-process.ts for stdin/stdout wiring abstractions` by adding `createNodeProcessIoAdapter` with adapter contracts for stdin writes and stdout line subscription in `src/adapters/node-process.ts`, mirroring Sugar transport behavior from `ref/micropolis/micropolisactivity.py` (`send_process` and `_stdout_thread_function`) while keeping parsing behavior in protocol modules.
+- [x] 2026-02-07: Completed Phase 6 task `Create src/adapters/node-udp.ts for UDP socket abstraction` by adding `createNodeUdpPlatform` in `src/adapters/node-udp.ts` as a Node `dgram` adapter for the `UdpListenPlatform` contract from `src/net/udp-hooks.ts`, mapping `udp_listen`/`udp_hear` responsibilities from `ref/micropolis/src/sim/w_net.c` (socket creation, reuse-address intent, bind-any, nonblocking-flag tracking, and EINTR/EWOULDBLOCK/error receive outcomes via a polling queue abstraction).
+- [x] 2026-02-07: Completed Phase 6 task `Add adapter tests with fakes/mocks only (no real network required)` by adding `src/adapters/node-process.test.ts` (fake stdin/stdout stream wiring tests) and `src/adapters/node-udp.test.ts` (mocked `node:dgram` + fake socket tests for socket setup, bind normalization, recv outcome mapping, and teardown) with no real network usage, aligned to adapter parity boundaries from `ref/micropolis/micropolisactivity.py` and `ref/micropolis/src/sim/w_net.c`.
+- [x] 2026-02-07: Completed Phase 7 task `Wire Sugar, TTY, and NET modules into createIntegrationRuntime` by wiring Sugar command methods to `src/sugar/activity-bridge.ts` serializers, routing TTY input through `StdinChannel` (`ref/micropolis/src/sim/w_tk.c` parity), and delegating NET methods to `createUdpHookRuntime` with adapter-provided `udpPlatform`; added runtime orchestration tests in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `Expose runtime API methods` by exposing `handleInputLine`, `handleOutputLine`, `share`/`focusIn`/`focusOut`/`quit`, `buddyAppeared`/`buddyDisappeared`, and `listenTo`/`hearFrom` on `IntegrationRuntime` in `src/runtime.ts`, matching Sugar (`ref/micropolis/micropolisactivity.py`), TTY (`ref/micropolis/src/sim/w_tk.c`), and NET (`ref/micropolis/src/sim/w_net.c`) integration entry points via parity-first adapter wiring.
+- [x] 2026-02-07: Completed Phase 7 task `handleInputLine(line)` by widening `IntegrationRuntime.handleInputLine` to accept `string | null` so EOF can be forwarded to `StdinChannel.consumeLine` with `StdinProc` parity (`ref/micropolis/src/sim/w_tk.c`), and added `src/runtime.test.ts` coverage for tty exit-on-EOF and non-tty read-disable behavior.
+- [x] 2026-02-07: Completed Phase 7 task `handleOutputLine(line)` by documenting/runtime-validating Sugar stdout dispatch parity in `src/runtime.ts` (`_stdout_thread_function` in `ref/micropolis/micropolisactivity.py`: trim + `split(' ')` + `PlaySound(words[1])` strict failure semantics) while preserving safe-mode hardening via typed malformed-line suppression.
+- [x] 2026-02-07: Completed Phase 7 task `share()`, `focusIn()`, `focusOut()`, `quit()` by documenting lifecycle parity mappings in `src/runtime.ts` to `share`, `_focus_in_cb`, `_focus_out_cb`, and `quit_process` in `ref/micropolis/micropolisactivity.py` and adding focused runtime tests for exact command emission (`SugarShare`, `SugarActivate`, `SugarDeactivate`, `SugarQuit`) plus sugar-disabled no-op behavior in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `buddyAppeared(buddy)`, `buddyDisappeared(buddy)` by adding Micropolis-mapped runtime API JSDoc in `src/runtime.ts` (mapping to `_buddy_appeared_cb` / `_buddy_disappeared_cb` in `ref/micropolis/micropolisactivity.py`) and adding focused runtime tests in `src/runtime.test.ts` for Sugar command emission (`SugarBuddyAdd`/`SugarBuddyDel`), sugar-disabled no-op behavior, and legacy `buddy.props` forwarding parity.
+- [x] 2026-02-07: Completed Phase 7 task `listenTo(port)`, `hearFrom(fileSock)` by finalizing runtime API parity docs in `src/runtime.ts` (mapping to `SimCmdListenTo`/`SimCmdHearFrom` in `ref/micropolis/src/sim/w_sim.c` and `udp_listen`/`udp_hear` in `ref/micropolis/src/sim/w_net.c`) while preserving adapter-gated no-op/failure semantics validated by NET runtime wiring tests in `src/runtime.test.ts`.
+- [x] 2026-02-07: Completed Phase 7 task `Add src/runtime.integration.test.ts for mixed-feature scenarios` by adding `src/runtime.integration.test.ts` coverage for sugar-only, tty-only, net-only, and sugar+tty+net runtime paths with deterministic cross-feature event logs aligned to `micropolisactivity.py`, `w_tk.c`, and `w_net.c` parity behavior.
+- [x] 2026-02-07: Checked Phase 7 task `sugar-only` by verifying the `records deterministic sugar-only events` integration scenario in `src/runtime.integration.test.ts`, covering Sugar stdout `PlaySound` dispatch and Sugar command emission parity boundaries from `ref/micropolis/micropolisactivity.py`.
+- [x] 2026-02-07: Checked Phase 7 task `tty-only` by validating the `records deterministic tty-only events` scenario in `src/runtime.integration.test.ts` (startup/post-command `sim:\n` prompts, multiline `Tcl_AssembleCmd`-style input completion, and EOF `sim_exit(0)` parity from `ref/micropolis/src/sim/w_tk.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic tty-only events"`.
+- [x] 2026-02-07: Checked Phase 7 task `net-only` by validating the `records deterministic net-only events` scenario in `src/runtime.integration.test.ts`, including `udp_listen` strict bind-port quirk and `udp_hear` packet command formatting parity (`HandlePacket <sock> {<ip>} {%3d }`) against `ref/micropolis/src/sim/w_net.c`, via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic net-only events"`.
+- [x] 2026-02-07: Checked Phase 7 task `sugar+tty+net` by validating the `records deterministic sugar+tty+net events` scenario in `src/runtime.integration.test.ts`, covering combined Sugar stdout/command dispatch (`ref/micropolis/micropolisactivity.py`), TTY prompt/eval/EOF behavior (`ref/micropolis/src/sim/w_tk.c`), and NET listen/hear packet formatting (`ref/micropolis/src/sim/w_net.c`) via `pnpm --filter @city/sim-integration test -- src/runtime.integration.test.ts -t "records deterministic sugar+tty+net events"`.
+- [x] 2026-02-07: Completed Phase 8 task `Add INTEGRATION-CONTRACT.md describing ownership boundaries with @city/sim-core, @city/sim-ui, and @city/sim-io` by adding `packages/sim-integration/INTEGRATION-CONTRACT.md` with explicit ownership matrix, layering rules, dependency direction, and Micropolis parity source mapping (`micropolisactivity.py`, `w_tk.c`, `w_sim.c`, `w_net.c`).
+- [x] 2026-02-07: Completed Phase 8 task `Document how makeSound/message/UI hook pathways are connected without duplicating sim-core responsibilities` by extending `packages/sim-integration/INTEGRATION-CONTRACT.md` with source-mapped pathway docs for Micropolis `MakeSound` -> `PlaySound`, `SendMes`/`doMessage`, and `DoUpdateHeads`/`UISet*` flows, and explicit non-duplication ownership rules across `@city/sim-core`, `@city/sim-integration`, and `@city/sim-ui`.
+- [x] 2026-02-07: Completed Phase 8 task `Add compile-time contract test(s) that validate integration runtime adapters can consume sim-core-style hooks` by adding `src/adapters/sim-core-hooks.ts` (`createSimCoreSoundHookAdapter`) and `src/adapters/sim-core-hooks.test.ts` with compile-time contract assertions against `@city/sim-core` `RealtimeCallbacks` plus runtime wiring verification into `createIntegrationRuntime` sound-token handling.
