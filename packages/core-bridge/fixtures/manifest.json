@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "name": "hello-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "hello",
+      "file": "happy/hello.json"
+    },
+    {
+      "name": "command-tool-apply-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "command",
+      "file": "happy/command-tool-apply.json"
+    },
+    {
+      "name": "request-snapshot-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "request_snapshot",
+      "file": "happy/request-snapshot.json"
+    },
+    {
+      "name": "ping-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "ping",
+      "file": "happy/ping.json"
+    },
+    {
+      "name": "ack-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "ack",
+      "file": "happy/ack.json"
+    },
+    {
+      "name": "reject-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "reject",
+      "file": "happy/reject.json"
+    },
+    {
+      "name": "patch-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "patch",
+      "file": "happy/patch.json"
+    },
+    {
+      "name": "snapshot-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "snapshot",
+      "file": "happy/snapshot.json"
+    },
+    {
+      "name": "resync-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "resync",
+      "file": "happy/resync.json"
+    },
+    {
+      "name": "presence-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "presence",
+      "file": "happy/presence.json"
+    },
+    {
+      "name": "error-happy",
+      "scenario": "single_envelope",
+      "envelopeKind": "error",
+      "file": "happy/error.json"
+    },
+    {
+      "name": "duplicate-command-id",
+      "scenario": "duplicate_command_id",
+      "file": "edge/duplicate-command-id.json"
+    },
+    {
+      "name": "out-of-order-seq",
+      "scenario": "out_of_order_seq",
+      "envelopeKind": "patch",
+      "file": "edge/out-of-order-seq.json"
+    },
+    {
+      "name": "version-mismatch-hello",
+      "scenario": "version_mismatch",
+      "envelopeKind": "hello",
+      "file": "edge/version-mismatch-hello.json"
+    }
+  ]
+}

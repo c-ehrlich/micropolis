@@ -1,5 +1,4 @@
 import type { TtyEvaluatorResult } from '../types.ts';
-
 import { TtyCommandBuffer } from './command-buffer.ts';
 
 /**

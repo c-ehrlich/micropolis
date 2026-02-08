@@ -40,7 +40,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 
 ## Task Checklist
 
-- [ ] **0.1 Create `@city/core-bridge` package scaffold**
+- [x] **0.1 Create `@city/core-bridge` package scaffold**
   - Goal: Add package folder, `package.json`, `tsconfig.json`, `src/index.ts`, and baseline scripts.
   - Files to read first:
     - `/Users/cje/dev/city/pnpm-workspace.yaml`
@@ -62,7 +62,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - Package is discovered by workspace and lint/typecheck succeeds.
     - No runtime protocol details yet, only scaffold.
 
-- [ ] **0.2 Define v1 envelope and field contracts**
+- [x] **0.2 Define v1 envelope and field contracts**
   - Goal: Introduce canonical envelope types for `hello`, `command`, `ack`, `reject`, `patch`, `snapshot`, `resync`, `presence`, `error`, `ping`, `request_snapshot`, and freeze concrete payload schemas.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -86,7 +86,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - No conflicting protocol shapes remain inside the new package.
     - Event names and required fields match master plan.
 
-- [ ] **0.3 Add command schema and handshake schema validators**
+- [x] **0.3 Add command schema and handshake schema validators**
   - Goal: Add runtime validation helpers for command envelopes and `hello` compatibility checks.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.ts`
@@ -108,7 +108,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - Validation failure modes are deterministic and documented.
     - Handshake mismatch behavior is explicit and test-covered.
 
-- [ ] **0.4 Define sequencing invariants and helpers (`tick` + `serverSeq`)**
+- [x] **0.4 Define sequencing invariants and helpers (`tick` + `serverSeq`)**
   - Goal: Provide shared helpers to enforce monotonic ordering and stale/gap detection semantics.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -128,7 +128,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Replay/apply decision logic is reusable by both local and DO clients.
 
-- [ ] **0.5 Build canonical fixture corpus**
+- [x] **0.5 Build canonical fixture corpus**
   - Goal: Create static fixtures for every envelope kind and key edge cases.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/fixtures/replay/manifest.json`
@@ -148,7 +148,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Fixtures can be consumed by other packages for cross-package conformance tests.
 
-- [ ] **0.6 Add cross-package contract conformance tests**
+- [x] **0.6 Add cross-package contract conformance tests**
   - Goal: Ensure `sim-integration` and future host implementations can consume bridge contracts without drift.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/index.ts`
@@ -169,7 +169,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Protocol ownership is practically enforceable by tests.
 
-- [ ] **0.7 Publish Stage 0 alignment notes**
+- [x] **0.7 Publish Stage 0 alignment notes**
   - Goal: Record final protocol decisions and unresolved questions in repo docs for Stage 1 consumers.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -195,4 +195,10 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 
 ## Execution Log
 
-- [ ] Add dated entries as tasks complete.
+- [2026-02-08] Completed task 0.1 by scaffolding `packages/core-bridge` with `package.json`, `tsconfig.json`, baseline `lint`/`typecheck` scripts, and a placeholder `src/index.ts` bridge surface export.
+- [2026-02-08] Completed task 0.2 by adding frozen v1 envelope contracts in `packages/core-bridge/src/types.ts` (including concrete `command`/`patch`/`snapshot` payload schemas and required identity/order/version fields), exporting them via `packages/core-bridge/src/index.ts`, and adding compile-time contract coverage in `packages/core-bridge/src/types.test.ts`.
+- [2026-02-08] Completed task 0.3 by adding runtime command/hello schema validators and strict lockstep handshake checks in `packages/core-bridge/src/validation.ts`, exporting validation APIs via `packages/core-bridge/src/index.ts`, adding validator unit coverage in `packages/core-bridge/src/validation.test.ts`, and wiring package test support in `packages/core-bridge/package.json` and `packages/core-bridge/vitest.config.ts`.
+- [2026-02-08] Completed task 0.4 by adding sequencing state helpers and invariant decision APIs in `packages/core-bridge/src/sequencing.ts` (strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, gap/tick-regression resync), exporting sequencing contracts from `packages/core-bridge/src/index.ts`, and adding table-driven coverage in `packages/core-bridge/src/sequencing.test.ts`.
+- [2026-02-08] Completed task 0.5 by adding `packages/core-bridge/fixtures/` canonical happy/edge JSON fixtures with a manifest, implementing typed fixture loading utilities in `packages/core-bridge/src/fixtures.ts`, exporting fixture APIs via `packages/core-bridge/src/index.ts`, and adding schema/sequencing/handshake-backed fixture validation coverage in `packages/core-bridge/src/fixtures.test.ts`.
+- [2026-02-08] Completed task 0.6 by adding `packages/sim-integration/src/bridge-contract.ts` bridge-owned envelope aliases, adding cross-package conformance/runtime wiring coverage in `packages/sim-integration/src/bridge-contract.test.ts` using `@city/core-bridge` contracts, documenting migration points in `packages/sim-integration/INTEGRATION-CONTRACT.md`, and exporting bridge contract seams from `packages/sim-integration/src/index.ts`.
+- [2026-02-08] Completed task 0.7 by publishing `STAGE_0_ALIGNMENT_NOTES.md` with the frozen Stage 0 v1 envelope inventory, handshake and sequencing invariants, and direct links to canonical fixtures/tests (`packages/core-bridge/src/*.test.ts`, `packages/core-bridge/fixtures/manifest.json`, `packages/sim-integration/src/bridge-contract.test.ts`) for Stage 1+ implementation baselines.

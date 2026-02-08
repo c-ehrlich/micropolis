@@ -38,7 +38,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 
 ## Task Checklist
 
-- [ ] **3.1 Align `sim-integration` runtime contracts to `@city/core-bridge`**
+- [x] **3.1 Align `sim-integration` runtime contracts to `@city/core-bridge`**
   - Goal: Remove protocol duplication and import canonical envelope/command/handshake types from bridge package.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/types.ts`
@@ -59,7 +59,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - One protocol definition source exists in practice and in tests.
 
-- [ ] **3.2 Implement authoritative room runtime with idempotency**
+- [x] **3.2 Implement authoritative room runtime with idempotency**
   - Goal: Process commands deterministically per room, enforce `commandId` dedupe, and emit ordered events.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -79,7 +79,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - Runtime behavior is deterministic and authority-safe.
 
-- [ ] **3.3 Add snapshot + patch-tail persistence interfaces and implementation hooks**
+- [x] **3.3 Add snapshot + patch-tail persistence interfaces and implementation hooks**
   - Goal: Support reconnect/recovery with persistent snapshots and patch tails.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-io/src/save.ts`
@@ -100,7 +100,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - Reconnect path can recover without full replay from genesis.
 
-- [ ] **3.4 Implement DO adapter package scaffold and room authority mapping**
+- [x] **3.4 Implement DO adapter package scaffold and room authority mapping**
   - Goal: Create `packages/sim-do-adapter` for DO plumbing and map one room/city to one DO instance.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/index.ts`
@@ -119,7 +119,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - DO adapter can host a room runtime in tests.
 
-- [ ] **3.5 Implement websocket protocol handling with strict handshake**
+- [x] **3.5 Implement websocket protocol handling with strict handshake**
   - Goal: Enforce `hello` lockstep and map wire messages to canonical envelope types.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_0_CONTRACT_FREEZE_PLAN.md`
@@ -138,7 +138,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - Protocol lockstep is enforced consistently across connections.
 
-- [ ] **3.6 Implement DoHost and run host conformance suite**
+- [x] **3.6 Implement DoHost and run host conformance suite**
   - Goal: Provide `DoHost` implementation compatible with `CoreHost` and pass Stage 1 shared conformance tests.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_1_MOCKED_BRIDGE_PLAN.md`
@@ -158,7 +158,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - UI can switch hosts without behavioral contract drift.
 
-- [ ] **3.7 Add reconnect/resync hardening and presence flow**
+- [x] **3.7 Add reconnect/resync hardening and presence flow**
   - Goal: Complete reconnect semantics and optional presence updates in DO mode.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_2_SIMPLE_UI_PLAN.md`
@@ -177,7 +177,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - DO runtime remains consistent across client churn and retries.
 
-- [ ] **3.8 Publish Stage 3 migration notes and legacy adapter status**
+- [x] **3.8 Publish Stage 3 migration notes and legacy adapter status**
   - Goal: Document bridge ownership finalization and legacy adapter boundaries.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/INTEGRATION-CONTRACT.md`
@@ -204,4 +204,12 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 
 ## Execution Log
 
-- [ ] Add dated entries as tasks complete.
+- [x] Add dated entries as tasks complete.
+- [x] 2026-02-08: Completed task 3.1 by introducing canonical bridge-owned envelope/command/handshake types in `@city/core-bridge`, updating `@city/sim-integration` multiplayer runtime contracts to import those types, and adding compile-time drift assertions/tests to enforce single-source protocol ownership.
+- [x] 2026-02-08: Completed task 3.2 by adding an authoritative per-room multiplayer runtime in `@city/sim-integration` with room registry contexts, deterministic per-room command queue ordering, per-room `commandId` idempotency dedupe, and ordered `ack`/`reject`/`error` plus downstream `patch`/`snapshot` envelope emissions carrying monotonic `tick` and `serverSeq`, with focused tests for acceptance, rejection, dedupe, and deterministic ordering.
+- [x] 2026-02-08: Completed task 3.3 by adding snapshot + patch-tail persistence contracts in `@city/sim-integration` multiplayer types, wiring authoritative runtime hooks for persistence-backed room bootstrap (`snapshot` + replay tail by `serverSeq`), adding configurable snapshot cadence with a Stage-locked default of 64 ticks plus tail truncation hooks, and adding focused tests for persisted bootstrap replay and post-truncation sequence continuity.
+- [x] 2026-02-08: Completed task 3.4 by scaffolding `@city/sim-do-adapter` with package-level `typecheck`/`lint`/`test` scripts, implementing a room-scoped `RoomDoAdapter` that maps one room to one deterministic DO authority key, wiring websocket open/message/close entrypoints to `@city/sim-integration` runtime APIs (`connectClient`/`receiveCommand`/`disconnectClient`), bridging DO alarms to authoritative `tick(nowMs)`, and adding focused adapter unit tests for routing and room-authority fanout behavior.
+- [x] 2026-02-08: Completed task 3.5 by hardening `@city/sim-do-adapter` websocket protocol handling with strict `hello` lockstep enforcement (bridge-v1 protocol/core payload match), adding validated JSON/binary envelope decode utilities that map wire payloads to canonical `@city/core-bridge` envelope types, denying pre-hello mutating `command` envelopes via bridge `reject` responses, routing protocol/authority/handshake mismatches through bridge `error` responses, and adding focused adapter tests for valid handshake, mismatch refusal, and pre-hello command denial.
+- [x] 2026-02-08: Completed task 3.6 by adding a bridge-owned `CoreHost` contract in `@city/core-bridge`, implementing `DoHost` and `LocalHost` wrappers in `@city/sim-do-adapter` with pluggable DO transport adapters, adding an in-memory transport harness for adapter-host composition, and adding a shared host conformance suite that runs against both hosts (handshake gating, ordered ack/patch/snapshot flow, duplicate `commandId` idempotency, and multi-client ordering/idempotency behavior).
+- [x] 2026-02-08: Completed task 3.7 by hardening `RoomDoAdapter` reconnect semantics with deterministic server-initiated `resync` directives for reconnect and hello-incompatibility paths, adding reconnect bootstrap replay via `bootstrapReplay` with adapter-level patch-tail ordering (`serverSeq`) and stale/drop filtering, adding optional DO `presence` join/leave event emission for handshaken client churn, and extending adapter/host tests with dropped-packet reconnect recovery and multi-client presence churn coverage.
+- [x] 2026-02-08: Completed task 3.8 by publishing `packages/sim-integration/STAGE_3_MIGRATION_NOTES.md` with bridge ownership finalization decisions, explicit optional/isolated legacy Sugar/TTY/UDP adapter status (mapped to `ref/micropolis/micropolisactivity.py` and `ref/micropolis/src/sim/w_tk.c` parity boundaries), documented Stage 3 known gaps for Stage 4 handoff, and linked these notes from `packages/sim-integration/INTEGRATION-CONTRACT.md`.

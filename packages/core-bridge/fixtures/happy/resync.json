@@ -1,0 +1,15 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "resync",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 258,
+    "serverSeq": 1028,
+    "payload": {
+      "reason": "sequence_gap",
+      "expectedNextServerSeq": 1029,
+      "snapshotRequired": true
+    }
+  }
+}

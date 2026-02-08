@@ -27,24 +27,18 @@ Add a multiplayer contract surface in `@city/sim-integration` that does not depe
 ```ts
 // packages/sim-integration/src/multiplayer/types.ts
 
-export type ClientId = string;
-export type RoomId = string;
-export type CommandId = string;
+import type {
+  BridgeClientCommandEnvelope,
+  BridgeClientId,
+  BridgeRoomId,
+  BridgeServerEnvelope,
+  BridgeServerSnapshotEnvelope,
+} from "@city/core-bridge";
 
-export interface ClientCommandEnvelope<T = unknown> {
-  roomId: RoomId;
-  clientId: ClientId;
-  commandId: CommandId; // idempotency key
-  sentAtMs: number;
-  payload: T;
-}
-
-export interface ServerEventEnvelope<T = unknown> {
-  roomId: RoomId;
-  tick: number;
-  kind: "ack" | "patch" | "snapshot" | "presence" | "error";
-  payload: T;
-}
+export type ClientId = BridgeClientId;
+export type RoomId = BridgeRoomId;
+export type ClientCommandEnvelope<T = unknown> = BridgeClientCommandEnvelope<T>;
+export type ServerEventEnvelope<T = unknown> = BridgeServerEnvelope<T>;
 
 export interface IntegrationPersistence {
   load(roomId: RoomId): Promise<Uint8Array | null>;
@@ -61,7 +55,7 @@ export interface IntegrationRuntime {
   disconnectClient(roomId: RoomId, clientId: ClientId): Promise<void>;
   receiveCommand(cmd: ClientCommandEnvelope): Promise<void>;
   tick(nowMs: number): Promise<void>; // authoritative tick
-  getSnapshot(roomId: RoomId): Promise<ServerEventEnvelope>;
+  getSnapshot(roomId: RoomId): Promise<BridgeServerSnapshotEnvelope>;
 }
 ```
 

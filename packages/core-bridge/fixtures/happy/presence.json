@@ -1,0 +1,14 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "presence",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 258,
+    "serverSeq": 1029,
+    "payload": {
+      "connectedClientIds": ["local-client", "client-2"],
+      "joinedClientId": "client-2"
+    }
+  }
+}

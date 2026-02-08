@@ -1,0 +1,20 @@
+{
+  "name": "@city/sim-do-adapter",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "pnpm -w eslint packages/sim-do-adapter/src packages/sim-do-adapter/vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root packages/sim-do-adapter"
+  },
+  "dependencies": {
+    "@city/core-bridge": "workspace:*",
+    "@city/sim-integration": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.10"
+  }
+}

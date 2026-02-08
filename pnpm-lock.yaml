@@ -98,6 +98,8 @@ importers:
         specifier: 7.3.1
         version: 7.3.1(@types/node@25.0.10)(tsx@4.21.0)
 
+  packages/core-bridge: {}
+
   packages/micropolis-c-harness: {}
 
   packages/shared: {}
@@ -115,6 +117,19 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.5.3
+
+  packages/sim-do-adapter:
+    dependencies:
+      '@city/core-bridge':
+        specifier: workspace:*
+        version: link:../core-bridge
+      '@city/sim-integration':
+        specifier: workspace:*
+        version: link:../sim-integration
+    devDependencies:
+      '@types/node':
+        specifier: 25.0.10
+        version: 25.0.10
 
   packages/sim-integration: {}
 
