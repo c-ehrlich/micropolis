@@ -108,7 +108,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - Validation failure modes are deterministic and documented.
     - Handshake mismatch behavior is explicit and test-covered.
 
-- [ ] **0.4 Define sequencing invariants and helpers (`tick` + `serverSeq`)**
+- [x] **0.4 Define sequencing invariants and helpers (`tick` + `serverSeq`)**
   - Goal: Provide shared helpers to enforce monotonic ordering and stale/gap detection semantics.
   - Files to read first:
     - `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`
@@ -198,3 +198,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 - [2026-02-08] Completed task 0.1 by scaffolding `packages/core-bridge` with `package.json`, `tsconfig.json`, baseline `lint`/`typecheck` scripts, and a placeholder `src/index.ts` bridge surface export.
 - [2026-02-08] Completed task 0.2 by adding frozen v1 envelope contracts in `packages/core-bridge/src/types.ts` (including concrete `command`/`patch`/`snapshot` payload schemas and required identity/order/version fields), exporting them via `packages/core-bridge/src/index.ts`, and adding compile-time contract coverage in `packages/core-bridge/src/types.test.ts`.
 - [2026-02-08] Completed task 0.3 by adding runtime command/hello schema validators and strict lockstep handshake checks in `packages/core-bridge/src/validation.ts`, exporting validation APIs via `packages/core-bridge/src/index.ts`, adding validator unit coverage in `packages/core-bridge/src/validation.test.ts`, and wiring package test support in `packages/core-bridge/package.json` and `packages/core-bridge/vitest.config.ts`.
+- [2026-02-08] Completed task 0.4 by adding sequencing state helpers and invariant decision APIs in `packages/core-bridge/src/sequencing.ts` (strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, gap/tick-regression resync), exporting sequencing contracts from `packages/core-bridge/src/index.ts`, and adding table-driven coverage in `packages/core-bridge/src/sequencing.test.ts`.
