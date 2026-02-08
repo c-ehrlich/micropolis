@@ -60,27 +60,27 @@ Verification:
 - [x] `pnpm -C /Users/cje/dev/city/packages/sim-assets typecheck`
 
 ### P1.2 Add package test harness
-- [ ] Add `vitest` config for `sim-assets`.
-- [ ] Add `test` script in `packages/sim-assets/package.json`.
-- [ ] Add first smoke test for package exports.
+- [x] Add `vitest` config for `sim-assets`.
+- [x] Add `test` script in `packages/sim-assets/package.json`.
+- [x] Add first smoke test for package exports.
 
 Verification:
-- [ ] `pnpm -C /Users/cje/dev/city/packages/sim-assets test`
+- [x] `pnpm -C /Users/cje/dev/city/packages/sim-assets test`
 
 ## Phase 2: Canonical Manifest Generation
 
 ### P2.1 Add generator script
-- [ ] Create `packages/sim-assets/scripts/gen-assets-manifest.mjs`.
-- [ ] Scan canonical inputs under `ref/micropolis/{res,images,manual}`.
-- [ ] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
+- [x] Create `packages/sim-assets/scripts/gen-assets-manifest.mjs`.
+- [x] Scan canonical inputs under `ref/micropolis/{res,images,manual}`.
+- [x] Emit deterministic generated files under `packages/sim-assets/src/generated/`.
 
 Verification:
 - [ ] Generator runs successfully.
 - [ ] Re-run generator produces no diff.
 
 ### P2.2 Add parity verifier
-- [ ] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
-- [ ] Assert all locked invariants and known-missing sets.
+- [x] Create `packages/sim-assets/scripts/verify-assets-parity.mjs`.
+- [x] Assert all locked invariants and known-missing sets.
 
 Verification:
 - [ ] Verifier exits 0 on current reference assets.
@@ -88,30 +88,30 @@ Verification:
 ## Phase 3: Complete Runtime Helpers
 
 ### P3.1 Implement file-backed resource loader
-- [ ] Extend `resource-loader.ts` with filesystem read API (full-file read).
-- [ ] Cache payload by `(type,id)` key to mirror C lifetime cache semantics.
-- [ ] Return deterministic error shape for missing resource files.
+- [x] Extend `resource-loader.ts` with filesystem read API (full-file read).
+- [x] Cache payload by `(type,id)` key to mirror C lifetime cache semantics.
+- [x] Return deterministic error shape for missing resource files.
 
 Verification:
 - [ ] Add `resource-loader.test.ts` with cache hit/miss and missing-file assertions.
 
 ### P3.2 Harden string-table parity
-- [ ] Ensure parser/lookup semantics are documented against `GetIndString` behavior.
-- [ ] Add `string-table.test.ts` with fixture assertions for `stri.202/.219/.301/.356`.
+- [x] Ensure parser/lookup semantics are documented against `GetIndString` behavior.
+- [x] Add `string-table.test.ts` with fixture assertions for `stri.202/.219/.301/.356`.
 
 Verification:
 - [ ] String-table tests pass.
 
 ### P3.3 Harden tile and sprite parity
-- [ ] Add `tiles.test.ts` reading actual XPM headers from canonical assets.
-- [ ] Add `sprites.test.ts` verifying frame manifests against discovered `obj*-*.xpm` files.
+- [x] Add `tiles.test.ts` reading actual XPM headers from canonical assets.
+- [x] Add `sprites.test.ts` verifying frame manifests against discovered `obj*-*.xpm` files.
 
 Verification:
 - [ ] Tile and sprite tests pass.
 
 ### P3.4 Build help catalog implementation
-- [ ] Implement `help-docs` inventory builders (help ids, manual html ids, missing/extra sets).
-- [ ] Add `help-docs.test.ts` with deterministic missing/extra assertions.
+- [x] Implement `help-docs` inventory builders (help ids, manual html ids, missing/extra sets).
+- [x] Add `help-docs.test.ts` with deterministic missing/extra assertions.
 
 Verification:
 - [ ] Help-doc tests pass.
@@ -119,24 +119,24 @@ Verification:
 ## Phase 4: Derived PNG Export Pipeline
 
 ### P4.1 Define derived-image output contract
-- [ ] Add output directory convention (for example `packages/sim-assets/generated-images/`).
-- [ ] Define manifest mapping canonical source path -> derived PNG path.
+- [x] Add output directory convention (for example `packages/sim-assets/generated-images/`).
+- [x] Define manifest mapping canonical source path -> derived PNG path.
 
 Verification:
 - [ ] Contract documented in package README.
 
 ### P4.2 Implement conversion script
-- [ ] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
-- [ ] Convert required XPM assets to PNG.
-- [ ] Keep conversion deterministic and idempotent.
+- [x] Add `packages/sim-assets/scripts/export-derived-images.mjs`.
+- [x] Convert required XPM assets to PNG.
+- [x] Keep conversion deterministic and idempotent.
 
 Verification:
 - [ ] Export script runs cleanly.
 - [ ] Second run yields no diff.
 
 ### P4.3 Enforce canonical/derived separation
-- [ ] Ensure runtime metadata always points to canonical identity keys.
-- [ ] Ensure derived PNG paths are optional overlays, not replacements for canonical IDs.
+- [x] Ensure runtime metadata always points to canonical identity keys.
+- [x] Ensure derived PNG paths are optional overlays, not replacements for canonical IDs.
 
 Verification:
 - [ ] Add tests proving canonical IDs remain stable regardless of derived export.
@@ -144,14 +144,14 @@ Verification:
 ## Phase 5: Integration Hooks
 
 ### P5.1 `sim-io` integration
-- [ ] Export helpers for scenario/resource resolution to avoid duplicate constants in `sim-io`.
+- [x] Export helpers for scenario/resource resolution to avoid duplicate constants in `sim-io`.
 
 Verification:
 - [ ] `sim-io` typecheck passes with helper usage.
 
 ### P5.2 `sim-ui` integration
-- [ ] Export helpers for tool icons, string resources, sound token mapping, and help docs.
-- [ ] Support canonical asset key + optional derived PNG path lookup.
+- [x] Export helpers for tool icons, string resources, sound token mapping, and help docs.
+- [x] Support canonical asset key + optional derived PNG path lookup.
 
 Verification:
 - [ ] `sim-ui` typecheck passes with helper usage.
@@ -159,13 +159,13 @@ Verification:
 ## Phase 6: CI Drift Gates
 
 ### P6.1 Add manifest drift gate
-- [ ] Add script/check that regenerates manifests and fails on diff.
+- [x] Add script/check that regenerates manifests and fails on diff.
 
 Verification:
 - [ ] Intentional stale manifest causes failure.
 
 ### P6.2 Add derived-image drift gate
-- [ ] Add check for deterministic derived PNG export output.
+- [x] Add check for deterministic derived PNG export output.
 
 Verification:
 - [ ] Intentional stale PNG set causes failure.
@@ -178,3 +178,32 @@ Verification:
 ## Execution Log
 - [x] 2026-02-07: Audited current `sim-assets` state. Conclusion: existing module skeleton is directionally correct and should be retained; next work is generator/tests/resource-loader completion plus derived PNG export pipeline.
 - [x] 2026-02-07: Completed P1.1 by replacing `TODO.md` stub with package intent + `PLAN.md` link; verified with package typecheck.
+- [x] 2026-02-07: Completed P1.2 task to add `vitest` config for `sim-assets` by creating `packages/sim-assets/vitest.config.ts`.
+- [x] 2026-02-07: Completed P1.2 task to add `test` script in `packages/sim-assets/package.json`.
+- [x] 2026-02-07: Completed P1.2 smoke-test task by adding `src/index.test.ts`; verified with `pnpm -C packages/sim-assets test`.
+- [x] 2026-02-07: Completed P2.1 task to create `packages/sim-assets/scripts/gen-assets-manifest.mjs`; generator now scans canonical `ref/micropolis/{res,images,manual}` and emits deterministic `src/generated/assets-manifest.ts`.
+- [x] 2026-02-07: Completed P2.1 canonical-input scan task by implementing explicit `scanCanonicalInputs()` traversal of `ref/micropolis/{res,images,manual}` in `scripts/gen-assets-manifest.mjs`.
+- [x] 2026-02-07: Completed P2.1 deterministic-generation task by regenerating `packages/sim-assets/src/generated/assets-manifest.ts` with stable ordering from canonical `ref/micropolis/{res,images,manual}` inputs.
+- [x] 2026-02-07: Completed P2.2 task by creating `packages/sim-assets/scripts/verify-assets-parity.mjs` to validate locked asset parity invariants against `ref/micropolis`.
+- [x] 2026-02-07: Completed P2.2 invariant-assertion task by tightening `scripts/verify-assets-parity.mjs` to enforce the exact known-missing literal Tcl bitmap set (`micropolisl`, `splashscreen`) alongside locked asset invariants.
+- [x] 2026-02-07: Completed P3.1 task to extend `packages/sim-assets/src/resource-loader.ts` with a filesystem full-file read API via exported `readResourceFile()` mapped to `GetResource` load semantics in `ref/micropolis/src/sim/w_resrc.c`.
+- [x] 2026-02-07: Completed P3.1 cache task by adding module-lifetime payload caching in `packages/sim-assets/src/resource-loader.ts` keyed by `(type,id)` to mirror `GetResource` resource identity semantics in `ref/micropolis/src/sim/w_resrc.c`.
+- [x] 2026-02-07: Completed P3.1 missing-resource error-shape task by adding deterministic `ResourceFileNotFoundError` metadata for missing files in `packages/sim-assets/src/resource-loader.ts` and parity tests in `packages/sim-assets/src/resource-loader.test.ts`.
+- [x] 2026-02-07: Completed P3.2 parser/lookup-documentation task by updating `packages/sim-assets/src/string-table.ts` JSDoc with explicit `GetIndString` source mapping and parity notes for newline-delimited parsing and 1-based lookup miss handling.
+- [x] 2026-02-07: Completed P3.2 fixture-parity test task by adding `packages/sim-assets/src/string-table.test.ts` with canonical assertions for `ref/micropolis/res/stri.202/.219/.301/.356` and `GetIndString`-aligned 1-based lookup behavior.
+- [x] 2026-02-07: Completed P3.3 tile-parity task by adding `packages/sim-assets/src/tiles.test.ts` to read canonical `ref/micropolis/images/{tiles.xpm,tilesbw.xpm,tilessm.xpm}` headers and assert parsed header metadata parity.
+- [x] 2026-02-07: Completed P3.3 sprite-parity task by adding `packages/sim-assets/src/sprites.test.ts` to discover canonical `ref/micropolis/images/obj*-*.xpm` files and verify generated sprite frame manifests plus C-derived frame-count parity.
+- [x] 2026-02-07: Completed P3.4 help-doc inventory builder task by implementing `packages/sim-assets/src/help-docs.ts` builders for help IDs, manual HTML IDs, and missing/extra parity sets, and extending `packages/sim-assets/scripts/gen-assets-manifest.mjs` / `src/generated/assets-manifest.ts` to emit canonical `help.tcl` help IDs.
+- [x] 2026-02-07: Completed P3.4 deterministic help-doc parity test task by adding `packages/sim-assets/src/help-docs.test.ts` with fixed canonical missing/extra assertions derived from `ref/micropolis/res/help.tcl` vs `ref/micropolis/manual/*.html`.
+- [x] 2026-02-07: Completed P4.1 output-directory convention task by defining `packages/sim-assets/generated-images/` as the derived PNG destination in `src/derived-images.ts`, documenting it in `packages/sim-assets/README.md`, and adding the committed directory placeholder.
+- [x] 2026-02-07: Completed P4.1 manifest-mapping task by defining `DERIVED_IMAGE_PATH_MANIFEST` in `packages/sim-assets/src/derived-images.ts` to map canonical `ref/micropolis/images/*.xpm` source paths to deterministic derived PNG output paths under `packages/sim-assets/generated-images/images/*.png`, with contract coverage in `packages/sim-assets/src/derived-images.test.ts`.
+- [x] 2026-02-07: Completed P4.2 script-addition task by creating `packages/sim-assets/scripts/export-derived-images.mjs` with deterministic canonical `ref/micropolis/images/*.xpm` to derived PNG export plumbing under `packages/sim-assets/generated-images/images/*.png`.
+- [x] 2026-02-07: Completed P4.2 conversion task by running `pnpm -C packages/sim-assets export-derived-images`, exporting required canonical `ref/micropolis/images/*.xpm` assets to `packages/sim-assets/generated-images/images/*.png` (340 PNGs written, 1 empty-source XPM skipped).
+- [x] 2026-02-07: Completed P4.2 determinism/idempotence task by parameterizing `scripts/export-derived-images.mjs` path roots for isolated runs and adding `scripts/export-derived-images.test.ts` assertions for stable ASCII ordering, repeat-run no-op writes, and deterministic PNG bytes from identical XPM input.
+- [x] 2026-02-07: Completed P4.3 runtime-canonical-key task by adding canonical image identity key typing/validation plus canonical-key-indexed runtime derived-image metadata in `packages/sim-assets/src/derived-images.ts`, with parity coverage in `packages/sim-assets/src/derived-images.test.ts`.
+- [x] 2026-02-07: Completed P4.3 overlay-optional task by making derived PNG paths optional in `packages/sim-assets/src/derived-images.ts` and adding `packages/sim-assets/src/derived-images.test.ts` coverage that canonical IDs/maps remain identical with overlays enabled or omitted.
+- [x] 2026-02-07: Completed P5.1 helper-export task by extending `packages/sim-assets/src/legacy.ts` with C-parity scenario/resource resolution exports (`normalizeLegacyScenarioId`, `resolveLegacyScenarioResourceId`, `resolveLegacyScenarioResourceName`, and typed `stri`/`snro` identifier helpers) and added parity tests in `packages/sim-assets/src/legacy.test.ts`.
+- [x] 2026-02-07: Completed P5.2 helper-export task by adding `packages/sim-assets/src/sim-ui.ts` exports for editor tool icon bitmaps, `stri.356` string-resource references, tool sound token/file mappings, and tool help-doc id/html helpers, with parity tests in `packages/sim-assets/src/sim-ui.test.ts`.
+- [x] 2026-02-07: Completed P5.2 canonical-key/derived-overlay task by adding `resolveSimUiToolIconAssetLookup` in `packages/sim-assets/src/sim-ui.ts` to return canonical `ref/micropolis/images/*.xpm` tool icon keys with optional derived PNG path lookup, plus coverage in `packages/sim-assets/src/sim-ui.test.ts`.
+- [x] 2026-02-07: Completed P6.1 manifest drift gate task by adding `packages/sim-assets/scripts/check-manifest-drift.mjs` and `package.json` wiring to regenerate `src/generated/assets-manifest.ts` and fail when regeneration changes bytes.
+- [x] 2026-02-07: Completed P6.2 derived-image drift gate task by adding `packages/sim-assets/scripts/check-derived-image-drift.mjs` plus `scripts/check-derived-image-drift.test.ts`, wiring `package.json`, and asserting deterministic export snapshots fail on stale checked-in PNG bytes.
