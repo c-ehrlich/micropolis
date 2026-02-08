@@ -38,7 +38,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 
 ## Task Checklist
 
-- [ ] **3.1 Align `sim-integration` runtime contracts to `@city/core-bridge`**
+- [x] **3.1 Align `sim-integration` runtime contracts to `@city/core-bridge`**
   - Goal: Remove protocol duplication and import canonical envelope/command/handshake types from bridge package.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/types.ts`
@@ -204,4 +204,5 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 
 ## Execution Log
 
-- [ ] Add dated entries as tasks complete.
+- [x] Add dated entries as tasks complete.
+- [x] 2026-02-08: Completed task 3.1 by introducing canonical bridge-owned envelope/command/handshake types in `@city/core-bridge`, updating `@city/sim-integration` multiplayer runtime contracts to import those types, and adding compile-time drift assertions/tests to enforce single-source protocol ownership.
