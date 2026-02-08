@@ -86,7 +86,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
     - No conflicting protocol shapes remain inside the new package.
     - Event names and required fields match master plan.
 
-- [ ] **0.3 Add command schema and handshake schema validators**
+- [x] **0.3 Add command schema and handshake schema validators**
   - Goal: Add runtime validation helpers for command envelopes and `hello` compatibility checks.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.ts`
@@ -197,3 +197,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 
 - [2026-02-08] Completed task 0.1 by scaffolding `packages/core-bridge` with `package.json`, `tsconfig.json`, baseline `lint`/`typecheck` scripts, and a placeholder `src/index.ts` bridge surface export.
 - [2026-02-08] Completed task 0.2 by adding frozen v1 envelope contracts in `packages/core-bridge/src/types.ts` (including concrete `command`/`patch`/`snapshot` payload schemas and required identity/order/version fields), exporting them via `packages/core-bridge/src/index.ts`, and adding compile-time contract coverage in `packages/core-bridge/src/types.test.ts`.
+- [2026-02-08] Completed task 0.3 by adding runtime command/hello schema validators and strict lockstep handshake checks in `packages/core-bridge/src/validation.ts`, exporting validation APIs via `packages/core-bridge/src/index.ts`, adding validator unit coverage in `packages/core-bridge/src/validation.test.ts`, and wiring package test support in `packages/core-bridge/package.json` and `packages/core-bridge/vitest.config.ts`.
