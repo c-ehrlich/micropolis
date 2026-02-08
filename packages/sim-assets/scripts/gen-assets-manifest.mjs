@@ -215,6 +215,7 @@ export function generateAssetsManifest() {
  * Canonical source roots: \`ref/micropolis/{res,images,manual}\`.
  * Do not edit manually.
  */
+// prettier-ignore
 export const ASSETS_MANIFEST = ${JSON.stringify(manifest, null, 2)} as const;
 `;
 
