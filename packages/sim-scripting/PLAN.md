@@ -1,5 +1,11 @@
 # Sim Scripting Build Checklist (`@city/sim-scripting`)
 
+## Status Update (2026-02-08)
+
+- [x] Runtime, command families, callback bridge, and feature-flag slices are implemented.
+- [x] Package is no longer a stub.
+- [ ] Remaining open items are transcript/quirk/integration hardening tests, final JSDoc audit, and completion gates.
+
 ## Agent Loop
 
 Use this exact loop:

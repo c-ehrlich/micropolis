@@ -28,6 +28,24 @@ Parity baseline for this package is the Micropolis integration surface in:
 4. `@city/sim-io` owns persistence format parity and file orchestration; integration does not parse or serialize city/scenario files.
 5. Cross-package composition must preserve one-way responsibilities: simulation logic in core, transport in integration, presentation in ui, persistence in io.
 
+## Stage 0 Bridge Migration Points
+
+The Stage 0 contract owner is `@city/core-bridge`. Migration in `@city/sim-integration`
+must converge on that package for protocol definitions:
+
+1. Use `packages/sim-integration/src/bridge-contract.ts` as the migration seam;
+   it aliases integration-facing envelope types directly to `@city/core-bridge`
+   (`IntegrationBridgeClientEnvelopeV1` / `IntegrationBridgeServerEnvelopeV1`).
+2. Command ingress boundaries (TTY/NET/Sugar adapters) should normalize incoming
+   protocol intents into bridge-owned client envelopes before runtime orchestration.
+3. Outbound authoritative events should be emitted as bridge-owned server
+   envelopes with explicit `tick` + `serverSeq` ordering metadata.
+4. Version/schema checks should use bridge-owned validators (`validateCoreBridgeV1HelloEnvelope`,
+   `validateCoreBridgeV1CommandEnvelope`, `validateCoreBridgeV1Handshake`) rather
+   than package-local protocol validators.
+5. Stale/gap ordering behavior should use bridge-owned sequencing helpers to keep
+   apply/drop/resync semantics consistent across local and future DO hosts.
+
 ## Hook Pathways (`makeSound`, messages, UI hooks)
 
 This section documents how the hooks connect across packages while keeping

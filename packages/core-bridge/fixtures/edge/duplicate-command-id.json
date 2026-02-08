@@ -1,0 +1,47 @@
+{
+  "scenario": "duplicate_command_id",
+  "firstCommand": {
+    "kind": "command",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-duplicate-1",
+    "payload": {
+      "type": "sim_set_speed",
+      "speed": 3
+    }
+  },
+  "duplicateCommand": {
+    "kind": "command",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-duplicate-1",
+    "payload": {
+      "type": "sim_set_speed",
+      "speed": 3
+    }
+  },
+  "firstAck": {
+    "kind": "ack",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-duplicate-1",
+    "tick": 259,
+    "serverSeq": 1031,
+    "payload": {
+      "deduplicated": false,
+      "commandType": "sim_set_speed"
+    }
+  },
+  "duplicateAck": {
+    "kind": "ack",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-duplicate-1",
+    "tick": 259,
+    "serverSeq": 1032,
+    "payload": {
+      "deduplicated": true,
+      "commandType": "sim_set_speed"
+    }
+  }
+}

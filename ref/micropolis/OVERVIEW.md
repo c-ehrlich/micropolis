@@ -6,9 +6,9 @@ Status note: this checklist tracks the TypeScript port status in this repository
 - [ ] UI/rendering/tools/sprites (`spec/ui/SPEC.md`) (core has UI-adjacent hooks/heads logic; `packages/sim-ui` remains a stub)
 - [x] Terrain generation (`spec/terrain/SPEC.md`) (non-UI `GenerateMap` pipeline in `packages/sim-core/src/terrain`)
 - [x] Persistence & scenarios (`spec/persistence/SPEC.md`) (`packages/sim-core` `.cty` + `packages/sim-io` load/save/scenario orchestration and parity tests)
-- [ ] Resources/assets (`spec/resources/SPEC.md`)
-- [ ] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`)
-- [ ] Platform integration (Sugar, networking) (`spec/integration/SPEC.md`)
+- [x] Resources/assets (`spec/resources/SPEC.md`) (`packages/sim-assets` metadata/parsers/loaders + manifest/drift tooling)
+- [x] Scripting interface & Tcl commands (`spec/scripting/SPEC.md`) (`packages/sim-scripting` runtime + command families + callback bridge)
+- [x] Platform integration (Sugar, networking) (`spec/integration/SPEC.md`) (`packages/sim-integration` Sugar/TTY/NET runtime adapters)
 
 # Micropolis Specification Overview
 

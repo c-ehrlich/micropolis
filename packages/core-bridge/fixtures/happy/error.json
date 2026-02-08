@@ -1,0 +1,15 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "error",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 258,
+    "serverSeq": 1030,
+    "payload": {
+      "code": "transport",
+      "message": "WebSocket backpressure exceeded retry threshold.",
+      "retryable": true
+    }
+  }
+}

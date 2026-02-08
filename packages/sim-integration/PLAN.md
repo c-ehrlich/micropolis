@@ -1,5 +1,11 @@
 # Sim Integration Plan (`@city/sim-integration`)
 
+## Status Update (2026-02-08)
+
+- [x] Runtime, adapters, and parity-focused tests are implemented across Sugar/TTY/NET surfaces.
+- [x] Package is no longer a stub.
+- [ ] Remaining open items are checklist/gate completion and final verification pass bookkeeping.
+
 ## Agent Loop
 
 Use this exact loop:
