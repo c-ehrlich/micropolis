@@ -1250,6 +1250,7 @@ export function createCamViewState(
  * Builds cam-view subcommand entries for optional CAM mode.
  * Mirrors `CAM_CMD(...)` registration in `cam_command_init`
  * (`ref/micropolis/src/sim/w_cam.c`).
+ * Parity note: subcommand coverage is a 1:1 port when CAM mode is enabled.
  */
 export function createCamViewSubcommandEntries(
   options: CreateCamViewSubcommandEntriesOptions = {},
@@ -1394,6 +1395,7 @@ export function createCamViewCommandDispatcher(
  * Registers the top-level `camview` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "camview", CamCmd, ...)` in
  * `cam_command_init` (`ref/micropolis/src/sim/w_cam.c`).
+ * Parity note: command registration name and factory binding are 1:1 with C.
  */
 export function registerCamViewCommand(
   runtime: ScriptRuntime,

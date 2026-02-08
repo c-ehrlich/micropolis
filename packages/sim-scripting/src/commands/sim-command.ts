@@ -456,6 +456,7 @@ export interface SimKickHooks {
  * Creates mutable `Kick` scheduling state.
  * Mirrors boot-time `UpdateDelayed = 0` initialization in
  * `ref/micropolis/src/sim/s_init.c`.
+ * Parity note: default `false` is 1:1 with C startup behavior.
  */
 export function createSimKickState(initialUpdateDelayed = false): SimKickState {
   return {
@@ -468,6 +469,7 @@ export function createSimKickState(initialUpdateDelayed = false): SimKickState {
  * Mirrors `Kick()` in `ref/micropolis/src/sim/w_tk.c`:
  * call the kick side effect, then schedule delayed update only when no delayed
  * update is currently pending.
+ * Parity note: side-effect order and delayed-update gating are a 1:1 port.
  */
 export function runSimKick(kickState: SimKickState, hooks: SimKickHooks = {}): void {
   hooks.onKick?.();

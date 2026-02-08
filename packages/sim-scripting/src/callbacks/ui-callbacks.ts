@@ -124,7 +124,9 @@ function resolveUiCallbackReference<
 /**
  * Registers or replaces one callback mapping in scripting state.
  * Mirrors C behavior where later script definitions replace earlier procedures,
- * while preserving case-sensitive callback command names.
+ * while preserving case-sensitive callback command names (`Tcl_CreateCommand`
+ * flows in `ref/micropolis/src/sim/w_tk.c`).
+ * Parity note: last-registration-wins behavior is 1:1 with Tcl command replacement.
  */
 export function registerUiCallback<
   TSim = unknown,
@@ -144,6 +146,7 @@ export function registerUiCallback<
  * Registers a batch of callback mappings in insertion order.
  * Mirrors ordered Tcl script loading where procedure bindings can be overwritten
  * by later definitions (`source` flow in `ref/micropolis/src/sim/w_tk.c`).
+ * Parity note: insertion-order replacement behavior is a 1:1 port.
  */
 export function registerUiCallbacks<
   TSim = unknown,
@@ -163,7 +166,7 @@ export function registerUiCallbacks<
 /**
  * Dispatches one UI callback by callback name and argv payload.
  * Mirrors C callback emission where procedures like `UISetFunds` are evaluated
- * by name with positional arguments (`Eval("UI...")` across `w_*.c`).
+ * by name with positional arguments (`Eval("UI...")` across `ref/micropolis/src/sim/w_*.c`).
  * Parity note: if no remap exists, `callbackName` is invoked directly.
  */
 export function dispatchUiCallback<

@@ -678,6 +678,7 @@ export function createDateViewState(
  * Builds `dateview` subcommand entries for the P3.2 command set.
  * Mirrors `DATE_CMD(...)` registration in `date_command_init`
  * (`ref/micropolis/src/sim/w_date.c`).
+ * Parity note: subcommand names and command coverage are a 1:1 port.
  */
 export function createDateViewSubcommandEntries(
   options: CreateDateViewSubcommandEntriesOptions = {},
@@ -815,6 +816,7 @@ export function createDateViewCommandDispatcher(
  * Registers the top-level `dateview` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "dateview", DateViewCmd, ...)`
  * in `date_command_init` (`ref/micropolis/src/sim/w_date.c`).
+ * Parity note: command registration name and factory binding are 1:1 with C.
  */
 export function registerDateViewCommand(
   runtime: ScriptRuntime,

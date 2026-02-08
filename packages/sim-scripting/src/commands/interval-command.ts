@@ -759,6 +759,7 @@ export function createIntervalState(
  * Builds `interval` subcommand entries.
  * Mirrors `IntervalWidgetCmd` subcommand branches in
  * `ref/micropolis/src/sim/w_inter.c`.
+ * Parity note: the subcommand set is a 1:1 port.
  */
 export function createIntervalSubcommandEntries(): readonly IntervalSubcommandEntry[] {
   return [
@@ -771,7 +772,8 @@ export function createIntervalSubcommandEntries(): readonly IntervalSubcommandEn
 
 /**
  * Builds a case-sensitive interval subcommand lookup table.
- * Mirrors per-widget command lookup semantics in Tcl.
+ * Mirrors `IntervalCmds` hash-table lookup behavior in
+ * `ref/micropolis/src/sim/w_inter.c`.
  * Parity note: duplicate names use last-registration-wins map semantics.
  */
 export function createIntervalSubcommandTable(
@@ -890,6 +892,7 @@ export function createIntervalCommandDispatcher(
  * Registers the top-level `interval` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "interval", Tk_IntervalCmd, ...)`
  * in `ref/micropolis/src/sim/w_tk.c`.
+ * Parity note: command registration name and factory binding are 1:1 with C.
  */
 export function registerIntervalCommand(
   runtime: ScriptRuntime,
