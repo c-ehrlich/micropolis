@@ -1,4 +1,9 @@
 import {
+  createInitialRuntimeMapState,
+  projectRuntimeMapState,
+  type RuntimeMapState,
+} from './map-state.ts';
+import {
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
   type HostEnvelope,
@@ -32,6 +37,7 @@ export interface WebRuntimeState {
   handshakeError: string | null;
   lastAppliedServerSeq: number;
   lastAppliedTick: number;
+  mapState: RuntimeMapState;
 }
 
 /**
@@ -89,6 +95,7 @@ export function createInitialWebRuntimeState(
     handshakeError: null,
     lastAppliedServerSeq: 0,
     lastAppliedTick: 0,
+    mapState: createInitialRuntimeMapState(),
   };
 }
 
@@ -147,12 +154,15 @@ export function reduceHostEnvelope(
 
   const phase =
     envelope.kind === 'snapshot' ? 'ready' : envelope.kind === 'resync' ? 'resyncing' : state.phase;
+  const mapState = projectRuntimeMapState(state.mapState, envelope);
+
   return {
     state: {
       ...state,
       phase,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
+      mapState,
     },
     outcome: 'applied',
     effect: { kind: 'none' },

@@ -58,7 +58,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - UI runtime can connect to `LocalHost` and process events deterministically.
 
-- [ ] **2.2 Implement map rendering with ordered patch application**
+- [x] **2.2 Implement map rendering with ordered patch application**
   - Goal: Render map state from host data and apply incremental updates in `serverSeq` order.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/core/map-store.ts`
@@ -211,3 +211,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed 2.1 by adding `apps/web` host-client runtime lifecycle + envelope reducer with mandatory `hello` negotiation, `serverSeq`/`tick` tracking, and web runtime stale/gap routing tests.
+- 2026-02-08: Completed 2.2 by adding Stage 2 canvas map rendering in `apps/web`, projecting authoritative snapshot+patch payloads into runtime map state, applying map deltas only after in-order envelope acceptance, and adding map progression/stale-drop tests plus manual smoke steps.
