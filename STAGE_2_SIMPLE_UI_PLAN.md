@@ -182,7 +182,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Local playable definition is automated and repeatable.
 
-- [ ] **2.8 Publish Stage 2 operation notes**
+- [x] **2.8 Publish Stage 2 operation notes**
   - Goal: Document how to run/play/test LocalHost mode for downstream teams.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/WORKING_GAME_PLAN.md`
@@ -217,3 +217,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - 2026-02-08: Completed 2.5 by adding Stage 2 browser city lifecycle/persistence/scenario command flows (`new-city`, `save-city`, `load-city`, `load-scenario`) through runtime envelopes, extracting a dedicated local demo host module with Micropolis-aligned `s_fileio.c` metadata constants, wiring route controls for new/save/load/scenario entry, and adding web-runtime save/load round-trip plus scenario boot smoke tests.
 - 2026-02-08: Completed 2.6 by adding a reconnect-aware Stage 2 runtime state machine (`reconnecting`/`resyncing`), auto-requesting `request_snapshot` on reconnect and server `resync` directives, safely clearing pending tool visuals during resync entry, allowing snapshot rebase before ordered patch-tail apply, wiring reconnect/resync controls in the Stage 2 route UX, and adding reconnect + server-resync ordering tests.
 - 2026-02-08: Completed 2.7 by replacing the Stage 2 web placeholder test with deterministic LocalHost playable smoke coverage for start-city -> tool placement -> ambient tick/HUD projection -> save/load round-trip, plus repeated-run determinism assertions to guard against flaky behavior.
+- 2026-02-08: Completed 2.8 by publishing `apps/web/STAGE_2_OPERATION_NOTES.md` with LocalHost run/play/test runbook instructions, command verification records, troubleshooting guidance, and explicit pre-DoHost limitations mapped to Micropolis editor/update/fileio behavior.
