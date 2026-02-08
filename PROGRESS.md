@@ -1,4 +1,4 @@
-## Progress Snapshot (Code-Verified)
+## Progress Snapshot (Code-Verified, 2026-02-08)
 
 This file tracks implementation status in the TypeScript port. Source of truth is code/tests in this repository.
 
@@ -7,25 +7,25 @@ This file tracks implementation status in the TypeScript port. Source of truth i
 - `ref/micropolis/spec/core/SPEC.md`:
   - Core simulation loop + systems are implemented in `packages/sim-core/src/sim/simulate.ts` and `packages/sim-core/src/systems/*.ts`.
   - Includes power, zones/growth, traffic, PTL, crime, pop density, fire coverage, budget, census/history, evaluation, messages/scenarios, disasters, valves, date/time, and optional heat.
-- `ref/micropolis/spec/terrain/SPEC.md` (non-UI terrain generation):
-  - `GenerateMap` pipeline and terrain routines are implemented in `packages/sim-core/src/terrain/*.ts`.
-  - Fixture parity and C-harness parity tests exist in `packages/sim-core/src/terrain/*.c-harness.test.ts` plus fixtures in `packages/sim-core/fixtures/terrain/`.
+- `ref/micropolis/spec/terrain/SPEC.md`:
+  - Non-UI `GenerateMap` pipeline and terrain routines are implemented in `packages/sim-core/src/terrain/*.ts` with fixture + C-harness parity tests.
 - `ref/micropolis/spec/persistence/SPEC.md`:
-  - `.cty` format read/write and metadata mapping are implemented in `packages/sim-core/src/io/cty.ts` and `packages/sim-core/src/io/cty-state.ts`.
-  - Public load/scenario orchestration APIs are implemented in `packages/sim-io/src/load.ts` (`loadFileLikeC`, `loadCityLikeC`, `loadScenarioLikeC`) plus `snro.*` scenario table/resource helpers in `packages/sim-io/src/scenarios.ts` and `packages/sim-io/src/node-files.ts`.
-  - Public save orchestration APIs are implemented in `packages/sim-io/src/save.ts` (`saveFileLikeC`, `saveCityLikeC`, `saveCityAsLikeC`) plus Node save-to-path wrappers in `packages/sim-io/src/node-files.ts`.
-  - Byte-for-byte save parity checks against the Micropolis C oracle are implemented in `packages/sim-io/src/save-parity.test.ts` via `packages/micropolis-c-harness/src/core-parity.ts` (`runCoreOracleSaveCty`).
-  - Cross-language `.cty` interoperability parity is covered in `packages/sim-io/src/persistence-roundtrip-parity.test.ts`, including TS-save->C-load, C-save->TS-load, TS<->C round-trips, load normalization parity, fixed-point percent truncation checks, stdin-bytes oracle load plumbing (`runCoreOracleLoadCtyBytes`), accepted file-size behavior (`27120`, `99120`, `219120`), and invalid-size rejection parity across TS + C loaders.
-  - Harness-level command equivalence coverage now verifies that `load-cty --cty-path` and `load-cty-bytes` produce identical loaded oracle state for the same valid payload, and also fail identically on invalid payloads while preserving pre-load oracle state; reusable non-throwing failure-probe wrapper APIs now expose load-command `exitStatus`/`signal`/`stderr` plus pre/post `save-cty` bytes for unchanged-state assertions (`packages/micropolis-c-harness/src/core-parity.ts`, `packages/micropolis-c-harness/src/core-parity.test.ts`); non-I/O parity callsites in sim-core use bytes-based loader plumbing (`packages/sim-core/src/io/cty.test.ts`).
+  - `.cty` read/write and state mapping live in `packages/sim-core/src/io/cty*.ts`.
+  - C-style load/save/scenario orchestration and parity tests live in `packages/sim-io/src/*.ts` and `packages/micropolis-c-harness/src/core-parity*.ts`.
+- `ref/micropolis/spec/resources/SPEC.md`:
+  - `packages/sim-assets` is implemented with typed asset catalogs/parsers/loaders for strings, tiles, sprites, sounds, UI bitmaps, help docs, scenario resource helpers, generated manifests, and deterministic derived-image export/drift checks.
+- `ref/micropolis/spec/scripting/SPEC.md`:
+  - `packages/sim-scripting` is implemented with a Tcl-like runtime, command families (`sim`, `editorview`, `mapview`, `graphview`, `dateview`, `sprite`, `piemenu`, `interval`, optional `camview`), callback bridge helpers, feature flags, and colocated parity tests.
+- `ref/micropolis/spec/integration/SPEC.md`:
+  - `packages/sim-integration` is implemented with Sugar command bridging, stdout `PlaySound` parsing, TTY stdin channel parity behavior, NET UDP hooks, Node adapters, mixed-feature runtime orchestration tests, and an integration ownership contract.
 
 ## Partially Implemented
 
 - `ref/micropolis/spec/ui/SPEC.md`:
-  - UI-adjacent logic exists in sim-core (`tool-actions.ts`, `realtime.ts`, heads/message behavior in core systems).
-  - Actual rendering/widgets/overlays/graphs/UI event-loop behavior are out of scope in sim-core and not implemented in `packages/sim-ui` (stub package).
+  - UI-adjacent behavior exists in `sim-core` (heads/messages/map invalidation flags/tool actions), but rendering/widgets/view-state/event-loop implementation is still pending in `packages/sim-ui` and app-level UI packages.
 
-## Not Yet Implemented (Non-UI Adjacent Packages)
+## Remaining Major Tasks
 
-- `ref/micropolis/spec/resources/SPEC.md` package work (`packages/sim-assets`) remains a stub.
-- `ref/micropolis/spec/scripting/SPEC.md` package work (`packages/sim-scripting`) remains a stub.
-- `ref/micropolis/spec/integration/SPEC.md` package work (`packages/sim-integration`) remains a stub.
+- Build `packages/sim-ui` from stub to working UI state/render package (map invalidation, heads, messages, overlays, graphs, tool UX).
+- Wire `sim-core` + `sim-scripting` + `sim-integration` together in app-level runtime flows (editor/docs/web) instead of package-isolated parity units.
+- Finish remaining parity hardening tasks called out in package plans (for example scripting transcript tests and explicit quirk coverage).

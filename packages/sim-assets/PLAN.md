@@ -7,7 +7,14 @@ Use this as an agent runbook: do one unchecked task, verify it, check it off, re
 - [x] Generate PNG assets as derived build artifacts for runtime/UI ergonomics.
 - [x] Do not replace canonical source assets with PNG/BMP as the primary truth.
 
-## Current Package Audit (2026-02-07)
+## Status Update (2026-02-08)
+
+- [x] Package is implemented and no longer a stub.
+- [x] Runtime helpers, manifests, parity verifier, and derived-image pipeline are in place.
+- [x] Drift-check scripts and colocated tests are in place.
+- [ ] Some checklist verification boxes below are still bookkeeping-only and have not all been re-ticked post-implementation.
+
+## Initial Package Audit (2026-02-07, historical snapshot)
 
 ### Already implemented and still makes sense
 - [x] Module skeleton exists (`catalog`, `resource-roots`, `resource-loader`, `string-table`, `tiles`, `sprites`, `ui-bitmaps`, `sounds`, `help-docs`, `legacy`).
