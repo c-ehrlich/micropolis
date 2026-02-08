@@ -57,7 +57,7 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
   - Done criteria:
     - UI can type against `CoreHost` without importing runtime internals.
 
-- [ ] **1.2 Implement deterministic mock authority engine**
+- [x] **1.2 Implement deterministic mock authority engine**
   - Goal: Add an in-memory authority simulator that emits `ack/reject/patch/snapshot/resync/error` deterministically.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/actions/tool-actions.ts`
@@ -186,3 +186,4 @@ Create a deterministic mocked bridge and a `LocalHost` skeleton that fully exerc
 
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed task 1.1 by adding `@city/core-bridge` with canonical envelope types, a bridge-owned `CoreHost` interface, and compile-time contract coverage.
+- 2026-02-08: Completed task 1.2 by adding a deterministic in-memory `MockAuthorityEngine` in `@city/core-bridge` with ordered `ack/reject/patch/snapshot/resync/error` emission, `tick`/`serverSeq` stamping, and duplicate `commandId` idempotency tests.
