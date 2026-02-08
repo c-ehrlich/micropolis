@@ -151,6 +151,7 @@ type GraphViewConfigureOptionName = (typeof GRAPH_VIEW_CONFIGURE_OPTION_NAMES)[n
  * Creates mutable redraw marker state for graph commands.
  * Mirrors boot-time `NewGraph = 0` setup and later command writes in
  * `ref/micropolis/src/sim/w_graph.c`.
+ * Parity note: default redraw flag state is a 1:1 port.
  */
 export function createGraphViewRedrawState(initialNewGraph = false): GraphViewRedrawState {
   return {
@@ -162,6 +163,7 @@ export function createGraphViewRedrawState(initialNewGraph = false): GraphViewRe
  * Marks graph data as dirty for redraw processing.
  * Mirrors `NewGraph = 1` in `GraphCmdRange` and `GraphCmdMask`
  * from `ref/micropolis/src/sim/w_graph.c`.
+ * Parity note: dirty-flag mutation and callback timing are 1:1 with C behavior.
  */
 export function markGraphViewNeedsRedraw(
   viewState: GraphViewState,
@@ -635,6 +637,7 @@ export function createGraphViewState(
  * Builds `graphview` subcommand entries for the P3.1 command set.
  * Mirrors `GRAPH_CMD(...)` registration in `graph_command_init`
  * (`ref/micropolis/src/sim/w_graph.c`).
+ * Parity note: subcommand coverage is a 1:1 port.
  */
 export function createGraphViewSubcommandEntries(
   options: CreateGraphViewSubcommandEntriesOptions = {},
@@ -773,6 +776,7 @@ export function createGraphViewCommandDispatcher(
  * Registers the top-level `graphview` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "graphview", GraphViewCmd, ...)`
  * in `graph_command_init` (`ref/micropolis/src/sim/w_graph.c`).
+ * Parity note: command registration name and factory binding are 1:1 with C.
  */
 export function registerGraphViewCommand(
   runtime: ScriptRuntime,

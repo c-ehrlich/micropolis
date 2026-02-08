@@ -20,8 +20,10 @@ export enum ScriptRuntimeErrorCode {
 
 /**
  * Runtime error object for command handlers and dispatch logic.
- * This is an intentional TypeScript enhancement over the C code to keep failures
- * typed while still mapping back to `TCL_ERROR`-style command results.
+ * Mirrors Tcl error propagation paths in `ref/micropolis/src/sim/w_tk.c`
+ * and command handlers in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: this is an intentional TypeScript enhancement that keeps
+ * failures typed while still mapping back to `TCL_ERROR`-style command results.
  */
 export class ScriptRuntimeError extends Error {
   readonly code: ScriptRuntimeErrorCode;
@@ -35,7 +37,9 @@ export class ScriptRuntimeError extends Error {
 
 /**
  * Builds a `TCL_OK`-equivalent runtime result.
- * Mirrors successful C command completion where `interp->result` is set.
+ * Mirrors successful C command completion where `interp->result` is set in
+ * `ref/micropolis/src/sim/w_tk.c` command dispatch flows.
+ * Parity note: success status/value semantics are a 1:1 port.
  */
 export function makeScriptSuccess(value = ''): ScriptRuntimeSuccess {
   return {
@@ -46,7 +50,9 @@ export function makeScriptSuccess(value = ''): ScriptRuntimeSuccess {
 
 /**
  * Converts a typed runtime error to a `TCL_ERROR`-equivalent result payload.
- * Mirrors command failure returns in the C bridge while retaining error metadata.
+ * Mirrors command failure returns in `ref/micropolis/src/sim/w_tk.c` and
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Difference from C: error metadata remains structured (`errorCode`) for TS callers/tests.
  */
 export function makeScriptFailure(error: ScriptRuntimeError): ScriptRuntimeFailure {
   return {

@@ -1989,6 +1989,7 @@ export function createEditorViewCommandDispatcher(
  * Registers the top-level `editorview` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "editorview", TileViewCmd, ...)` in
  * `editor_command_init` (`ref/micropolis/src/sim/w_editor.c`), scoped to editor shell behavior.
+ * Parity note: top-level command-name registration is a 1:1 behavior port.
  */
 export function registerEditorViewCommand(
   runtime: ScriptRuntime,

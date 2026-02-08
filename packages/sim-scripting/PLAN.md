@@ -20,10 +20,10 @@ Use this exact loop:
   - browser/DOM UI implementation
 
 ## Parity lock (applies to every task)
-- [ ] Keep command names case-sensitive and unknown subcommand behavior as error.
-- [ ] Preserve C integer behavior where relevant (truncating integer division/assignments).
-- [ ] Preserve side-effect order (`Kick()` timing and callback sequencing).
-- [ ] Keep legacy quirks configurable for parity mode:
+- [x] Keep command names case-sensitive and unknown subcommand behavior as error.
+- [x] Preserve C integer behavior where relevant (truncating integer division/assignments).
+- [x] Preserve side-effect order (`Kick()` timing and callback sequencing).
+- [x] Keep legacy quirks configurable for parity mode:
   - `CityFileName` allocation bug shape (`w_sim.c`)
   - `Dollars` literal-format behavior
   - `Disasters` inversion
@@ -243,31 +243,31 @@ Use this exact loop:
     - extras are unavailable by default and available when `legacyExtras=true`
 
 ## Cross-cutting test tasks
-- [ ] `T1` Add transcript tests for end-to-end command flows.
+- [x] `T1` Add transcript tests for end-to-end command flows.
   - Done when:
     - at least one transcript each for `sim`, `editorview`, `mapview`, `sprite`
 
-- [ ] `T2` Add compatibility tests for all parity quirks listed in “Parity lock”.
+- [x] `T2` Add compatibility tests for all parity quirks listed in “Parity lock”.
   - Done when:
     - each quirk has an explicit test with C-source reference in comments
 
-- [ ] `T3` Add sim-core integration tests.
+- [x] `T3` Add sim-core integration tests.
   - Done when:
     - scripting runtime drives `sim-core` hooks for representative update cycle
 
 ## Documentation tasks
-- [ ] `D1` Add JSDoc to every exported function/class with C source mapping.
+- [x] `D1` Add JSDoc to every exported function/class with C source mapping.
   - Done when:
     - each export references relevant `ref/micropolis/src/sim/*.c` location
     - doc states whether behavior is 1:1 or intentionally different
 
-- [ ] `D2` Update `/Users/cje/dev/city/packages/sim-scripting/TODO.md` to point to this checklist and next unchecked task.
+- [x] `D2` Update `/Users/cje/dev/city/packages/sim-scripting/TODO.md` to point to this checklist and next unchecked task.
   - Done when:
     - TODO reflects active task ID
 
 ## Completion gate
-- [ ] `G1` All checklist tasks above are checked.
-- [ ] `G2` Package and workspace checks pass:
+- [x] `G1` All checklist tasks above are checked.
+- [x] `G2` Package and workspace checks pass:
   - `pnpm typecheck`
   - `pnpm lint`
   - `pnpm format`
@@ -312,3 +312,9 @@ Use this exact loop:
 - [x] `2026-02-07` Completed `P6.2` by adding the optional `camview` command family (`configure`, `position`, `size`, `Visible`, `StoreColor`, `NewCam`, `DeleteCam`, `RandomizeCam`, `ConfigCam`, `FindCam`, `FindSomeCam`) with CAM-flag-gated default registration, C-mapped `w_cam.c`/`g_cam.c` parsing and camera-list semantics, and colocated unit coverage for lifecycle/error/parity behavior.
 - [x] `2026-02-07` Completed `P6.3` by adding optional NET `sim` subcommands (`ListenTo`, `HearFrom`) with `w_sim.c` arg/`file<sock>` parsing parity, default NET-enabled registration wiring, `HandlePacket` callback dispatch formatting parity from `w_net.c` (`%3d ` byte list), and colocated tests for command and packet-callback contracts.
 - [x] `2026-02-07` Completed `P6.4` by adding built-in `legacyExtras` support for source-delta `sim` heat commands (`HeatSteps`, `HeatFlow`, `HeatRule`) with `w_sim.c`/`sim.c` defaults and `Kick()` parity, wiring those entries into flag-gated default registration, and adding source-delta callback helpers/tests for `UIDidGenerateNewCity` (`s_gen.c`) and `DropFireBombs` (`w_stubs.c`).
+- [x] `2026-02-08` Completed `T1` by adding transcript-style end-to-end command flow tests in `src/commands/transcripts.test.ts` for `sim`, `editorview`, `mapview`, and `sprite`.
+- [x] `2026-02-08` Completed `T2` by adding explicit parity-lock compatibility tests (case-sensitive unknown-subcommand behavior, C integer truncation, `Kick`/callback ordering, and configurable legacy quirks) in `src/commands/parity-lock.test.ts` with C-source references.
+- [x] `2026-02-08` Completed `T3` by adding `sim` -> `sim-core` integration tests in `src/bootstrap/sim-core-integration.test.ts` that drive `runSimLoop` through `sim Update` hooks for representative update cycles.
+- [x] `2026-02-08` Completed `D1` by auditing exported function/class JSDoc blocks and adding explicit `ref/micropolis` mappings plus parity/difference statements where missing.
+- [x] `2026-02-08` Completed `D2` by updating `packages/sim-scripting/TODO.md` to point at this checklist and reflect that no unchecked task remains.
+- [x] `2026-02-08` Completed `G2` by running workspace checks: `pnpm typecheck`, `pnpm lint`, and `pnpm format`, plus package tests (`pnpm -C packages/sim-scripting test`).

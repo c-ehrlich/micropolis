@@ -1658,6 +1658,7 @@ export function createPieMenuState(
  * `defer`, `configure`, `add`, `delete`, `entryconfigure`, `index`, `invoke`,
  * `post`, `unpost`, `grab`, `ungrab`, `distance`, and `direction` in
  * `ref/micropolis/src/sim/w_piem.c`.
+ * Parity note: the subcommand surface and ordering are a 1:1 port of the C table.
  */
 export function createPieMenuSubcommandEntries(
   options: CreatePieMenuSubcommandEntriesOptions = {},
@@ -1686,8 +1687,9 @@ export function createPieMenuSubcommandEntries(
 
 /**
  * Builds a case-sensitive pie-menu subcommand lookup table.
- * Mirrors Tcl command table lookup behavior where duplicate registrations are
- * last-write-wins.
+ * Mirrors hash lookup in `PieMenuWidgetCmd` via command tables in
+ * `ref/micropolis/src/sim/w_piem.c`.
+ * Parity note: duplicate names are last-registration-wins, matching Tcl hash replacement.
  */
 export function createPieMenuSubcommandTable(
   entries: readonly PieMenuSubcommandEntry[] = [],
@@ -1855,6 +1857,7 @@ export function createPieMenuCommandDispatcher(
  * Registers the top-level `piemenu` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "piemenu", Tk_PieMenuCmd, ...)`
  * in `ref/micropolis/src/sim/w_tk.c`.
+ * Parity note: top-level command-name registration is a 1:1 behavior port.
  */
 export function registerPieMenuCommand(
   runtime: ScriptRuntime,

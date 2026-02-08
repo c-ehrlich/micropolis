@@ -902,6 +902,7 @@ export function createMapViewState(
  * Builds map-view subcommand entries for the P2.5 command set.
  * Mirrors `MAP_CMD(...)` registration in
  * `map_command_init` (`ref/micropolis/src/sim/w_map.c`).
+ * Parity note: subcommand coverage is a 1:1 port.
  */
 export function createMapViewSubcommandEntries(
   options: CreateMapViewSubcommandEntriesOptions = {},
@@ -1045,6 +1046,7 @@ export function createMapViewCommandDispatcher(
  * Registers the top-level `mapview` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "mapview", TileViewCmd, ...)` in
  * `map_command_init` (`ref/micropolis/src/sim/w_map.c`), scoped to map-view shell behavior.
+ * Parity note: top-level command-name registration is a 1:1 behavior port.
  */
 export function registerMapViewCommand(
   runtime: ScriptRuntime,

@@ -794,6 +794,7 @@ export function createSpriteCommandDispatcher(
  * Registers the top-level `sprite` command in a runtime.
  * Mirrors `Tcl_CreateCommand(..., "sprite", SpriteCmd, ...)`
  * in `sprite_command_init` (`ref/micropolis/src/sim/w_sprite.c`).
+ * Parity note: top-level command-name registration is a 1:1 behavior port.
  */
 export function registerSpriteCommand(
   runtime: ScriptRuntime,

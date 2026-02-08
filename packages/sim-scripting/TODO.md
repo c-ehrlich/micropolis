@@ -1,3 +1,4 @@
-# TODO
+# Sim Scripting TODO
 
-Stub package for scripting/commands.
+- Active checklist: `/Users/cje/dev/city/packages/sim-scripting/PLAN.md`
+- Next unchecked task: none (all checklist items complete)
