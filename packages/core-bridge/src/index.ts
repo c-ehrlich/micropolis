@@ -21,6 +21,7 @@ export function getCoreBridgeScaffold(): CoreBridgeScaffold {
   };
 }
 
+export * from './fixtures.ts';
 export * from './sequencing.ts';
 export * from './types.ts';
 export * from './validation.ts';

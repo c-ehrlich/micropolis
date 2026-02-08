@@ -1,0 +1,25 @@
+{
+  "scenario": "out_of_order_seq",
+  "initialState": {
+    "lastAppliedServerSeq": 200,
+    "lastTick": 300
+  },
+  "incomingEnvelope": {
+    "kind": "patch",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "tick": 301,
+    "serverSeq": 202,
+    "payload": {
+      "mapDeltas": [],
+      "hud": {},
+      "messageFeed": [],
+      "lifecycle": []
+    }
+  },
+  "expectedDecision": {
+    "action": "resync",
+    "reason": "server_seq_gap",
+    "expectedServerSeq": 201
+  }
+}

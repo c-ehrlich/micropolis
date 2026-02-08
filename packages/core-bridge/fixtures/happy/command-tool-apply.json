@@ -1,0 +1,19 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "command",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "commandId": "cmd-1000",
+    "payload": {
+      "type": "tool_apply",
+      "tool": "road",
+      "x": 10,
+      "y": 12,
+      "dragTo": {
+        "x": 10,
+        "y": 15
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "scenario": "single_envelope",
+  "envelope": {
+    "kind": "hello",
+    "roomId": "local-room",
+    "clientId": "local-client",
+    "payload": {
+      "protocolVersion": "core-bridge/v1",
+      "cityPayloadVersion": "city/v1",
+      "coreVersion": "1.0.0",
+      "snapshotCadenceTicks": 64
+    }
+  }
+}

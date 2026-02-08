@@ -128,7 +128,7 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
   - Done criteria:
     - Replay/apply decision logic is reusable by both local and DO clients.
 
-- [ ] **0.5 Build canonical fixture corpus**
+- [x] **0.5 Build canonical fixture corpus**
   - Goal: Create static fixtures for every envelope kind and key edge cases.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/fixtures/replay/manifest.json`
@@ -199,3 +199,4 @@ Freeze a single bridge contract in `@city/core-bridge` so all subsequent work (m
 - [2026-02-08] Completed task 0.2 by adding frozen v1 envelope contracts in `packages/core-bridge/src/types.ts` (including concrete `command`/`patch`/`snapshot` payload schemas and required identity/order/version fields), exporting them via `packages/core-bridge/src/index.ts`, and adding compile-time contract coverage in `packages/core-bridge/src/types.test.ts`.
 - [2026-02-08] Completed task 0.3 by adding runtime command/hello schema validators and strict lockstep handshake checks in `packages/core-bridge/src/validation.ts`, exporting validation APIs via `packages/core-bridge/src/index.ts`, adding validator unit coverage in `packages/core-bridge/src/validation.test.ts`, and wiring package test support in `packages/core-bridge/package.json` and `packages/core-bridge/vitest.config.ts`.
 - [2026-02-08] Completed task 0.4 by adding sequencing state helpers and invariant decision APIs in `packages/core-bridge/src/sequencing.ts` (strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, gap/tick-regression resync), exporting sequencing contracts from `packages/core-bridge/src/index.ts`, and adding table-driven coverage in `packages/core-bridge/src/sequencing.test.ts`.
+- [2026-02-08] Completed task 0.5 by adding `packages/core-bridge/fixtures/` canonical happy/edge JSON fixtures with a manifest, implementing typed fixture loading utilities in `packages/core-bridge/src/fixtures.ts`, exporting fixture APIs via `packages/core-bridge/src/index.ts`, and adding schema/sequencing/handshake-backed fixture validation coverage in `packages/core-bridge/src/fixtures.test.ts`.
