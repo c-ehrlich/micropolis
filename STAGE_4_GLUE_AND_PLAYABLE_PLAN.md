@@ -72,7 +72,7 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
   - Done criteria:
     - Startup flow is predictable and diagnostic in local and DO modes.
 
-- [ ] **4.3 Validate command lifecycle parity across host modes**
+- [x] **4.3 Validate command lifecycle parity across host modes**
   - Goal: Confirm command -> pending visual -> `ack/reject` -> commit/rollback behavior is equivalent across LocalHost and DoHost.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_2_SIMPLE_UI_PLAN.md`
@@ -182,3 +182,4 @@ Converge Stage 1/2/3 outputs into one cohesive product where `apps/web` can swit
 - [ ] Add dated entries as tasks complete.
 - 2026-02-08: Completed task 4.1 by adding a centralized `apps/web` host factory with env/config mode selection (`local` vs `do`), introducing host-agnostic runtime wiring bound only to `CoreHost`, wiring `apps/web/src/main.tsx` through the new factory/runtime path, and adding focused tests that verify equivalent lifecycle wiring behavior across both host modes.
 - 2026-02-08: Completed task 4.2 by centralizing web runtime bootstrap state transitions around a shared `hello` handshake validator, unifying LocalHost/DoHost startup event flow (`connected` -> `hello`) with deterministic mismatch diagnostics, rendering explicit user-facing handshake/runtime status in `apps/web/src/routes/index.tsx`, and adding focused runtime tests that cover successful handshake plus version-mismatch failure paths in both host modes.
+- 2026-02-08: Completed task 4.3 by extending `apps/web` `CoreHost`/runtime command lifecycle glue with deterministic client pending-visual tracking (`pending` before host response), host-emitted `ack`/`reject`/authoritative `patch` events shared by both `LocalHost` and `DoHost`, duplicate `commandId` idempotent retry handling (`ack` without re-apply), and host-mode matrix tests that capture identical deterministic lifecycle logs for successful and rejected placement flows while verifying no speculative authoritative client commit before `patch`.

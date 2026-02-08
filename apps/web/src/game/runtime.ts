@@ -1,4 +1,10 @@
-import type { CoreHost, CoreHostEvent, CoreHostEventListener } from './core-host';
+import type {
+  CoreHost,
+  CoreHostCommand,
+  CoreHostEvent,
+  CoreHostEventListener,
+  CoreHostPlacement,
+} from './core-host';
 import { HELLO_VERSION_MISMATCH_CODE, validateHelloCompatibility } from './handshake';
 
 /**
@@ -27,6 +33,28 @@ export interface RuntimeDiagnostic {
 }
 
 /**
+ * Visual-only pending placement tracked before authoritative host commit.
+ * Mirrors pending tool-preview intent from `DoPendTool(...)` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ * Parity note: this pending model is intentionally client-side and non-authoritative.
+ */
+export interface PendingVisualPlacement {
+  readonly commandId: string;
+  readonly tool: CoreHostPlacement['tool'];
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * Authoritative placement committed from host `patch` events.
+ * Mirrors successful tool outcomes in `ref/micropolis/src/sim/w_tool.c`
+ * and downstream zone mutation in `ref/micropolis/src/sim/s_zone.c`.
+ */
+export interface CommittedPlacement extends CoreHostPlacement {
+  readonly commandId: string;
+}
+
+/**
  * External runtime state snapshot consumed by route components.
  * Mirrors deterministic startup sequencing mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
@@ -35,6 +63,10 @@ export interface GameRuntimeState {
   readonly mode: CoreHost['mode'];
   readonly status: RuntimeBootstrapStatus;
   readonly diagnostic?: RuntimeDiagnostic;
+  readonly pendingCommands: ReadonlyArray<string>;
+  readonly pendingPlacements: ReadonlyArray<PendingVisualPlacement>;
+  readonly committedPlacements: ReadonlyArray<CommittedPlacement>;
+  readonly commandLifecycleLog: ReadonlyArray<string>;
 }
 
 /**
@@ -61,6 +93,7 @@ export interface GameRuntime {
   readonly mode: CoreHost['mode'];
   start(): void;
   stop(): void;
+  sendCommand(command: CoreHostCommand): void;
   subscribe(listener: CoreHostEventListener): () => void;
   subscribeState(listener: (state: GameRuntimeState) => void): () => void;
   getState(): GameRuntimeState;
@@ -136,9 +169,14 @@ export function describeRuntimeStatus(state: GameRuntimeState): RuntimeStatusVie
 export function createGameRuntime(host: CoreHost): GameRuntime {
   const eventListeners = new Set<CoreHostEventListener>();
   const stateListeners = new Set<(state: GameRuntimeState) => void>();
+  const appliedPatchPlacements = new Set<string>();
   let state: GameRuntimeState = {
     mode: host.mode,
     status: 'idle',
+    pendingCommands: [],
+    pendingPlacements: [],
+    committedPlacements: [],
+    commandLifecycleLog: [],
   };
   let started = false;
 
@@ -148,8 +186,8 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     }
   };
 
-  const setState = (nextState: GameRuntimeState): void => {
-    state = nextState;
+  const updateState = (updater: (current: GameRuntimeState) => GameRuntimeState): void => {
+    state = updater(state);
     emitState();
   };
 
@@ -161,44 +199,105 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     if (event.type === 'hello') {
       const result = validateHelloCompatibility(event.payload);
       if (result.ok) {
-        setState({
+        updateState((current) => ({
+          ...current,
           mode: host.mode,
           status: 'ready',
-        });
+          diagnostic: undefined,
+        }));
         return;
       }
 
-      setState({
+      updateState((current) => ({
+        ...current,
         mode: host.mode,
         status: 'handshake-error',
         diagnostic: {
           code: result.mismatch.code,
           message: result.mismatch.message,
         },
-      });
+      }));
       started = false;
       host.disconnect();
       return;
     }
 
+    if (event.type === 'ack') {
+      updateState((current) => ({
+        ...current,
+        pendingCommands: current.pendingCommands.filter(
+          (commandId) => commandId !== event.commandId,
+        ),
+        pendingPlacements: current.pendingPlacements.filter(
+          (placement) => placement.commandId !== event.commandId,
+        ),
+        commandLifecycleLog: [...current.commandLifecycleLog, `ack:${event.commandId}`],
+      }));
+      return;
+    }
+
+    if (event.type === 'reject') {
+      updateState((current) => ({
+        ...current,
+        pendingCommands: current.pendingCommands.filter(
+          (commandId) => commandId !== event.commandId,
+        ),
+        pendingPlacements: current.pendingPlacements.filter(
+          (placement) => placement.commandId !== event.commandId,
+        ),
+        commandLifecycleLog: [
+          ...current.commandLifecycleLog,
+          `reject:${event.commandId}:${event.code}`,
+        ],
+      }));
+      return;
+    }
+
+    if (event.type === 'patch') {
+      updateState((current) => {
+        const committedPlacements = [...current.committedPlacements];
+        const commandLifecycleLog = [...current.commandLifecycleLog];
+        for (const placement of event.placements) {
+          const placementKey = `${event.commandId}:${placement.tool}:${placement.x},${placement.y}`;
+          if (appliedPatchPlacements.has(placementKey)) {
+            continue;
+          }
+          appliedPatchPlacements.add(placementKey);
+          committedPlacements.push({ ...placement, commandId: event.commandId });
+          commandLifecycleLog.push(
+            `patch:${event.commandId}:${placement.tool}@${placement.x},${placement.y}`,
+          );
+        }
+
+        return {
+          ...current,
+          committedPlacements,
+          commandLifecycleLog,
+        };
+      });
+      return;
+    }
+
     if (event.type === 'error') {
-      setState({
+      updateState((current) => ({
+        ...current,
         mode: host.mode,
         status: 'runtime-error',
         diagnostic: {
           code: event.code,
           message: event.message,
         },
-      });
+      }));
       started = false;
       return;
     }
 
     if (event.type === 'disconnected' && !started && state.status !== 'handshake-error') {
-      setState({
+      updateState((current) => ({
+        ...current,
         mode: host.mode,
         status: 'stopped',
-      });
+      }));
     }
   });
 
@@ -211,10 +310,12 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
       }
 
       started = true;
-      setState({
+      updateState((current) => ({
+        ...current,
         mode: host.mode,
         status: 'bootstrapping',
-      });
+        diagnostic: undefined,
+      }));
       host.connect();
     },
     stop() {
@@ -225,11 +326,47 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
       started = false;
       host.disconnect();
       if (state.status !== 'handshake-error') {
-        setState({
+        updateState((current) => ({
+          ...current,
           mode: host.mode,
           status: 'stopped',
-        });
+        }));
       }
+    },
+    sendCommand(command: CoreHostCommand): void {
+      if (!started || state.status !== 'ready') {
+        return;
+      }
+
+      updateState((current) => {
+        const hasPendingCommand = current.pendingCommands.includes(command.commandId);
+        const hasPendingPlacement = current.pendingPlacements.some(
+          (placement) => placement.commandId === command.commandId,
+        );
+
+        return {
+          ...current,
+          pendingCommands: hasPendingCommand
+            ? current.pendingCommands
+            : [...current.pendingCommands, command.commandId],
+          pendingPlacements: hasPendingPlacement
+            ? current.pendingPlacements
+            : [
+                ...current.pendingPlacements,
+                {
+                  commandId: command.commandId,
+                  tool: command.tool,
+                  x: command.x,
+                  y: command.y,
+                },
+              ],
+          commandLifecycleLog: [
+            ...current.commandLifecycleLog,
+            `pending:${command.commandId}:${command.tool}@${command.x},${command.y}`,
+          ],
+        };
+      });
+      host.sendCommand(command);
     },
     subscribe(listener: CoreHostEventListener): () => void {
       eventListeners.add(listener);

@@ -44,6 +44,7 @@ describe('createCoreHost', () => {
     expect(host.mode).toBe('local');
     expect(typeof host.connect).toBe('function');
     expect(typeof host.disconnect).toBe('function');
+    expect(typeof host.sendCommand).toBe('function');
     expect(typeof host.subscribe).toBe('function');
   });
 
@@ -52,6 +53,7 @@ describe('createCoreHost', () => {
     expect(host.mode).toBe('do');
     expect(typeof host.connect).toBe('function');
     expect(typeof host.disconnect).toBe('function');
+    expect(typeof host.sendCommand).toBe('function');
     expect(typeof host.subscribe).toBe('function');
   });
 });

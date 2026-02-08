@@ -56,6 +56,95 @@ export interface CoreHostErrorEvent {
 }
 
 /**
+ * Tool names accepted by the Stage 4 host command bridge.
+ * Mirrors Micropolis tool entrypoints in `ref/micropolis/src/sim/w_tool.c`
+ * (`road_tool`, `rail_tool`, `wire_tool`, `bulldozer_tool`, `*_tool` zoning).
+ * Parity note: these string literals are a TypeScript command envelope surface,
+ * not direct C enum constants.
+ */
+export type CoreHostTool = 'road' | 'rail' | 'wire' | 'bulldoze' | 'res' | 'com' | 'ind';
+
+/**
+ * Placement intent command sent from the web runtime to a `CoreHost`.
+ * Mirrors `DoTool`/`ToolDown` intent routing in `ref/micropolis/src/sim/w_tool.c`.
+ * Parity note: command envelopes are bridge-level; C receives immediate function calls.
+ */
+export interface CoreHostToolCommand {
+  type: 'tool-command';
+  commandId: string;
+  tool: CoreHostTool;
+  x: number;
+  y: number;
+}
+
+/**
+ * Command union accepted by `CoreHost`.
+ * Mirrors high-level UI tool intent dispatch in `ref/micropolis/src/sim/w_tool.c`.
+ */
+export type CoreHostCommand = CoreHostToolCommand;
+
+/**
+ * Authoritative placement payload produced by successful command application.
+ * Mirrors successful tool commit behavior in `ref/micropolis/src/sim/w_tool.c`
+ * where `DidTool(...)` only fires on successful placement paths.
+ * Parity note: explicit payload structs are a TypeScript event-model addition.
+ */
+export interface CoreHostPlacement {
+  tool: CoreHostTool;
+  x: number;
+  y: number;
+}
+
+/**
+ * Canonical rejection code for expected command denials.
+ * Mirrors expected failure paths in `ref/micropolis/src/sim/w_tool.c` where
+ * invalid placements return failure codes instead of mutating map state.
+ */
+export type CoreHostRejectCode = 'OUT_OF_BOUNDS' | 'TILE_OCCUPIED';
+
+/**
+ * Success acknowledgement emitted for accepted commands.
+ * Mirrors expected acceptance signaling from Stage bridge rules anchored to
+ * `ref/micropolis/src/sim/w_tool.c` successful tool application.
+ */
+export interface CoreHostAckEvent {
+  type: 'ack';
+  mode: HostMode;
+  commandId: string;
+  serverSeq: number;
+}
+
+/**
+ * Expected command denial emitted for rejected tool operations.
+ * Mirrors `DoTool` failure paths in `ref/micropolis/src/sim/w_tool.c`
+ * where invalid placement/funds conditions are signaled without map commit.
+ * Parity note: structured reject payloads are a bridge TypeScript addition.
+ */
+export interface CoreHostRejectEvent {
+  type: 'reject';
+  mode: HostMode;
+  commandId: string;
+  code: CoreHostRejectCode;
+  message: string;
+  serverSeq: number;
+}
+
+/**
+ * Authoritative patch event emitted after successful command commit.
+ * Mirrors the "apply result only after successful tool operation" behavior
+ * from `ref/micropolis/src/sim/w_tool.c` and downstream zone updates in
+ * `ref/micropolis/src/sim/s_zone.c`.
+ * Parity note: explicit patch envelopes are bridge-level abstractions.
+ */
+export interface CoreHostPatchEvent {
+  type: 'patch';
+  mode: HostMode;
+  commandId: string;
+  placements: ReadonlyArray<CoreHostPlacement>;
+  serverSeq: number;
+}
+
+/**
  * Event emitted by `CoreHost` implementations.
  * Mirrors transport + startup lifecycle expectations mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
@@ -64,6 +153,9 @@ export type CoreHostEvent =
   | CoreHostConnectedEvent
   | CoreHostDisconnectedEvent
   | CoreHostHelloEvent
+  | CoreHostAckEvent
+  | CoreHostRejectEvent
+  | CoreHostPatchEvent
   | CoreHostErrorEvent;
 
 /**
@@ -83,5 +175,6 @@ export interface CoreHost {
   readonly mode: HostMode;
   connect(): void;
   disconnect(): void;
+  sendCommand(command: CoreHostCommand): void;
   subscribe(listener: CoreHostEventListener): () => void;
 }
