@@ -59,7 +59,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - One protocol definition source exists in practice and in tests.
 
-- [ ] **3.2 Implement authoritative room runtime with idempotency**
+- [x] **3.2 Implement authoritative room runtime with idempotency**
   - Goal: Process commands deterministically per room, enforce `commandId` dedupe, and emit ordered events.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-integration/src/runtime.integration.test.ts`
@@ -206,3 +206,4 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 
 - [x] Add dated entries as tasks complete.
 - [x] 2026-02-08: Completed task 3.1 by introducing canonical bridge-owned envelope/command/handshake types in `@city/core-bridge`, updating `@city/sim-integration` multiplayer runtime contracts to import those types, and adding compile-time drift assertions/tests to enforce single-source protocol ownership.
+- [x] 2026-02-08: Completed task 3.2 by adding an authoritative per-room multiplayer runtime in `@city/sim-integration` with room registry contexts, deterministic per-room command queue ordering, per-room `commandId` idempotency dedupe, and ordered `ack`/`reject`/`error` plus downstream `patch`/`snapshot` envelope emissions carrying monotonic `tick` and `serverSeq`, with focused tests for acceptance, rejection, dedupe, and deterministic ordering.
