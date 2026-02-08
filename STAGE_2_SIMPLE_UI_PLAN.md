@@ -37,7 +37,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 
 ## Task Checklist
 
-- [ ] **2.1 Build web host-client runtime module**
+- [x] **2.1 Build web host-client runtime module**
   - Goal: Add a client runtime in `apps/web` that connects to `CoreHost`, handles handshake, and centralizes envelope processing.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/src/main.tsx`
@@ -58,7 +58,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - UI runtime can connect to `LocalHost` and process events deterministically.
 
-- [ ] **2.2 Implement map rendering with ordered patch application**
+- [x] **2.2 Implement map rendering with ordered patch application**
   - Goal: Render map state from host data and apply incremental updates in `serverSeq` order.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/core/map-store.ts`
@@ -79,7 +79,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Map updates reflect host output without full redraw dependence.
 
-- [ ] **2.3 Implement tool command UI and pending-visual lifecycle**
+- [x] **2.3 Implement tool command UI and pending-visual lifecycle**
   - Goal: Support core tools and pending state flow from command send through `ack/reject`.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/actions/tool-actions.ts`
@@ -100,7 +100,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Tool interactions are playable and command-correlated.
 
-- [ ] **2.4 Implement HUD and simulation controls**
+- [x] **2.4 Implement HUD and simulation controls**
   - Goal: Show funds/date/demand/messages and allow pause/play/speed interactions through host commands.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-core/src/systems/messages.ts`
@@ -122,7 +122,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - User can control sim and observe key city telemetry.
 
-- [ ] **2.5 Add save/load/scenario flows in browser**
+- [x] **2.5 Add save/load/scenario flows in browser**
   - Goal: Support new city, save/export, load/import, and scenario entry from MVP.
   - Files to read first:
     - `/Users/cje/dev/city/packages/sim-io/src/load.ts`
@@ -143,7 +143,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Save/load/scenario flows work without bypassing host boundaries.
 
-- [ ] **2.6 Add reconnect and resync UX handling**
+- [x] **2.6 Add reconnect and resync UX handling**
   - Goal: Handle disconnect/reconnect and server-initiated resync without corrupting local UI state.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_1_MOCKED_BRIDGE_PLAN.md`
@@ -162,7 +162,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - UI recovers from dropped/out-of-order streams predictably.
 
-- [ ] **2.7 Add end-to-end playable smoke tests for LocalHost mode**
+- [x] **2.7 Add end-to-end playable smoke tests for LocalHost mode**
   - Goal: Capture user-level playable flow in automated tests.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/src/__tests__/basic.test.ts`
@@ -182,7 +182,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Local playable definition is automated and repeatable.
 
-- [ ] **2.8 Publish Stage 2 operation notes**
+- [x] **2.8 Publish Stage 2 operation notes**
   - Goal: Document how to run/play/test LocalHost mode for downstream teams.
   - Files to read first:
     - `/Users/cje/dev/city/apps/web/WORKING_GAME_PLAN.md`
@@ -210,3 +210,11 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 ## Execution Log
 
 - [ ] Add dated entries as tasks complete.
+- 2026-02-08: Completed 2.1 by adding `apps/web` host-client runtime lifecycle + envelope reducer with mandatory `hello` negotiation, `serverSeq`/`tick` tracking, and web runtime stale/gap routing tests.
+- 2026-02-08: Completed 2.2 by adding Stage 2 canvas map rendering in `apps/web`, projecting authoritative snapshot+patch payloads into runtime map state, applying map deltas only after in-order envelope acceptance, and adding map progression/stale-drop tests plus manual smoke steps.
+- 2026-02-08: Completed 2.3 by adding Stage 2 tool command UI (road/rail/wire/bulldoze/R/C/I), emitting command envelopes with `commandId`, implementing visual-only pending lifecycle (enqueue on send, settle on `ack`, rollback on `reject`), extending local demo host ack/reject/idempotency behavior, and adding pending lifecycle plus duplicate-correlation runtime tests.
+- 2026-02-08: Completed 2.4 by extending Stage 2 web runtime protocol/state with host-projected HUD scalars and message feed, adding pause/play/set-speed command handling routed through host envelopes, implementing HUD + simulation controls + message log UI in `apps/web`, and adding HUD projection/runtime/route boundary tests (including no direct sim-core mutation imports in route components).
+- 2026-02-08: Completed 2.5 by adding Stage 2 browser city lifecycle/persistence/scenario command flows (`new-city`, `save-city`, `load-city`, `load-scenario`) through runtime envelopes, extracting a dedicated local demo host module with Micropolis-aligned `s_fileio.c` metadata constants, wiring route controls for new/save/load/scenario entry, and adding web-runtime save/load round-trip plus scenario boot smoke tests.
+- 2026-02-08: Completed 2.6 by adding a reconnect-aware Stage 2 runtime state machine (`reconnecting`/`resyncing`), auto-requesting `request_snapshot` on reconnect and server `resync` directives, safely clearing pending tool visuals during resync entry, allowing snapshot rebase before ordered patch-tail apply, wiring reconnect/resync controls in the Stage 2 route UX, and adding reconnect + server-resync ordering tests.
+- 2026-02-08: Completed 2.7 by replacing the Stage 2 web placeholder test with deterministic LocalHost playable smoke coverage for start-city -> tool placement -> ambient tick/HUD projection -> save/load round-trip, plus repeated-run determinism assertions to guard against flaky behavior.
+- 2026-02-08: Completed 2.8 by publishing `apps/web/STAGE_2_OPERATION_NOTES.md` with LocalHost run/play/test runbook instructions, command verification records, troubleshooting guidance, and explicit pre-DoHost limitations mapped to Micropolis editor/update/fileio behavior.
