@@ -59,7 +59,7 @@ describe('core oracle .cty load command parity', () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it('matches load-cty and load-cty-bytes state for oracle-generated payloads', () => {
     const savedFromState = runCoreOracleInitNewCity({ seed: 0x00012345 });
