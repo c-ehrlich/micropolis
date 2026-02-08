@@ -138,7 +138,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - Protocol lockstep is enforced consistently across connections.
 
-- [ ] **3.6 Implement DoHost and run host conformance suite**
+- [x] **3.6 Implement DoHost and run host conformance suite**
   - Goal: Provide `DoHost` implementation compatible with `CoreHost` and pass Stage 1 shared conformance tests.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_1_MOCKED_BRIDGE_PLAN.md`
@@ -210,3 +210,4 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 - [x] 2026-02-08: Completed task 3.3 by adding snapshot + patch-tail persistence contracts in `@city/sim-integration` multiplayer types, wiring authoritative runtime hooks for persistence-backed room bootstrap (`snapshot` + replay tail by `serverSeq`), adding configurable snapshot cadence with a Stage-locked default of 64 ticks plus tail truncation hooks, and adding focused tests for persisted bootstrap replay and post-truncation sequence continuity.
 - [x] 2026-02-08: Completed task 3.4 by scaffolding `@city/sim-do-adapter` with package-level `typecheck`/`lint`/`test` scripts, implementing a room-scoped `RoomDoAdapter` that maps one room to one deterministic DO authority key, wiring websocket open/message/close entrypoints to `@city/sim-integration` runtime APIs (`connectClient`/`receiveCommand`/`disconnectClient`), bridging DO alarms to authoritative `tick(nowMs)`, and adding focused adapter unit tests for routing and room-authority fanout behavior.
 - [x] 2026-02-08: Completed task 3.5 by hardening `@city/sim-do-adapter` websocket protocol handling with strict `hello` lockstep enforcement (bridge-v1 protocol/core payload match), adding validated JSON/binary envelope decode utilities that map wire payloads to canonical `@city/core-bridge` envelope types, denying pre-hello mutating `command` envelopes via bridge `reject` responses, routing protocol/authority/handshake mismatches through bridge `error` responses, and adding focused adapter tests for valid handshake, mismatch refusal, and pre-hello command denial.
+- [x] 2026-02-08: Completed task 3.6 by adding a bridge-owned `CoreHost` contract in `@city/core-bridge`, implementing `DoHost` and `LocalHost` wrappers in `@city/sim-do-adapter` with pluggable DO transport adapters, adding an in-memory transport harness for adapter-host composition, and adding a shared host conformance suite that runs against both hosts (handshake gating, ordered ack/patch/snapshot flow, duplicate `commandId` idempotency, and multi-client ordering/idempotency behavior).
