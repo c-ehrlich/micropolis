@@ -28,11 +28,13 @@ pnpm format
 
 ## Autonomous task orchestration
 The repo includes a Codex-driven orchestrator at `scripts/auto-orchestrator.mjs` for
-the three package streams:
+the staged playable-game rollout plans:
 
-- `packages/sim-assets`
-- `packages/sim-scripting`
-- `packages/sim-integration`
+- `STAGE_0_CONTRACT_FREEZE_PLAN.md`
+- `STAGE_1_MOCKED_BRIDGE_PLAN.md`
+- `STAGE_2_SIMPLE_UI_PLAN.md`
+- `STAGE_3_REAL_BRIDGE_DO_PLAN.md`
+- `STAGE_4_GLUE_AND_PLAYABLE_PLAN.md`
 
 Inspect queue + drift:
 ```bash
@@ -48,7 +50,8 @@ pnpm auto:run -- --max-runtime-minutes 1440
 Useful flags:
 - `--once`: complete exactly one task and stop.
 - `--dry-run`: plan/selection only; no git push or PR changes.
-- `--no-tests`: skip `pnpm test` gate (keeps `typecheck/lint/format`).
+- `--streams <id,...>`: run only specific stage stream ids (`stage-0` ... `stage-4`).
+- `--no-tests`: remove `pnpm test` from `--checks` if present.
 - `--max-retries-per-task <n>`: retries before a task is marked blocked.
 - `--model <name>`: pass a specific model to `codex exec`.
 
