@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   runCoreOracleInitNewCity,
-  runCoreOracleLoadCtyBytesFailureProbe,
   runCoreOracleLoadCty,
   runCoreOracleLoadCtyBytes,
+  runCoreOracleLoadCtyBytesFailureProbe,
   runCoreOracleLoadCtyFailureProbe,
   runCoreOracleSaveCty,
 } from './core-parity.ts';
