@@ -21,4 +21,9 @@ describe('stage 2 route boundaries', () => {
     expect(ROUTE_SOURCE).toContain("kind: 'scenario'");
     expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
   });
+
+  it('routes reconnect and resync UX actions through runtime host APIs', () => {
+    expect(ROUTE_SOURCE).toContain('runtime.reconnect');
+    expect(ROUTE_SOURCE).toContain("runtime.requestSnapshot('resync')");
+  });
 });

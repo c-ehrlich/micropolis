@@ -47,6 +47,14 @@ export interface CreateWebHostRuntimeOptions {
  */
 export interface WebHostRuntime {
   connect(): void;
+  /**
+   * Reconnects to host authority and requests an authoritative resync snapshot.
+   * Mirrors reconnect recovery intent in `ref/micropolis/spec/integration/SPEC.md`
+   * and `ref/micropolis/src/sim/w_update.c`.
+   * Difference: Stage 2 performs reconnect as an explicit runtime API action
+   * rather than socket-layer retry hidden behind Tcl event loops.
+   */
+  reconnect(): void;
   disconnect(): void;
   sendCommand(commandId: string, command: Stage2ClientCommand): void;
   requestSnapshot(reason?: 'manual' | 'resync'): void;
@@ -69,6 +77,7 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
 
   let state = createInitialWebRuntimeState({ roomId, clientId });
   let connection: CoreHostConnection | undefined;
+  let shouldRequestReconnectSnapshot = false;
   const listeners = new Set<(event: WebRuntimeEvent) => void>();
 
   const emit = (event: WebRuntimeEvent): void => {
@@ -84,7 +93,24 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
 
   const handleEnvelope = (envelope: HostEnvelope): void => {
     const result = reduceHostEnvelope(state, envelope);
-    state = result.state;
+    let nextState = result.state;
+
+    if (envelope.kind === 'hello') {
+      if (result.outcome === 'applied' && shouldRequestReconnectSnapshot) {
+        nextState = {
+          ...nextState,
+          phase: 'resyncing',
+          pendingTools: [],
+          lastRejectReason: null,
+        };
+      }
+
+      if (result.outcome !== 'applied') {
+        shouldRequestReconnectSnapshot = false;
+      }
+    }
+
+    state = nextState;
     emit({
       state,
       outcome: result.outcome,
@@ -100,6 +126,23 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
         fromServerSeq: result.effect.fromServerSeq,
       });
     }
+
+    if (
+      envelope.kind === 'hello' &&
+      result.outcome === 'applied' &&
+      shouldRequestReconnectSnapshot
+    ) {
+      shouldRequestReconnectSnapshot = false;
+      if (connection !== undefined) {
+        connection.send({
+          kind: 'request_snapshot',
+          roomId: state.roomId,
+          clientId: state.clientId,
+          reason: 'resync',
+          fromServerSeq: state.lastAppliedServerSeq + 1,
+        });
+      }
+    }
   };
 
   return {
@@ -108,22 +151,28 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
         return;
       }
 
+      const reconnecting = state.lastAppliedServerSeq > 0;
+      shouldRequestReconnectSnapshot = reconnecting;
+
       setState(
         {
           ...state,
-          phase: 'connecting',
+          phase: reconnecting ? 'reconnecting' : 'connecting',
+          handshakeError: null,
         },
         'applied',
       );
 
       connection = options.host.connect(handleEnvelope);
-      setState(
-        {
-          ...state,
-          phase: 'negotiating',
-        },
-        'applied',
-      );
+      if (!reconnecting) {
+        setState(
+          {
+            ...state,
+            phase: 'negotiating',
+          },
+          'applied',
+        );
+      }
 
       connection.send({
         kind: 'hello',
@@ -133,6 +182,10 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
         coreVersion,
       });
     },
+    reconnect() {
+      this.disconnect();
+      this.connect();
+    },
     disconnect() {
       if (connection === undefined) {
         return;
@@ -140,6 +193,7 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
 
       connection.disconnect();
       connection = undefined;
+      shouldRequestReconnectSnapshot = false;
       setState(
         {
           ...state,
@@ -171,6 +225,18 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
     requestSnapshot(reason = 'manual') {
       if (connection === undefined) {
         throw new Error('Cannot request snapshot before connect()');
+      }
+
+      if (reason === 'resync') {
+        setState(
+          {
+            ...state,
+            phase: 'resyncing',
+            pendingTools: [],
+            lastRejectReason: null,
+          },
+          'applied',
+        );
       }
 
       connection.send({

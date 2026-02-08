@@ -26,6 +26,7 @@ import {
 export type WebRuntimePhase =
   | 'disconnected'
   | 'connecting'
+  | 'reconnecting'
   | 'negotiating'
   | 'ready'
   | 'resyncing'
@@ -74,7 +75,7 @@ export type WebRuntimeReducerEffect =
     }
   | {
       kind: 'request_snapshot';
-      reason: 'sequence-gap';
+      reason: 'sequence-gap' | 'resync';
       fromServerSeq: number;
     };
 
@@ -193,11 +194,17 @@ export function reduceHostEnvelope(
 
   const expectedServerSeq = state.lastAppliedServerSeq + 1;
   if (envelope.serverSeq > expectedServerSeq) {
+    if (envelope.kind === 'resync') {
+      return applyResyncDirective(state, envelope);
+    }
+
+    const canApplyResyncSnapshot = state.phase === 'resyncing' && envelope.kind === 'snapshot';
+    if (canApplyResyncSnapshot) {
+      return applySequencedEnvelope(state, envelope);
+    }
+
     return {
-      state: {
-        ...state,
-        phase: 'resyncing',
-      },
+      state: enterResyncingPhase(state),
       outcome: 'gap-detected',
       effect: {
         kind: 'request_snapshot',
@@ -207,8 +214,18 @@ export function reduceHostEnvelope(
     };
   }
 
-  const phase =
-    envelope.kind === 'snapshot' ? 'ready' : envelope.kind === 'resync' ? 'resyncing' : state.phase;
+  if (envelope.kind === 'resync') {
+    return applyResyncDirective(state, envelope);
+  }
+
+  return applySequencedEnvelope(state, envelope);
+}
+
+function applySequencedEnvelope(
+  state: WebRuntimeState,
+  envelope: Exclude<HostEnvelope, { kind: 'hello' | 'resync' }>,
+): WebRuntimeReducerResult {
+  const phase = envelope.kind === 'snapshot' ? 'ready' : state.phase;
   const settledState = settlePendingToolCommand(state, envelope);
   const mapState = projectRuntimeMapState(settledState.mapState, envelope);
   const hudState = projectRuntimeHudState(settledState.hudState, envelope);
@@ -224,6 +241,48 @@ export function reduceHostEnvelope(
     },
     outcome: 'applied',
     effect: { kind: 'none' },
+  };
+}
+
+function applyResyncDirective(
+  state: WebRuntimeState,
+  envelope: Extract<HostEnvelope, { kind: 'resync' }>,
+): WebRuntimeReducerResult {
+  const resyncState = enterResyncingPhase(state);
+  const mapState = projectRuntimeMapState(resyncState.mapState, envelope);
+  const hudState = projectRuntimeHudState(resyncState.hudState, envelope);
+
+  return {
+    state: {
+      ...resyncState,
+      lastAppliedServerSeq: envelope.serverSeq,
+      lastAppliedTick: envelope.tick,
+      mapState,
+      hudState,
+    },
+    outcome: 'applied',
+    effect: {
+      kind: 'request_snapshot',
+      reason: 'resync',
+      fromServerSeq: envelope.serverSeq + 1,
+    },
+  };
+}
+
+function enterResyncingPhase(state: WebRuntimeState): WebRuntimeState {
+  if (
+    state.phase === 'resyncing' &&
+    state.pendingTools.length === 0 &&
+    state.lastRejectReason === null
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    phase: 'resyncing',
+    pendingTools: [],
+    lastRejectReason: null,
   };
 }
 

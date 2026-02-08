@@ -139,6 +139,134 @@ describe('reduceHostEnvelope', () => {
     });
   });
 
+  it('clears pending visuals when a sequence gap forces resync', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const withPending = enqueuePendingToolCommandVisual(
+      afterHello,
+      'cmd-gap',
+      createToolCommand('road'),
+    );
+    const afterFirst = reduceHostEnvelope(withPending, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 7,
+      serverSeq: 1,
+      payload: { baseline: true },
+    }).state;
+
+    const gap = reduceHostEnvelope(afterFirst, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 7,
+      serverSeq: 3,
+      payload: { skipped: 2 },
+    });
+
+    expect(gap.state.phase).toBe('resyncing');
+    expect(gap.state.pendingTools).toHaveLength(0);
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 2,
+    });
+  });
+
+  it('requests a resync snapshot when host sends a resync directive', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterPatch = reduceHostEnvelope(afterHello, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 1,
+      payload: { baseline: true },
+    }).state;
+
+    const afterResync = reduceHostEnvelope(afterPatch, {
+      kind: 'resync',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 3,
+      reason: 'server-gap-detected',
+    });
+
+    expect(afterResync.outcome).toBe('applied');
+    expect(afterResync.state.phase).toBe('resyncing');
+    expect(afterResync.state.lastAppliedServerSeq).toBe(3);
+    expect(afterResync.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'resync',
+      fromServerSeq: 4,
+    });
+  });
+
+  it('accepts snapshot rebases during resync and preserves ordered patch progression', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterPatch = reduceHostEnvelope(afterHello, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 1,
+      payload: { baseline: true },
+    }).state;
+    const afterResync = reduceHostEnvelope(afterPatch, {
+      kind: 'resync',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 2,
+      reason: 'server-gap-detected',
+    }).state;
+
+    const rebasedSnapshot = reduceHostEnvelope(afterResync, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 8,
+      // Reconnect/resync snapshots can jump forward to current authority seq.
+      serverSeq: 12,
+      payload: {
+        map: { width: 1, height: 1, tiles: [5] },
+      },
+    });
+    expect(rebasedSnapshot.outcome).toBe('applied');
+    expect(rebasedSnapshot.state.phase).toBe('ready');
+    expect(rebasedSnapshot.state.lastAppliedServerSeq).toBe(12);
+
+    const afterTailPatch = reduceHostEnvelope(rebasedSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 13,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 7 }] },
+      },
+    });
+    expect(afterTailPatch.outcome).toBe('applied');
+    expect(afterTailPatch.state.lastAppliedServerSeq).toBe(13);
+
+    const stale = reduceHostEnvelope(afterTailPatch.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 12,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 9 }] },
+      },
+    });
+    expect(stale.outcome).toBe('dropped-stale');
+    expect(stale.state.lastAppliedServerSeq).toBe(13);
+  });
+
   it('creates pending command visuals and settles them on ack', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;

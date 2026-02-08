@@ -143,7 +143,7 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
   - Done criteria:
     - Save/load/scenario flows work without bypassing host boundaries.
 
-- [ ] **2.6 Add reconnect and resync UX handling**
+- [x] **2.6 Add reconnect and resync UX handling**
   - Goal: Handle disconnect/reconnect and server-initiated resync without corrupting local UI state.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_1_MOCKED_BRIDGE_PLAN.md`
@@ -215,3 +215,4 @@ Ship a playable browser game in `apps/web` using `CoreHost` + `LocalHost`, with 
 - 2026-02-08: Completed 2.3 by adding Stage 2 tool command UI (road/rail/wire/bulldoze/R/C/I), emitting command envelopes with `commandId`, implementing visual-only pending lifecycle (enqueue on send, settle on `ack`, rollback on `reject`), extending local demo host ack/reject/idempotency behavior, and adding pending lifecycle plus duplicate-correlation runtime tests.
 - 2026-02-08: Completed 2.4 by extending Stage 2 web runtime protocol/state with host-projected HUD scalars and message feed, adding pause/play/set-speed command handling routed through host envelopes, implementing HUD + simulation controls + message log UI in `apps/web`, and adding HUD projection/runtime/route boundary tests (including no direct sim-core mutation imports in route components).
 - 2026-02-08: Completed 2.5 by adding Stage 2 browser city lifecycle/persistence/scenario command flows (`new-city`, `save-city`, `load-city`, `load-scenario`) through runtime envelopes, extracting a dedicated local demo host module with Micropolis-aligned `s_fileio.c` metadata constants, wiring route controls for new/save/load/scenario entry, and adding web-runtime save/load round-trip plus scenario boot smoke tests.
+- 2026-02-08: Completed 2.6 by adding a reconnect-aware Stage 2 runtime state machine (`reconnecting`/`resyncing`), auto-requesting `request_snapshot` on reconnect and server `resync` directives, safely clearing pending tool visuals during resync entry, allowing snapshot rebase before ordered patch-tail apply, wiring reconnect/resync controls in the Stage 2 route UX, and adding reconnect + server-resync ordering tests.

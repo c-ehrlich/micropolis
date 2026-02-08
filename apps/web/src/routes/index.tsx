@@ -66,6 +66,14 @@ function HomePage() {
   }, [runtime]);
 
   const controlsDisabled = state.phase !== 'ready';
+  const reconnectDisabled =
+    state.phase === 'connecting' || state.phase === 'negotiating' || state.phase === 'reconnecting';
+  const resyncDisabled =
+    state.phase === 'disconnected' ||
+    state.phase === 'connecting' ||
+    state.phase === 'negotiating' ||
+    state.phase === 'reconnecting' ||
+    state.phase === 'failed';
 
   return (
     <main
@@ -88,6 +96,31 @@ function HomePage() {
       </div>
       <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {lastSaveStatus}
+      </div>
+      <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+        {formatRuntimePhaseStatus(state.phase)}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button
+          disabled={reconnectDisabled}
+          onClick={() => {
+            runtime.reconnect();
+            setCityIoError('');
+            setLastSaveStatus('');
+          }}
+          type="button"
+        >
+          Reconnect
+        </button>
+        <button
+          disabled={resyncDisabled}
+          onClick={() => {
+            runtime.requestSnapshot('resync');
+          }}
+          type="button"
+        >
+          Resync Snapshot
+        </button>
       </div>
 
       <section
@@ -387,6 +420,33 @@ function formatSpeedLabel(speed: number): string {
   }
 
   return `x${speed}`;
+}
+
+/**
+ * Runtime phase status text shown above Stage 2 reconnect/resync controls.
+ * Mirrors reconnect/resync lifecycle intent from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
+  if (phase === 'reconnecting') {
+    return 'Reconnecting to host...';
+  }
+  if (phase === 'resyncing') {
+    return 'Resyncing authoritative snapshot...';
+  }
+  if (phase === 'negotiating') {
+    return 'Negotiating hello handshake...';
+  }
+  if (phase === 'connecting') {
+    return 'Connecting to host...';
+  }
+  if (phase === 'failed') {
+    return 'Connection failed. Reconnect to retry.';
+  }
+  if (phase === 'disconnected') {
+    return 'Disconnected.';
+  }
+  return 'Connected.';
 }
 
 /**

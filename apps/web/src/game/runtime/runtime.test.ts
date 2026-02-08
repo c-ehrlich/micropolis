@@ -184,6 +184,172 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().lastRejectReason).toBe('out-of-bounds');
   });
 
+  it('reconnects by requesting a resync snapshot and then applies patch tail ordering', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tiles: [5] },
+      },
+    });
+    runtime.disconnect();
+
+    runtime.connect();
+    expect(runtime.getState().phase).toBe('reconnecting');
+
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+    expect(runtime.getState().phase).toBe('resyncing');
+    expect(host.sent).toContainEqual({
+      kind: 'request_snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      reason: 'resync',
+      fromServerSeq: 2,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      // Reconnect snapshot can jump to latest authority sequence.
+      serverSeq: 8,
+      payload: {
+        map: { width: 1, height: 1, tiles: [9] },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 5,
+      serverSeq: 9,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 11 }] },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 5,
+      serverSeq: 8,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 13 }] },
+      },
+    });
+
+    expect(runtime.getState().phase).toBe('ready');
+    expect(runtime.getState().lastAppliedServerSeq).toBe(9);
+    expect(runtime.getState().mapState.tiles[0]).toBe(11);
+  });
+
+  it('clears pending visuals and requests snapshot when server emits resync directive', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const outcomes: string[] = [];
+    runtime.subscribe((event) => {
+      if (event.envelope !== undefined) {
+        outcomes.push(`${event.outcome}:${event.envelope.kind}`);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: 'v1',
+      coreVersion: 'stage-2',
+      accepted: true,
+    });
+
+    runtime.sendCommand('cmd-pending', {
+      kind: 'tool',
+      tool: 'road',
+      x: 7,
+      y: 7,
+    });
+    expect(runtime.getState().pendingTools).toHaveLength(1);
+
+    host.emit({
+      kind: 'resync',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 2,
+      reason: 'server-gap',
+    });
+    expect(runtime.getState().phase).toBe('resyncing');
+    expect(runtime.getState().pendingTools).toHaveLength(0);
+    expect(host.sent).toContainEqual({
+      kind: 'request_snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      reason: 'resync',
+      fromServerSeq: 3,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 10,
+      payload: {
+        map: { width: 1, height: 1, tiles: [21] },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 11,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 22 }] },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 10,
+      payload: {
+        map: { tiles: [{ index: 0, tile: 23 }] },
+      },
+    });
+
+    expect(runtime.getState().phase).toBe('ready');
+    expect(runtime.getState().lastAppliedServerSeq).toBe(11);
+    expect(runtime.getState().mapState.tiles[0]).toBe(22);
+    expect(outcomes).toContain('applied:resync');
+    expect(outcomes).toContain('dropped-stale:patch');
+  });
+
   it('projects HUD state from snapshot/patch host events', () => {
     const host = new FakeLocalHost();
     const runtime = createWebHostRuntime({ host });
