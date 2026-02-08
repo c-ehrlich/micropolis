@@ -1,4 +1,9 @@
-import type { BridgeClientCommandEnvelope, BridgeServerSnapshotEnvelope } from '@city/core-bridge';
+import type {
+  BridgeClientCommandEnvelope,
+  BridgeHelloPayload,
+  BridgeServerEnvelope,
+  BridgeServerSnapshotEnvelope,
+} from '@city/core-bridge';
 import type {
   IntegrationBroadcaster,
   IntegrationMultiplayerRuntime,
@@ -8,6 +13,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createDoRoomAuthorityBinding,
+  decodeClientEnvelopeFromJson,
+  DEFAULT_DO_HELLO_PAYLOAD,
   type DoWebSocketLike,
   type DoWebSocketOutboundMessage,
   mapRoomToDurableObjectName,
@@ -34,7 +41,7 @@ interface TestRuntimeHarness {
   tickCalls: number[];
   getSnapshotCalls: string[];
   requireBroadcaster: () => IntegrationBroadcaster<TestPatchPayload, TestSnapshotPayload>;
-  snapshotToReturn: BridgeServerSnapshotEnvelope<TestSnapshotPayload>;
+  getLastSnapshot: () => BridgeServerSnapshotEnvelope<TestSnapshotPayload>;
 }
 
 describe('room do adapter', () => {
@@ -57,8 +64,73 @@ describe('room do adapter', () => {
     expect(harness.disconnectCalls).toEqual([{ roomId: 'room-a', clientId: 'client-a' }]);
   });
 
-  it('routes websocket command messages to runtime receiveCommand', async () => {
+  it('accepts valid hello lockstep payloads and emits server hello', async () => {
     const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
+
+    const helloPayload: BridgeHelloPayload = {
+      protocolVersion: DEFAULT_DO_HELLO_PAYLOAD.protocolVersion,
+      coreVersion: DEFAULT_DO_HELLO_PAYLOAD.coreVersion,
+    };
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'hello',
+        roomId: 'room-a',
+        clientId: 'client-a',
+        payload: helloPayload,
+      }),
+    );
+
+    const helloEnvelope = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0));
+    if (helloEnvelope.kind !== 'hello') {
+      throw new Error('expected server hello envelope');
+    }
+    expect(helloEnvelope.kind).toBe('hello');
+    expect(helloEnvelope.roomId).toBe('room-a');
+    expect(helloEnvelope.clientId).toBe('client-a');
+    expect(helloEnvelope.payload).toEqual(DEFAULT_DO_HELLO_PAYLOAD);
+  });
+
+  it('denies pre-hello mutating commands with reject and skips runtime receiveCommand', async () => {
+    const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
+
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'command',
+        roomId: 'room-a',
+        clientId: 'client-a',
+        commandId: 'cmd-before-hello',
+        sentAtMs: 100,
+        payload: { action: 'build-road' },
+      }),
+    );
+
+    expect(harness.receiveCommandCalls).toEqual([]);
+    const rejectEnvelope = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0));
+    expect(rejectEnvelope).toMatchObject({
+      kind: 'reject',
+      roomId: 'room-a',
+      payload: {
+        commandId: 'cmd-before-hello',
+        code: 'HELLO_REQUIRED',
+      },
+    });
+  });
+
+  it('routes websocket command messages to runtime receiveCommand after hello', async () => {
+    const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
+
     const command: BridgeClientCommandEnvelope<TestCommandPayload> = {
       kind: 'command',
       roomId: 'room-a',
@@ -73,10 +145,63 @@ describe('room do adapter', () => {
     expect(harness.receiveCommandCalls).toEqual([command]);
   });
 
+  it('rejects hello payload mismatch and keeps client in pre-hello state', async () => {
+    const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
+
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'hello',
+        roomId: 'room-a',
+        clientId: 'client-a',
+        payload: {
+          protocolVersion: 'bridge-v2',
+          coreVersion: DEFAULT_DO_HELLO_PAYLOAD.coreVersion,
+        },
+      }),
+    );
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'command',
+        roomId: 'room-a',
+        clientId: 'client-a',
+        commandId: 'cmd-after-mismatch',
+        sentAtMs: 200,
+        payload: { action: 'build-road' },
+      }),
+    );
+
+    const mismatchError = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0));
+    expect(mismatchError).toMatchObject({
+      kind: 'error',
+      roomId: 'room-a',
+      payload: {
+        code: 'HELLO_VERSION_MISMATCH',
+      },
+    });
+    const rejectAfterMismatch = parseServerEnvelopeMessage(requireMessageAt(socket.messages, 1));
+    expect(rejectAfterMismatch).toMatchObject({
+      kind: 'reject',
+      roomId: 'room-a',
+      payload: {
+        commandId: 'cmd-after-mismatch',
+        code: 'HELLO_REQUIRED',
+      },
+    });
+    expect(harness.receiveCommandCalls).toEqual([]);
+  });
+
   it('routes websocket snapshot requests to runtime getSnapshot and socket send', async () => {
     const harness = createRuntimeHarness();
     const socket = createFakeSocket();
     await harness.adapter.handleWebSocketOpen('client-a', socket);
+    await sendHello(harness, {
+      roomId: 'room-a',
+      clientId: 'client-a',
+    });
 
     await harness.adapter.handleWebSocketMessage(
       'client-a',
@@ -87,10 +212,10 @@ describe('room do adapter', () => {
       }),
     );
 
-    expect(harness.getSnapshotCalls).toEqual(['room-a']);
-    expect(socket.messages).toHaveLength(1);
-    expect(JSON.parse(requireStringMessage(requireMessageAt(socket.messages, 0)))).toEqual(
-      harness.snapshotToReturn,
+    expect(harness.getSnapshotCalls).toEqual(['room-a', 'room-a']);
+    expect(socket.messages).toHaveLength(2);
+    expect(parseServerEnvelopeMessage(requireMessageAt(socket.messages, 1))).toEqual(
+      harness.getLastSnapshot(),
     );
   });
 
@@ -148,36 +273,50 @@ describe('room do adapter', () => {
     );
   });
 
-  it('rejects websocket messages that target a different room authority', async () => {
+  it('returns protocol error envelopes for websocket messages that target a different room authority', async () => {
     const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
 
-    await expect(
-      harness.adapter.handleWebSocketMessage(
-        'client-a',
-        JSON.stringify({
-          kind: 'ping',
-          roomId: 'room-b',
-          clientId: 'client-a',
-          sentAtMs: 1,
-        }),
-      ),
-    ).rejects.toThrow('room authority mismatch');
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'ping',
+        roomId: 'room-b',
+        clientId: 'client-a',
+        sentAtMs: 1,
+      }),
+    );
+
+    expect(parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0))).toMatchObject({
+      kind: 'error',
+      payload: {
+        code: 'ROOM_AUTHORITY_MISMATCH',
+      },
+    });
   });
 
-  it('rejects websocket messages that target a different client identity', async () => {
+  it('returns protocol error envelopes for websocket messages that target a different client identity', async () => {
     const harness = createRuntimeHarness();
+    const socket = createFakeSocket();
+    await harness.adapter.handleWebSocketOpen('client-a', socket);
 
-    await expect(
-      harness.adapter.handleWebSocketMessage(
-        'client-a',
-        JSON.stringify({
-          kind: 'ping',
-          roomId: 'room-a',
-          clientId: 'client-b',
-          sentAtMs: 1,
-        }),
-      ),
-    ).rejects.toThrow('client authority mismatch');
+    await harness.adapter.handleWebSocketMessage(
+      'client-a',
+      JSON.stringify({
+        kind: 'ping',
+        roomId: 'room-a',
+        clientId: 'client-b',
+        sentAtMs: 1,
+      }),
+    );
+
+    expect(parseServerEnvelopeMessage(requireMessageAt(socket.messages, 0))).toMatchObject({
+      kind: 'error',
+      payload: {
+        code: 'CLIENT_AUTHORITY_MISMATCH',
+      },
+    });
   });
 
   it('rejects runtime broadcaster room fanout for a non-owned room id', () => {
@@ -195,6 +334,29 @@ describe('room do adapter', () => {
 
     expect(() => broadcaster.sendToRoom('room-b', patchEvent)).toThrow('room authority mismatch');
   });
+
+  it('decodes json/binary websocket payloads into canonical client envelopes', () => {
+    const jsonMessage = JSON.stringify({
+      kind: 'ping',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      sentAtMs: 123,
+    });
+    expect(decodeClientEnvelopeFromJson<TestCommandPayload>(jsonMessage)).toEqual({
+      kind: 'ping',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      sentAtMs: 123,
+    });
+
+    const binaryMessage = new TextEncoder().encode(jsonMessage);
+    expect(decodeClientEnvelopeFromJson<TestCommandPayload>(binaryMessage)).toEqual({
+      kind: 'ping',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      sentAtMs: 123,
+    });
+  });
 });
 
 /**
@@ -209,11 +371,12 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
   const receiveCommandCalls: BridgeClientCommandEnvelope<TestCommandPayload>[] = [];
   const tickCalls: number[] = [];
   const getSnapshotCalls: string[] = [];
-  const snapshotToReturn: BridgeServerSnapshotEnvelope<TestSnapshotPayload> = {
+  let nextServerSeq = 10;
+  let snapshotToReturn: BridgeServerSnapshotEnvelope<TestSnapshotPayload> = {
     kind: 'snapshot',
     roomId: 'room-a',
     tick: 3,
-    serverSeq: 12,
+    serverSeq: 10,
     payload: {
       snapshotId: 'snapshot-3',
     },
@@ -241,6 +404,16 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
     },
     async getSnapshot(roomId) {
       getSnapshotCalls.push(roomId);
+      nextServerSeq += 1;
+      snapshotToReturn = {
+        kind: 'snapshot',
+        roomId,
+        tick: 3,
+        serverSeq: nextServerSeq,
+        payload: {
+          snapshotId: 'snapshot-3',
+        },
+      };
       return snapshotToReturn;
     },
     async bootstrapReplay() {
@@ -270,7 +443,9 @@ function createRuntimeHarness(options: { nowMs?: () => number } = {}): TestRunti
       }
       return capturedBroadcaster;
     },
-    snapshotToReturn,
+    getLastSnapshot() {
+      return snapshotToReturn;
+    },
   };
 }
 
@@ -303,6 +478,15 @@ function requireStringMessage(message: DoWebSocketOutboundMessage): string {
   return message;
 }
 
+function parseServerEnvelopeMessage(
+  message: DoWebSocketOutboundMessage,
+): BridgeServerEnvelope<TestPatchPayload, TestSnapshotPayload> {
+  return JSON.parse(requireStringMessage(message)) as BridgeServerEnvelope<
+    TestPatchPayload,
+    TestSnapshotPayload
+  >;
+}
+
 /**
  * Retrieve one outbound socket message by index with an explicit bounds check.
  * Mirrors explicit bounds-safety expectations while iterating packet buffers in
@@ -318,4 +502,19 @@ function requireMessageAt(
     throw new Error(`expected outbound message at index ${index}`);
   }
   return message;
+}
+
+async function sendHello(
+  harness: TestRuntimeHarness,
+  options: { roomId: string; clientId: string },
+): Promise<void> {
+  await harness.adapter.handleWebSocketMessage(
+    options.clientId,
+    JSON.stringify({
+      kind: 'hello',
+      roomId: options.roomId,
+      clientId: options.clientId,
+      payload: DEFAULT_DO_HELLO_PAYLOAD,
+    }),
+  );
 }

@@ -119,7 +119,7 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
   - Done criteria:
     - DO adapter can host a room runtime in tests.
 
-- [ ] **3.5 Implement websocket protocol handling with strict handshake**
+- [x] **3.5 Implement websocket protocol handling with strict handshake**
   - Goal: Enforce `hello` lockstep and map wire messages to canonical envelope types.
   - Files to read first:
     - `/Users/cje/dev/city/STAGE_0_CONTRACT_FREEZE_PLAN.md`
@@ -209,3 +209,4 @@ Replace mock/skeleton behavior with a real authoritative bridge-backed runtime a
 - [x] 2026-02-08: Completed task 3.2 by adding an authoritative per-room multiplayer runtime in `@city/sim-integration` with room registry contexts, deterministic per-room command queue ordering, per-room `commandId` idempotency dedupe, and ordered `ack`/`reject`/`error` plus downstream `patch`/`snapshot` envelope emissions carrying monotonic `tick` and `serverSeq`, with focused tests for acceptance, rejection, dedupe, and deterministic ordering.
 - [x] 2026-02-08: Completed task 3.3 by adding snapshot + patch-tail persistence contracts in `@city/sim-integration` multiplayer types, wiring authoritative runtime hooks for persistence-backed room bootstrap (`snapshot` + replay tail by `serverSeq`), adding configurable snapshot cadence with a Stage-locked default of 64 ticks plus tail truncation hooks, and adding focused tests for persisted bootstrap replay and post-truncation sequence continuity.
 - [x] 2026-02-08: Completed task 3.4 by scaffolding `@city/sim-do-adapter` with package-level `typecheck`/`lint`/`test` scripts, implementing a room-scoped `RoomDoAdapter` that maps one room to one deterministic DO authority key, wiring websocket open/message/close entrypoints to `@city/sim-integration` runtime APIs (`connectClient`/`receiveCommand`/`disconnectClient`), bridging DO alarms to authoritative `tick(nowMs)`, and adding focused adapter unit tests for routing and room-authority fanout behavior.
+- [x] 2026-02-08: Completed task 3.5 by hardening `@city/sim-do-adapter` websocket protocol handling with strict `hello` lockstep enforcement (bridge-v1 protocol/core payload match), adding validated JSON/binary envelope decode utilities that map wire payloads to canonical `@city/core-bridge` envelope types, denying pre-hello mutating `command` envelopes via bridge `reject` responses, routing protocol/authority/handshake mismatches through bridge `error` responses, and adding focused adapter tests for valid handshake, mismatch refusal, and pre-hello command denial.

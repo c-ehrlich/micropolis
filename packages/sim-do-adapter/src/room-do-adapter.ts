@@ -1,4 +1,4 @@
-import type { BridgeClientEnvelope } from '@city/core-bridge';
+import type { BridgeClientEnvelope, BridgeHelloPayload } from '@city/core-bridge';
 import type {
   IntegrationBroadcaster,
   IntegrationClientId,
@@ -92,8 +92,21 @@ export interface DoRoomAdapterOptions<
   encodeServerEnvelope?: (
     event: IntegrationServerEnvelope<TPatchPayload, TSnapshotPayload, TPresencePayload>,
   ) => DoWebSocketOutboundMessage;
+  expectedHelloPayload?: BridgeHelloPayload;
   nowMs?: () => number;
 }
+
+/**
+ * Default bridge-v1 handshake payload enforced by the DO websocket adapter.
+ * Mirrors strict startup compatibility intent from bridge contract planning
+ * around `ref/micropolis/src/sim/w_sim.c` + `ref/micropolis/src/sim/w_net.c`.
+ * Parity note: Micropolis C did not use structured hello payloads; this is an
+ * intentional bridge-v1 lockstep requirement.
+ */
+export const DEFAULT_DO_HELLO_PAYLOAD: BridgeHelloPayload = {
+  protocolVersion: 'bridge-v1',
+  coreVersion: '0.0.0',
+};
 
 /**
  * Map one room/city ID to one deterministic Durable Object name.
@@ -134,6 +147,7 @@ export class RoomDoAdapter<
   TPresencePayload = unknown,
 > {
   private readonly socketsByClientId = new Map<IntegrationClientId, DoWebSocketLike>();
+  private readonly handshakenClientIds = new Set<IntegrationClientId>();
   private readonly runtime: IntegrationMultiplayerRuntime<
     TCommandPayload,
     TPatchPayload,
@@ -146,6 +160,7 @@ export class RoomDoAdapter<
   private readonly encodeServerEnvelope: (
     event: IntegrationServerEnvelope<TPatchPayload, TSnapshotPayload, TPresencePayload>,
   ) => DoWebSocketOutboundMessage;
+  private readonly expectedHelloPayload: BridgeHelloPayload;
   private readonly nowMs: () => number;
 
   /**
@@ -164,6 +179,7 @@ export class RoomDoAdapter<
   ) {
     this.decodeClientEnvelope = options.decodeClientEnvelope ?? decodeClientEnvelopeFromJson;
     this.encodeServerEnvelope = options.encodeServerEnvelope ?? encodeServerEnvelopeAsJson;
+    this.expectedHelloPayload = options.expectedHelloPayload ?? DEFAULT_DO_HELLO_PAYLOAD;
     this.nowMs = options.nowMs ?? Date.now;
     this.runtime = options.createRuntime(this.createBroadcaster());
   }
@@ -185,6 +201,7 @@ export class RoomDoAdapter<
    */
   async handleWebSocketOpen(clientId: IntegrationClientId, socket: DoWebSocketLike): Promise<void> {
     this.socketsByClientId.set(clientId, socket);
+    this.handshakenClientIds.delete(clientId);
     await this.runtime.connectClient(this.options.roomId, clientId);
   }
 
@@ -192,16 +209,48 @@ export class RoomDoAdapter<
    * Route one websocket message into authoritative runtime APIs.
    * Mirrors command intake dispatch intent from `SimCmd` in
    * `ref/micropolis/src/sim/w_sim.c`.
-   * Parity note: `hello`/`ping` are accepted as no-op scaffolding in this task;
-   * strict handshake behavior is handled in later stage tasks.
+   * Parity note: `hello` lockstep and pre-hello command denial are intentional
+   * bridge-v1 additions over legacy NET packet handling.
    */
   async handleWebSocketMessage(
     clientId: IntegrationClientId,
     message: DoWebSocketMessage,
   ): Promise<void> {
-    const envelope = this.decodeClientEnvelope(message);
-    assertSameRoomAuthority(this.options.roomId, envelope.roomId);
-    assertSameClientAuthority(clientId, envelope.clientId);
+    let envelope: BridgeClientEnvelope<TCommandPayload>;
+    try {
+      envelope = this.decodeClientEnvelope(message);
+    } catch {
+      await this.sendProtocolError(clientId, 'invalid client envelope payload', 'INVALID_ENVELOPE');
+      return;
+    }
+
+    if (envelope.roomId !== this.options.roomId) {
+      await this.sendProtocolError(
+        clientId,
+        `room authority mismatch: expected ${this.options.roomId}, received ${envelope.roomId}`,
+        'ROOM_AUTHORITY_MISMATCH',
+      );
+      return;
+    }
+
+    if (envelope.clientId !== clientId) {
+      await this.sendProtocolError(
+        clientId,
+        `client authority mismatch: expected ${clientId}, received ${envelope.clientId}`,
+        'CLIENT_AUTHORITY_MISMATCH',
+      );
+      return;
+    }
+
+    if (envelope.kind === 'hello') {
+      await this.handleHelloEnvelope(clientId, envelope.payload);
+      return;
+    }
+
+    if (!this.handshakenClientIds.has(clientId)) {
+      await this.handlePreHelloEnvelope(clientId, envelope);
+      return;
+    }
 
     if (envelope.kind === 'command') {
       await this.runtime.receiveCommand(envelope);
@@ -214,7 +263,7 @@ export class RoomDoAdapter<
       return;
     }
 
-    if (envelope.kind === 'hello' || envelope.kind === 'ping') {
+    if (envelope.kind === 'ping') {
       return;
     }
 
@@ -229,6 +278,7 @@ export class RoomDoAdapter<
    */
   async handleWebSocketClose(clientId: IntegrationClientId): Promise<void> {
     this.socketsByClientId.delete(clientId);
+    this.handshakenClientIds.delete(clientId);
     await this.runtime.disconnectClient(this.options.roomId, clientId);
   }
 
@@ -311,6 +361,139 @@ export class RoomDoAdapter<
       socket.send(encoded);
     }
   }
+
+  /**
+   * Handle a client `hello` envelope with strict protocol/core lockstep checks.
+   * Mirrors startup compatibility checks from bridge planning over NET flows in
+   * `ref/micropolis/src/sim/w_net.c`.
+   * Parity note: this handshake is intentionally additive versus C transport.
+   */
+  private async handleHelloEnvelope(
+    clientId: IntegrationClientId,
+    payload: BridgeHelloPayload,
+  ): Promise<void> {
+    if (this.handshakenClientIds.has(clientId)) {
+      await this.sendProtocolError(
+        clientId,
+        'hello handshake already completed for this connection',
+        'HELLO_ALREADY_COMPLETED',
+      );
+      return;
+    }
+
+    if (!isStrictHelloMatch(payload, this.expectedHelloPayload)) {
+      await this.sendProtocolError(
+        clientId,
+        `hello payload mismatch: expected protocol=${this.expectedHelloPayload.protocolVersion}, core=${this.expectedHelloPayload.coreVersion}`,
+        'HELLO_VERSION_MISMATCH',
+      );
+      return;
+    }
+
+    this.handshakenClientIds.add(clientId);
+    const position = await this.reserveEnvelopePosition();
+    this.sendToClient(clientId, {
+      kind: 'hello',
+      roomId: this.options.roomId,
+      clientId,
+      tick: position.tick,
+      serverSeq: position.serverSeq,
+      payload: this.expectedHelloPayload,
+    });
+  }
+
+  /**
+   * Route non-hello envelopes received before successful handshake completion.
+   * Mirrors command gating intent from `SimCmd` routing in `w_sim.c` while
+   * adding bridge-v1 handshake discipline.
+   * Parity note: bridge `reject` is used for expected command denial; other
+   * pre-hello envelopes map to bridge `error`.
+   */
+  private async handlePreHelloEnvelope(
+    clientId: IntegrationClientId,
+    envelope: Exclude<BridgeClientEnvelope<TCommandPayload>, { kind: 'hello' }>,
+  ): Promise<void> {
+    if (envelope.kind === 'command') {
+      await this.sendCommandReject(
+        clientId,
+        envelope.commandId,
+        'client must complete hello handshake before sending commands',
+        'HELLO_REQUIRED',
+      );
+      return;
+    }
+
+    await this.sendProtocolError(
+      clientId,
+      `client must complete hello handshake before ${envelope.kind}`,
+      'HELLO_REQUIRED',
+    );
+  }
+
+  /**
+   * Emit a bridge `reject` envelope for expected command-denial outcomes.
+   * Mirrors expected command denial semantics from `SimCmd` pathways in
+   * `ref/micropolis/src/sim/w_sim.c`, mapped to bridge envelopes.
+   * Parity note: this reject is adapter-level pre-runtime gating.
+   */
+  private async sendCommandReject(
+    clientId: IntegrationClientId,
+    commandId: string,
+    reason: string,
+    code: string,
+  ): Promise<void> {
+    const position = await this.reserveEnvelopePosition();
+    this.sendToClient(clientId, {
+      kind: 'reject',
+      roomId: this.options.roomId,
+      tick: position.tick,
+      serverSeq: position.serverSeq,
+      payload: {
+        commandId,
+        reason,
+        code,
+      },
+    });
+  }
+
+  /**
+   * Emit a bridge `error` envelope for unexpected/runtime protocol failures.
+   * Mirrors fatal transport fault surfacing intent from `ref/micropolis/src/sim/w_net.c`,
+   * while separating expected denials into `reject`.
+   * Parity note: this is structured bridge-v1 error metadata, not Tcl stderr.
+   */
+  private async sendProtocolError(
+    clientId: IntegrationClientId,
+    message: string,
+    code: string,
+  ): Promise<void> {
+    const position = await this.reserveEnvelopePosition();
+    this.sendToClient(clientId, {
+      kind: 'error',
+      roomId: this.options.roomId,
+      tick: position.tick,
+      serverSeq: position.serverSeq,
+      payload: {
+        message,
+        code,
+      },
+    });
+  }
+
+  /**
+   * Reserve the next tick/sequence pair for one adapter-emitted envelope.
+   * Mirrors monotonic outbound sequencing intent from `HandlePacket` stream
+   * ordering in `ref/micropolis/src/sim/w_net.c`.
+   * Parity note: this intentionally reuses runtime snapshot sequencing instead
+   * of introducing a second sequence counter in the adapter.
+   */
+  private async reserveEnvelopePosition(): Promise<{ tick: number; serverSeq: number }> {
+    const snapshot = await this.runtime.getSnapshot(this.options.roomId);
+    return {
+      tick: snapshot.tick,
+      serverSeq: snapshot.serverSeq,
+    };
+  }
 }
 
 /**
@@ -322,7 +505,73 @@ export class RoomDoAdapter<
 export function decodeClientEnvelopeFromJson<TCommandPayload>(
   message: DoWebSocketMessage,
 ): BridgeClientEnvelope<TCommandPayload> {
-  return JSON.parse(normalizeSocketMessageToText(message)) as BridgeClientEnvelope<TCommandPayload>;
+  const raw: unknown = JSON.parse(normalizeSocketMessageToText(message));
+  return decodeClientEnvelope(raw);
+}
+
+/**
+ * Decode one unknown client payload into a validated bridge client envelope.
+ * Mirrors strict dispatch-shape checks around `SimCmd` packet handling in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Parity note: bridge-v1 performs explicit object/field validation before
+ * command routing, unlike C's Tcl argv parsing.
+ */
+export function decodeClientEnvelope<TCommandPayload>(
+  payload: unknown,
+): BridgeClientEnvelope<TCommandPayload> {
+  const envelope = requireObjectRecord(payload, 'client envelope');
+  const kind = requireStringField(envelope, 'kind', 'client envelope');
+  const roomId = requireStringField(envelope, 'roomId', 'client envelope');
+  const clientId = requireStringField(envelope, 'clientId', 'client envelope');
+
+  if (kind === 'hello') {
+    const helloPayload = requireObjectRecord(envelope.payload, 'hello payload');
+    return {
+      kind,
+      roomId,
+      clientId,
+      payload: {
+        protocolVersion: requireStringField(helloPayload, 'protocolVersion', 'hello payload'),
+        coreVersion: requireStringField(helloPayload, 'coreVersion', 'hello payload'),
+      },
+    };
+  }
+
+  if (kind === 'command') {
+    const commandId = requireStringField(envelope, 'commandId', 'command envelope');
+    const sentAtMs = requireFiniteNumberField(envelope, 'sentAtMs', 'command envelope');
+    if (!hasOwnProperty(envelope, 'payload')) {
+      throw new Error('command envelope is missing payload');
+    }
+    return {
+      kind,
+      roomId,
+      clientId,
+      commandId,
+      sentAtMs,
+      payload: envelope.payload as TCommandPayload,
+    };
+  }
+
+  if (kind === 'request_snapshot') {
+    return {
+      kind,
+      roomId,
+      clientId,
+    };
+  }
+
+  if (kind === 'ping') {
+    const sentAtMs = requireFiniteNumberField(envelope, 'sentAtMs', 'ping envelope');
+    return {
+      kind,
+      roomId,
+      clientId,
+      sentAtMs,
+    };
+  }
+
+  throw new Error(`unsupported client envelope kind: ${kind}`);
 }
 
 /**
@@ -354,32 +603,54 @@ function normalizeSocketMessageToText(message: DoWebSocketMessage): string {
   return textDecoder.decode(new Uint8Array(message));
 }
 
+function isStrictHelloMatch(received: BridgeHelloPayload, expected: BridgeHelloPayload): boolean {
+  return (
+    received.protocolVersion === expected.protocolVersion &&
+    received.coreVersion === expected.coreVersion
+  );
+}
+
+function hasOwnProperty(object: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function requireObjectRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireStringField(record: Record<string, unknown>, key: string, label: string): string {
+  const value = record[key];
+  if (typeof value !== 'string') {
+    throw new Error(`${label}.${key} must be a string`);
+  }
+  return value;
+}
+
+function requireFiniteNumberField(
+  record: Record<string, unknown>,
+  key: string,
+  label: string,
+): number {
+  const value = record[key];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${label}.${key} must be a finite number`);
+  }
+  return value;
+}
+
 /**
- * Enforce that inbound/outbound envelopes stay inside this room authority.
+ * Enforce that outbound broadcaster envelopes stay inside this room authority.
  * Mirrors single-endpoint authority discipline from `net_listen_socket` in
  * `ref/micropolis/src/sim/w_net.c`.
- * Parity note: explicit room assertions are additive for bridge-v1.
+ * Parity note: explicit room assertions are additive for bridge-v1 routing.
  */
 function assertSameRoomAuthority(expectedRoomId: IntegrationRoomId, receivedRoomId: string): void {
   if (receivedRoomId !== expectedRoomId) {
     throw new Error(
       `room authority mismatch: expected ${expectedRoomId}, received ${receivedRoomId}`,
-    );
-  }
-}
-
-/**
- * Enforce that message client identity matches the connected websocket owner.
- * Mirrors transport peer identity assumptions in `ref/micropolis/src/sim/w_net.c`.
- * Parity note: explicit client-id assertion is additive for bridge-v1.
- */
-function assertSameClientAuthority(
-  expectedClientId: IntegrationClientId,
-  receivedClientId: string,
-): void {
-  if (receivedClientId !== expectedClientId) {
-    throw new Error(
-      `client authority mismatch: expected ${expectedClientId}, received ${receivedClientId}`,
     );
   }
 }
