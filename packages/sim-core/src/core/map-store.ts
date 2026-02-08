@@ -312,6 +312,10 @@ export class DoubleBufferMapStore implements MapStore {
   private active = new Map<LayerId, LayerArray>();
   private work = new Map<LayerId, LayerArray>();
   private writers = new Map<LayerId, PatchWriter<LayerArray>>();
+  // Tick-local set of layers that actually participated this tick.
+  // Parity note: this lazy preparation is a TypeScript optimization; C map buffers
+  // are long-lived globals in `ref/micropolis/src/sim/sim.c`.
+  private preparedLayers = new Set<LayerId>();
   private inTick = false;
   private layerOrder: LayerId[];
 
@@ -332,12 +336,8 @@ export class DoubleBufferMapStore implements MapStore {
     if (this.inTick) {
       throw new Error('beginTick called while already in a tick');
     }
-    for (const id of this.layerOrder) {
-      const activeArr = this.active.get(id)!;
-      const workArr = this.work.get(id)!;
-      workArr.set(activeArr);
-      this.writers.set(id, new PatchWriter(workArr));
-    }
+    this.writers.clear();
+    this.preparedLayers.clear();
     this.inTick = true;
   }
 
@@ -345,18 +345,26 @@ export class DoubleBufferMapStore implements MapStore {
     if (!this.inTick) {
       throw new Error('getLayer called outside of a tick');
     }
-    return this.work.get(layer)!;
+
+    return this.prepareLayerForTick(layer);
   }
 
   write(layer: LayerId, index: number, value: number): void {
     if (!this.inTick) {
       throw new Error('write called outside of a tick');
     }
+
+    this.validateLayerWriteIndex(layer, index);
     const writer = this.writers.get(layer);
-    if (!writer) {
-      throw new Error(`no patch writer for layer ${layer}`);
+    if (writer) {
+      writer.write(index, value);
+      return;
     }
-    writer.write(index, value);
+
+    const layerBuffer = this.prepareLayerForTick(layer);
+    const patchWriter = new PatchWriter(layerBuffer);
+    patchWriter.write(index, value);
+    this.writers.set(layer, patchWriter);
   }
 
   commitTick(): TickResult {
@@ -372,20 +380,56 @@ export class DoubleBufferMapStore implements MapStore {
       }
     }
 
-    for (const id of this.layerOrder) {
-      const activeArr = this.active.get(id)!;
-      const workArr = this.work.get(id)!;
+    for (const id of this.preparedLayers) {
+      const activeArr = getOrThrow(this.active.get(id));
+      const workArr = getOrThrow(this.work.get(id));
       this.active.set(id, workArr);
       this.work.set(id, activeArr);
     }
 
     this.writers.clear();
+    this.preparedLayers.clear();
     this.inTick = false;
     return { patches };
   }
 
   snapshot(layer: LayerId): LayerArray {
-    return this.active.get(layer)!;
+    return getOrThrow(this.active.get(layer));
+  }
+
+  /**
+   * Lazily copy one layer into its work buffer for the current tick.
+   * Parity note: this preserves patch/write semantics while avoiding eager copies
+   * for untouched layers in browser-oriented runtimes.
+   */
+  private prepareLayerForTick(layer: LayerId): LayerArray {
+    if (this.preparedLayers.has(layer)) {
+      return getOrThrow(this.work.get(layer));
+    }
+
+    const activeArr = getOrThrow(this.active.get(layer));
+    const workArr = getOrThrow(this.work.get(layer));
+    workArr.set(activeArr);
+    this.preparedLayers.add(layer);
+    return workArr;
+  }
+
+  /**
+   * Enforce deterministic bounds/integer guarantees for map writes.
+   * Mirrors defensive bounds expectations used across C map mutation paths
+   * in `ref/micropolis/src/sim` routines.
+   */
+  private validateLayerWriteIndex(layer: LayerId, index: number): void {
+    const layerDef = this.layerDefs[layer];
+    if (!layerDef) {
+      throw new Error(`unknown layer ${layer}`);
+    }
+    if (!Number.isInteger(index)) {
+      throw new Error(`write index must be an integer for layer ${layer}`);
+    }
+    if (index < 0 || index >= layerDef.length) {
+      throw new Error(`write index ${index} is out of bounds for layer ${layer}`);
+    }
   }
 }
 

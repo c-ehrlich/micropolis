@@ -5,6 +5,7 @@ export * from './core/assert.ts';
 export * from './core/clocks.ts';
 export * from './core/constants.ts';
 export * from './core/map-flags.ts';
+export * from './core/map-invalidation.ts';
 export * from './core/map-store.ts';
 export * from './core/rng.ts';
 export * from './core/ruleset.ts';
