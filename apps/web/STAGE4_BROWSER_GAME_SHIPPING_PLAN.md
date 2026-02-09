@@ -188,7 +188,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/host-factory.test.ts` still passes.
+- [x] `apps/web/src/game/host-factory.test.ts` still passes.
 - [ ] `apps/web/src/game/runtime.test.ts` still passes.
 - [ ] Stage 4 route boots successfully using the new authority path (not `DeterministicCommandAuthority`).
 
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
