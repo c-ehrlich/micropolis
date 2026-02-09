@@ -144,7 +144,7 @@ Deletion execution notes:
 
 ### Stage 0 Exit Criteria
 
-- [ ] Canonical bridge contract is selected and documented as the only runtime contract for upcoming web work.
+- [x] Canonical bridge contract is selected and documented as the only runtime contract for upcoming web work.
 - [ ] Single surviving UI surface (`/`) is selected and duplicate protocol surface deletion is planned.
 - [ ] Snapshot/patch, resync, funds, and save/load semantics are fully locked.
 - [ ] Stage 1+ can proceed without additional architecture decisions.
