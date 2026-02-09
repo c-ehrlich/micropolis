@@ -81,6 +81,11 @@ Decision surface:
 
 Contract source: `packages/core-bridge/src/validation.ts`.
 
+Handshake/version ownership source:
+
+- `packages/core-bridge/src/local-host.ts` and `packages/core-bridge/src/types.ts` are the only Stage 0 owners for handshake/version defaults.
+- Web adapters consume these values (`apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts`) and must not introduce new web-local handshake/version constants.
+
 Schema validators:
 
 - `validateCoreBridgeV1CommandEnvelope`

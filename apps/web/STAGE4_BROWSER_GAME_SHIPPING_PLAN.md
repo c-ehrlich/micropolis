@@ -36,6 +36,8 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] Web-local protocol forks are deleted after bridge-contract port:
 - [x] `apps/web/src/game/core-host.ts`
 - [x] `apps/web/src/game/runtime/protocol.ts`
+- [x] Handshake/version defaults are bridge-owned in `@city/core-bridge` (`packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts`).
+- [x] Web surfaces (`apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts`) consume handshake/version defaults from `@city/core-bridge` and do not define new web-local handshake/version constants.
 - [x] Keep existing sequencing/resync policy from `packages/core-bridge/src/sequencing.ts` (no re-evaluation unless blocker).
 - [x] Snapshot/patch map rule: patch deltas use `{ x, y, tile }`; snapshot tile order is explicit x-major (`x * WORLD_Y + y`).
 - [x] Funds rule: `SimState.TotalFunds` is canonical; `ToolContext.funds` is synchronized derived state.
@@ -63,9 +65,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/core-host.ts` -> `packages/core-bridge/src/core-host.ts`.
 - [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/runtime/protocol.ts` -> `packages/core-bridge/src/types.ts`.
 
-- [ ] 0.2 Freeze handshake/version ownership at bridge layer.
-- [ ] 0.2 Check: Stage 0 docs name `@city/core-bridge` as the only handshake/version owner.
-- [ ] 0.2 Check: no Stage 0 step asks for new web-local handshake constants.
+- [x] 0.2 Freeze handshake/version ownership at bridge layer.
+- [x] 0.2 Check: Stage 0 docs name `@city/core-bridge` as the only handshake/version owner.
+- [x] 0.2 Check: no Stage 0 step asks for new web-local handshake constants.
 
 - [ ] 0.3 Freeze playable command inventory for single-player shipping.
 - [ ] 0.3 Check: inventory includes tool apply, sim pause/resume/set speed, city new/load/save, scenario start.
@@ -105,6 +107,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 | --- | --- | --- | --- |
 | Web runtime interface ownership | `apps/web/src/game/core-host.ts` | `packages/core-bridge/src/core-host.ts` | All Stage 1+ host/runtime work imports contract ownership from `@city/core-bridge`. |
 | Web envelope type ownership | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope definitions and command payload unions are bridge-owned only. |
+| Web handshake/version ownership | `apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts` | Handshake/version defaults are owned by `@city/core-bridge`; web modules only re-export or consume bridge-owned values. |
 | Web sequencing/resync ownership | local reducer-specific ordering behavior | `packages/core-bridge/src/sequencing.ts` | Stale drop, server-seq gap resync, and tick-regression resync stay bridge-defined. |
 
 ### Stage 0 Exit Criteria
@@ -529,4 +532,3 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-

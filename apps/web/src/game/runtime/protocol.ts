@@ -1,3 +1,4 @@
+import { LOCAL_HOST_DEFAULT_CORE_VERSION } from '../../../../../packages/core-bridge/src/local-host.ts';
 import {
   type CityCommandPayloadV1,
   type CitySimSpeedV1,
@@ -79,10 +80,12 @@ export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 
 /**
  * Default core version announced by the Stage 2 web runtime handshake.
- * Mirrors strict lockstep intent from `ref/micropolis/src/sim/w_sim.c` while
- * intentionally using a string token instead of the C Tcl `sim Version` path.
+ * Maps Stage 2 runtime handshake defaults to
+ * `LOCAL_HOST_DEFAULT_CORE_VERSION` in `packages/core-bridge/src/local-host.ts`.
+ * Parity note: explicit version tokens are a bridge abstraction rather than
+ * direct C Tcl `sim Version` return strings in `ref/micropolis/src/sim/w_sim.c`.
  */
-export const DEFAULT_CORE_VERSION = 'stage-2';
+export const DEFAULT_CORE_VERSION = LOCAL_HOST_DEFAULT_CORE_VERSION;
 
 /**
  * Stage 0 playable command inventory locked to canonical bridge payload types.
