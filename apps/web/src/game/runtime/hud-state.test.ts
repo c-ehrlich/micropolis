@@ -323,4 +323,48 @@ describe('runtime HUD projection', () => {
 
     expect(next).toEqual(afterSnapshot);
   });
+
+  it('prefers canonical patch messageDeltas over legacy message compatibility fields', () => {
+    const initial = createInitialRuntimeHudState();
+    const next = projectRuntimeHudState(initial, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 4,
+      payload: {
+        hud: {
+          message: {
+            // Message ids remain integral in `SendMes` (`ref/micropolis/src/sim/s_msg.c`).
+            id: 70,
+            text: 'Legacy hud.message entry.',
+          },
+        },
+        messageDeltas: [
+          {
+            id: 71,
+            text: 'Canonical message delta entry.',
+          },
+        ],
+        messages: [
+          {
+            id: 72,
+            text: 'Legacy messages[] compatibility entry.',
+          },
+        ],
+      } as unknown as HostPatchPayload,
+    });
+
+    expect(next.messages).toEqual([
+      {
+        id: 71,
+        text: 'Canonical message delta entry.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 11,
+        serverSeq: 4,
+      },
+    ]);
+  });
 });

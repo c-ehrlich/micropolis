@@ -120,7 +120,12 @@ export function projectRuntimeHudState(
     return state;
   }
 
-  const parsed = parseHudPayload(envelope.payload, envelope.tick, envelope.serverSeq);
+  const parsed = parseHudPayload(
+    envelope.payload,
+    envelope.kind,
+    envelope.tick,
+    envelope.serverSeq,
+  );
   if (parsed === null) {
     return state;
   }
@@ -174,6 +179,7 @@ interface ParsedMessageInput {
 
 function parseHudPayload(
   payload: unknown,
+  envelopeKind: 'snapshot' | 'patch',
   tick: number,
   serverSeq: number,
 ): ParsedHudPayload | null {
@@ -184,6 +190,8 @@ function parseHudPayload(
   const parsed: ParsedHudPayload = {
     messages: [],
   };
+
+  let legacyHudMessage: RuntimeHudMessageEvent | null = null;
 
   const hudRecord = readRecord(payload.hud);
   if (hudRecord !== null) {
@@ -260,30 +268,41 @@ function parseHudPayload(
     }
 
     const hudMessage = parseMessageInput(hudRecord.message);
-    if (hudMessage !== null) {
-      parsed.messages.push(toHudMessageEvent(hudMessage, tick, serverSeq));
-    }
+    legacyHudMessage = hudMessage === null ? null : toHudMessageEvent(hudMessage, tick, serverSeq);
   }
 
-  if (Array.isArray(payload.messageDeltas)) {
-    for (const rawEntry of payload.messageDeltas) {
+  const messageDeltaEntries = readMessageArrayEntries(payload.messageDeltas);
+  const messageEntries = readMessageArrayEntries(payload.messages);
+  const primaryEntries =
+    envelopeKind === 'patch'
+      ? (messageDeltaEntries ?? messageEntries)
+      : (messageEntries ?? messageDeltaEntries);
+  if (primaryEntries !== null) {
+    for (const rawEntry of primaryEntries) {
       const message = parseMessageDeltaInput(rawEntry);
       if (message !== null) {
         parsed.messages.push(toHudMessageEvent(message, tick, serverSeq));
       }
     }
-  }
-
-  if (Array.isArray(payload.messages)) {
-    for (const rawEntry of payload.messages) {
-      const message = parseMessageDeltaInput(rawEntry);
-      if (message !== null) {
-        parsed.messages.push(toHudMessageEvent(message, tick, serverSeq));
-      }
-    }
+  } else if (legacyHudMessage !== null) {
+    parsed.messages.push(legacyHudMessage);
   }
 
   return parsed;
+}
+
+/**
+ * Reads one optional message-entry array from host HUD payloads.
+ * Mirrors Stage 2 bridge migration between legacy and canonical message lists
+ * layered above Micropolis `SendMes`/`SendMesAt` delivery in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ */
+function readMessageArrayEntries(value: unknown): readonly unknown[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  return value;
 }
 
 function appendMessages(
