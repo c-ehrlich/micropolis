@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { World } from './constants.ts';
-import { MAP_FLAGS } from './map-flags.ts';
+import { MAP_FLAG_COUNT, MAP_FLAGS } from './map-flags.ts';
 import { consumeMapRedrawPlan, planMapRedraw } from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
 
@@ -156,10 +156,10 @@ describe('planMapRedraw', () => {
 });
 
 describe('consumeMapRedrawPlan', () => {
-  it('clears NewMap and consumed NewMapFlags entries only', () => {
+  it('clears NewMap and all NewMapFlags entries for the update cycle', () => {
     const state = {
       NewMap: 1,
-      NewMapFlags: new Uint8Array(15),
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
     };
     state.NewMapFlags[MAP_FLAGS.ALMAP] = 1;
     state.NewMapFlags[MAP_FLAGS.PLMAP] = 1;
@@ -170,6 +170,6 @@ describe('consumeMapRedrawPlan', () => {
 
     expect(state.NewMap).toBe(0);
     expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(0);
-    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(0);
   });
 });

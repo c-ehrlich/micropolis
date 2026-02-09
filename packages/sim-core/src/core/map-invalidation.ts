@@ -136,19 +136,19 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
 }
 
 /**
- * Clear invalidation markers that were consumed by the current redraw plan.
- * Mirrors C redraw cycles where `NewMap`/`NewMapFlags` are cleared after use
- * (`ref/micropolis/src/sim/s_scan.c`, `ref/micropolis/src/sim/w_map.c`).
+ * Clear invalidation markers at the end of one map-update cycle.
+ * Mirrors `sim_update_maps` in `ref/micropolis/src/sim/sim.c`, which always
+ * resets `NewMap` and clears all `NewMapFlags[0..NMAPS-1]` after map views are
+ * processed.
+ * Parity note: `plan` is retained for diagnostics call-sites, but the clear
+ * behavior is cycle-wide and does not depend on consumed per-view flags.
  */
 export function consumeMapRedrawPlan(
   state: MapInvalidationState,
-  plan: Pick<MapRedrawPlan, 'consumedFlags'>,
+  _plan: Pick<MapRedrawPlan, 'consumedFlags'>,
 ): void {
   state.NewMap = 0;
-  for (const flag of plan.consumedFlags) {
-    const index = MAP_FLAGS[flag];
-    state.NewMapFlags[index] = 0;
-  }
+  state.NewMapFlags.fill(0);
 }
 
 function buildDirtyRectsFromMapPatch(indexes: Uint32Array): DirtyTileRect[] {

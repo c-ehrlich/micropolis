@@ -203,7 +203,7 @@ Deletion execution notes:
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` semantics)
-- [ ] `ref/micropolis/src/sim/sim.c` (`sim_update_maps` invalidation/clear cycle)
+- [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps` invalidation/clear cycle)
 - [ ] `ref/micropolis/src/sim/w_update.c` (heads/date/funds/options)
 - [ ] `ref/micropolis/src/sim/s_msg.c` (message port/dispatch semantics)
 
@@ -567,5 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
