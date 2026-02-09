@@ -158,6 +158,7 @@ interface HookDrivenHudState {
   demandR: number;
   demandC: number;
   demandI: number;
+  options: HostHudOptionsPayload;
 }
 
 /**
@@ -788,6 +789,47 @@ export class DemoMapHost implements CoreHost {
         if (typeof value === 'number') {
           this.hookHudState.demandI = Math.trunc(value);
         }
+        return;
+      case 'optionAutoBudget':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoBudget = value;
+        }
+        return;
+      case 'optionAutoGo':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoGo = value;
+        }
+        return;
+      case 'optionAutoBulldoze':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoBulldoze = value;
+        }
+        return;
+      case 'optionDisasters':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.disasters = value;
+        }
+        return;
+      case 'optionUserSoundOn':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.userSoundOn = value;
+        }
+        return;
+      case 'optionDoAnimation':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doAnimation = value;
+        }
+        return;
+      case 'optionDoMessages':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doMessages = value;
+        }
+        return;
+      case 'optionDoNotices':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doNotices = value;
+        }
+        return;
     }
   }
 
@@ -931,16 +973,7 @@ export class DemoMapHost implements CoreHost {
    * `ref/micropolis/src/sim/w_update.c`.
    */
   private getHudOptionsHeads(): HostHudOptionsPayload {
-    return {
-      autoBudget: this.simState.autoBudget,
-      autoGo: this.simState.autoGo,
-      autoBulldoze: this.simState.autoBulldoze,
-      disasters: !this.simState.NoDisasters,
-      userSoundOn: this.simState.userSoundOn,
-      doAnimation: this.simState.doAnimation,
-      doMessages: this.simState.doMessages,
-      doNotices: this.simState.doNotices,
-    };
+    return { ...this.hookHudState.options };
   }
 
   /**
@@ -1169,6 +1202,16 @@ function createInitialHookDrivenHudState(): HookDrivenHudState {
     demandR: 0,
     demandC: 0,
     demandI: 0,
+    options: {
+      autoBudget: DEMO_DEFAULT_AUTO_BUDGET,
+      autoGo: DEMO_DEFAULT_AUTO_GO,
+      autoBulldoze: DEMO_DEFAULT_AUTO_BULLDOZE,
+      disasters: DEMO_DEFAULT_DISASTERS,
+      userSoundOn: DEMO_DEFAULT_USER_SOUND_ON,
+      doAnimation: DEMO_DEFAULT_DO_ANIMATION,
+      doMessages: DEMO_DEFAULT_DO_MESSAGES,
+      doNotices: DEMO_DEFAULT_DO_NOTICES,
+    },
   };
 }
 

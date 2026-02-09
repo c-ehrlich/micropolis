@@ -175,4 +175,32 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     expect(runtime.getState().lastRejectReason).toBe('invalid-city-file');
   });
+
+  it('only updates HUD options after DoUpdateHeads emits option uiSet keys', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    expect(runtime.getState().hudState.options.autoBudget).toBe(true);
+    expect(runtime.getState().hudState.options.autoGo).toBe(true);
+
+    const simState = (host as unknown as { simState: { autoBudget: boolean; autoGo: boolean } })
+      .simState;
+    simState.autoBudget = false;
+    simState.autoGo = false;
+    runtime.requestSnapshot('manual');
+
+    // w_update.c `updateOptions` only emits when MustUpdateOptions is set and
+    // `DoUpdateHeads` runs. Snapshot heads should stay on last emitted values.
+    expect(runtime.getState().hudState.options.autoBudget).toBe(true);
+    expect(runtime.getState().hudState.options.autoGo).toBe(true);
+
+    runtime.sendCommand('new-1', {
+      kind: 'city-lifecycle',
+      action: 'new-city',
+    });
+
+    expect(runtime.getState().hudState.options.autoBudget).toBe(true);
+    expect(runtime.getState().hudState.options.autoGo).toBe(true);
+  });
 });

@@ -314,7 +314,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_update.c` (`DoUpdateHeads`, date/funds/options)
+- [x] `ref/micropolis/src/sim/w_update.c` (`DoUpdateHeads`, date/funds/options)
 - [ ] `ref/micropolis/src/sim/s_msg.c` (`SendMes`, `SendMesAt`, `doMessage`)
 - [ ] `ref/micropolis/src/sim/w_util.c` (`Pause`, `Resume`, `setSpeed`)
 
