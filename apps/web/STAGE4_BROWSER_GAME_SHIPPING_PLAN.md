@@ -252,7 +252,7 @@ Deletion execution notes:
 - [x] `packages/sim-core/src/systems/funds.ts`
 - [x] `packages/sim-core/src/systems/date-time.ts`
 - [x] `apps/web/src/game/runtime.command-lifecycle.test.ts`
-- [ ] `apps/web/src/game/runtime.ts`
+- [x] `apps/web/src/game/runtime.ts`
 
 ### Implementation checklist
 
@@ -567,6 +567,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
