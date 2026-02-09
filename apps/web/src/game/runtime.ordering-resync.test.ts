@@ -11,6 +11,17 @@ import type {
 } from './core-host';
 import { createHelloPayload } from './handshake';
 import { createGameRuntime } from './runtime';
+import {
+  type ClientEnvelope as Stage2ClientEnvelope,
+  type CoreHost as Stage2CoreHost,
+  type CoreHostConnection as Stage2CoreHostConnection,
+  DEFAULT_CORE_VERSION as STAGE2_DEFAULT_CORE_VERSION,
+  DEFAULT_LOCAL_CLIENT_ID as STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+  DEFAULT_LOCAL_ROOM_ID as STAGE2_DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION as STAGE2_DEFAULT_PROTOCOL_VERSION,
+  type HostEnvelope as Stage2HostEnvelope,
+} from './runtime/protocol.ts';
+import { createWebHostRuntime, type WebRuntimeState } from './runtime/runtime.ts';
 
 interface ScriptedHostOptions {
   readonly mode: HostMode;
@@ -122,6 +133,60 @@ function snapshotEvent(
     tick,
     baseServerSeq,
     placements,
+  };
+}
+
+interface ScriptedStage2HostOptions {
+  readonly onClientEnvelope?: (host: ScriptedStage2Host, envelope: Stage2ClientEnvelope) => void;
+}
+
+/**
+ * Deterministic Stage 2 host script harness for runtime ordering/resync tests.
+ * Mirrors ordered host/client envelope exchange requirements in
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: this is a TypeScript test adapter and not a 1:1 Micropolis
+ * socket/event loop implementation from `ref/micropolis/src/sim/w_sim.c`.
+ */
+class ScriptedStage2Host implements Stage2CoreHost {
+  public readonly sent: Stage2ClientEnvelope[] = [];
+  private onEnvelope: ((envelope: Stage2HostEnvelope) => void) | undefined;
+
+  public constructor(private readonly options: ScriptedStage2HostOptions = {}) {}
+
+  public connect(onEnvelope: (envelope: Stage2HostEnvelope) => void): Stage2CoreHostConnection {
+    this.onEnvelope = onEnvelope;
+    return {
+      send: (envelope) => {
+        this.sent.push(envelope);
+        this.options.onClientEnvelope?.(this, envelope);
+      },
+      disconnect: () => {
+        this.onEnvelope = undefined;
+      },
+    };
+  }
+
+  public emit(envelope: Stage2HostEnvelope): void {
+    if (this.onEnvelope === undefined) {
+      throw new Error('ScriptedStage2Host.emit called before connect()');
+    }
+
+    this.onEnvelope(envelope);
+  }
+}
+
+/**
+ * Build a deterministic accepted Stage 2 hello envelope for ordering tests.
+ * Mirrors startup hello gating in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function createAcceptedStage2HelloEnvelope(): Stage2HostEnvelope {
+  return {
+    kind: 'hello',
+    roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+    clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+    protocolVersion: STAGE2_DEFAULT_PROTOCOL_VERSION,
+    coreVersion: STAGE2_DEFAULT_CORE_VERSION,
+    accepted: true,
   };
 }
 
@@ -279,4 +344,226 @@ describe('runtime ordering/resync/reconnect invariants', () => {
       ]);
     },
   );
+});
+
+describe('stage2 ordering/resync with expanded payload projection', () => {
+  test('recovers map/hud/messages/realtime from sequence-gap resync snapshots plus ordered patch tail', () => {
+    const sentSnapshotRequests: Stage2ClientEnvelope[] = [];
+    const host = new ScriptedStage2Host({
+      onClientEnvelope(scriptHost, envelope) {
+        if (envelope.kind !== 'request_snapshot' || envelope.reason !== 'sequence-gap') {
+          return;
+        }
+
+        sentSnapshotRequests.push(envelope);
+        expect(envelope.roomId).toBe(STAGE2_DEFAULT_LOCAL_ROOM_ID);
+        expect(envelope.clientId).toBe(STAGE2_DEFAULT_LOCAL_CLIENT_ID);
+        expect(envelope.fromServerSeq).toBe(3);
+
+        scriptHost.emit({
+          kind: 'snapshot',
+          roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+          clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+          // C simulation tick progression is monotonic (`CityTime` in `s_sim.c`),
+          // so resync replay checkpoints and tails preserve non-decreasing ticks.
+          tick: 102,
+          serverSeq: 4,
+          payload: {
+            map: { width: 2, height: 1, tileWords: [7, 10] },
+            hud: {
+              funds: 18_500,
+              date: { month: 1, year: 1900 },
+              demand: { r: 1, c: 0, i: -1 },
+              speed: 2,
+              options: {
+                autoBudget: true,
+                autoGo: false,
+                autoBulldoze: true,
+                disasters: true,
+                userSoundOn: true,
+                doAnimation: true,
+                doMessages: false,
+                doNotices: true,
+              },
+            },
+            messages: [
+              { id: 14, text: 'Residents demand police stations.', tick: 100, serverSeq: 1 },
+              { id: 16, text: 'Taxes are too high.', tick: 101, serverSeq: 2 },
+              { id: 18, text: 'Power demand is increasing.', tick: 102, serverSeq: 4 },
+            ],
+            realtime: {
+              objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
+            },
+          },
+        });
+        scriptHost.emit({
+          kind: 'patch',
+          roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+          clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+          tick: 103,
+          serverSeq: 5,
+          payload: {
+            map: { tileWordDeltas: [{ x: 1, y: 0, tileWord: 12 }] },
+            hud: { speed: 3 },
+            messageDeltas: [{ id: 19, text: 'Traffic congestion reported.' }],
+            realtime: {
+              objects: [{ name: 'TRA', type: 1, x: 112, y: 128, frame: 5 }],
+            },
+          },
+        });
+      },
+    });
+    const runtime = createWebHostRuntime({ host });
+    const sequencedEvents: Array<{
+      outcome: string;
+      kind: Stage2HostEnvelope['kind'];
+      state: WebRuntimeState;
+    }> = [];
+    runtime.subscribe((event) => {
+      if (event.envelope === undefined) {
+        return;
+      }
+
+      sequencedEvents.push({
+        outcome: event.outcome,
+        kind: event.envelope.kind,
+        state: event.state,
+      });
+    });
+
+    runtime.connect();
+    host.emit(createAcceptedStage2HelloEnvelope());
+    host.emit({
+      kind: 'snapshot',
+      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      tick: 100,
+      serverSeq: 1,
+      payload: {
+        map: { width: 2, height: 1, tileWords: [5, 6] },
+        hud: {
+          funds: 20_000,
+          date: { month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 1,
+        },
+        messages: [{ id: 14, text: 'Residents demand police stations.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 1 }],
+        },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      tick: 101,
+      serverSeq: 2,
+      payload: {
+        map: { tileWordDeltas: [{ x: 1, y: 0, tileWord: 8 }] },
+        hud: { speed: 2 },
+        messageDeltas: [{ id: 16, text: 'Taxes are too high.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 80, y: 96, frame: 2 }],
+        },
+      },
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      tick: 102,
+      // Intentional serverSeq gap (expected seq=3) must trigger snapshot recovery.
+      serverSeq: 4,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 99 }] },
+        hud: { speed: 3 },
+        messageDeltas: [{ id: 18, text: 'Power demand is increasing.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 3 }],
+        },
+      },
+    });
+
+    const gapEvent = sequencedEvents.find(
+      (entry) => entry.outcome === 'gap-detected' && entry.kind === 'patch',
+    );
+    expect(gapEvent).toBeDefined();
+    expect(Array.from(gapEvent?.state.mapState.tiles ?? [])).toEqual([5, 8]);
+    expect(gapEvent?.state.hudState.speed).toBe(2);
+    expect(gapEvent?.state.hudState.messages.map((message) => message.id)).toEqual([14, 16]);
+    expect(gapEvent?.state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 80, y: 96, frame: 2 },
+    ]);
+    expect(gapEvent?.state.phase).toBe('resyncing');
+
+    const state = runtime.getState();
+    expect(state.phase).toBe('ready');
+    expect(state.lastAppliedServerSeq).toBe(5);
+    expect(state.lastAppliedTick).toBe(103);
+    expect(Array.from(state.mapState.tiles)).toEqual([7, 12]);
+    expect(state.hudState.fundsLabel).toBe('Funds: $18,500');
+    expect(state.hudState.speed).toBe(3);
+    expect(state.hudState.options).toEqual({
+      autoBudget: true,
+      autoGo: false,
+      autoBulldoze: true,
+      disasters: true,
+      userSoundOn: true,
+      doAnimation: true,
+      doMessages: false,
+      doNotices: true,
+    });
+    expect(state.hudState.messages).toEqual([
+      {
+        id: 14,
+        text: 'Residents demand police stations.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 100,
+        serverSeq: 1,
+      },
+      {
+        id: 16,
+        text: 'Taxes are too high.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 101,
+        serverSeq: 2,
+      },
+      {
+        id: 18,
+        text: 'Power demand is increasing.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 102,
+        serverSeq: 4,
+      },
+      {
+        id: 19,
+        text: 'Traffic congestion reported.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 103,
+        serverSeq: 5,
+      },
+    ]);
+    expect(state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 112, y: 128, frame: 5 },
+    ]);
+    expect(sentSnapshotRequests).toEqual([
+      {
+        kind: 'request_snapshot',
+        roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
+        clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+        reason: 'sequence-gap',
+        fromServerSeq: 3,
+      },
+    ]);
+    expect(host.sent.map((envelope) => envelope.kind)).toEqual(['hello', 'request_snapshot']);
+  });
 });

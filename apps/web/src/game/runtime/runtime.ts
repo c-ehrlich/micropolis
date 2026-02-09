@@ -16,6 +16,8 @@ import {
   type WebRuntimeState,
 } from './reducer.ts';
 
+export type { WebRuntimeState } from './reducer.ts';
+
 /**
  * Listener payload for runtime state transitions and routed envelopes.
  * Mirrors deterministic command/update progression intent from
