@@ -12,6 +12,7 @@ import {
 } from '../../../../../packages/sim-core/src/index.ts';
 import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
+import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -569,6 +570,40 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(Array.from(runtime.getState().mapState.tiles, (tile) => tile & TileMask.LOMASK)).toEqual(
       Array.from(expectedScenarioTiles, (tile) => tile & TileMask.LOMASK),
     );
+  });
+
+  it('clamps scenario ids before snro resource lookup', async () => {
+    const requestedScenarioFiles: string[] = [];
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({
+        enableAmbientTicks: false,
+        scenarioResourceLoader: (fileName) => {
+          requestedScenarioFiles.push(fileName);
+          return new Uint8Array(
+            readFileSync(new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url)),
+          );
+        },
+      }),
+    });
+    runtime.connect();
+
+    runtime.sendCommand('scenario-clamp-99', {
+      kind: 'scenario',
+      action: 'load-scenario',
+      scenarioId: 99,
+    });
+    await waitForRuntimeState(
+      () =>
+        runtime.getState().hudState.fundsLabel === 'Funds: $5,000' &&
+        runtime.getState().hudState.dateLabel === 'Jan 1900',
+      'scenario id clamp metadata update',
+    );
+
+    // Out-of-range ids clamp to scenario 1 in `LoadScenario`, which uses
+    // `snro.111`, year 1900, and funds 5000 in `ref/micropolis/src/sim/s_fileio.c`.
+    expect(requestedScenarioFiles).toEqual([getScenarioDefinition(99).fileName]);
+    expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $5,000');
+    expect(runtime.getState().hudState.dateLabel).toBe('Jan 1900');
   });
 
   it('rejects invalid import bytes with deterministic reason', () => {

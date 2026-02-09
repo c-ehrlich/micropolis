@@ -60,25 +60,7 @@ const DEMO_NEW_CITY_TREE_LEVEL = -1;
 const DEMO_NEW_CITY_LAKE_LEVEL = -1;
 const DEMO_NEW_CITY_CURVE_LEVEL = -1;
 const DEMO_NEW_CITY_CREATE_ISLAND = -1;
-const DEMO_SCENARIO_FILE_NAMES = [
-  'snro.111',
-  'snro.222',
-  'snro.333',
-  'snro.444',
-  'snro.555',
-  'snro.666',
-  'snro.777',
-  'snro.888',
-] as const;
-type DemoScenarioFileName = (typeof DEMO_SCENARIO_FILE_NAMES)[number];
-const DEMO_SCENARIO_RESOURCE_URLS: Readonly<Record<DemoScenarioFileName, URL>> = Object.freeze(
-  Object.fromEntries(
-    DEMO_SCENARIO_FILE_NAMES.map((fileName) => [
-      fileName,
-      new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url),
-    ]),
-  ) as Record<DemoScenarioFileName, URL>,
-);
+const DEMO_SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 type NodeFsPromisesModule = {
   readFile: typeof nodeReadFile;
 };
@@ -139,8 +121,8 @@ export interface Stage2ScenarioChoice {
 /**
  * Stage 2 browser scenario option table.
  * Mirrors `LoadScenario` switch-table labels/file ids from
- * `ref/micropolis/src/sim/s_fileio.c` (1:1 metadata), while map payloads stay
- * scripted in this LocalHost demo.
+ * `ref/micropolis/src/sim/s_fileio.c` (1:1 metadata). Runtime scenario starts
+ * load canonical `snro.*` payloads from `ref/micropolis/res`.
  */
 export const STAGE2_SCENARIO_CHOICES: readonly Stage2ScenarioChoice[] = SCENARIO_TABLE.map(
   (scenario: ScenarioDefinition) => ({
@@ -1636,11 +1618,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getScenarioResourceUrl(fileName: string): URL {
-  if (fileName in DEMO_SCENARIO_RESOURCE_URLS) {
-    return DEMO_SCENARIO_RESOURCE_URLS[fileName as keyof typeof DEMO_SCENARIO_RESOURCE_URLS];
+  const resourceUrl = DEMO_SCENARIO_RESOURCE_URLS.get(fileName);
+  if (resourceUrl !== undefined) {
+    return resourceUrl;
   }
 
   throw new Error(`unsupported scenario file: ${fileName}`);
+}
+
+/**
+ * Build scenario resource URLs from canonical scenario metadata constants.
+ * Mirrors `LoadScenario` filename selection in `ref/micropolis/src/sim/s_fileio.c`,
+ * while resolving each `snro.*` payload to local `ref/micropolis/res`.
+ */
+function createScenarioResourceUrlTable(): ReadonlyMap<string, URL> {
+  return new Map(
+    SCENARIO_TABLE.map(({ fileName }) => [
+      fileName,
+      new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url),
+    ]),
+  );
 }
 
 async function readBinaryResourceFromUrl(resourceUrl: URL): Promise<Uint8Array> {
