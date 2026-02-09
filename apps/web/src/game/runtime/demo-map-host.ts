@@ -1,5 +1,12 @@
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  runUiUpdate,
+  sendMessages,
+  setValves,
+  type SimContext,
+  type SimState,
+} from '../../../../../packages/sim-core/src/index.ts';
+import {
   applyLoadNormalization,
   createCityFile,
   decodeCityFileForMap,
@@ -7,12 +14,14 @@ import {
   readCityMeta,
   writeCityMeta,
 } from '../../../../../packages/sim-core/src/io/cty.ts';
+import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { deriveCityNameFromPath } from '../../../../../packages/sim-io/src/load.ts';
 import {
   getScenarioDefinition,
   SCENARIO_TABLE,
   type ScenarioDefinition,
 } from '../../../../../packages/sim-io/src/scenarios.ts';
+import { Stage4SimCoreAuthorityState } from '../stage4-sim-core-authority-state.ts';
 import {
   type ClientEnvelope,
   type CoreHost,
@@ -40,7 +49,6 @@ import {
 const DEMO_WORLD_WIDTH = 120;
 const DEMO_WORLD_HEIGHT = 100;
 const DEMO_PATCH_INTERVAL_MS = 180;
-const DEMO_STARTING_YEAR = 1900;
 const DEMO_INITIAL_FUNDS = 20_000;
 const DEMO_MESSAGE_LOG_LIMIT = 24;
 const DEMO_DEFAULT_CITY_FILE_NAME = 'newcity.cty';
@@ -77,21 +85,6 @@ const TOOL_COSTS: Record<Stage2ToolName, number> = {
 };
 
 const ZONE_TOOLS = new Set<Stage2ToolName>(['res', 'com', 'ind']);
-
-const DATE_STRINGS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
 
 const STAGE2_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -157,6 +150,16 @@ interface DemoPatchPayload extends HostPatchPayload {
   };
 }
 
+interface HookDrivenHudState {
+  fundsLabel: string;
+  dateLabel: string;
+  dateMonth: number;
+  dateYear: number;
+  demandR: number;
+  demandC: number;
+  demandI: number;
+}
+
 /**
  * Parses a host patch payload for browser save/export bytes.
  * Mirrors `SaveCityAs` data flow in `ref/micropolis/src/sim/s_fileio.c`.
@@ -206,34 +209,27 @@ export interface DemoMapHostOptions {
  * `ref/micropolis/src/sim/w_tool.c`, `ref/micropolis/src/sim/w_update.c`,
  * `ref/micropolis/src/sim/w_util.c`, `ref/micropolis/src/sim/s_msg.c`, and
  * `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: this remains a scripted LocalHost demo and intentionally does not
- * run full `sim-core` ticking/parity systems yet.
+ * Difference: map mutation remains deterministic/demo-scripted, but HUD/message/speed
+ * projection is sourced from real sim-core hook outputs (`uiSet`, `sendMes`,
+ * `sendMesAt`, `tickCount`).
  */
 export class DemoMapHost implements CoreHost {
   private readonly enableAmbientTicks: boolean;
   private readonly patchIntervalMs: number;
+  private readonly simState: SimState;
+  private readonly simContext: SimContext;
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private serverSeq = 0;
   private tick = 0;
-  private cityTime = 0;
-  private rngState = 0x12345678;
-  private totalFunds = DEMO_INITIAL_FUNDS;
-  private simMetaSpeed: Stage2SimSpeed = 3;
-  private paused = false;
-  private speedCycle = 0;
-  private cityTax = 7;
-  private autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
-  private autoGo = DEMO_DEFAULT_AUTO_GO;
-  private autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
-  private userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
-  private doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-  private doMessages = DEMO_DEFAULT_DO_MESSAGES;
-  private doNotices = DEMO_DEFAULT_DO_NOTICES;
-  private disasters = DEMO_DEFAULT_DISASTERS;
+  private hookTickCount = 0;
+  private simPaused = false;
+  private simPausedSpeed = 3;
   private cityFileName: string | null = DEMO_DEFAULT_CITY_FILE_NAME;
   private cityName = DEMO_DEFAULT_CITY_NAME;
   private currentScenarioId = 0;
+  private readonly hookHudState: HookDrivenHudState = createInitialHookDrivenHudState();
+  private pendingHookMessages: DemoHudMessagePayload[] = [];
   private readonly mapTiles = buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
   private readonly messageLog: DemoHudMessagePayload[] = [
     {
@@ -249,6 +245,19 @@ export class DemoMapHost implements CoreHost {
   constructor(options: DemoMapHostOptions = {}) {
     this.enableAmbientTicks = options.enableAmbientTicks ?? true;
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
+    const authorityState = new Stage4SimCoreAuthorityState({
+      hooks: {
+        tickCount: () => this.hookTickCount,
+        uiSet: (key, value) => this.captureUiSet(key, value),
+        sendMes: (id) => this.captureMessage(id),
+        sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
+      },
+    });
+    this.simState = authorityState.simState;
+    this.simContext = authorityState.simContext;
+    this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
+    this.refreshHookDrivenHud();
+    this.pendingHookMessages = [];
   }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
@@ -382,29 +391,31 @@ export class DemoMapHost implements CoreHost {
     }
 
     const toolCost = TOOL_COSTS[command.tool];
-    if (this.totalFunds - toolCost < 0) {
+    const nextFunds = this.simState.TotalFunds - toolCost;
+    if (nextFunds < 0) {
       const reason = 'insufficient-funds';
       this.commandOutcomes.set(envelope.commandId, { kind: 'reject', reason });
       this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, reason);
       return;
     }
 
-    this.totalFunds -= toolCost;
+    setFunds(this.simState, nextFunds);
+    this.refreshHookDrivenHud();
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
     this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
 
     const payload: DemoPatchPayload = {
-      hud: {
-        funds: this.totalFunds,
-        fundsLabel: formatFundsLabel(this.totalFunds),
-        options: this.getHudOptionsHeads(),
-      },
+      hud: this.getHudHeadsPayload(),
     };
 
     if (placement.deltas.length > 0) {
       payload.map = {
         tileWordDeltas: placement.deltas,
       };
+    }
+    const hookMessages = this.drainPendingHookMessages();
+    if (hookMessages.length > 0) {
+      payload.messageDeltas = hookMessages;
     }
 
     this.emitPatch(envelope.roomId, envelope.clientId, payload);
@@ -420,15 +431,18 @@ export class DemoMapHost implements CoreHost {
     command: Stage2SimControlCommand,
   ): void {
     this.applySimControl(command);
+    this.refreshHookDrivenHud();
 
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
     this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-    this.emitPatch(envelope.roomId, envelope.clientId, {
-      hud: {
-        speed: this.getVisibleSpeed(),
-        options: this.getHudOptionsHeads(),
-      },
-    });
+    const payload: DemoPatchPayload = {
+      hud: this.getHudHeadsPayload(),
+    };
+    const hookMessages = this.drainPendingHookMessages();
+    if (hookMessages.length > 0) {
+      payload.messageDeltas = hookMessages;
+    }
+    this.emitPatch(envelope.roomId, envelope.clientId, payload);
   }
 
   /**
@@ -511,20 +525,7 @@ export class DemoMapHost implements CoreHost {
     this.currentScenarioId = 0;
 
     this.mapTiles.set(loaded.mapTiles);
-    this.cityTime = loaded.cityTime;
-    this.totalFunds = loaded.totalFunds;
-    this.cityTax = loaded.cityTax;
-    this.paused = loaded.paused;
-    this.simMetaSpeed = loaded.simMetaSpeed;
-    this.autoBudget = loaded.autoBudget;
-    this.autoGo = loaded.autoGo;
-    this.autoBulldoze = loaded.autoBulldoze;
-    this.userSoundOn = loaded.userSoundOn;
-    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
-    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
-    this.disasters = DEMO_DEFAULT_DISASTERS;
-    this.speedCycle = 0;
+    this.applyLoadedSimulationMeta(loaded);
 
     this.resetMessageLog(`Loaded ${this.cityName}.`);
 
@@ -549,20 +550,7 @@ export class DemoMapHost implements CoreHost {
     this.currentScenarioId = scenario.id;
     this.cityName = scenario.name;
     this.cityFileName = `${scenario.fileName}.cty`;
-    this.cityTime = scenario.startCityTime;
-    this.totalFunds = scenario.startFunds;
-    this.simMetaSpeed = 3;
-    this.paused = false;
-    this.speedCycle = 0;
-    this.cityTax = 7;
-    this.autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
-    this.autoGo = DEMO_DEFAULT_AUTO_GO;
-    this.autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
-    this.userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
-    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
-    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
-    this.disasters = DEMO_DEFAULT_DISASTERS;
+    this.applyScenarioSimulationMeta(scenario.startCityTime, scenario.startFunds);
 
     const scenarioMap = buildScenarioDemoMapTiles(scenario.id, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
     this.mapTiles.set(scenarioMap);
@@ -583,6 +571,10 @@ export class DemoMapHost implements CoreHost {
     }
 
     const snapshotServerSeq = this.serverSeq + 1;
+    const pendingMessages = this.drainPendingHookMessages();
+    if (pendingMessages.length > 0) {
+      this.recordMessages(pendingMessages, this.tick, snapshotServerSeq);
+    }
     this.ensureMessageLogReplayMetadata(this.tick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
@@ -602,12 +594,7 @@ export class DemoMapHost implements CoreHost {
           ),
         },
         hud: {
-          funds: this.totalFunds,
-          fundsLabel: formatFundsLabel(this.totalFunds),
-          date: computeDemoDateHeads(this.cityTime),
-          demand: computeDemoDemandHeads(this.tick),
-          speed: this.getVisibleSpeed(),
-          options: this.getHudOptionsHeads(),
+          ...this.getHudHeadsPayload(),
         },
         realtime: {
           objects: [],
@@ -697,39 +684,38 @@ export class DemoMapHost implements CoreHost {
    * invalidation ownership in `ref/micropolis/src/sim/w_map.c`.
    */
   private emitAmbientPatch(roomId: string, clientId: string): void {
-    if (!this.shouldAdvanceSimulation()) {
+    if (this.getVisibleSpeed() === 0) {
       return;
     }
 
-    this.tick += 1;
-    this.cityTime += 1;
-
-    let fundsChanged = false;
-    if ((this.cityTime & 15) === 0) {
-      this.totalFunds += this.simMetaSpeed;
-      fundsChanged = true;
+    this.simState.Spdcycle = (this.simState.Spdcycle + 1) & 0xffff;
+    if (this.simState.SimSpeed === 1 && this.simState.Spdcycle % 5 !== 0) {
+      return;
     }
+    if (this.simState.SimSpeed === 2 && this.simState.Spdcycle % 3 !== 0) {
+      return;
+    }
+
+    this.hookTickCount += 1;
+    this.simContext.store.beginTick();
+    try {
+      this.simState.CityTime += 1;
+      setValves(this.simState, this.simContext);
+      sendMessages(this.simState, this.simContext);
+      runUiUpdate(this.simState, this.simContext);
+    } finally {
+      this.simContext.store.commitTick();
+    }
+
+    this.tick += 1;
 
     const payload: DemoPatchPayload = {
-      hud: {
-        funds: this.totalFunds,
-        date: computeDemoDateHeads(this.cityTime),
-        demand: computeDemoDemandHeads(this.tick),
-        speed: this.getVisibleSpeed(),
-        options: this.getHudOptionsHeads(),
-      },
+      hud: this.getHudHeadsPayload(),
     };
 
-    if (fundsChanged) {
-      if (payload.hud === undefined) {
-        payload.hud = {};
-      }
-      payload.hud.fundsLabel = formatFundsLabel(this.totalFunds);
-    }
-
-    const ambientMessage = this.createAmbientMessage();
-    if (ambientMessage !== null) {
-      payload.messageDeltas = [ambientMessage];
+    const hookMessages = this.drainPendingHookMessages();
+    if (hookMessages.length > 0) {
+      payload.messageDeltas = hookMessages;
     }
 
     this.emitPatch(roomId, clientId, payload);
@@ -763,50 +749,83 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Returns whether the next interval should advance simulation work.
-   * Mirrors `SimFrame` speed gating in `ref/micropolis/src/sim/s_sim.c`:
-   * speed 0 pauses, speed 1 runs every 5th cycle, speed 2 every 3rd cycle,
-   * speed 3 runs each cycle.
+   * Captures one authoritative `uiSet` head update from sim-core hooks.
+   * Mirrors `UISet*` calls from `DoUpdateHeads` in `ref/micropolis/src/sim/w_update.c`.
    */
-  private shouldAdvanceSimulation(): boolean {
-    if (this.paused) {
-      return false;
+  private captureUiSet(key: string, value: number | boolean | string): void {
+    switch (key) {
+      case 'funds':
+        if (typeof value === 'string') {
+          this.hookHudState.fundsLabel = value;
+        }
+        return;
+      case 'date':
+        if (typeof value === 'string') {
+          this.hookHudState.dateLabel = value;
+        }
+        return;
+      case 'dateMonth':
+        if (typeof value === 'number') {
+          this.hookHudState.dateMonth = Math.trunc(value);
+        }
+        return;
+      case 'dateYear':
+        if (typeof value === 'number') {
+          this.hookHudState.dateYear = Math.trunc(value);
+        }
+        return;
+      case 'demandR':
+        if (typeof value === 'number') {
+          this.hookHudState.demandR = Math.trunc(value);
+        }
+        return;
+      case 'demandC':
+        if (typeof value === 'number') {
+          this.hookHudState.demandC = Math.trunc(value);
+        }
+        return;
+      case 'demandI':
+        if (typeof value === 'number') {
+          this.hookHudState.demandI = Math.trunc(value);
+        }
     }
-
-    this.speedCycle = (this.speedCycle + 1) & 0xffff;
-    if (this.simMetaSpeed === 1 && this.speedCycle % 5 !== 0) {
-      return false;
-    }
-
-    if (this.simMetaSpeed === 2 && this.speedCycle % 3 !== 0) {
-      return false;
-    }
-
-    return true;
   }
 
   /**
-   * Creates an occasional deterministic message event for the Stage 2 feed/log.
-   * Mirrors threshold-driven message feed behavior in
-   * `ref/micropolis/src/sim/s_msg.c`.
-   * Difference: this emits from a scripted cadence rather than full sim thresholds.
+   * Captures one authoritative `SendMes` dispatch from sim-core hooks.
+   * Mirrors `SendMes`/`doMessage` delivery in `ref/micropolis/src/sim/s_msg.c`.
    */
-  private createAmbientMessage(): DemoHudMessagePayload | null {
-    if ((this.cityTime & 31) !== 0) {
-      return null;
-    }
-
-    const candidates = [1, 2, 3, 4, 5, 6, 13, 14, 16, 17, 18, 19, -10, -11, -12];
-    const index = this.nextRandom() % candidates.length;
-    const id = candidates[index];
-    if (id === undefined) {
-      return null;
-    }
-
-    return {
+  private captureMessage(id: number): void {
+    this.pendingHookMessages.push({
       id,
       text: messageTextForId(id),
-    };
+    });
+  }
+
+  /**
+   * Captures one authoritative `SendMesAt` dispatch from sim-core hooks.
+   * Mirrors `SendMesAt`/`doMessage` delivery in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private captureMessageAt(id: number, x: number, y: number): void {
+    this.pendingHookMessages.push({
+      id,
+      text: messageTextForId(id),
+      x,
+      y,
+    });
+  }
+
+  /**
+   * Consumes buffered hook-delivered messages for one host patch emission.
+   * Mirrors one-heads-cycle message delivery ownership in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private drainPendingHookMessages(): DemoHudMessagePayload[] {
+    if (this.pendingHookMessages.length === 0) {
+      return [];
+    }
+    const messages = this.pendingHookMessages;
+    this.pendingHookMessages = [];
+    return messages;
   }
 
   /**
@@ -861,12 +880,49 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Reads visible UI speed value.
-   * Mirrors `UISetSpeed` behavior in `ref/micropolis/src/sim/w_util.c`, where
-   * paused mode reports speed 0 while preserving remembered meta speed.
+   * Runs one heads update pass so hook-owned HUD state stays current.
+   * Mirrors `sim_update_editors` -> `DoUpdateHeads` flow in
+   * `ref/micropolis/src/sim/sim.c` and `ref/micropolis/src/sim/w_update.c`.
+   */
+  private refreshHookDrivenHud(): void {
+    this.simContext.store.beginTick();
+    try {
+      runUiUpdate(this.simState, this.simContext);
+    } finally {
+      this.simContext.store.commitTick();
+    }
+  }
+
+  /**
+   * Builds Stage 2 HUD payload heads from authoritative sim-core hook state.
+   * Mirrors `UISetFunds`, `UISetDate`, `UISetDemand`, and `UISetSpeed` flows in
+   * `ref/micropolis/src/sim/w_update.c` and `ref/micropolis/src/sim/w_util.c`.
+   */
+  private getHudHeadsPayload(): NonNullable<DemoPatchPayload['hud']> {
+    return {
+      funds: this.simState.TotalFunds,
+      fundsLabel: this.hookHudState.fundsLabel,
+      date: {
+        label: this.hookHudState.dateLabel,
+        month: this.hookHudState.dateMonth,
+        year: this.hookHudState.dateYear,
+      },
+      demand: {
+        r: this.hookHudState.demandR,
+        c: this.hookHudState.demandC,
+        i: this.hookHudState.demandI,
+      },
+      speed: this.getVisibleSpeed(),
+      options: this.getHudOptionsHeads(),
+    };
+  }
+
+  /**
+   * Reads visible speed exactly like `UISetSpeed` in `setSpeed(short)`.
+   * Mirrors `setSpeed` display behavior from `ref/micropolis/src/sim/w_util.c`.
    */
   private getVisibleSpeed(): number {
-    return this.paused ? 0 : this.simMetaSpeed;
+    return this.simPaused ? 0 : this.simState.SimMetaSpeed;
   }
 
   /**
@@ -876,14 +932,14 @@ export class DemoMapHost implements CoreHost {
    */
   private getHudOptionsHeads(): HostHudOptionsPayload {
     return {
-      autoBudget: this.autoBudget,
-      autoGo: this.autoGo,
-      autoBulldoze: this.autoBulldoze,
-      disasters: this.disasters,
-      userSoundOn: this.userSoundOn,
-      doAnimation: this.doAnimation,
-      doMessages: this.doMessages,
-      doNotices: this.doNotices,
+      autoBudget: this.simState.autoBudget,
+      autoGo: this.simState.autoGo,
+      autoBulldoze: this.simState.autoBulldoze,
+      disasters: !this.simState.NoDisasters,
+      userSoundOn: this.simState.userSoundOn,
+      doAnimation: this.simState.doAnimation,
+      doMessages: this.simState.doMessages,
+      doNotices: this.simState.doNotices,
     };
   }
 
@@ -894,44 +950,138 @@ export class DemoMapHost implements CoreHost {
    */
   private applySimControl(command: Stage2SimControlCommand): void {
     if (command.control === 'pause') {
-      this.paused = true;
+      this.pauseSimulation();
       return;
     }
 
     if (command.control === 'play') {
-      this.paused = false;
+      this.resumeSimulation();
       return;
     }
 
-    this.simMetaSpeed = command.speed;
-    this.paused = false;
+    this.setSimulationSpeed(command.speed);
   }
 
   /**
-   * Deterministic pseudo-random generator for host-side scripted updates.
-   * Mirrors the fixed-seed deterministic run style used throughout Micropolis.
+   * Pause semantics for Stage 2 host sim controls.
+   * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
    */
-  private nextRandom(): number {
-    this.rngState = (Math.imul(this.rngState, 1103515245) + 12345) >>> 0;
-    return this.rngState;
+  private pauseSimulation(): void {
+    if (this.simPaused) {
+      return;
+    }
+    this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
+    this.setSimulationSpeed(0);
+    this.simPaused = true;
   }
 
+  /**
+   * Resume semantics for Stage 2 host sim controls.
+   * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private resumeSimulation(): void {
+    if (!this.simPaused) {
+      return;
+    }
+    this.simPaused = false;
+    this.setSimulationSpeed(this.simPausedSpeed);
+  }
+
+  /**
+   * Speed semantics for Stage 2 host sim controls.
+   * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private setSimulationSpeed(candidate: number): void {
+    let speed = normalizePlayableSpeed(candidate);
+    this.simState.SimMetaSpeed = speed;
+
+    if (this.simPaused) {
+      this.simPausedSpeed = this.simState.SimMetaSpeed;
+      speed = 0;
+    }
+
+    this.simState.SimSpeed = speed;
+  }
+
+  /**
+   * Applies decoded `.cty` scalar state into authoritative sim-core HUD controls.
+   * Mirrors `loadFile` scalar restoration in `ref/micropolis/src/sim/s_fileio.c`,
+   * then refreshes heads via the `DoUpdateHeads` pathway.
+   * Parity note: map tile restoration still follows Stage 2 demo map ownership.
+   */
+  private applyLoadedSimulationMeta(loaded: DecodedDemoCity): void {
+    this.simState.CityTime = loaded.cityTime;
+    setFunds(this.simState, loaded.totalFunds);
+    this.simState.CityTax = loaded.cityTax;
+    this.simState.autoBudget = loaded.autoBudget;
+    this.simState.autoGo = loaded.autoGo;
+    this.simState.autoBulldoze = loaded.autoBulldoze;
+    this.simState.userSoundOn = loaded.userSoundOn;
+    this.simState.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+    this.simState.doMessages = DEMO_DEFAULT_DO_MESSAGES;
+    this.simState.doNotices = DEMO_DEFAULT_DO_NOTICES;
+    this.simState.NoDisasters = !DEMO_DEFAULT_DISASTERS;
+    this.simState.MustUpdateOptions = 1;
+    this.simState.ValveFlag = 1;
+    this.simState.MessagePort = 0;
+    this.simState.MesNum = 0;
+    this.simState.MesX = 0;
+    this.simState.MesY = 0;
+    this.simState.LastPicNum = 0;
+    this.simState.LastMesTime = 0;
+
+    this.simPaused = false;
+    this.setSimulationSpeed(loaded.simMetaSpeed);
+    if (loaded.paused) {
+      this.pauseSimulation();
+    }
+
+    this.pendingHookMessages = [];
+    this.refreshHookDrivenHud();
+  }
+
+  /**
+   * Applies scenario/new-city scalar heads baseline into sim-core HUD controls.
+   * Mirrors scenario/reset scalar bootstrap intent from
+   * `ref/micropolis/src/sim/s_fileio.c` (`LoadScenario`) and
+   * `ref/micropolis/src/sim/s_init.c` reset ownership.
+   * Parity note: map tile payload remains Stage 2 demo-owned in this host.
+   */
+  private applyScenarioSimulationMeta(cityTime: number, totalFunds: number): void {
+    this.simState.CityTime = cityTime;
+    setFunds(this.simState, totalFunds);
+    this.simState.CityTax = 7;
+    this.simState.autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
+    this.simState.autoGo = DEMO_DEFAULT_AUTO_GO;
+    this.simState.autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
+    this.simState.userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
+    this.simState.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+    this.simState.doMessages = DEMO_DEFAULT_DO_MESSAGES;
+    this.simState.doNotices = DEMO_DEFAULT_DO_NOTICES;
+    this.simState.NoDisasters = !DEMO_DEFAULT_DISASTERS;
+    this.simState.MustUpdateOptions = 1;
+    this.simState.ValveFlag = 1;
+    this.simState.MessagePort = 0;
+    this.simState.MesNum = 0;
+    this.simState.MesX = 0;
+    this.simState.MesY = 0;
+    this.simState.LastPicNum = 0;
+    this.simState.LastMesTime = 0;
+
+    this.simPaused = false;
+    this.setSimulationSpeed(3);
+    this.pendingHookMessages = [];
+    this.refreshHookDrivenHud();
+  }
+
+  /**
+   * Resets Stage 2 host state to a new-city baseline.
+   * Mirrors `DoNewCity` reset intent in `ref/micropolis/src/sim/s_init.c`.
+   * Parity note: map regeneration remains deterministic/demo-scripted here.
+   */
   private resetToNewCity(): void {
     this.currentScenarioId = 0;
-    this.cityTime = 0;
-    this.totalFunds = DEMO_INITIAL_FUNDS;
-    this.simMetaSpeed = 3;
-    this.paused = false;
-    this.speedCycle = 0;
-    this.cityTax = 7;
-    this.autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
-    this.autoGo = DEMO_DEFAULT_AUTO_GO;
-    this.autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
-    this.userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
-    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
-    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
-    this.disasters = DEMO_DEFAULT_DISASTERS;
+    this.applyScenarioSimulationMeta(0, DEMO_INITIAL_FUNDS);
     this.cityFileName = DEMO_DEFAULT_CITY_FILE_NAME;
     this.cityName = DEMO_DEFAULT_CITY_NAME;
     this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
@@ -942,13 +1092,13 @@ export class DemoMapHost implements CoreHost {
     const city = createCityFile({ width: DEMO_WORLD_WIDTH, height: DEMO_WORLD_HEIGHT });
     city.map.set(this.mapTiles);
     writeCityMeta(city.misc, {
-      cityTime: Math.max(0, Math.trunc(this.cityTime)),
-      totalFunds: Math.max(0, Math.trunc(this.totalFunds)),
-      autoBulldoze: this.autoBulldoze,
-      autoBudget: this.autoBudget,
-      autoGo: this.autoGo,
-      userSoundOn: this.userSoundOn,
-      cityTax: this.cityTax,
+      cityTime: Math.max(0, Math.trunc(this.simState.CityTime)),
+      totalFunds: Math.max(0, Math.trunc(this.simState.TotalFunds)),
+      autoBulldoze: this.simState.autoBulldoze,
+      autoBudget: this.simState.autoBudget,
+      autoGo: this.simState.autoGo,
+      userSoundOn: this.simState.userSoundOn,
+      cityTax: this.simState.CityTax,
       simSpeed: this.getVisibleSpeed(),
       policePercent: 1,
       firePercent: 1,
@@ -958,7 +1108,7 @@ export class DemoMapHost implements CoreHost {
   }
 }
 
-function tryDecodeImportedCity(cityBytes: Uint8Array): {
+type DecodedDemoCity = {
   mapTiles: Uint16Array;
   cityTime: number;
   totalFunds: number;
@@ -969,7 +1119,9 @@ function tryDecodeImportedCity(cityBytes: Uint8Array): {
   autoGo: boolean;
   autoBulldoze: boolean;
   userSoundOn: boolean;
-} | null {
+};
+
+function tryDecodeImportedCity(cityBytes: Uint8Array): DecodedDemoCity | null {
   try {
     const city = decodeCityFileForMap(cityBytes, {
       width: DEMO_WORLD_WIDTH,
@@ -1003,6 +1155,41 @@ function sanitizeCityFileName(fileName: string): string {
   return trimmed.toLowerCase().endsWith('.cty') ? trimmed : `${trimmed}.cty`;
 }
 
+/**
+ * Initial HUD scalar cache used before the first sim-core `uiSet` heads pass.
+ * Mirrors pre-`DoUpdateHeads` UI baseline intent in
+ * `ref/micropolis/src/sim/w_update.c`.
+ */
+function createInitialHookDrivenHudState(): HookDrivenHudState {
+  return {
+    fundsLabel: formatFundsLabel(DEMO_INITIAL_FUNDS),
+    dateLabel: 'Jan 1900',
+    dateMonth: 0,
+    dateYear: 1900,
+    demandR: 0,
+    demandC: 0,
+    demandI: 0,
+  };
+}
+
+/**
+ * Clamps an arbitrary candidate to the playable `setSpeed(short)` domain `0..3`.
+ * Mirrors clamping in `setSpeed(short)` from `ref/micropolis/src/sim/w_util.c`.
+ */
+function normalizePlayableSpeed(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const speed = Math.trunc(value);
+  if (speed <= 0) {
+    return 0;
+  }
+  if (speed >= 3) {
+    return 3;
+  }
+  return speed;
+}
+
 function clampPlayableSpeed(value: number): Stage2SimSpeed {
   if (value <= 1) {
     return 1;
@@ -1011,35 +1198,6 @@ function clampPlayableSpeed(value: number): Stage2SimSpeed {
     return 3;
   }
   return 2;
-}
-
-/**
- * Computes deterministic demand head values in the visible -15..15 range.
- * Mirrors `SetDemand` output range from `ref/micropolis/src/sim/w_update.c`
- * where demand is emitted as integer valve/100 values.
- */
-function computeDemoDemandHeads(tick: number): { r: number; c: number; i: number } {
-  return {
-    r: ((tick * 5) % 31) - 15,
-    c: ((tick * 3 + 7) % 31) - 15,
-    i: ((tick * 2 + 11) % 31) - 15,
-  };
-}
-
-/**
- * Computes date label/month/year from CityTime.
- * Mirrors `updateDate` calculations in `ref/micropolis/src/sim/w_update.c`:
- * `y = (CityTime / 48) + StartingYear` and `m = (CityTime % 48) >> 2`.
- */
-function computeDemoDateHeads(cityTime: number): { label: string; month: number; year: number } {
-  const year = Math.trunc(cityTime / 48) + DEMO_STARTING_YEAR;
-  const month = Math.trunc((cityTime % 48) / 4);
-  const monthName = DATE_STRINGS[month] ?? 'Jan';
-  return {
-    label: `${monthName} ${year}`,
-    month,
-    year,
-  };
 }
 
 /**

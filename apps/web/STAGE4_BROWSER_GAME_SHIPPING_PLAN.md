@@ -310,7 +310,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Drive Stage 4 HUD/messages/speed from real sim-core hook outputs (`uiSet`, `sendMes`, `sendMesAt`, `tickCount`).
+- [x] Drive Stage 4 HUD/messages/speed from real sim-core hook outputs (`uiSet`, `sendMes`, `sendMesAt`, `tickCount`).
 
 ### C references to review
 
