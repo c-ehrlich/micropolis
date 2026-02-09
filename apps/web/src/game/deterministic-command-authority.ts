@@ -13,7 +13,7 @@ import type {
 
 interface AcceptedOutcome {
   kind: 'ack';
-  placement: CoreHostPlacement;
+  placement?: CoreHostPlacement;
 }
 
 interface RejectedOutcome {
@@ -52,6 +52,10 @@ export class DeterministicCommandAuthority {
   public constructor(private readonly options: DeterministicCommandAuthorityOptions) {}
 
   public processCommand(command: CoreHostCommand): CoreHostEvent[] {
+    if (command.type === 'sim-control-command') {
+      return this.processSimControlCommand(command.commandId);
+    }
+
     const tick = this.nextTick();
     const previousOutcome = this.commandOutcomes.get(command.commandId);
     if (previousOutcome) {
@@ -99,6 +103,30 @@ export class DeterministicCommandAuthority {
       this.recordSequenced(this.createAck(command.commandId, tick)),
       this.recordSequenced(this.createPatch(command.commandId, placement, tick)),
     ];
+  }
+
+  /**
+   * Deterministic fallback handling for sim control commands.
+   * Mirrors Stage 0/1 command-ingress acceptance intent from
+   * `ref/micropolis/src/sim/w_sim.c` pause/resume/speed handlers.
+   * Parity note: this shim acknowledges controls without sim-core speed state.
+   */
+  private processSimControlCommand(commandId: string): CoreHostEvent[] {
+    const tick = this.nextTick();
+    const previousOutcome = this.commandOutcomes.get(commandId);
+    if (previousOutcome) {
+      if (previousOutcome.kind === 'ack') {
+        return [this.recordSequenced(this.createAck(commandId, tick))];
+      }
+      return [
+        this.recordSequenced(
+          this.createReject(commandId, previousOutcome.code, previousOutcome.message, tick),
+        ),
+      ];
+    }
+
+    this.commandOutcomes.set(commandId, { kind: 'ack' });
+    return [this.recordSequenced(this.createAck(commandId, tick))];
   }
 
   /**

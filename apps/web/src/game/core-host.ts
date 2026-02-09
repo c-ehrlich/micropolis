@@ -107,10 +107,58 @@ export interface CoreHostToolCommand {
 }
 
 /**
- * Command union accepted by `CoreHost`.
- * Mirrors high-level UI tool intent dispatch in `ref/micropolis/src/sim/w_tool.c`.
+ * Pause command sent from runtime to host authority.
+ * Mirrors `SimCmdPause` -> `Pause()` in
+ * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: this preserves C pause intent while using a typed command envelope.
  */
-export type CoreHostCommand = CoreHostToolCommand;
+export interface CoreHostPauseCommand {
+  type: 'sim-control-command';
+  commandId: string;
+  control: 'pause';
+}
+
+/**
+ * Resume command sent from runtime to host authority.
+ * Mirrors `SimCmdResume` -> `Resume()` in
+ * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: this preserves C resume intent while using a typed command envelope.
+ */
+export interface CoreHostResumeCommand {
+  type: 'sim-control-command';
+  commandId: string;
+  control: 'resume';
+}
+
+/**
+ * Set-speed command sent from runtime to host authority.
+ * Mirrors `SimCmdSpeed` -> `setSpeed(short)` in
+ * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: C accepts `0..7` at command ingress and clamps to `0..3` in
+ * `setSpeed`; host-side command handling mirrors that clamp behavior.
+ */
+export interface CoreHostSetSpeedCommand {
+  type: 'sim-control-command';
+  commandId: string;
+  control: 'set-speed';
+  speed: number;
+}
+
+/**
+ * Simulation control command union accepted by `CoreHost`.
+ * Mirrors speed/pause routing in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type CoreHostSimControlCommand =
+  | CoreHostPauseCommand
+  | CoreHostResumeCommand
+  | CoreHostSetSpeedCommand;
+
+/**
+ * Command union accepted by `CoreHost`.
+ * Mirrors high-level UI dispatch across tool and speed controls in
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_util.c`.
+ */
+export type CoreHostCommand = CoreHostToolCommand | CoreHostSimControlCommand;
 
 /**
  * Authoritative placement payload produced by successful command application.

@@ -7,4 +7,4 @@ import { createGameRuntime } from './runtime';
  * `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: singleton module ownership is a TypeScript app-composition concern.
  */
-export const gameRuntime = createGameRuntime(createCoreHost());
+export const gameRuntime = createGameRuntime(createCoreHost({ env: import.meta.env }));

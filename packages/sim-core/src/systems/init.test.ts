@@ -108,6 +108,33 @@ describe('initWillStuff', () => {
     expect(hooks.doUpdateHeads).toHaveBeenCalledOnce();
   });
 
+  it('re-arms heads/funds UI emission on repeated InitWillStuff runs', () => {
+    const store = createClassicMapStore();
+    const uiSet = vi.fn();
+    const context = createSimContext({ store, rng: createRng(1), hooks: { uiSet } });
+    const state = createSimState();
+
+    state.TotalFunds = 20_000;
+    state.RValve = 400;
+    state.CValve = -300;
+    state.IValve = 200;
+
+    initWillStuff(context, state, { seed: 123 });
+    uiSet.mockClear();
+
+    initWillStuff(context, state, { seed: 456 });
+
+    // `InitWillStuff` in `ref/micropolis/src/sim/s_init.c` resets LastR/LastC/LastI
+    // and LastFunds before `DoUpdateHeads()`, so the second init pass must emit
+    // demand + funds heads again even when values are unchanged.
+    const emittedHeadKeys = uiSet.mock.calls.map(([key]) => key);
+    expect(emittedHeadKeys.filter((key) => key === 'demandR')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'demandC')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'demandI')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'funds')).toHaveLength(1);
+    expect(state.LastFunds).toBe(state.TotalFunds);
+  });
+
   it('clears all derived layers listed in the spec', () => {
     const store = createClassicMapStore();
     const context = createSimContext({ store, rng: createRng(1) });
@@ -496,5 +523,30 @@ describe('doSimInit', () => {
     expect(state.TotalPop).toBe(1);
     expect(state.DoInitialEval).toBe(1);
     expect(hooks.doAllGraphs).toHaveBeenCalledOnce();
+  });
+
+  it('matches DoSimInit new-city branch ordering and power scan count', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+    state.InitSimLoad = 2;
+    state.Fcycle = 2000;
+    state.Scycle = 2000;
+
+    const calls: string[] = [];
+    doSimInit(context, state, {
+      evalInit: () => calls.push('evalInit'),
+      doPowerScan: () => calls.push('power'),
+      mapScan: () => calls.push('scan'),
+    });
+
+    // `DoSimInit` in `ref/micropolis/src/sim/s_sim.c` runs:
+    // InitSimMemory() -> ... -> DoPowerScan()
+    // and resets Fcycle/Scycle to 0 before those calls.
+    expect(state.Fcycle).toBe(0);
+    expect(state.Scycle).toBe(0);
+    expect(calls.filter((value) => value === 'evalInit')).toHaveLength(1);
+    expect(calls.filter((value) => value === 'power')).toHaveLength(2);
+    expect(calls.filter((value) => value === 'scan')).toHaveLength(1);
   });
 });

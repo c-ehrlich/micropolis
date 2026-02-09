@@ -158,39 +158,39 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace Stage 4 deterministic command authority with a real sim-core-backed authority loop that owns `SimState`, `SimContext`, `ToolContext`, and ticking.
+- [x] Replace Stage 4 deterministic command authority with a real sim-core-backed authority loop that owns `SimState`, `SimContext`, `ToolContext`, and ticking.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sim.c` (command routing/bootstrap intent)
-- [ ] `ref/micropolis/src/sim/s_sim.c` (`SimFrame`, `Simulate`, `DoSimInit`)
-- [ ] `ref/micropolis/src/sim/s_init.c` (initialization/reset expectations)
-- [ ] `ref/micropolis/src/sim/w_util.c` (speed/pause semantics)
+- [x] `ref/micropolis/src/sim/w_sim.c` (command routing/bootstrap intent)
+- [x] `ref/micropolis/src/sim/s_sim.c` (`SimFrame`, `Simulate`, `DoSimInit`)
+- [x] `ref/micropolis/src/sim/s_init.c` (initialization/reset expectations)
+- [x] `ref/micropolis/src/sim/w_util.c` (speed/pause semantics)
 
 ### TS references to review
 
-- [ ] `apps/web/src/game/host-factory.ts`
-- [ ] `apps/web/src/game/local-host.ts`
-- [ ] `apps/web/src/game/do-host.ts`
-- [ ] `apps/web/src/game/runtime.ts`
-- [ ] `packages/sim-core/src/core/sim-state.ts`
-- [ ] `packages/sim-core/src/core/sim-context.ts`
-- [ ] `packages/sim-core/src/sim/simulate.ts`
-- [ ] `packages/sim-core/src/systems/init.ts`
+- [x] `apps/web/src/game/host-factory.ts`
+- [x] `apps/web/src/game/local-host.ts`
+- [x] `apps/web/src/game/do-host.ts`
+- [x] `apps/web/src/game/runtime.ts`
+- [x] `packages/sim-core/src/core/sim-state.ts`
+- [x] `packages/sim-core/src/core/sim-context.ts`
+- [x] `packages/sim-core/src/sim/simulate.ts`
+- [x] `packages/sim-core/src/systems/init.ts`
 
 ### Implementation checklist
 
-- [ ] Add a new Stage 4 authority module that creates and owns `MapStore + SimState + SimContext + ToolContext`.
-- [ ] Implement host lifecycle (`connect`, `disconnect`, periodic tick loop, snapshot request support).
-- [ ] Keep deterministic authority available only for isolated tests/fallback.
-- [ ] Add host-factory flag/wiring to opt into the real authority path in web dev/runtime.
-- [ ] Ensure handshake behavior remains compatible with existing runtime bootstrapping.
+- [x] Add a new Stage 4 authority module that creates and owns `MapStore + SimState + SimContext + ToolContext`.
+- [x] Implement host lifecycle (`connect`, `disconnect`, periodic tick loop, snapshot request support).
+- [x] Keep deterministic authority available only for isolated tests/fallback.
+- [x] Add host-factory flag/wiring to opt into the real authority path in web dev/runtime.
+- [x] Ensure handshake behavior remains compatible with existing runtime bootstrapping.
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/host-factory.test.ts` still passes.
-- [ ] `apps/web/src/game/runtime.test.ts` still passes.
-- [ ] Stage 4 route boots successfully using the new authority path (not `DeterministicCommandAuthority`).
+- [x] `apps/web/src/game/host-factory.test.ts` still passes.
+- [x] `apps/web/src/game/runtime.test.ts` still passes.
+- [x] Stage 4 route boots successfully using the new authority path (not `DeterministicCommandAuthority`).
 
 ---
 
@@ -567,3 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
+
+
