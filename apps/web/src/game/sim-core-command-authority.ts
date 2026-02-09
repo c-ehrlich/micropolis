@@ -547,7 +547,11 @@ export function createStage4CommandAuthority(
         'Deterministic authority mode is restricted to isolated tests/fallback; set allowDeterministicFallback to true.',
       );
     }
-    return new DeterministicCommandAuthority({ mode: options.mode });
+    return new DeterministicCommandAuthority({
+      mode: options.mode,
+      seed: options.seed,
+      startingFunds: options.startingFunds,
+    });
   }
 
   return new SimCoreCommandAuthority(options);

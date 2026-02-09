@@ -516,4 +516,45 @@ describe('createStage4CommandAuthority', () => {
     expect(first.map((event) => event.type)).toEqual(['ack', 'patch']);
     expect(occupied.map((event) => event.type)).toEqual(['reject']);
   });
+
+  test('routes deterministic fallback tool rejects through sim-core tool result mapping', () => {
+    const outOfBoundsAuthority = createStage4CommandAuthority({
+      mode: 'local',
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+    });
+    const outOfBounds = outOfBoundsAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-det-oob',
+      tool: 'road',
+      x: -1,
+      y: 5,
+    });
+    expect(outOfBounds.map((event) => event.type)).toEqual(['reject']);
+    const outOfBoundsReject = outOfBounds[0];
+    if (outOfBoundsReject?.type !== 'reject') {
+      throw new Error('expected deterministic out-of-bounds reject event');
+    }
+    expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+
+    const noFundsAuthority = createStage4CommandAuthority({
+      mode: 'local',
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+      startingFunds: 0,
+    });
+    const noFunds = noFundsAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-det-no-funds',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(noFunds.map((event) => event.type)).toEqual(['reject']);
+    const noFundsReject = noFunds[0];
+    if (noFundsReject?.type !== 'reject') {
+      throw new Error('expected deterministic no-funds reject event');
+    }
+    expect(noFundsReject.code).toBe('NO_FUNDS');
+  });
 });

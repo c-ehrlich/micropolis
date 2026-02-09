@@ -256,7 +256,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Replace occupancy-only acceptance/reject logic with `applyToolAction`-backed outcomes.
+- [x] Replace occupancy-only acceptance/reject logic with `applyToolAction`-backed outcomes.
 - [ ] Translate tool outcomes into stable host ack/reject codes/messages.
 - [x] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
 - [ ] Ensure reject reasons include out-of-bounds/no-funds/invalid placement cases.
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
