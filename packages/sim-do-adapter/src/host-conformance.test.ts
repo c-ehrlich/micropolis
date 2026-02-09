@@ -18,7 +18,15 @@ import {
 } from './room-do-adapter.ts';
 
 interface TestCommandPayload {
-  action: 'apply' | 'reject';
+  action: 'apply' | 'reject' | 'city_load';
+  /**
+   * Scenario/load token used by this host conformance runtime to model
+   * authoritative room-state replacement after `city_load`.
+   * Mirrors in-place `LoadCity` replacement flow in
+   * `ref/micropolis/src/sim/s_fileio.c` (`LoadCity` -> `loadFile` -> `DidLoadCity`).
+   * Parity note: token metadata is a test-harness abstraction and not a 1:1 C field.
+   */
+  cityStateToken?: string;
 }
 
 interface TestPatchPayload {
@@ -29,6 +37,7 @@ interface TestPatchPayload {
 interface TestSnapshotPayload {
   snapshotToken: string;
   appliedCommandIds: string[];
+  cityStateToken: string;
 }
 
 type TestServerEnvelope = BridgeServerEnvelope<TestPatchPayload, TestSnapshotPayload>;
@@ -271,6 +280,51 @@ function runHostConformanceSuite(name: string, hostKind: HostKind): void {
       expect(latestSnapshot).toBeDefined();
       expect(latestSnapshot?.payload.appliedCommandIds).toContain('cmd-drop');
     });
+
+    it('treats city_load as in-room state replacement and emits a fresh snapshot', async () => {
+      const harness = createHostConformanceHarness(hostKind);
+      const host = harness.createHost('client-a');
+      const events: TestServerEnvelope[] = [];
+      host.subscribe((event) => {
+        events.push(event);
+      });
+
+      await host.connect();
+      await host.sendHello();
+      await host.sendCommand({
+        commandId: 'cmd-pre-load',
+        payload: { action: 'apply' },
+        sentAtMs: 100,
+      });
+      await host.sendCommand({
+        commandId: 'cmd-load',
+        payload: {
+          action: 'city_load',
+          cityStateToken: 'loaded-city-token',
+        },
+        sentAtMs: 101,
+      });
+      await harness.tick(500);
+      await host.requestSnapshot();
+
+      const loadAck = events.find(
+        (event): event is Extract<TestServerEnvelope, { kind: 'ack' }> =>
+          event.kind === 'ack' && event.payload.commandId === 'cmd-load',
+      );
+      expect(loadAck).toBeDefined();
+
+      const loadedSnapshot = [...events]
+        .reverse()
+        .find(
+          (event): event is Extract<TestServerEnvelope, { kind: 'snapshot' }> =>
+            event.kind === 'snapshot' && event.payload.cityStateToken === 'loaded-city-token',
+        );
+      expect(loadedSnapshot).toBeDefined();
+      expect(loadedSnapshot?.roomId).toBe('room-a');
+      expect(loadedSnapshot?.payload.appliedCommandIds).toEqual([]);
+      expect(events.every((event) => event.roomId === 'room-a')).toBe(true);
+      assertStrictlyIncreasingServerSeq(events);
+    });
   });
 }
 
@@ -322,6 +376,7 @@ function createConformanceRuntime(
   const queuedCommands: QueuedCommand[] = [];
   const processedCommandIds = new Set<string>();
   const appliedCommandIds: string[] = [];
+  let cityStateToken = 'initial-city';
   let nextReceiveOrder = 0;
   let tick = 0;
   let serverSeq = 0;
@@ -403,6 +458,24 @@ function createConformanceRuntime(
             commandId: command.commandId,
           },
         });
+
+        if (command.payload.action === 'city_load') {
+          cityStateToken = command.payload.cityStateToken ?? `loaded:${command.commandId}`;
+          appliedCommandIds.splice(0, appliedCommandIds.length);
+          broadcaster.sendToRoom(roomId, {
+            kind: 'snapshot',
+            roomId,
+            tick,
+            serverSeq: nextServerSeq(),
+            payload: {
+              snapshotToken: `${roomId}:${tick}:${cityStateToken}`,
+              appliedCommandIds: [],
+              cityStateToken,
+            },
+          });
+          continue;
+        }
+
         appliedCommandIds.push(command.commandId);
         broadcaster.sendToRoom(roomId, {
           kind: 'patch',
@@ -428,6 +501,7 @@ function createConformanceRuntime(
         payload: {
           snapshotToken: `${roomId}:${tick}`,
           appliedCommandIds: [...appliedCommandIds],
+          cityStateToken,
         },
       };
     },
@@ -445,6 +519,7 @@ function createConformanceRuntime(
           payload: {
             snapshotToken: `${roomId}:${tick}`,
             appliedCommandIds: [...appliedCommandIds],
+            cityStateToken,
           },
         },
         replayTail: [],

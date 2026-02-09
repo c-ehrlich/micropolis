@@ -94,6 +94,23 @@ Rules:
 3. Client may keep local pending tool visuals keyed by `commandId` (`pendingTools`) for UX parity with pending tool feedback intent in `ref/micropolis/src/sim/w_tool.c`; these markers are non-authoritative and must not mutate authoritative map/HUD projections.
 4. Pending visuals settle only when host emits command outcomes (`ack`/`reject`) or resync transitions clear them.
 
+## Save/Load Room Semantics (Frozen)
+
+Contract sources:
+
+- `packages/core-bridge/src/types.ts`
+- `packages/core-bridge/src/core-host.ts`
+- `packages/sim-do-adapter/src/host-conformance.test.ts`
+
+Micropolis parity source:
+
+- `ref/micropolis/src/sim/s_fileio.c` (`LoadCity` mutates the active simulation state and triggers UI refresh; it does not create a new simulation process/room concept).
+
+Rules:
+
+1. `city_load` replaces authoritative city/simulation state in the current room/session and must be followed by a fresh authoritative snapshot baseline.
+2. Creating/selecting a new room/session is a separate host lifecycle/transport binding behavior (`connect`/room routing), not a `city_load` side effect.
+
 ## Funds Coupling Invariant (Frozen)
 
 Contract sources:
