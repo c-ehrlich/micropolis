@@ -59,6 +59,20 @@ function today() {
 }
 
 /**
+ * Sanitizes dynamic values for safe use in log file names.
+ *
+ * Not from Micropolis C; this prevents `/` and other path/control characters
+ * in task ids from creating invalid nested paths during orchestrator logging.
+ */
+function sanitizeForPathSegment(value) {
+  const cleaned = value.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  if (cleaned.length === 0) {
+    return 'task';
+  }
+  return cleaned.slice(0, 120);
+}
+
+/**
  * Parses CLI arguments for the automation orchestrator.
  *
  * Not from Micropolis C sources; this configures Codex CLI automation behavior.
@@ -884,13 +898,17 @@ async function pushBranch(repoRoot, pkg, dryRun) {
  */
 async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, logDir) {
   const taskId = task.id ?? 'task';
+  const logTaskId = sanitizeForPathSegment(taskId);
   const timestamp = new Date().toISOString().replaceAll(':', '-');
   const wasTaskUncheckedAtStart = isTaskStillUnchecked(worktreeRoot, pkg, task);
 
   let prompt = buildTaskPrompt(pkg, task);
 
   for (let attempt = 1; attempt <= args.maxRetriesPerTask; attempt += 1) {
-    const logPath = path.join(logDir, `${pkg.id}-${taskId}-${timestamp}-attempt${attempt}.jsonl`);
+    const logPath = path.join(
+      logDir,
+      `${pkg.id}-${logTaskId}-${timestamp}-attempt${attempt}.jsonl`,
+    );
     process.stdout.write(`\n[codex] ${pkg.id} ${taskId} attempt ${attempt}\n`);
 
     // eslint-disable-next-line no-await-in-loop
