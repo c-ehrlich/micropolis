@@ -24,6 +24,7 @@ import type {
   CoreHostRejectEvent,
   CoreHostSnapshotEvent,
   CoreHostSnapshotPlacement,
+  CoreHostToolCommand,
   HostMode,
 } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
@@ -174,6 +175,15 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   public processCommand(command: CoreHostCommand): CoreHostEvent[] {
+    // Mirrors `SimCmd` routing in `ref/micropolis/src/sim/w_sim.c`:
+    // one command ingress dispatches to command-specific handlers.
+    switch (command.type) {
+      case 'tool-command':
+        return this.processToolCommand(command);
+    }
+  }
+
+  private processToolCommand(command: CoreHostToolCommand): CoreHostEvent[] {
     const currentTick = this.currentTick();
     const previousOutcome = this.commandOutcomes.get(command.commandId);
     if (previousOutcome) {

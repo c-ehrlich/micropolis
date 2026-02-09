@@ -162,7 +162,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sim.c` (command routing/bootstrap intent)
+- [x] `ref/micropolis/src/sim/w_sim.c` (command routing/bootstrap intent)
 - [ ] `ref/micropolis/src/sim/s_sim.c` (`SimFrame`, `Simulate`, `DoSimInit`)
 - [ ] `ref/micropolis/src/sim/s_init.c` (initialization/reset expectations)
 - [ ] `ref/micropolis/src/sim/w_util.c` (speed/pause semantics)
