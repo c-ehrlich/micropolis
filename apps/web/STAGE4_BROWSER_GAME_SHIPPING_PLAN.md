@@ -336,8 +336,8 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/hud-state.test.ts` validates heads/message projection behavior.
-- [ ] `packages/sim-core/src/systems/messages.test.ts` and `packages/sim-core/src/systems/date-time.test.ts` remain green.
+- [x] `apps/web/src/game/runtime/hud-state.test.ts` validates heads/message projection behavior.
+- [x] `packages/sim-core/src/systems/messages.test.ts` and `packages/sim-core/src/systems/date-time.test.ts` remain green.
 - [ ] Manual: funds/date/demand/speed visibly update during simulation.
 - [ ] Manual: messages appear/expire correctly and coordinate messages carry x/y.
 
@@ -567,6 +567,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 

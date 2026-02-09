@@ -16,6 +16,19 @@ function setLastDispatched(state: SimState, next: LastDispatched): void {
   LAST_DISPATCHED.set(state, next);
 }
 
+/**
+ * Clears runtime dispatch de-duplication state when no active message remains.
+ * Mirrors the lifecycle boundary where `doMessage` in `ref/micropolis/src/sim/s_msg.c`
+ * no longer has a current `MesNum` to present.
+ *
+ * Parity note: C de-duplicates by last rendered text (`SetMessageField` globals),
+ * while sim-core de-duplicates hook dispatches by id/coords in this module. Clearing
+ * this cache at `MesNum == 0` preserves expiry/requeue behavior for Stage 5 message feeds.
+ */
+function clearLastDispatched(state: SimState): void {
+  setLastDispatched(state, { kind: 'none' });
+}
+
 function dispatchMes(state: SimState, context: SimContext, id: number): void {
   const x = state.MesX;
   const y = state.MesY;
@@ -224,7 +237,10 @@ export function doMessage(state: SimState, context: SimContext): void {
     state.LastMesTime = tick;
     firstTime = true;
   } else {
-    if (state.MesNum === 0) return;
+    if (state.MesNum === 0) {
+      clearLastDispatched(state);
+      return;
+    }
 
     // s_msg.c: picture messages flip sign and reset the timer when there is no port input.
     if (state.MesNum < 0) {
@@ -232,6 +248,7 @@ export function doMessage(state: SimState, context: SimContext): void {
       state.LastMesTime = tick;
     } else if (tick - state.LastMesTime > 60 * 30) {
       state.MesNum = 0;
+      clearLastDispatched(state);
       return;
     }
   }
@@ -244,6 +261,7 @@ export function doMessage(state: SimState, context: SimContext): void {
     if (state.MesNum === 0) return;
     if (state.MesNum > 60) {
       state.MesNum = 0;
+      clearLastDispatched(state);
       return;
     }
 

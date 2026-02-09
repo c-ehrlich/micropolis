@@ -124,6 +124,34 @@ describe('doMessage parity', () => {
     expect(state.MesNum).toBe(0);
   });
 
+  it('allows the same message id to dispatch again after expiry and requeue', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // First delivery: SendMes queues, then w_update.c updateDate invokes s_msg.c doMessage.
+    expect(sendMes(state, context, 12)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMes).toHaveBeenCalledTimes(1);
+    expect(hooks.sendMes).toHaveBeenLastCalledWith(12);
+
+    // Magic number source: s_msg.c doMessage expires active positive MesNum only when
+    // `TickCount() - LastMesTime > (60 * 30)`.
+    tick.now = 60 * 30 + 1;
+    updateDate(state, context);
+    expect(state.MesNum).toBe(0);
+
+    // After expiry, the same id should still be deliverable when re-enqueued.
+    expect(sendMes(state, context, 12)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMes).toHaveBeenCalledTimes(2);
+    expect(hooks.sendMes).toHaveBeenLastCalledWith(12);
+  });
+
   it('plays first-display sounds only when a new message enters MesNum', () => {
     const tick = { now: 0 };
     const hooks = { tickCount: () => tick.now, makeSound: vi.fn() };
