@@ -334,7 +334,7 @@ function getHelloRejectionReason(
   envelope: Extract<HostEnvelope, { kind: 'hello' }>,
 ): string | null {
   if (!envelope.accepted) {
-    return envelope.reason ?? 'host rejected hello';
+    return envelope.reason ?? envelope.message ?? 'host rejected hello';
   }
 
   if (envelope.roomId !== state.roomId) {

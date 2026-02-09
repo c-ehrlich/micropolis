@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_LOCAL_CLIENT_ID, DEFAULT_LOCAL_ROOM_ID } from './protocol.ts';
+import {
+  DEFAULT_CORE_VERSION,
+  DEFAULT_LOCAL_CLIENT_ID,
+  DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION,
+} from './protocol.ts';
 import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
 
 /**
@@ -12,8 +17,8 @@ function createAcceptedHelloEnvelope() {
     kind: 'hello' as const,
     roomId: DEFAULT_LOCAL_ROOM_ID,
     clientId: DEFAULT_LOCAL_CLIENT_ID,
-    protocolVersion: 'v1',
-    coreVersion: 'stage-2',
+    protocolVersion: DEFAULT_PROTOCOL_VERSION,
+    coreVersion: DEFAULT_CORE_VERSION,
     accepted: true,
   };
 }

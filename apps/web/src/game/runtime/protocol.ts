@@ -4,7 +4,7 @@ import {
   CORE_BRIDGE_V1_PROTOCOL_VERSION,
   type CoreClientEnvelope as CoreBridgeClientEnvelopeContract,
   type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
-} from '../../../../../packages/core-bridge/src/types.ts';
+} from '@city/core-bridge';
 
 /**
  * Stage 0 canonical client-envelope contract alias for web runtime migration.
@@ -67,11 +67,12 @@ export const DEFAULT_LOCAL_CLIENT_ID = CANONICAL_BRIDGE_LOCAL_CLIENT_ID;
 
 /**
  * Default protocol version used by the Stage 2 web runtime handshake.
- * Mirrors the mandatory hello/version lockstep rules from
- * `ref/micropolis/src/sim/w_sim.c` command-gate behavior, adapted to the
- * bridge envelope handshake model.
+ * Maps Stage 2 runtime handshake defaults to
+ * `CORE_BRIDGE_V1_PROTOCOL_VERSION` in `packages/core-bridge/src/types.ts`.
+ * Parity note: protocol tokens are a bridge abstraction rather than direct
+ * `SimCmdVersion` Tcl command strings in `ref/micropolis/src/sim/w_sim.c`.
  */
-export const DEFAULT_PROTOCOL_VERSION = 'v1';
+export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 
 /**
  * Default core version announced by the Stage 2 web runtime handshake.
@@ -265,6 +266,15 @@ export interface HostHelloEnvelope {
   protocolVersion: string;
   coreVersion: string;
   accepted: boolean;
+  /**
+   * Canonical bridge hello rejection detail field from
+   * `packages/core-bridge/src/types.ts` `HostHelloEnvelope.message`.
+   */
+  message?: string;
+  /**
+   * Legacy Stage 2 hello rejection detail field retained for local-host
+   * compatibility while Stage 0 convergence work is still in flight.
+   */
   reason?: string;
 }
 

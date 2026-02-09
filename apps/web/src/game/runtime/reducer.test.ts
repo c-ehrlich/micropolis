@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_CORE_VERSION,
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
   type Stage2ToolCommand,
 } from './protocol.ts';
@@ -22,8 +24,8 @@ function createAcceptedHelloEnvelope(): HostEnvelope {
     kind: 'hello',
     roomId: DEFAULT_LOCAL_ROOM_ID,
     clientId: DEFAULT_LOCAL_CLIENT_ID,
-    protocolVersion: 'v1',
-    coreVersion: 'stage-2',
+    protocolVersion: DEFAULT_PROTOCOL_VERSION,
+    coreVersion: DEFAULT_CORE_VERSION,
     accepted: true,
   };
 }
@@ -78,6 +80,24 @@ describe('reduceHostEnvelope', () => {
     expect(afterPatch.outcome).toBe('applied');
     expect(afterPatch.state.lastAppliedServerSeq).toBe(1);
     expect(afterPatch.state.lastAppliedTick).toBe(3);
+  });
+
+  it('uses canonical hello `message` when the host rejects handshake', () => {
+    const state = createInitialWebRuntimeState();
+    const rejected = reduceHostEnvelope(state, {
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: false,
+      message: 'protocol mismatch',
+    });
+
+    expect(rejected.outcome).toBe('hello-rejected');
+    expect(rejected.state.phase).toBe('failed');
+    expect(rejected.state.handshakeComplete).toBe(false);
+    expect(rejected.state.handshakeError).toBe('protocol mismatch');
   });
 
   it('drops stale envelopes', () => {

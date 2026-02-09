@@ -4,8 +4,10 @@ import {
   type ClientEnvelope,
   type CoreHost,
   type CoreHostConnection,
+  DEFAULT_CORE_VERSION,
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
@@ -53,8 +55,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
     });
     expect(runtime.getState().phase).toBe('negotiating');
 
@@ -62,8 +64,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
 
@@ -85,8 +87,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
     host.emit({
@@ -138,8 +140,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
 
@@ -193,8 +195,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
     host.emit({
@@ -216,8 +218,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
     expect(runtime.getState().phase).toBe('resyncing');
@@ -281,8 +283,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
 
@@ -358,8 +360,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
 
@@ -420,8 +422,8 @@ describe('createWebHostRuntime', () => {
       kind: 'hello',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      protocolVersion: 'v1',
-      coreVersion: 'stage-2',
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
       accepted: true,
     });
 
