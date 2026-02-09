@@ -238,6 +238,104 @@ describe('reduceHostEnvelope', () => {
     });
   });
 
+  it('keeps expanded authoritative projection state unchanged for stale drops and sequence gaps', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors monotonic simulation/frame progression assumptions from
+      // `ref/micropolis/src/sim/s_sim.c` and `ref/micropolis/src/sim/sim.c`.
+      tick: 10,
+      serverSeq: 10,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 1,
+        },
+        messages: [
+          {
+            // C message ids are integer table indexes in `s_msg.c`.
+            id: 14,
+            text: 'Residents demand police stations.',
+          },
+        ],
+        realtime: {
+          // Fields map to `SimSprite` in `packages/sim-core/src/sim/realtime.ts`,
+          // the TypeScript port of `ref/micropolis/src/sim/w_sprite.c`.
+          objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
+        },
+      },
+    }).state;
+    const baselineProjection = reduceHostEnvelope(afterSnapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 11,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+        hud: { speed: 2 },
+        messageDeltas: [{ id: 16, text: 'Taxes are too high.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 80, y: 96, frame: 3 }],
+        },
+      },
+    }).state;
+
+    const stale = reduceHostEnvelope(baselineProjection, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      // Stale duplicate sequence should be dropped without projection changes.
+      serverSeq: 11,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: { speed: 3 },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
+        },
+      },
+    });
+    expect(stale.outcome).toBe('dropped-stale');
+    expect(stale.state).toBe(baselineProjection);
+    expect(stale.effect).toEqual({ kind: 'none' });
+
+    const gap = reduceHostEnvelope(baselineProjection, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      // Gap from expected seq 12 to 13 must request snapshot resync.
+      serverSeq: 13,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: { speed: 3 },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
+        },
+      },
+    });
+
+    expect(gap.outcome).toBe('gap-detected');
+    expect(gap.state.phase).toBe('resyncing');
+    expect(gap.state.mapState).toBe(baselineProjection.mapState);
+    expect(gap.state.hudState).toBe(baselineProjection.hudState);
+    expect(gap.state.realtimeState).toBe(baselineProjection.realtimeState);
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 12,
+    });
+  });
+
   it('requests resync when tick regresses even if serverSeq is in-order', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
