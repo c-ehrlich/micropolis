@@ -73,6 +73,62 @@ function sanitizeForPathSegment(value) {
 }
 
 /**
+ * Returns the single inline-code token when task text is exactly one backticked value.
+ *
+ * Not from Micropolis C; this supports checklist task classification in markdown plans.
+ */
+function getSingleInlineCodeToken(text) {
+  const match = /^`([^`]+)`$/.exec(text.trim());
+  if (!match) {
+    return null;
+  }
+  return match[1];
+}
+
+/**
+ * Returns true when a checklist task is a file-reference item (for "Required References").
+ *
+ * Not from Micropolis C; this detects path-only checklist items in shipping plans.
+ */
+function isFileReferenceTask(repoRoot, task) {
+  const token = getSingleInlineCodeToken(task.text);
+  if (!token) {
+    return false;
+  }
+  return existsSync(path.join(repoRoot, token));
+}
+
+/**
+ * Marks one unchecked task line as checked using the parsed line number/text snapshot.
+ *
+ * Not from Micropolis C; this updates markdown checklist state for automation.
+ */
+function markTaskCheckedAtLine(repoRoot, pkg, task) {
+  const planAbsolutePath = path.join(repoRoot, pkg.planPath);
+  const lines = readFileSync(planAbsolutePath, 'utf8').split('\n');
+  const lineIndex = task.lineNumber - 1;
+  const line = lines[lineIndex] ?? '';
+  const checklistMatch = /^(\s*- \[)([ xX])(\]\s+)(.+)$/.exec(line);
+
+  if (!checklistMatch) {
+    return false;
+  }
+
+  const currentTaskText = checklistMatch[4].trim();
+  if (currentTaskText !== task.text.trim()) {
+    return false;
+  }
+
+  if (checklistMatch[2].toLowerCase() === 'x') {
+    return false;
+  }
+
+  lines[lineIndex] = `${checklistMatch[1]}x${checklistMatch[3]}${checklistMatch[4]}`;
+  writeFileSync(planAbsolutePath, `${lines.join('\n')}\n`, 'utf8');
+  return true;
+}
+
+/**
  * Parses CLI arguments for the automation orchestrator.
  *
  * Not from Micropolis C sources; this configures Codex CLI automation behavior.
@@ -901,6 +957,68 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
   const logTaskId = sanitizeForPathSegment(taskId);
   const timestamp = new Date().toISOString().replaceAll(':', '-');
   const wasTaskUncheckedAtStart = isTaskStillUnchecked(worktreeRoot, pkg, task);
+
+  if (isFileReferenceTask(worktreeRoot, task)) {
+    process.stdout.write(
+      `[auto] ${pkg.id} ${taskId}: file-reference checklist task detected; checking plan item directly.\n`,
+    );
+
+    const marked = markTaskCheckedAtLine(worktreeRoot, pkg, task);
+    if (!marked) {
+      process.stdout.write(
+        `[auto] ${pkg.id} ${taskId}: could not mark via direct line update; falling back to Codex.\n`,
+      );
+    } else {
+      const changedFiles = await getChangedFiles(worktreeRoot);
+      if (!changedFiles.includes(pkg.planPath)) {
+        return {
+          success: false,
+          commitMessage: null,
+          prUrl: null,
+        };
+      }
+
+      const checkFailures = await runChecks(worktreeRoot, args.checks);
+      if (checkFailures.length > 0) {
+        return {
+          success: false,
+          commitMessage: null,
+          prUrl: null,
+        };
+      }
+
+      const commitMessage = await commitChanges(worktreeRoot, pkg, task, args.dryRun);
+      if (commitMessage === null) {
+        return {
+          success: false,
+          commitMessage: null,
+          prUrl: null,
+        };
+      }
+
+      if (!args.skipPush) {
+        await pushBranch(worktreeRoot, pkg, args.dryRun);
+      }
+
+      let prUrl = null;
+      if (!args.skipPr) {
+        prUrl = await ensurePullRequest(
+          mainRepoRoot,
+          pkg,
+          task,
+          args.checks,
+          args.dryRun,
+          args.baseRef,
+        );
+      }
+
+      return {
+        success: true,
+        commitMessage,
+        prUrl,
+      };
+    }
+  }
 
   let prompt = buildTaskPrompt(pkg, task);
 
