@@ -56,7 +56,7 @@ Scope:
 - Add sim controls (pause/play, speed).
 - Wire hook outputs into visible HUD:
   - funds/date/demand/options/messages via `uiSet` and `sendMes`/`sendMesAt`.
-- Keep tool funds and sim funds synchronized after each action.
+- Keep Stage 0 funds coupling semantics: `SimState.TotalFunds` is canonical; `ToolContext.funds` is synchronized derived state before tool evaluation and after every tool outcome, matching `TotalFunds` checks and `Spend`/`SetFunds` behavior in `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_stubs.c`.
 
 Acceptance:
 
@@ -120,7 +120,7 @@ Estimate: 3-5 days.
 Mitigation: keep an explicit system-composition module with comments mapping each call to source C file behavior.
 
 2. Risk: divergence between `ToolContext.funds` and `SimState.TotalFunds`.
-Mitigation: single synchronization path after tool actions; add assertions and tests.
+Mitigation: one canonical ownership path (`SimState.TotalFunds`) with explicit pre/post-tool synchronization for `ToolContext.funds`; add assertions and tests.
 
 3. Risk: map redraw cost at full 120x100 updates each frame.
 Mitigation: start full redraw for correctness, then switch to dirty-flag invalidation.

@@ -27,6 +27,7 @@ Parity baseline for this package is the Micropolis integration surface in:
 3. `@city/sim-ui` owns presentation decisions for core events/messages; integration may surface transport tokens, but UI interpretation stays in `@city/sim-ui`.
 4. `@city/sim-io` owns persistence format parity and file orchestration; integration does not parse or serialize city/scenario files.
 5. Cross-package composition must preserve one-way responsibilities: simulation logic in core, transport in integration, presentation in ui, persistence in io.
+6. Funds ownership is frozen to `SimState.TotalFunds` in `@city/sim-core`; any `ToolContext.funds` used during tool execution is synchronized derived state and never an integration-owned source of truth (parity: `TotalFunds` checks in `ref/micropolis/src/sim/w_tool.c` and `Spend`/`SetFunds` in `ref/micropolis/src/sim/w_stubs.c`).
 
 ## Stage 3 Finalization Notes
 
@@ -102,6 +103,19 @@ TypeScript ownership split:
 - `@city/sim-core` computes and emits canonical `uiSet` keys/values (`packages/sim-core/src/systems/date-time.ts`).
 - `@city/sim-integration` does not reinterpret `uiSet` keys and does not own head-window state.
 - `@city/sim-ui` consumes `uiSet` outputs and updates view state/widgets.
+
+### 4) Tool command funds coupling
+
+Micropolis parity chain:
+
+1. Tool logic checks and spends canonical `TotalFunds` during placement (`ref/micropolis/src/sim/w_tool.c`).
+2. `Spend` and `SetFunds` mutate canonical `TotalFunds` and trigger funds UI refresh (`ref/micropolis/src/sim/w_stubs.c`, `ref/micropolis/src/sim/w_update.c`).
+
+TypeScript ownership split:
+
+- `@city/sim-core` owns canonical funds (`SimState.TotalFunds`) and funds mutation semantics.
+- `@city/sim-core` may use `ToolContext.funds` as a derived execution mirror, but it must be synchronized from canonical funds state before tool evaluation and after each outcome.
+- `@city/sim-integration` transports tool commands/outcomes only and must not maintain an independent funds authority.
 
 ### Required non-duplication rule
 

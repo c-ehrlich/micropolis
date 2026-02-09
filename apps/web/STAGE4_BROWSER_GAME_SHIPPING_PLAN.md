@@ -40,7 +40,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] Web surfaces (`apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts`) consume handshake/version defaults from `@city/core-bridge` and do not define new web-local handshake/version constants.
 - [x] Keep existing sequencing/resync policy from `packages/core-bridge/src/sequencing.ts` (no re-evaluation unless blocker).
 - [x] Snapshot/patch map rule: patch deltas use `{ x, y, tile }`; snapshot tile order is explicit x-major (`x * WORLD_Y + y`).
-- [x] Funds rule: `SimState.TotalFunds` is canonical; `ToolContext.funds` is synchronized derived state.
+- [x] Funds rule: `SimState.TotalFunds` is canonical authoritative funds state; `ToolContext.funds` is synchronized derived state and must be refreshed from canonical funds before tool evaluation and resynchronized after every tool outcome (success or reject).
 - [x] Save/load room rule: `load-city` replaces current authoritative room state and emits fresh snapshot.
 - [x] Single-player playable command inventory is frozen to the bridge-owned `CityCommandPayloadV1` subset (`tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`).
 - [x] Host/client authority rule: host owns authoritative simulation state progression; web client is projection-only except non-authoritative pending tool visuals.
@@ -87,9 +87,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.
 - [x] 0.6 Check: no alternative sequencing policy is introduced in Stage 0 docs.
 
-- [ ] 0.7 Freeze funds coupling semantics.
-- [ ] 0.7 Check: `SimState.TotalFunds` is explicitly documented as canonical.
-- [ ] 0.7 Check: all tool-flow docs require `ToolContext.funds` synchronization from canonical funds state.
+- [x] 0.7 Freeze funds coupling semantics.
+- [x] 0.7 Check: `SimState.TotalFunds` is explicitly documented as canonical.
+- [x] 0.7 Check: all tool-flow docs require `ToolContext.funds` synchronization from canonical funds state.
 
 - [ ] 0.8 Freeze save/load room semantics for local and DO-backed hosts.
 - [ ] 0.8 Check: `load-city` semantics are explicitly “replace state in current room/session + emit snapshot”.
@@ -111,6 +111,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 | Web envelope type ownership | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope definitions and command payload unions are bridge-owned only. |
 | Web handshake/version ownership | `apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts` | Handshake/version defaults are owned by `@city/core-bridge`; web modules only re-export or consume bridge-owned values. |
 | Web sequencing/resync ownership | local reducer-specific ordering behavior | `packages/core-bridge/src/sequencing.ts` | Stale drop, server-seq gap resync, and tick-regression resync stay bridge-defined. |
+| Funds coupling ownership | ad-hoc funds mirroring in early web tool flows | `SimState.TotalFunds` in `packages/sim-core/src/core/sim-state.ts` with mutation helpers in `packages/sim-core/src/systems/funds.ts` and tool mirror state in `packages/sim-core/src/actions/tool-actions.ts` | `SimState.TotalFunds` is canonical for all tool flows. `ToolContext.funds` is derived-only and must synchronize from canonical funds before tool evaluation and after each accept/reject result, matching Micropolis `TotalFunds` + `Spend`/`SetFunds` semantics in `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_stubs.c`. |
 | Single-player playable command inventory ownership | Stage 2-local command unions in `apps/web/src/game/runtime/protocol.ts` | `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts` (using Stage 0 subset extraction in `apps/web/src/game/runtime/protocol.ts`) | Stage 0 playable inventory is exactly `tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`; no web-local payload union may redefine these bridge payload shapes. |
 | Host/client authority boundary ownership | client runtime pending-visual UX state in `apps/web/src/game/runtime/reducer.ts` | host-ordered authority events in `packages/core-bridge/src/core-host.ts` + `packages/core-bridge/src/types.ts` | Host remains authoritative for simulation/map/HUD progression; client runtime is projection-only and may track pending visuals only until host `ack`/`reject` or resync. |
 

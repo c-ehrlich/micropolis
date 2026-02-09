@@ -94,6 +94,27 @@ Rules:
 3. Client may keep local pending tool visuals keyed by `commandId` (`pendingTools`) for UX parity with pending tool feedback intent in `ref/micropolis/src/sim/w_tool.c`; these markers are non-authoritative and must not mutate authoritative map/HUD projections.
 4. Pending visuals settle only when host emits command outcomes (`ack`/`reject`) or resync transitions clear them.
 
+## Funds Coupling Invariant (Frozen)
+
+Contract sources:
+
+- `packages/sim-core/src/core/sim-state.ts`
+- `packages/sim-core/src/systems/funds.ts`
+- `packages/sim-core/src/actions/tool-actions.ts`
+
+Micropolis parity sources:
+
+- `ref/micropolis/src/sim/w_tool.c`
+- `ref/micropolis/src/sim/w_stubs.c`
+- `ref/micropolis/src/sim/s_fileio.c`
+
+Rules:
+
+1. `SimState.TotalFunds` is the single canonical funds value in runtime state.
+2. `ToolContext.funds` is derived tool-execution state only; it must never become an independent source of truth.
+3. Tool flows must synchronize `ToolContext.funds` from canonical `SimState.TotalFunds` before tool evaluation and synchronize back from canonical funds state after every tool outcome (success, reject, out-of-bounds, no-funds).
+4. Lifecycle and IO flows (`new-city`, `load-city`, `scenario_start`) that update funds through `setFunds`/`spendFunds` must preserve the same canonical ownership so HUD/head publication remains consistent with `DoUpdateHeads` expectations.
+
 ## Handshake and Validation Behavior
 
 Contract source: `packages/core-bridge/src/validation.ts`.
