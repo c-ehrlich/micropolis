@@ -202,6 +202,7 @@ describe('SimCoreCommandAuthority', () => {
       throw new Error('expected out-of-bounds reject event');
     }
     expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+    expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
 
     const noFunds = authority.processCommand({
       type: 'tool-command',
@@ -216,6 +217,7 @@ describe('SimCoreCommandAuthority', () => {
       throw new Error('expected no-funds reject event');
     }
     expect(noFundsReject.code).toBe('NO_FUNDS');
+    expect(noFundsReject.message).toBe('insufficient funds for tool placement');
 
     const invalidAuthority = new SimCoreCommandAuthority({
       mode: 'local',
@@ -242,6 +244,7 @@ describe('SimCoreCommandAuthority', () => {
       throw new Error('expected invalid-placement reject event');
     }
     expect(invalidPlacementReject.code).toBe('INVALID_PLACEMENT');
+    expect(invalidPlacementReject.message).toBe('tool placement was rejected by simulation rules');
   });
 
   test('mirrors Spend/SetFunds funds-head update behavior after tool spends', () => {
@@ -536,6 +539,7 @@ describe('createStage4CommandAuthority', () => {
       throw new Error('expected deterministic out-of-bounds reject event');
     }
     expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+    expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
 
     const noFundsAuthority = createStage4CommandAuthority({
       mode: 'local',
@@ -556,5 +560,6 @@ describe('createStage4CommandAuthority', () => {
       throw new Error('expected deterministic no-funds reject event');
     }
     expect(noFundsReject.code).toBe('NO_FUNDS');
+    expect(noFundsReject.message).toBe('insufficient funds for tool placement');
   });
 });

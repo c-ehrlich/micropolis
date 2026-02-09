@@ -2,7 +2,6 @@ import {
   applyToolAction,
   type SimState,
   type ToolContext,
-  type ToolResult,
 } from '../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
 import type {
@@ -18,17 +17,18 @@ import type {
   HostMode,
 } from './core-host';
 import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import {
+  createOutOfBoundsHostRejectOutcome,
+  type HostToolRejectOutcome,
+  translateToolResultToHostOutcome,
+} from './tool-outcome-host-translation';
 
 interface AcceptedOutcome {
   kind: 'ack';
   placement?: CoreHostPlacement;
 }
 
-interface RejectedOutcome {
-  kind: 'reject';
-  code: CoreHostRejectCode;
-  message: string;
-}
+type RejectedOutcome = HostToolRejectOutcome;
 
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
@@ -91,10 +91,11 @@ export class DeterministicCommandAuthority {
     }
 
     if (!isPlacementCoordinate(command.x, command.y)) {
+      const outOfBoundsReject = createOutOfBoundsHostRejectOutcome();
       return this.recordReject(
         command.commandId,
-        'OUT_OF_BOUNDS',
-        'tool coordinates are out of bounds',
+        outOfBoundsReject.code,
+        outOfBoundsReject.message,
         tick,
       );
     }
@@ -161,7 +162,11 @@ export class DeterministicCommandAuthority {
         tickId: tick,
         seq: this.serverSeq,
       });
-      return toToolRejectedOutcome(toolResult.result);
+      const hostOutcome = translateToolResultToHostOutcome(toolResult.result);
+      if (hostOutcome.kind === 'ack') {
+        return undefined;
+      }
+      return hostOutcome;
     } finally {
       this.syncStateFromToolContext();
       this.toolContext.store.commitTick();
@@ -314,39 +319,6 @@ export class DeterministicCommandAuthority {
 
 function isPlacementCoordinate(x: number, y: number): boolean {
   return Number.isInteger(x) && Number.isInteger(y);
-}
-
-/**
- * Maps one sim-core tool result into the deterministic fallback reject shape.
- * Mirrors `DoTool` return handling in `ref/micropolis/src/sim/w_tool.c`
- * (`-1` out-of-bounds, `-2` no-funds, other non-success invalid placement).
- */
-function toToolRejectedOutcome(result: ToolResult): RejectedOutcome | undefined {
-  if (result === 'ok') {
-    return undefined;
-  }
-
-  if (result === 'out-of-bounds') {
-    return {
-      kind: 'reject',
-      code: 'OUT_OF_BOUNDS',
-      message: 'tool coordinates are out of bounds',
-    };
-  }
-
-  if (result === 'no-funds') {
-    return {
-      kind: 'reject',
-      code: 'NO_FUNDS',
-      message: 'insufficient funds for tool placement',
-    };
-  }
-
-  return {
-    kind: 'reject',
-    code: 'INVALID_PLACEMENT',
-    message: 'tool placement was rejected by simulation rules',
-  };
 }
 
 function normalizeServerSeq(candidate: number, highestKnown: number): number {
