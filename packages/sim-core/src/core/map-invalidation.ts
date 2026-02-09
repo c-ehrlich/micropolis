@@ -32,6 +32,7 @@ export interface MapRedrawPlan {
     | 'none'
     | 'new-map'
     | 'map-flag'
+    | 'shake'
     | 'patch-tile-threshold'
     | 'patch-rect-threshold'
     | 'patch-rects';
@@ -50,6 +51,7 @@ export interface PlanMapRedrawOptions {
   readonly activeMapFlag: MapFlagId;
   readonly newMap: number;
   readonly newMapFlags: Uint8Array;
+  readonly shakeNow?: number;
   readonly mapPatch?: Patch | null;
   readonly maxDirtyTilesBeforeFullRedraw?: number;
   readonly maxDirtyRectsBeforeFullRedraw?: number;
@@ -95,6 +97,15 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
       fullRedraw: true,
       dirtyRects: [],
       consumedFlags: [options.activeMapFlag],
+    };
+  }
+
+  if ((options.shakeNow ?? 0) !== 0) {
+    return {
+      reason: 'shake',
+      fullRedraw: true,
+      dirtyRects: [],
+      consumedFlags: [],
     };
   }
 
@@ -145,8 +156,18 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
  */
 export function consumeMapRedrawPlan(
   state: MapInvalidationState,
-  _plan: Pick<MapRedrawPlan, 'consumedFlags'>,
+  _plan?: Pick<MapRedrawPlan, 'consumedFlags'>,
 ): void {
+  consumeMapInvalidationCycle(state);
+}
+
+/**
+ * Clear map invalidation markers after one complete map-view update cycle.
+ * Mirrors `sim_update_maps` in `ref/micropolis/src/sim/sim.c`, where `NewMap`
+ * and all `NewMapFlags[0..NMAPS-1]` entries are reset once after iterating all
+ * map views.
+ */
+export function consumeMapInvalidationCycle(state: MapInvalidationState): void {
   state.NewMap = 0;
   for (let index = 0; index < MAP_FLAG_COUNT; index += 1) {
     state.NewMapFlags[index] = 0;

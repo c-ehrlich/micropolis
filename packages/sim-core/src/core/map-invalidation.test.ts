@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { World } from './constants.ts';
 import { MAP_FLAG_COUNT, MAP_FLAGS } from './map-flags.ts';
-import { consumeMapRedrawPlan, planMapRedraw } from './map-invalidation.ts';
+import {
+  consumeMapInvalidationCycle,
+  consumeMapRedrawPlan,
+  planMapRedraw,
+} from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
 
 /**
@@ -63,6 +67,25 @@ describe('planMapRedraw', () => {
       fullRedraw: true,
       dirtyRects: [],
       consumedFlags: ['PDMAP'],
+    });
+  });
+
+  it('forces full redraw while ShakeNow is active', () => {
+    const plan = planMapRedraw({
+      activeMapFlag: 'ALMAP',
+      newMap: 0,
+      newMapFlags: new Uint8Array(15),
+      // `sim_update_maps` invalidates map views when `ShakeNow` is non-zero.
+      // Source: `ref/micropolis/src/sim/sim.c` (`mustUpdateMap` expression).
+      shakeNow: 1,
+      mapPatch: createMapPatch([mapIndex(7, 9)]),
+    });
+
+    expect(plan).toEqual({
+      reason: 'shake',
+      fullRedraw: true,
+      dirtyRects: [],
+      consumedFlags: [],
     });
   });
 
@@ -189,5 +212,24 @@ describe('consumeMapRedrawPlan', () => {
 
     expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
     expect(state.NewMapFlags[extensionSlot]).toBe(9);
+  });
+});
+
+describe('consumeMapInvalidationCycle', () => {
+  it('clears map invalidation markers once after a full view-update cycle', () => {
+    const extensionSlot = MAP_FLAG_COUNT;
+    const state = {
+      NewMap: 1,
+      // C `sim_update_maps` clears `NewMapFlags[0..NMAPS-1]` only.
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT + 1),
+    };
+    state.NewMapFlags[MAP_FLAGS.ALMAP] = 1;
+    state.NewMapFlags[extensionSlot] = 7;
+
+    consumeMapInvalidationCycle(state);
+
+    expect(state.NewMap).toBe(0);
+    expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(0);
+    expect(state.NewMapFlags[extensionSlot]).toBe(7);
   });
 });
