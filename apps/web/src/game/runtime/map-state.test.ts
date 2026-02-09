@@ -1,126 +1,150 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_CORE_VERSION,
+  createInitialRuntimeMapState,
+  projectRuntimeMapState,
+  type RuntimeMapState,
+} from './map-state.ts';
+import {
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
-  DEFAULT_PROTOCOL_VERSION,
+  type HostMapPatchTileWordDelta,
+  type SequencedHostEnvelope,
 } from './protocol.ts';
-import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
 
 /**
- * Produces an accepted hello envelope for deterministic map-stream tests.
- * Mirrors handshake gate behavior mapped from `ref/micropolis/src/sim/w_sim.c`.
+ * Applies one ordered envelope stream to runtime map projection state.
+ * Mirrors snapshot baseline + patch tail replay semantics used for map recovery
+ * in `ref/micropolis/spec/integration/SPEC.md`.
  */
-function createAcceptedHelloEnvelope() {
+function applyMapEnvelopeStream(
+  state: RuntimeMapState,
+  envelopes: readonly SequencedHostEnvelope[],
+): RuntimeMapState {
+  return envelopes.reduce((nextState, envelope) => {
+    return projectRuntimeMapState(nextState, envelope);
+  }, state);
+}
+
+/**
+ * Builds one authoritative snapshot envelope fixture for map projection tests.
+ * Mirrors map snapshot payload ownership in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: `tileWords` fixtures intentionally use C x-major ordering.
+ */
+function createSnapshotEnvelope(
+  serverSeq: number,
+  tick: number,
+  width: number,
+  height: number,
+  tileWords: readonly number[],
+): SequencedHostEnvelope {
   return {
-    kind: 'hello' as const,
+    kind: 'snapshot',
     roomId: DEFAULT_LOCAL_ROOM_ID,
     clientId: DEFAULT_LOCAL_CLIENT_ID,
-    protocolVersion: DEFAULT_PROTOCOL_VERSION,
-    coreVersion: DEFAULT_CORE_VERSION,
-    accepted: true,
+    tick,
+    serverSeq,
+    payload: {
+      map: {
+        width,
+        height,
+        tileWords,
+      },
+    },
+  };
+}
+
+/**
+ * Builds one authoritative patch envelope fixture for map projection tests.
+ * Mirrors coordinate-addressed `Map[x][y]` mutation intent in
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_con.c`.
+ * Parity note: this keeps coordinate deltas (not legacy linear indexes).
+ */
+function createPatchEnvelope(
+  serverSeq: number,
+  tick: number,
+  tileWordDeltas: readonly HostMapPatchTileWordDelta[],
+): SequencedHostEnvelope {
+  return {
+    kind: 'patch',
+    roomId: DEFAULT_LOCAL_ROOM_ID,
+    clientId: DEFAULT_LOCAL_CLIENT_ID,
+    tick,
+    serverSeq,
+    payload: {
+      map: {
+        tileWordDeltas,
+      },
+    },
   };
 }
 
 describe('runtime map projection', () => {
-  it('applies snapshot baseline then in-order map patch deltas', () => {
-    const initial = createInitialWebRuntimeState();
-    const afterHello = reduceHostEnvelope(initial, createAcceptedHelloEnvelope()).state;
+  it('applies snapshot baseline then patch deltas into row-major runtime tiles', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(
+        1,
+        0,
+        3,
+        2,
+        // C map storage is x-major (`Map[x][y]`) in `s_alloc.c`/`s_fileio.c`:
+        // `index = x * height + y`, so this decodes to runtime row-major
+        // `[0, 1, 2, 3, 4, 5]`.
+        [0, 3, 1, 4, 2, 5],
+      ),
+    );
 
-    const afterSnapshot = reduceHostEnvelope(afterHello, {
-      kind: 'snapshot',
-      roomId: DEFAULT_LOCAL_ROOM_ID,
-      clientId: DEFAULT_LOCAL_CLIENT_ID,
-      tick: 0,
-      serverSeq: 1,
-      payload: {
-        map: {
-          width: 3,
-          height: 2,
-          // C map storage is x-major (`Map[x][y]`) in `s_alloc.c`/`s_fileio.c`:
-          // index = x * height + y, so this decodes to runtime row-major [0,1,2,3,4,5].
-          tileWords: [0, 3, 1, 4, 2, 5],
-        },
-      },
-    });
+    expect(afterSnapshot.hasSnapshot).toBe(true);
+    expect(afterSnapshot.drawMode).toBe('snapshot');
+    expect(afterSnapshot.renderEpoch).toBe(1);
+    expect(Array.from(afterSnapshot.tiles)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(Array.from(afterSnapshot.dirtyTileIndexes)).toEqual([]);
 
-    expect(afterSnapshot.outcome).toBe('applied');
-    expect(afterSnapshot.state.mapState.hasSnapshot).toBe(true);
-    expect(afterSnapshot.state.mapState.drawMode).toBe('snapshot');
-    expect(Array.from(afterSnapshot.state.mapState.tiles)).toEqual([0, 1, 2, 3, 4, 5]);
+    const afterPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [
+        { x: 0, y: 0, tileWord: 9 },
+        { x: 2, y: 1, tileWord: 10 },
+      ]),
+    );
 
-    const afterPatch = reduceHostEnvelope(afterSnapshot.state, {
-      kind: 'patch',
-      roomId: DEFAULT_LOCAL_ROOM_ID,
-      clientId: DEFAULT_LOCAL_CLIENT_ID,
-      // Sequence/tick progression mirrors ordered host application guarantees in
-      // `ref/micropolis/src/sim/w_map.c` update entry points for Stage 2.
-      tick: 1,
-      serverSeq: 2,
-      payload: {
-        map: {
-          tileWordDeltas: [
-            { x: 0, y: 0, tileWord: 9 },
-            { x: 1, y: 1, tileWord: 10 },
-          ],
-        },
-      },
-    });
-
-    expect(afterPatch.outcome).toBe('applied');
-    expect(afterPatch.state.mapState.drawMode).toBe('patch');
-    expect(Array.from(afterPatch.state.mapState.dirtyTileIndexes)).toEqual([0, 4]);
-    expect(Array.from(afterPatch.state.mapState.tiles)).toEqual([9, 1, 2, 3, 10, 5]);
+    expect(afterPatch.drawMode).toBe('patch');
+    expect(afterPatch.renderEpoch).toBe(2);
+    expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([0, 5]);
+    expect(Array.from(afterPatch.tiles)).toEqual([9, 1, 2, 3, 4, 10]);
   });
 
-  it('drops stale map patches and preserves rendered map state', () => {
-    const initial = createInitialWebRuntimeState();
-    const afterHello = reduceHostEnvelope(initial, createAcceptedHelloEnvelope()).state;
-    const afterSnapshot = reduceHostEnvelope(afterHello, {
-      kind: 'snapshot',
-      roomId: DEFAULT_LOCAL_ROOM_ID,
-      clientId: DEFAULT_LOCAL_CLIENT_ID,
-      tick: 0,
-      serverSeq: 1,
-      payload: {
-        map: {
-          width: 2,
-          height: 2,
-          tileWords: [1, 3, 2, 4],
-        },
-      },
-    }).state;
-    const afterPatch = reduceHostEnvelope(afterSnapshot, {
-      kind: 'patch',
-      roomId: DEFAULT_LOCAL_ROOM_ID,
-      clientId: DEFAULT_LOCAL_CLIENT_ID,
-      tick: 1,
-      serverSeq: 2,
-      payload: {
-        map: {
-          tileWordDeltas: [{ x: 1, y: 0, tileWord: 7 }],
-        },
-      },
-    }).state;
+  it('reconstructs the same map from snapshot replay plus patch tail', () => {
+    const initial = createInitialRuntimeMapState();
 
-    const beforeStaleTiles = Array.from(afterPatch.mapState.tiles);
-    const beforeStaleEpoch = afterPatch.mapState.renderEpoch;
-    const stale = reduceHostEnvelope(afterPatch, {
-      kind: 'patch',
-      roomId: DEFAULT_LOCAL_ROOM_ID,
-      clientId: DEFAULT_LOCAL_CLIENT_ID,
-      tick: 1,
-      serverSeq: 2,
-      payload: {
-        map: {
-          tileWordDeltas: [{ x: 1, y: 1, tileWord: 9 }],
-        },
-      },
-    });
+    const fullHistoryState = applyMapEnvelopeStream(initial, [
+      createSnapshotEnvelope(1, 0, 3, 2, [0, 3, 1, 4, 2, 5]),
+      createPatchEnvelope(2, 1, [
+        { x: 0, y: 0, tileWord: 9 },
+        { x: 2, y: 1, tileWord: 10 },
+      ]),
+      createPatchEnvelope(3, 2, [{ x: 1, y: 1, tileWord: 11 }]),
+    ]);
 
-    expect(stale.outcome).toBe('dropped-stale');
-    expect(Array.from(stale.state.mapState.tiles)).toEqual(beforeStaleTiles);
-    expect(stale.state.mapState.renderEpoch).toBe(beforeStaleEpoch);
+    const replayState = applyMapEnvelopeStream(initial, [
+      createSnapshotEnvelope(
+        2,
+        1,
+        3,
+        2,
+        // This snapshot baseline represents state after serverSeq=2:
+        // row-major `[9, 1, 2, 3, 4, 10]` encoded back to C x-major order.
+        [9, 3, 1, 4, 2, 10],
+      ),
+      createPatchEnvelope(3, 2, [{ x: 1, y: 1, tileWord: 11 }]),
+    ]);
+
+    expect(Array.from(fullHistoryState.tiles)).toEqual([9, 1, 2, 3, 11, 10]);
+    expect(Array.from(replayState.tiles)).toEqual([9, 1, 2, 3, 11, 10]);
+    expect(Array.from(replayState.tiles)).toEqual(Array.from(fullHistoryState.tiles));
+    expect(Array.from(replayState.dirtyTileIndexes)).toEqual([4]);
+    expect(replayState.drawMode).toBe('patch');
   });
 });

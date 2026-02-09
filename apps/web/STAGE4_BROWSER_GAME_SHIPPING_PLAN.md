@@ -226,7 +226,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/map-state.test.ts` covers snapshot+patch reconstruction.
+- [x] `apps/web/src/game/runtime/map-state.test.ts` covers snapshot+patch reconstruction.
 - [ ] `apps/web/src/game/runtime/hud-state.test.ts` covers heads/message projection.
 - [ ] `apps/web/src/game/runtime/reducer.test.ts` covers sequence drops/gap behavior.
 - [ ] `apps/web/src/game/runtime.ordering-resync.test.ts` covers resync recovery with expanded payloads.
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
