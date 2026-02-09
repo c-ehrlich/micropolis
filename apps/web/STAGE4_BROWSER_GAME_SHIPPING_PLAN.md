@@ -265,7 +265,7 @@ Deletion execution notes:
 ### Verification checklist
 
 - [x] `packages/sim-core/src/actions/tool-actions.test.ts` remains green.
-- [ ] `packages/sim-core/src/actions/tool-actions.c-oracle.test.ts` remains green.
+- [x] `packages/sim-core/src/actions/tool-actions.c-oracle.test.ts` remains green.
 - [ ] `apps/web/src/game/runtime.command-lifecycle.test.ts` validates tool success+reject against authoritative state.
 - [ ] Manual: road/rail/wire/bulldoze/R/C/I cost and placement behavior match expected Micropolis semantics.
 
