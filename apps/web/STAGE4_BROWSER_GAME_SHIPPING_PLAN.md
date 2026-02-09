@@ -310,36 +310,36 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Drive Stage 4 HUD/messages/speed from real sim-core hook outputs (`uiSet`, `sendMes`, `sendMesAt`, `tickCount`).
+- [x] Drive Stage 4 HUD/messages/speed from real sim-core hook outputs (`uiSet`, `sendMes`, `sendMesAt`, `tickCount`).
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_update.c` (`DoUpdateHeads`, date/funds/options)
-- [ ] `ref/micropolis/src/sim/s_msg.c` (`SendMes`, `SendMesAt`, `doMessage`)
-- [ ] `ref/micropolis/src/sim/w_util.c` (`Pause`, `Resume`, `setSpeed`)
+- [x] `ref/micropolis/src/sim/w_update.c` (`DoUpdateHeads`, date/funds/options)
+- [x] `ref/micropolis/src/sim/s_msg.c` (`SendMes`, `SendMesAt`, `doMessage`)
+- [x] `ref/micropolis/src/sim/w_util.c` (`Pause`, `Resume`, `setSpeed`)
 
 ### TS references to review
 
-- [ ] `packages/sim-core/src/core/sim-context.ts`
-- [ ] `packages/sim-core/src/systems/date-time.ts`
-- [ ] `packages/sim-core/src/systems/messages.ts`
-- [ ] `apps/web/src/game/runtime/hud-state.ts`
-- [ ] `apps/web/src/routes/index.tsx`
-- [ ] `packages/sim-ui/IMPORTANT.md`
+- [x] `packages/sim-core/src/core/sim-context.ts`
+- [x] `packages/sim-core/src/systems/date-time.ts`
+- [x] `packages/sim-core/src/systems/messages.ts`
+- [x] `apps/web/src/game/runtime/hud-state.ts`
+- [x] `apps/web/src/routes/index.tsx`
+- [x] `packages/sim-ui/IMPORTANT.md`
 
 ### Implementation checklist
 
-- [ ] Wire `SimContext` hooks to host payload builders for HUD/message updates.
-- [ ] Feed Stage 4 UI labels from authoritative HUD state only.
-- [ ] Wire Stage 4 play/pause/speed controls to real sim speed state.
-- [ ] Preserve message timing/expiry/requeue behavior expected by C message flow.
+- [x] Wire `SimContext` hooks to host payload builders for HUD/message updates.
+- [x] Feed Stage 4 UI labels from authoritative HUD state only.
+- [x] Wire Stage 4 play/pause/speed controls to real sim speed state.
+- [x] Preserve message timing/expiry/requeue behavior expected by C message flow.
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/hud-state.test.ts` validates heads/message projection behavior.
-- [ ] `packages/sim-core/src/systems/messages.test.ts` and `packages/sim-core/src/systems/date-time.test.ts` remain green.
-- [ ] Manual: funds/date/demand/speed visibly update during simulation.
-- [ ] Manual: messages appear/expire correctly and coordinate messages carry x/y.
+- [x] `apps/web/src/game/runtime/hud-state.test.ts` validates heads/message projection behavior.
+- [x] `packages/sim-core/src/systems/messages.test.ts` and `packages/sim-core/src/systems/date-time.test.ts` remain green.
+- [x] Manual: funds/date/demand/speed visibly update during simulation.
+- [x] Manual: messages appear/expire correctly and coordinate messages carry x/y.
 
 ---
 
@@ -567,3 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+

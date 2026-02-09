@@ -226,12 +226,9 @@ function Stage4RuntimePanel() {
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
               <div>{state.hudState.fundsLabel}</div>
-              <div>Date: {state.hudState.dateLabel}</div>
-              <div>
-                Demand R/C/I: {state.hudState.demandR}/{state.hudState.demandC}/
-                {state.hudState.demandI}
-              </div>
-              <div>Speed: {formatSpeedLabel(state.hudState.speed)}</div>
+              <div>{state.hudState.dateDisplayLabel}</div>
+              <div>{state.hudState.demandLabel}</div>
+              <div>{state.hudState.speedLabel}</div>
             </div>
           </section>
 
@@ -446,18 +443,6 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
 }
 
 /**
- * Human-readable speed text formatter for the HUD panel.
- * Mirrors `UISetSpeed` paused-display behavior from `ref/micropolis/src/sim/w_util.c`.
- */
-function formatSpeedLabel(speed: number): string {
-  if (speed <= 0) {
-    return 'Paused';
-  }
-
-  return `x${speed}`;
-}
-
-/**
  * Runtime phase status text shown above Stage 2 reconnect/resync controls.
  * Mirrors reconnect/resync lifecycle intent from
  * `ref/micropolis/spec/integration/SPEC.md`.
@@ -507,11 +492,21 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
         padding: 8,
       }}
     >
-      {[...messages].reverse().map((message) => (
-        <div key={`${message.serverSeq}:${message.id}:${message.tick}`} style={{ marginBottom: 4 }}>
-          <span style={{ color: '#334155' }}>[{message.serverSeq}]</span> {message.text}
-        </div>
-      ))}
+      {[...messages].reverse().map((message) => {
+        const coordinateSuffix =
+          message.dispatch === 'sendMesAt' && message.x !== null && message.y !== null
+            ? ` @ (${message.x}, ${message.y})`
+            : '';
+        return (
+          <div
+            key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
+            style={{ marginBottom: 4 }}
+          >
+            <span style={{ color: '#334155' }}>[{message.serverSeq}]</span> {message.text}
+            {coordinateSuffix}
+          </div>
+        );
+      })}
     </div>
   );
 }

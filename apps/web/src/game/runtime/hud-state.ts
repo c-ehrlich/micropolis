@@ -66,12 +66,15 @@ export interface RuntimeHudOptionsState {
 export interface RuntimeHudState {
   fundsLabel: string;
   dateLabel: string;
+  dateDisplayLabel: string;
   dateMonth: number;
   dateYear: number;
   demandR: number;
   demandC: number;
   demandI: number;
+  demandLabel: string;
   speed: number;
+  speedLabel: string;
   options: RuntimeHudOptionsState;
   messages: readonly RuntimeHudMessageEvent[];
 }
@@ -82,15 +85,23 @@ export interface RuntimeHudState {
  * `ref/micropolis/src/sim/w_update.c`.
  */
 export function createInitialRuntimeHudState(): RuntimeHudState {
+  const dateLabel = 'Jan 1900';
+  const demandR = 0;
+  const demandC = 0;
+  const demandI = 0;
+  const speed = 0;
   return {
     fundsLabel: 'Funds: $0',
-    dateLabel: 'Jan 1900',
+    dateLabel,
+    dateDisplayLabel: formatDateDisplayLabel(dateLabel),
     dateMonth: 0,
     dateYear: 1900,
-    demandR: 0,
-    demandC: 0,
-    demandI: 0,
-    speed: 0,
+    demandR,
+    demandC,
+    demandI,
+    demandLabel: formatDemandLabel(demandR, demandC, demandI),
+    speed,
+    speedLabel: formatSpeedDisplayLabel(speed),
     options: {
       autoBudget: true,
       autoGo: true,
@@ -130,15 +141,24 @@ export function projectRuntimeHudState(
     return state;
   }
 
+  const dateLabel = parsed.dateLabel ?? state.dateLabel;
+  const demandR = parsed.demandR ?? state.demandR;
+  const demandC = parsed.demandC ?? state.demandC;
+  const demandI = parsed.demandI ?? state.demandI;
+  const speed = parsed.speed ?? state.speed;
+
   const nextState: RuntimeHudState = {
     fundsLabel: parsed.fundsLabel ?? state.fundsLabel,
-    dateLabel: parsed.dateLabel ?? state.dateLabel,
+    dateLabel,
+    dateDisplayLabel: formatDateDisplayLabel(dateLabel),
     dateMonth: parsed.dateMonth ?? state.dateMonth,
     dateYear: parsed.dateYear ?? state.dateYear,
-    demandR: parsed.demandR ?? state.demandR,
-    demandC: parsed.demandC ?? state.demandC,
-    demandI: parsed.demandI ?? state.demandI,
-    speed: parsed.speed ?? state.speed,
+    demandR,
+    demandC,
+    demandI,
+    demandLabel: formatDemandLabel(demandR, demandC, demandI),
+    speed,
+    speedLabel: formatSpeedDisplayLabel(speed),
     options:
       parsed.options === undefined ? state.options : mergeOptions(state.options, parsed.options),
     messages:
@@ -490,12 +510,15 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
   if (
     left.fundsLabel !== right.fundsLabel ||
     left.dateLabel !== right.dateLabel ||
+    left.dateDisplayLabel !== right.dateDisplayLabel ||
     left.dateMonth !== right.dateMonth ||
     left.dateYear !== right.dateYear ||
     left.demandR !== right.demandR ||
     left.demandC !== right.demandC ||
     left.demandI !== right.demandI ||
+    left.demandLabel !== right.demandLabel ||
     left.speed !== right.speed ||
+    left.speedLabel !== right.speedLabel ||
     left.options.autoBudget !== right.options.autoBudget ||
     left.options.autoGo !== right.options.autoGo ||
     left.options.autoBulldoze !== right.options.autoBulldoze ||
@@ -550,6 +573,23 @@ function mergeOptions(
 
 function formatDateLabel(month: number, year: number): string {
   return `${HUD_MONTH_LABELS[month] ?? 'Jan'} ${year}`;
+}
+
+function formatDateDisplayLabel(dateLabel: string): string {
+  return `Date: ${dateLabel}`;
+}
+
+function formatDemandLabel(demandR: number, demandC: number, demandI: number): string {
+  return `Demand R/C/I: ${demandR}/${demandC}/${demandI}`;
+}
+
+/**
+ * Formats the visible simulation speed text consumed by the Stage 4 HUD.
+ * Mirrors paused-speed display intent from `UISetSpeed` in
+ * `ref/micropolis/src/sim/w_util.c`.
+ */
+function formatSpeedDisplayLabel(speed: number): string {
+  return speed <= 0 ? 'Speed: Paused' : `Speed: x${speed}`;
 }
 
 function formatFundsLabel(funds: number): string {

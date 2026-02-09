@@ -9,6 +9,7 @@ import {
   initWillStuff,
   type MapStore,
   type SimContext,
+  type SimHooks,
   type SimState,
   type ToolContext,
 } from '../../../../packages/sim-core/src/index.ts';
@@ -25,6 +26,15 @@ const DEFAULT_STARTING_FUNDS = 20_000;
 export interface Stage4SimCoreAuthorityStateOptions {
   readonly seed?: number;
   readonly startingFunds?: number;
+  /**
+   * Optional hook overrides for Stage 4 host integrations.
+   * Mirrors `TickCount`/`SendMes`/`SendMesAt`/`UISet*` callback ownership across
+   * `ref/micropolis/src/sim/w_stubs.c`, `ref/micropolis/src/sim/s_msg.c`, and
+   * `ref/micropolis/src/sim/w_update.c`.
+   * Parity note: this is an integration seam for bridge payload projection; the
+   * underlying sim-core hook semantics remain 1:1 with C ownership.
+   */
+  readonly hooks?: Partial<SimHooks>;
 }
 
 /**
@@ -48,6 +58,7 @@ export class Stage4SimCoreAuthorityState {
       rng: createRng(options.seed),
       hooks: {
         tickCount: () => simState.Fcycle,
+        ...options.hooks,
       },
     });
 

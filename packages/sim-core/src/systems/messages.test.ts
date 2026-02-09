@@ -123,6 +123,120 @@ describe('doMessage parity', () => {
     updateDate(state, context);
     expect(state.MesNum).toBe(0);
   });
+
+  it('allows the same message id to dispatch again after expiry and requeue', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // First delivery: SendMes queues, then w_update.c updateDate invokes s_msg.c doMessage.
+    expect(sendMes(state, context, 12)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMes).toHaveBeenCalledTimes(1);
+    expect(hooks.sendMes).toHaveBeenLastCalledWith(12);
+
+    // Magic number source: s_msg.c doMessage expires active positive MesNum only when
+    // `TickCount() - LastMesTime > (60 * 30)`.
+    tick.now = 60 * 30 + 1;
+    updateDate(state, context);
+    expect(state.MesNum).toBe(0);
+
+    // After expiry, the same id should still be deliverable when re-enqueued.
+    expect(sendMes(state, context, 12)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMes).toHaveBeenCalledTimes(2);
+    expect(hooks.sendMes).toHaveBeenLastCalledWith(12);
+  });
+
+  it('plays first-display sounds only when a new message enters MesNum', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, makeSound: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // s_msg.c doMessage firstTime switch: message id 11 triggers "Siren".
+    expect(sendMes(state, context, 11)).toBe(true);
+    updateDate(state, context);
+    // sim-core sound mapping in messages.ts: city channel=0, siren sound id=4.
+    expect(hooks.makeSound).toHaveBeenCalledTimes(1);
+    expect(hooks.makeSound).toHaveBeenCalledWith(0, 4);
+
+    tick.now += 1;
+    updateDate(state, context);
+    // s_msg.c firstTime is false while the same MesNum remains active.
+    expect(hooks.makeSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays firstTime sounds for picture-to-text message requeue', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, makeSound: vi.fn(), sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // s_msg.c doMessage firstTime switch: message id 30 plays "Explosion-Low" then "Siren".
+    // Picture messages requeue text via `MessagePort = pictId`, so the switch runs again next tick.
+    expect(sendMes(state, context, -30)).toBe(true);
+
+    updateDate(state, context);
+    tick.now += 1;
+    updateDate(state, context);
+
+    // sim-core sound mapping in messages.ts:
+    // city channel=0, explosion-low=6, siren=4.
+    expect(hooks.makeSound.mock.calls).toEqual([
+      [0, 6],
+      [0, 4],
+      [0, 6],
+      [0, 4],
+    ]);
+  });
+
+  it('re-dispatches one latched SendMesAt message when autoGo toggles on', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, sendMesAt: vi.fn(), sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+    state.autoGo = false;
+
+    // s_msg.c SendMesAt + doMessage:
+    // with autoGo disabled, MesX/MesY remain latched after delivery.
+    expect(sendMesAt(state, context, 12, 4, 9)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(1);
+    expect(state.MesX).toBe(4);
+    expect(state.MesY).toBe(9);
+
+    // Same message should remain de-duplicated while autoGo is still disabled.
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(1);
+
+    // s_msg.c doMessage: enabling autoGo with latched MesX/MesY triggers DoAutoGoto,
+    // then consumes MesX/MesY (`MesX=MesY=0`).
+    state.autoGo = true;
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(2);
+    expect(hooks.sendMesAt).toHaveBeenLastCalledWith(12, 4, 9);
+    expect(state.MesX).toBe(0);
+    expect(state.MesY).toBe(0);
+
+    // After coordinates are consumed, text remains the same active message and should
+    // stay de-duplicated (SetMessageField parity in s_msg.c).
+    updateDate(state, context);
+    expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
 });
 
 describe('CheckGrowth', () => {

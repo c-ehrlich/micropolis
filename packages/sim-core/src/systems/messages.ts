@@ -4,7 +4,7 @@ import type { SimState } from '../core/sim-state.ts';
 type LastDispatched =
   | { kind: 'none' }
   | { kind: 'mes'; id: number }
-  | { kind: 'mesAt'; id: number; x: number; y: number };
+  | { kind: 'mesAt'; id: number; x: number; y: number; autoGo: boolean };
 
 const LAST_DISPATCHED = new WeakMap<SimState, LastDispatched>();
 
@@ -14,6 +14,19 @@ function getLastDispatched(state: SimState): LastDispatched {
 
 function setLastDispatched(state: SimState, next: LastDispatched): void {
   LAST_DISPATCHED.set(state, next);
+}
+
+/**
+ * Clears runtime dispatch de-duplication state when no active message remains.
+ * Mirrors the lifecycle boundary where `doMessage` in `ref/micropolis/src/sim/s_msg.c`
+ * no longer has a current `MesNum` to present.
+ *
+ * Parity note: C de-duplicates by last rendered text (`SetMessageField` globals),
+ * while sim-core de-duplicates hook dispatches by id/coords in this module. Clearing
+ * this cache at `MesNum == 0` preserves expiry/requeue behavior for Stage 5 message feeds.
+ */
+function clearLastDispatched(state: SimState): void {
+  setLastDispatched(state, { kind: 'none' });
 }
 
 function dispatchMes(state: SimState, context: SimContext, id: number): void {
@@ -40,7 +53,7 @@ function dispatchMes(state: SimState, context: SimContext, id: number): void {
   // at the id/coordinate level, since message string lookup lives in the UI layer.
   const prev = getLastDispatched(state);
   if (!wantsAt) {
-    if (prev.kind === 'mes' && prev.id === id) {
+    if (prev.kind !== 'none' && prev.id === id) {
       return;
     }
     setLastDispatched(state, { kind: 'mes', id });
@@ -48,11 +61,73 @@ function dispatchMes(state: SimState, context: SimContext, id: number): void {
     return;
   }
 
-  if (prev.kind === 'mesAt' && prev.id === id && prev.x === x && prev.y === y) {
+  if (
+    prev.kind === 'mesAt' &&
+    prev.id === id &&
+    prev.x === x &&
+    prev.y === y &&
+    prev.autoGo === state.autoGo
+  ) {
     return;
   }
-  setLastDispatched(state, { kind: 'mesAt', id, x, y });
+  setLastDispatched(state, { kind: 'mesAt', id, x, y, autoGo: state.autoGo });
   context.hooks.sendMesAt(id, x, y);
+}
+
+const MESSAGE_SOUND_CHANNEL_CITY = 0;
+const MESSAGE_SOUND_HONK_MED = 1;
+const MESSAGE_SOUND_HONK_LOW = 2;
+const MESSAGE_SOUND_HONK_HIGH = 3;
+const MESSAGE_SOUND_SIREN = 4;
+const MESSAGE_SOUND_MONSTER = 5;
+const MESSAGE_SOUND_EXPLOSION_LOW = 6;
+const MESSAGE_SOUND_EXPLOSION_HIGH = 7;
+
+/**
+ * First-display sound effects for queued messages.
+ * Mirrors the `firstTime` sound switch in `doMessage` from
+ * `ref/micropolis/src/sim/s_msg.c`.
+ *
+ * Parity note: C uses named sound strings via `MakeSound("city", "...")`.
+ * sim-core forwards stable numeric `(channel, sound)` ids through `SimHooks.makeSound`.
+ */
+function playFirstDisplaySound(state: SimState, context: SimContext): void {
+  const messageId = state.MesNum < 0 ? -state.MesNum : state.MesNum;
+
+  switch (messageId) {
+    case 12:
+      if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_MED);
+      } else if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_LOW);
+      } else if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_HIGH);
+      }
+      return;
+    case 11:
+    case 20:
+    case 22:
+    case 23:
+    case 24:
+    case 25:
+    case 26:
+    case 27:
+    case 44:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+    case 21:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_MONSTER);
+      return;
+    case 30:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+    case 43:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_HIGH);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+  }
 }
 
 /**
@@ -144,6 +219,7 @@ export function sendMesAt(
  *
  * Mirrors `doMessage` in `ref/micropolis/src/sim/s_msg.c` (core behavior, 1:1):
  * - Consumes `MessagePort` into `MesNum` and clears the port.
+ * - Triggers first-display message sounds from the `firstTime` switch table.
  * - Requeues picture messages by setting `MessagePort = pictId` so the text message
  *   is shown on the next tick.
  * - Expires active non-picture messages after `(60 * 30)` ticks via `TickCount()`.
@@ -153,13 +229,18 @@ export function sendMesAt(
  */
 export function doMessage(state: SimState, context: SimContext): void {
   const tick = context.hooks.tickCount();
+  let firstTime = false;
 
   if (state.MessagePort) {
     state.MesNum = state.MessagePort;
     state.MessagePort = 0;
     state.LastMesTime = tick;
+    firstTime = true;
   } else {
-    if (state.MesNum === 0) return;
+    if (state.MesNum === 0) {
+      clearLastDispatched(state);
+      return;
+    }
 
     // s_msg.c: picture messages flip sign and reset the timer when there is no port input.
     if (state.MesNum < 0) {
@@ -167,14 +248,20 @@ export function doMessage(state: SimState, context: SimContext): void {
       state.LastMesTime = tick;
     } else if (tick - state.LastMesTime > 60 * 30) {
       state.MesNum = 0;
+      clearLastDispatched(state);
       return;
     }
+  }
+
+  if (firstTime) {
+    playFirstDisplaySound(state, context);
   }
 
   if (state.MesNum >= 0) {
     if (state.MesNum === 0) return;
     if (state.MesNum > 60) {
       state.MesNum = 0;
+      clearLastDispatched(state);
       return;
     }
 
