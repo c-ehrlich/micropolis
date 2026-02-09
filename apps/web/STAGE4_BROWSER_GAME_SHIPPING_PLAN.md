@@ -175,7 +175,7 @@ Deletion execution notes:
 - [x] `apps/web/src/game/runtime.ts`
 - [x] `packages/sim-core/src/core/sim-state.ts`
 - [x] `packages/sim-core/src/core/sim-context.ts`
-- [ ] `packages/sim-core/src/sim/simulate.ts`
+- [x] `packages/sim-core/src/sim/simulate.ts`
 - [ ] `packages/sim-core/src/systems/init.ts`
 
 ### Implementation checklist
@@ -567,6 +567,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
