@@ -9,16 +9,19 @@ describe('web route runtime boundaries', () => {
     expect(ROUTE_SOURCE).toContain('apps/web/src/game/runtime/protocol.ts');
   });
 
-  it('keeps a top-level runtime view toggle so Stage 4 and Stage 2 panels are both reachable', () => {
-    expect(ROUTE_SOURCE).toContain('Stage 4 Runtime (Default)');
-    expect(ROUTE_SOURCE).toContain('Stage 2 Demo Map');
+  it('removes the Stage 2/Stage 4 runtime mode toggle from the primary `/` route', () => {
+    expect(ROUTE_SOURCE).not.toContain('Stage 4 Runtime (Default)');
+    expect(ROUTE_SOURCE).not.toContain('Stage 2 Demo Map');
+    expect(ROUTE_SOURCE).toContain('<Stage4RuntimePanel />');
   });
 
   it('projects Stage 4 from authoritative snapshot/patch runtime state', () => {
     expect(ROUTE_SOURCE).toContain('createWebHostRuntime({ host: new DemoMapHost() })');
+    expect(ROUTE_SOURCE).toContain('mapState={state.mapState}');
+    expect(ROUTE_SOURCE).toContain('tileSize={STAGE4_MAP_TILE_SIZE}');
     expect(ROUTE_SOURCE).toContain("kind: 'tool'");
     expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
-    expect(ROUTE_SOURCE).toContain('Authoritative Snapshot/Patch Map');
+    expect(ROUTE_SOURCE).toContain('Stage 4 Runtime');
   });
 
   it('does not import sim-core directly from UI route components', () => {

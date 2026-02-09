@@ -2,20 +2,40 @@ import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-b
 import type { SequencedHostEnvelope } from './protocol.ts';
 
 const EMPTY_DIRTY_TILE_INDEXES = new Uint32Array(0);
+const EMPTY_DIRTY_RECTS: readonly RuntimeMapDirtyRect[] = Object.freeze([]);
 
 /**
  * Last map draw mode emitted by one authoritative envelope.
- * Mirrors `DoUpdateMap` full redraw vs changed-region intent from
- * `ref/micropolis/src/sim/w_map.c`; difference: Stage 2 exposes this
- * explicitly for the React canvas renderer.
+ * Mirrors `MemDrawMap` draw-proc dispatch intent in
+ * `ref/micropolis/src/sim/g_map.c`.
+ * Parity note: this Stage 4 transport-level mode (`none`/`snapshot`/`patch`)
+ * intentionally differs from C thematic map states (`ALMAP`..`DYMAP`) and is
+ * used only to route full vs dirty redraw behavior in the web canvas.
  */
 export type RuntimeMapDrawMode = 'none' | 'snapshot' | 'patch';
+
+/**
+ * Dirty tile rectangle for one runtime patch redraw.
+ * Mirrors the invalid-region ownership used by map views in
+ * `DoUpdateMap` from `ref/micropolis/src/sim/w_map.c`.
+ * Parity note: Micropolis C redraws map views by invalidation state, while
+ * this runtime exposes explicit tile-space rects for browser patch repainting.
+ */
+export interface RuntimeMapDirtyRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 /**
  * Runtime map projection consumed by the Stage 2 canvas renderer.
  * Mirrors `MemDrawMap` map-buffer ownership in `ref/micropolis/src/sim/g_map.c`.
  * Difference: this stores one explicit typed tile buffer instead of the C
  * global map memory macros.
+ * Parity note: `drawMode`/`dirtyTileIndexes`/`dirtyRects` are map-view owned
+ * redraw markers, matching `view->invalid` lifecycle ownership in `DoUpdateMap` from
+ * `ref/micropolis/src/sim/w_map.c`.
  */
 export interface RuntimeMapState {
   hasSnapshot: boolean;
@@ -23,6 +43,7 @@ export interface RuntimeMapState {
   height: number;
   tiles: Uint16Array;
   dirtyTileIndexes: Uint32Array;
+  dirtyRects: readonly RuntimeMapDirtyRect[];
   drawMode: RuntimeMapDrawMode;
   renderEpoch: number;
 }
@@ -38,6 +59,7 @@ export function createInitialRuntimeMapState(): RuntimeMapState {
     height: 0,
     tiles: new Uint16Array(0),
     dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
+    dirtyRects: EMPTY_DIRTY_RECTS,
     drawMode: 'none',
     renderEpoch: 0,
   };
@@ -47,7 +69,8 @@ export function createInitialRuntimeMapState(): RuntimeMapState {
  * Projects snapshot/patch host envelopes into the runtime map projection.
  * Mirrors ordered map baseline + incremental application behavior across
  * `ref/micropolis/src/sim/w_map.c` and `ref/micropolis/src/sim/g_map.c`.
- * Difference: this consumes bridge payloads instead of direct C globals.
+ * Difference: this consumes bridge payloads instead of direct C globals, and
+ * non-map envelopes intentionally do not clear map redraw markers.
  */
 export function projectRuntimeMapState(
   state: RuntimeMapState,
@@ -61,7 +84,7 @@ export function projectRuntimeMapState(
     return applyPatchPayload(state, envelope.payload);
   }
 
-  return resetMapDrawMarkers(state);
+  return state;
 }
 
 interface SnapshotPayload {
@@ -78,7 +101,7 @@ interface PatchTileDelta {
 function applySnapshotPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
   const parsed = parseSnapshotPayload(payload);
   if (parsed === null) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   return {
@@ -87,6 +110,7 @@ function applySnapshotPayload(state: RuntimeMapState, payload: unknown): Runtime
     height: parsed.height,
     tiles: parsed.tiles,
     dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
+    dirtyRects: EMPTY_DIRTY_RECTS,
     drawMode: 'snapshot',
     renderEpoch: state.renderEpoch + 1,
   };
@@ -94,12 +118,12 @@ function applySnapshotPayload(state: RuntimeMapState, payload: unknown): Runtime
 
 function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
   if (!state.hasSnapshot) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   const deltas = parsePatchPayload(payload, state.width, state.height);
   if (deltas === null || deltas.length === 0) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   let nextTiles: Uint16Array | null = null;
@@ -123,27 +147,17 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
   }
 
   if (nextTiles === null || dirty.length === 0) {
-    return resetMapDrawMarkers(state);
-  }
-
-  return {
-    ...state,
-    tiles: nextTiles,
-    dirtyTileIndexes: Uint32Array.from(dirty),
-    drawMode: 'patch',
-    renderEpoch: state.renderEpoch + 1,
-  };
-}
-
-function resetMapDrawMarkers(state: RuntimeMapState): RuntimeMapState {
-  if (state.drawMode === 'none' && state.dirtyTileIndexes.length === 0) {
     return state;
   }
 
+  const dirtyTileIndexes = normalizeDirtyTileIndexes(dirty, state.tiles.length);
   return {
     ...state,
-    dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
-    drawMode: 'none',
+    tiles: nextTiles,
+    dirtyTileIndexes,
+    dirtyRects: buildDirtyRectsFromDirtyTileIndexes(dirtyTileIndexes, state.width),
+    drawMode: 'patch',
+    renderEpoch: state.renderEpoch + 1,
   };
 }
 
@@ -300,6 +314,111 @@ function convertSnapshotTileWordsToRuntimeTiles(
  */
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
+}
+
+function normalizeDirtyTileIndexes(indexes: readonly number[], tileCount: number): Uint32Array {
+  if (indexes.length === 0) {
+    return EMPTY_DIRTY_TILE_INDEXES;
+  }
+
+  const unique = [...new Set(indexes)]
+    .filter((index) => index >= 0 && index < tileCount)
+    .sort((left, right) => left - right);
+  if (unique.length === 0) {
+    return EMPTY_DIRTY_TILE_INDEXES;
+  }
+
+  return Uint32Array.from(unique);
+}
+
+function buildDirtyRectsFromDirtyTileIndexes(
+  indexes: Uint32Array,
+  width: number,
+): readonly RuntimeMapDirtyRect[] {
+  if (indexes.length === 0 || width <= 0) {
+    return EMPTY_DIRTY_RECTS;
+  }
+
+  const firstIndex = indexes[0];
+  if (firstIndex === undefined) {
+    return EMPTY_DIRTY_RECTS;
+  }
+
+  const rowRuns: RuntimeMapDirtyRect[] = [];
+  let runStartIndex = firstIndex;
+  let previousIndex = firstIndex;
+
+  for (let cursor = 1; cursor < indexes.length; cursor += 1) {
+    const currentIndex = indexes[cursor];
+    if (currentIndex === undefined) {
+      continue;
+    }
+
+    const previousY = Math.trunc(previousIndex / width);
+    const currentY = Math.trunc(currentIndex / width);
+    if (currentY === previousY && currentIndex === previousIndex + 1) {
+      previousIndex = currentIndex;
+      continue;
+    }
+
+    rowRuns.push(buildRowRunRect(runStartIndex, previousIndex, width));
+    runStartIndex = currentIndex;
+    previousIndex = currentIndex;
+  }
+
+  rowRuns.push(buildRowRunRect(runStartIndex, previousIndex, width));
+  return mergeAdjacentRowRuns(rowRuns);
+}
+
+function buildRowRunRect(startIndex: number, endIndex: number, width: number): RuntimeMapDirtyRect {
+  const y = Math.trunc(startIndex / width);
+  const startX = startIndex - y * width;
+  const endX = endIndex - y * width;
+  return {
+    x: startX,
+    y,
+    width: endX - startX + 1,
+    height: 1,
+  };
+}
+
+function mergeAdjacentRowRuns(
+  runs: readonly RuntimeMapDirtyRect[],
+): readonly RuntimeMapDirtyRect[] {
+  if (runs.length <= 1) {
+    return runs;
+  }
+
+  const sortedRuns = [...runs].sort((left, right) => {
+    if (left.x !== right.x) {
+      return left.x - right.x;
+    }
+    if (left.width !== right.width) {
+      return left.width - right.width;
+    }
+    return left.y - right.y;
+  });
+
+  const merged: RuntimeMapDirtyRect[] = [];
+  for (const run of sortedRuns) {
+    const previous = merged.at(-1);
+    if (
+      previous !== undefined &&
+      previous.x === run.x &&
+      previous.width === run.width &&
+      previous.y + previous.height === run.y
+    ) {
+      merged[merged.length - 1] = {
+        ...previous,
+        height: previous.height + run.height,
+      };
+      continue;
+    }
+
+    merged.push(run);
+  }
+
+  return merged;
 }
 
 function toUint16Array(value: unknown, expectedLength: number): Uint16Array | null {

@@ -275,34 +275,34 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace Stage 4 placement-dot canvas with authoritative tile-map rendering.
+- [x] Replace Stage 4 placement-dot canvas with authoritative tile-map rendering.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/g_bigmap.c` (tile draw loops, `LOMASK` usage)
-- [ ] `ref/micropolis/src/sim/g_map.c` (map-state draw modes)
-- [ ] `ref/micropolis/src/sim/w_map.c` (map update ownership)
-- [ ] `ref/micropolis/src/sim/g_ani.c` (tile animation masking)
+- [x] `ref/micropolis/src/sim/g_bigmap.c` (tile draw loops, `LOMASK` usage)
+- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw modes)
+- [x] `ref/micropolis/src/sim/w_map.c` (map update ownership)
+- [x] `ref/micropolis/src/sim/g_ani.c` (tile animation masking)
 
 ### TS references to review
 
-- [ ] `apps/web/src/routes/index.tsx`
-- [ ] `apps/web/src/game/map/map-canvas.tsx`
-- [ ] `apps/web/src/game/runtime/map-state.ts`
-- [ ] `packages/sim-core/src/core/constants.ts`
+- [x] `apps/web/src/routes/index.tsx`
+- [x] `apps/web/src/game/map/map-canvas.tsx`
+- [x] `apps/web/src/game/runtime/map-state.ts`
+- [x] `packages/sim-core/src/core/constants.ts`
 
 ### Implementation checklist
 
-- [ ] Stage 4 panel reads and renders authoritative `RuntimeMapState`.
-- [ ] Tile lookup masks map words with `TileMask.LOMASK` before sprite/debug lookup.
-- [ ] Full redraw occurs on snapshot; patch redraw occurs only on dirty tiles/rects.
-- [ ] Remove Stage 4 placement-only canvas from primary UI path.
+- [x] Stage 4 panel reads and renders authoritative `RuntimeMapState`.
+- [x] Tile lookup masks map words with `TileMask.LOMASK` before sprite/debug lookup.
+- [x] Full redraw occurs on snapshot; patch redraw occurs only on dirty tiles/rects.
+- [x] Remove Stage 4 placement-only canvas from primary UI path.
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/map-state.test.ts` verifies snapshot and patch draw modes.
-- [ ] Manual: Stage 4 shows full map immediately after snapshot.
-- [ ] Manual: patch updates no longer appear as random debug noise paint.
+- [x] `apps/web/src/game/runtime/map-state.test.ts` verifies snapshot and patch draw modes.
+- [x] Manual: Stage 4 shows full map immediately after snapshot.
+- [x] Manual: patch updates no longer appear as random debug noise paint.
 
 ---
 
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
