@@ -322,7 +322,7 @@ Deletion execution notes:
 
 - [ ] `packages/sim-core/src/core/sim-context.ts`
 - [ ] `packages/sim-core/src/systems/date-time.ts`
-- [ ] `packages/sim-core/src/systems/messages.ts`
+- [x] `packages/sim-core/src/systems/messages.ts`
 - [ ] `apps/web/src/game/runtime/hud-state.ts`
 - [ ] `apps/web/src/routes/index.tsx`
 - [ ] `packages/sim-ui/IMPORTANT.md`

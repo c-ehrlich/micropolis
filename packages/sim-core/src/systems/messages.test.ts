@@ -172,6 +172,43 @@ describe('doMessage parity', () => {
       [0, 4],
     ]);
   });
+
+  it('re-dispatches one latched SendMesAt message when autoGo toggles on', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, sendMesAt: vi.fn(), sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+    state.autoGo = false;
+
+    // s_msg.c SendMesAt + doMessage:
+    // with autoGo disabled, MesX/MesY remain latched after delivery.
+    expect(sendMesAt(state, context, 12, 4, 9)).toBe(true);
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(1);
+    expect(state.MesX).toBe(4);
+    expect(state.MesY).toBe(9);
+
+    // Same message should remain de-duplicated while autoGo is still disabled.
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(1);
+
+    // s_msg.c doMessage: enabling autoGo with latched MesX/MesY triggers DoAutoGoto,
+    // then consumes MesX/MesY (`MesX=MesY=0`).
+    state.autoGo = true;
+    updateDate(state, context);
+    expect(hooks.sendMesAt).toHaveBeenCalledTimes(2);
+    expect(hooks.sendMesAt).toHaveBeenLastCalledWith(12, 4, 9);
+    expect(state.MesX).toBe(0);
+    expect(state.MesY).toBe(0);
+
+    // After coordinates are consumed, text remains the same active message and should
+    // stay de-duplicated (SetMessageField parity in s_msg.c).
+    updateDate(state, context);
+    expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
 });
 
 describe('CheckGrowth', () => {

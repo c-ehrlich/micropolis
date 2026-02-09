@@ -4,7 +4,7 @@ import type { SimState } from '../core/sim-state.ts';
 type LastDispatched =
   | { kind: 'none' }
   | { kind: 'mes'; id: number }
-  | { kind: 'mesAt'; id: number; x: number; y: number };
+  | { kind: 'mesAt'; id: number; x: number; y: number; autoGo: boolean };
 
 const LAST_DISPATCHED = new WeakMap<SimState, LastDispatched>();
 
@@ -40,7 +40,7 @@ function dispatchMes(state: SimState, context: SimContext, id: number): void {
   // at the id/coordinate level, since message string lookup lives in the UI layer.
   const prev = getLastDispatched(state);
   if (!wantsAt) {
-    if (prev.kind === 'mes' && prev.id === id) {
+    if (prev.kind !== 'none' && prev.id === id) {
       return;
     }
     setLastDispatched(state, { kind: 'mes', id });
@@ -48,10 +48,16 @@ function dispatchMes(state: SimState, context: SimContext, id: number): void {
     return;
   }
 
-  if (prev.kind === 'mesAt' && prev.id === id && prev.x === x && prev.y === y) {
+  if (
+    prev.kind === 'mesAt' &&
+    prev.id === id &&
+    prev.x === x &&
+    prev.y === y &&
+    prev.autoGo === state.autoGo
+  ) {
     return;
   }
-  setLastDispatched(state, { kind: 'mesAt', id, x, y });
+  setLastDispatched(state, { kind: 'mesAt', id, x, y, autoGo: state.autoGo });
   context.hooks.sendMesAt(id, x, y);
 }
 
