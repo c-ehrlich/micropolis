@@ -146,6 +146,7 @@ Deletion execution notes:
 
 - [x] Canonical bridge contract is selected and documented as the only runtime contract for upcoming web work.
 - [x] Single surviving UI surface (`/`) is selected and duplicate protocol surface deletion is planned.
+- Implementation trace (2026-02-09): `apps/web/src/routes/index.tsx` now carries an explicit Stage 0 lock marker for surviving route `/` and names the duplicate protocol modules scheduled for deletion (`apps/web/src/game/core-host.ts`, `apps/web/src/game/runtime/protocol.ts`) after bridge-contract convergence.
 - [ ] Snapshot/patch, resync, funds, and save/load semantics are fully locked.
 - [ ] Stage 1+ can proceed without additional architecture decisions.
 

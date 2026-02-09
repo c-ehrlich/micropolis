@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import ROUTE_SOURCE from './index.tsx?raw';
 
 describe('web route runtime boundaries', () => {
+  it('documents Stage 0 surface convergence on the surviving `/` gameplay route', () => {
+    expect(ROUTE_SOURCE).toContain("const SURVIVING_GAMEPLAY_ROUTE_PATH = '/'");
+    expect(ROUTE_SOURCE).toContain('apps/web/src/game/core-host.ts');
+    expect(ROUTE_SOURCE).toContain('apps/web/src/game/runtime/protocol.ts');
+  });
+
   it('keeps a top-level runtime view toggle so Stage 4 and Stage 2 panels are both reachable', () => {
     expect(ROUTE_SOURCE).toContain('Stage 4 Runtime (Default)');
     expect(ROUTE_SOURCE).toContain('Stage 2 Demo Map');
