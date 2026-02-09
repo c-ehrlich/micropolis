@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'vitest';
 
 import type { HostMode } from './core-host';
-import { createCoreHost, DEFAULT_HOST_MODE, resolveHostMode } from './host-factory';
+import {
+  createCoreHost,
+  DEFAULT_HOST_MODE,
+  DEFAULT_STAGE4_AUTHORITY_MODE,
+  resolveHostMode,
+  resolveStage4AuthorityMode,
+} from './host-factory';
 import { createGameRuntime } from './runtime';
 
 /**
@@ -35,6 +41,24 @@ describe('resolveHostMode', () => {
     expect(() => resolveHostMode({ env: { VITE_CORE_HOST_MODE: 'invalid-mode' } })).toThrow(
       'Unsupported host mode: invalid-mode',
     );
+  });
+});
+
+describe('resolveStage4AuthorityMode', () => {
+  test('defaults to sim-core authority when no config is provided', () => {
+    expect(resolveStage4AuthorityMode({ env: {} })).toBe(DEFAULT_STAGE4_AUTHORITY_MODE);
+  });
+
+  test('reads deterministic authority mode from env config', () => {
+    expect(
+      resolveStage4AuthorityMode({ env: { VITE_STAGE4_AUTHORITY_MODE: 'deterministic' } }),
+    ).toBe('deterministic');
+  });
+
+  test('throws on unsupported authority mode strings', () => {
+    expect(() =>
+      resolveStage4AuthorityMode({ env: { VITE_STAGE4_AUTHORITY_MODE: 'invalid-authority-mode' } }),
+    ).toThrow('Unsupported stage4 authority mode: invalid-authority-mode');
   });
 });
 

@@ -158,7 +158,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace Stage 4 deterministic command authority with a real sim-core-backed authority loop that owns `SimState`, `SimContext`, `ToolContext`, and ticking.
+- [x] Replace Stage 4 deterministic command authority with a real sim-core-backed authority loop that owns `SimState`, `SimContext`, `ToolContext`, and ticking.
 
 ### C references to review
 

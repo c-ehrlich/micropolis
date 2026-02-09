@@ -1,14 +1,22 @@
 import type { CoreHost, HostMode } from './core-host';
 import { DoHost } from './do-host';
 import { LocalHost } from './local-host';
+import type { Stage4AuthorityMode } from './sim-core-command-authority';
 
 /**
  * Default host mode for `apps/web`.
  * Mirrors Micropolis single-process default behavior in `ref/micropolis/src/sim/w_sim.c`
  * where simulation runs locally unless NET pathways are explicitly used.
- * Parity note: this intentionally defaults to LocalHost for deterministic local play.
+ * Parity note: this intentionally defaults to LocalHost for in-process authority play.
  */
 export const DEFAULT_HOST_MODE: HostMode = 'local';
+/**
+ * Default Stage 4 authority engine for web runtime host wiring.
+ * Mirrors Stage 1 migration intent to make sim-core the authoritative owner of
+ * simulation state/ticking, aligned with `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: deterministic fallback remains available only as an explicit opt-in.
+ */
+export const DEFAULT_STAGE4_AUTHORITY_MODE: Stage4AuthorityMode = 'sim-core';
 
 /**
  * Minimal environment input used for host mode resolution.
@@ -18,6 +26,7 @@ export const DEFAULT_HOST_MODE: HostMode = 'local';
  */
 export interface HostFactoryEnv {
   readonly VITE_CORE_HOST_MODE?: string;
+  readonly VITE_STAGE4_AUTHORITY_MODE?: string;
 }
 
 /**
@@ -27,6 +36,7 @@ export interface HostFactoryEnv {
  */
 export interface CreateCoreHostOptions {
   readonly mode?: HostMode;
+  readonly authorityMode?: Stage4AuthorityMode;
   readonly env?: HostFactoryEnv;
   readonly createLocalHost?: () => CoreHost;
   readonly createDoHost?: () => CoreHost;
@@ -53,6 +63,30 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
 }
 
 /**
+ * Resolve Stage 4 authority mode from explicit options, then env, then sim-core default.
+ * Mirrors Stage 1 host-authority migration intent rooted in `ref/micropolis/src/sim/w_sim.c`
+ * and simulation ownership in `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: fallback to deterministic authority is a temporary TypeScript migration seam.
+ */
+export function resolveStage4AuthorityMode(
+  options: CreateCoreHostOptions = {},
+): Stage4AuthorityMode {
+  const configuredMode =
+    options.authorityMode ??
+    options.env?.VITE_STAGE4_AUTHORITY_MODE ??
+    import.meta.env.VITE_STAGE4_AUTHORITY_MODE;
+  if (configuredMode === undefined || configuredMode === '') {
+    return DEFAULT_STAGE4_AUTHORITY_MODE;
+  }
+
+  if (!isStage4AuthorityMode(configuredMode)) {
+    throw new Error(`Unsupported stage4 authority mode: ${configuredMode}`);
+  }
+
+  return configuredMode;
+}
+
+/**
  * Create the selected `CoreHost` implementation from one centralized path.
  * Mirrors Micropolis command routing consistency in `ref/micropolis/src/sim/w_sim.c`,
  * where UI-facing command flow does not branch by transport-specific business logic.
@@ -60,11 +94,16 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
  */
 export function createCoreHost(options: CreateCoreHostOptions = {}): CoreHost {
   const mode = resolveHostMode(options);
-  const createLocalHost = options.createLocalHost ?? (() => new LocalHost());
-  const createDoHost = options.createDoHost ?? (() => new DoHost());
+  const authorityMode = resolveStage4AuthorityMode(options);
+  const createLocalHost = options.createLocalHost ?? (() => new LocalHost({ authorityMode }));
+  const createDoHost = options.createDoHost ?? (() => new DoHost({ authorityMode }));
   return mode === 'do' ? createDoHost() : createLocalHost();
 }
 
 function isHostMode(value: string): value is HostMode {
   return value === 'local' || value === 'do';
+}
+
+function isStage4AuthorityMode(value: string): value is Stage4AuthorityMode {
+  return value === 'sim-core' || value === 'deterministic';
 }

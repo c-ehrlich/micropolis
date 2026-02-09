@@ -1,6 +1,11 @@
 import type { CoreHost, CoreHostCommand, CoreHostEvent, CoreHostEventListener } from './core-host';
-import { DeterministicCommandAuthority } from './deterministic-command-authority';
 import { createHelloPayload, type HelloPayload, type HelloVersions } from './handshake';
+import {
+  createStage4CommandAuthority,
+  type SimCoreAuthorityTickScheduler,
+  type Stage4AuthorityMode,
+  type Stage4CommandAuthority,
+} from './sim-core-command-authority';
 
 /**
  * Configuration for Durable Object host bootstrap identity and version payload.
@@ -12,6 +17,9 @@ export interface DoHostOptions {
   readonly roomId?: string;
   readonly clientId?: string;
   readonly helloVersions?: Partial<HelloVersions>;
+  readonly authorityMode?: Stage4AuthorityMode;
+  readonly authorityTickIntervalMs?: number;
+  readonly authorityTickScheduler?: SimCoreAuthorityTickScheduler;
 }
 
 /**
@@ -25,7 +33,7 @@ export class DoHost implements CoreHost {
   public readonly mode = 'do' as const;
   private readonly listeners = new Set<CoreHostEventListener>();
   private readonly helloPayload: HelloPayload;
-  private readonly commandAuthority = new DeterministicCommandAuthority({ mode: this.mode });
+  private readonly commandAuthority: Stage4CommandAuthority;
   private connected = false;
 
   public constructor(private readonly options: DoHostOptions = {}) {
@@ -36,16 +44,24 @@ export class DoHost implements CoreHost {
       },
       this.options.helloVersions,
     );
+    this.commandAuthority = createStage4CommandAuthority({
+      mode: this.mode,
+      authorityMode: this.options.authorityMode,
+      tickIntervalMs: this.options.authorityTickIntervalMs,
+      tickScheduler: this.options.authorityTickScheduler,
+    });
   }
 
   public connect(): void {
     this.connected = true;
+    this.commandAuthority.connect?.();
     this.emitEvent({ type: 'connected', mode: this.mode });
     this.emitEvent({ type: 'hello', mode: this.mode, payload: this.helloPayload });
   }
 
   public disconnect(): void {
     this.connected = false;
+    this.commandAuthority.disconnect?.();
     this.emitEvent({ type: 'disconnected', mode: this.mode });
   }
 
