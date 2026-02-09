@@ -74,6 +74,14 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       vi.advanceTimersByTime(20);
 
       expect(coordinateMessages).toContainEqual({ id: 14, x: 7, y: 9 });
+      expect(runtime.getState().hudState.messages).toContainEqual(
+        expect.objectContaining({
+          id: 14,
+          dispatch: 'sendMesAt',
+          x: 7,
+          y: 9,
+        }),
+      );
     } finally {
       runtime.disconnect();
       vi.useRealTimers();
@@ -126,8 +134,23 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 180 });
     const runtime = createWebHostRuntime({ host });
+    let message12DispatchCount = 0;
 
     try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const deltas = event.envelope.payload.messageDeltas;
+        if (deltas === undefined) {
+          return;
+        }
+        for (const message of deltas) {
+          if (message.id === 12) {
+            message12DispatchCount += 1;
+          }
+        }
+      });
       runtime.connect();
 
       const authority = host as unknown as {
@@ -156,12 +179,20 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       vi.advanceTimersByTime(500);
       expect(authority.simState.MesNum).toBe(12);
+      expect(message12DispatchCount).toBe(1);
 
       vi.advanceTimersByTime(29_000);
       expect(authority.simState.MesNum).toBe(12);
 
       vi.advanceTimersByTime(2_000);
       expect(authority.simState.MesNum).toBe(0);
+
+      // After expiry, the same id can be enqueued and dispatched again.
+      // This mirrors `doMessage` + `SetMessageField` behavior in
+      // `ref/micropolis/src/sim/s_msg.c`, where expiry clears the active message.
+      expect(sendMes(authority.simState, authority.simContext, 12)).toBe(true);
+      vi.advanceTimersByTime(500);
+      expect(message12DispatchCount).toBe(2);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();

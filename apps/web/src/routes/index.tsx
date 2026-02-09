@@ -492,11 +492,21 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
         padding: 8,
       }}
     >
-      {[...messages].reverse().map((message) => (
-        <div key={`${message.serverSeq}:${message.id}:${message.tick}`} style={{ marginBottom: 4 }}>
-          <span style={{ color: '#334155' }}>[{message.serverSeq}]</span> {message.text}
-        </div>
-      ))}
+      {[...messages].reverse().map((message) => {
+        const coordinateSuffix =
+          message.dispatch === 'sendMesAt' && message.x !== null && message.y !== null
+            ? ` @ (${message.x}, ${message.y})`
+            : '';
+        return (
+          <div
+            key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
+            style={{ marginBottom: 4 }}
+          >
+            <span style={{ color: '#334155' }}>[{message.serverSeq}]</span> {message.text}
+            {coordinateSuffix}
+          </div>
+        );
+      })}
     </div>
   );
 }
