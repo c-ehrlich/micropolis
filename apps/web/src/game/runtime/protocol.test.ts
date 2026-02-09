@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fromCanonicalBridgeToolName,
   getStage0PlayableBridgeCommandType,
+  isStage0PlayableBridgeCommandType,
   STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
   type Stage2ToolName,
   toCanonicalBridgeToolName,
@@ -95,5 +96,13 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       const canonical = toCanonicalBridgeToolName(tool);
       expect(fromCanonicalBridgeToolName(canonical)).toBe(tool);
     }
+  });
+
+  it('accepts only frozen Stage 0 playable command discriminants', () => {
+    for (const type of STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES) {
+      expect(isStage0PlayableBridgeCommandType(type)).toBe(true);
+    }
+
+    expect(isStage0PlayableBridgeCommandType('unknown_command_type' as never)).toBe(false);
   });
 });

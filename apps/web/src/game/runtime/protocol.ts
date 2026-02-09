@@ -104,7 +104,7 @@ export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
   'city_load',
   'city_save',
   'scenario_start',
-] as const;
+] as const satisfies readonly CityCommandPayloadV1['type'][];
 
 /**
  * Canonical bridge command-type subset used by Stage 2 playable flows.
@@ -112,6 +112,21 @@ export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
  * `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts`.
  */
 export type Stage0PlayableBridgeCommandType = (typeof STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES)[number];
+
+type _Stage0MissingPlayableBridgeCommandTypes = Exclude<
+  CityCommandPayloadV1['type'],
+  Stage0PlayableBridgeCommandType
+>;
+
+type _Stage0ExtraPlayableBridgeCommandTypes = Exclude<
+  Stage0PlayableBridgeCommandType,
+  CityCommandPayloadV1['type']
+>;
+
+const _STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_EXHAUSTIVENESS_CHECK: Record<
+  _Stage0MissingPlayableBridgeCommandTypes | _Stage0ExtraPlayableBridgeCommandTypes,
+  never
+> = {};
 
 /**
  * Canonical bridge command payload subset for playable Stage 2 commands.
@@ -124,6 +139,26 @@ export type Stage0PlayableBridgeCommandPayload = Extract<
     type: Stage0PlayableBridgeCommandType;
   }
 >;
+
+const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET = new Set<Stage0PlayableBridgeCommandType>(
+  STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
+);
+
+/**
+ * Returns true when a canonical bridge command type is in the Stage 0 playable
+ * single-player inventory.
+ * Mirrors Stage 0 command gating intent from `SimCmd` in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: this checks typed bridge command discriminants instead of Tcl
+ * command names.
+ */
+export function isStage0PlayableBridgeCommandType(
+  commandType: CityCommandPayloadV1['type'],
+): commandType is Stage0PlayableBridgeCommandType {
+  return STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET.has(
+    commandType as Stage0PlayableBridgeCommandType,
+  );
+}
 
 /**
  * Stage 2 canonical bridge tool identifiers used by the playable toolbar.

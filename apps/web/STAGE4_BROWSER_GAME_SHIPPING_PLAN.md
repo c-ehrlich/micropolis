@@ -72,7 +72,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 
 - [x] 0.3 Freeze playable command inventory for single-player shipping.
 - [x] 0.3 Check: inventory includes tool apply, sim pause/resume/set speed, city new/load/save, scenario start.
-- [x] 0.3 Check: command inventory references bridge payload types, not web-local unions.
+- [x] 0.3 Check: command inventory references bridge payload types, not web-local unions (`Stage0PlayableBridgeCommandPayload`, `STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES`, and `isStage0PlayableBridgeCommandType` in `apps/web/src/game/runtime/protocol.ts`).
 
 - [ ] 0.4 Freeze host/client authority boundary.
 - [ ] 0.4 Check: host owns authoritative simulation state and progression.
