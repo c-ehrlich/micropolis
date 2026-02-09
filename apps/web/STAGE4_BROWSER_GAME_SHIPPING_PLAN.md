@@ -222,7 +222,7 @@ Deletion execution notes:
 - [x] Extend payloads for HUD heads (funds/date/demand/speed/options) and message deltas.
 - [x] Add optional realtime object payload field now (can be empty until Stage 7).
 - [x] Keep strict ordering behavior (`serverSeq`, `tick`) and gap handling.
-- [ ] Ensure snapshot replay can reconstruct map + HUD + messages deterministically.
+- [x] Ensure snapshot replay can reconstruct map + HUD + messages deterministically.
 
 ### Verification checklist
 
@@ -567,5 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 

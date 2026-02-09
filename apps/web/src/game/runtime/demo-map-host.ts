@@ -583,13 +583,15 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
-    this.serverSeq += 1;
+    const snapshotServerSeq = this.serverSeq + 1;
+    this.ensureMessageLogReplayMetadata(this.tick, snapshotServerSeq);
+    this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
       kind: 'snapshot',
       roomId,
       clientId,
       tick: this.tick,
-      serverSeq: this.serverSeq,
+      serverSeq: snapshotServerSeq,
       payload: {
         map: {
           width: DEMO_WORLD_WIDTH,
@@ -668,19 +670,20 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
+    const patchServerSeq = this.serverSeq + 1;
     if (payload.messageDeltas !== undefined) {
-      this.recordMessages(payload.messageDeltas);
+      this.recordMessages(payload.messageDeltas, this.tick, patchServerSeq);
     } else if (payload.messages !== undefined) {
-      this.recordMessages(payload.messages);
+      this.recordMessages(payload.messages, this.tick, patchServerSeq);
     }
 
-    this.serverSeq += 1;
+    this.serverSeq = patchServerSeq;
     this.onEnvelope({
       kind: 'patch',
       roomId,
       clientId,
       tick: this.tick,
-      serverSeq: this.serverSeq,
+      serverSeq: patchServerSeq,
       payload,
     });
   }
@@ -831,8 +834,18 @@ export class DemoMapHost implements CoreHost {
    * Mirrors one-slot message replacement in `SetMessageField` from
    * `ref/micropolis/src/sim/s_msg.c`, but intentionally keeps a bounded log.
    */
-  private recordMessages(messages: readonly DemoHudMessagePayload[]): void {
-    this.messageLog.push(...messages);
+  private recordMessages(
+    messages: readonly DemoHudMessagePayload[],
+    tick: number,
+    serverSeq: number,
+  ): void {
+    for (const message of messages) {
+      this.messageLog.push({
+        ...message,
+        tick: message.tick ?? tick,
+        serverSeq: message.serverSeq ?? serverSeq,
+      });
+    }
     if (this.messageLog.length > DEMO_MESSAGE_LOG_LIMIT) {
       this.messageLog.splice(0, this.messageLog.length - DEMO_MESSAGE_LOG_LIMIT);
     }
@@ -840,6 +853,31 @@ export class DemoMapHost implements CoreHost {
 
   private resetMessageLog(text: string): void {
     this.messageLog.splice(0, this.messageLog.length, { id: 0, text });
+  }
+
+  /**
+   * Ensures snapshot baseline messages retain stable ordering metadata.
+   * Mirrors deterministic replay cursor intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Difference: C message payloads do not carry tick/sequence fields, so Stage 2
+   * records these bridge metadata fields for deterministic snapshot replay.
+   */
+  private ensureMessageLogReplayMetadata(tick: number, serverSeq: number): void {
+    for (let index = 0; index < this.messageLog.length; index += 1) {
+      const message = this.messageLog[index];
+      if (message === undefined) {
+        continue;
+      }
+      if (message.tick !== undefined && message.serverSeq !== undefined) {
+        continue;
+      }
+
+      this.messageLog[index] = {
+        ...message,
+        tick: message.tick ?? tick,
+        serverSeq: message.serverSeq ?? serverSeq,
+      };
+    }
   }
 
   /**

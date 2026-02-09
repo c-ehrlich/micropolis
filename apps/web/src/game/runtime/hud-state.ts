@@ -168,6 +168,8 @@ interface ParsedMessageInput {
   dispatch: RuntimeHudMessageDispatch;
   x: number | null;
   y: number | null;
+  tick?: number;
+  serverSeq?: number;
 }
 
 function parseHudPayload(
@@ -307,8 +309,8 @@ function toHudMessageEvent(
 ): RuntimeHudMessageEvent {
   return {
     ...message,
-    tick,
-    serverSeq,
+    tick: message.tick ?? tick,
+    serverSeq: message.serverSeq ?? serverSeq,
   };
 }
 
@@ -354,6 +356,14 @@ function parseMessageInput(value: unknown): ParsedMessageInput | null {
   const dispatch = x !== null && y !== null && (x !== 0 || y !== 0) ? 'sendMesAt' : 'sendMes';
   const projectedX = dispatch === 'sendMesAt' ? x : null;
   const projectedY = dispatch === 'sendMesAt' ? y : null;
+  const replayTick = readReplayOrderInteger(record.tick);
+  if (replayTick === undefined) {
+    return null;
+  }
+  const replayServerSeq = readReplayOrderInteger(record.serverSeq);
+  if (replayServerSeq === undefined) {
+    return null;
+  }
 
   return {
     id,
@@ -361,6 +371,8 @@ function parseMessageInput(value: unknown): ParsedMessageInput | null {
     dispatch,
     x: projectedX,
     y: projectedY,
+    ...(replayTick === null ? {} : { tick: replayTick }),
+    ...(replayServerSeq === null ? {} : { serverSeq: replayServerSeq }),
   };
 }
 
@@ -415,6 +427,25 @@ function readRangeInteger(value: unknown, min: number, max: number): number | nu
   }
 
   return next;
+}
+
+/**
+ * Reads one optional non-negative integer used for replay ordering metadata.
+ * Mirrors monotonic tick/sequence progression constraints from
+ * `ref/micropolis/src/sim/s_sim.c` and `ref/micropolis/spec/integration/SPEC.md`.
+ * Difference: this parser accepts omitted values to keep Stage 2 compatibility
+ * with older message payloads that only carry id/text/coordinates.
+ */
+function readReplayOrderInteger(value: unknown): number | null | undefined {
+  if (value === undefined) {
+    return null;
+  }
+
+  const parsed = readRangeInteger(value, 0, 2_000_000_000);
+  if (parsed === null) {
+    return undefined;
+  }
+  return parsed;
 }
 
 function readNullableInteger(value: unknown): number | null {

@@ -399,6 +399,133 @@ describe('reduceHostEnvelope', () => {
     expect(stale.state.lastAppliedServerSeq).toBe(13);
   });
 
+  it('reconstructs map/hud/messages identically from snapshot checkpoint replay plus patch tail', () => {
+    const start = reduceHostEnvelope(
+      createInitialWebRuntimeState(),
+      createAcceptedHelloEnvelope(),
+    ).state;
+
+    const liveAfterSnapshot = reduceHostEnvelope(start, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 10,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 1,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
+        },
+        messages: [
+          {
+            // C message ids are integer table indexes in `s_msg.c`.
+            id: 14,
+            text: 'Residents demand police stations.',
+          },
+        ],
+      },
+    }).state;
+    const liveAfterPatchOne = reduceHostEnvelope(liveAfterSnapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 2,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+        hud: {
+          speed: 2,
+        },
+        messageDeltas: [{ id: 16, text: 'Taxes are too high.' }],
+      },
+    }).state;
+    const liveFinal = reduceHostEnvelope(liveAfterPatchOne, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: {
+          speed: 3,
+        },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+      },
+    }).state;
+
+    const replayCheckpoint = reduceHostEnvelope(start, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 2,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [7] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 2,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
+        },
+        messages: [
+          {
+            id: 14,
+            text: 'Residents demand police stations.',
+            tick: 10,
+            serverSeq: 1,
+          },
+          {
+            id: 16,
+            text: 'Taxes are too high.',
+            tick: 11,
+            serverSeq: 2,
+          },
+        ],
+      },
+    }).state;
+    const replayFinal = reduceHostEnvelope(replayCheckpoint, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: {
+          speed: 3,
+        },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+      },
+    }).state;
+
+    expect(Array.from(replayFinal.mapState.tiles)).toEqual(Array.from(liveFinal.mapState.tiles));
+    expect(replayFinal.hudState).toEqual(liveFinal.hudState);
+  });
+
   it('creates pending command visuals and settles them on ack', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;

@@ -558,6 +558,20 @@ export interface HostHudMessagePayload {
   text: string;
   x?: number;
   y?: number;
+  /**
+   * Optional original authority tick for replay-stable snapshot baselines.
+   * Mirrors ordered message progression intent from `ref/micropolis/src/sim/s_msg.c`.
+   * Parity note: this field is bridge metadata (not present in C payloads) used
+   * so snapshot replay can preserve prior message ordering context.
+   */
+  tick?: number;
+  /**
+   * Optional original authority sequence for replay-stable snapshot baselines.
+   * Mirrors ordered update delivery intent from `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: this field is bridge metadata (not present in C payloads) used
+   * so snapshot replay can preserve prior message ordering context.
+   */
+  serverSeq?: number;
 }
 
 /**

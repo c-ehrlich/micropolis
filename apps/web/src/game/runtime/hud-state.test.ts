@@ -216,6 +216,54 @@ describe('runtime HUD projection', () => {
     ]);
   });
 
+  it('preserves replay tick/serverSeq metadata carried by snapshot baseline messages', () => {
+    const initial = createInitialRuntimeHudState();
+    const snapshot = projectRuntimeHudState(initial, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 20,
+      serverSeq: 8,
+      payload: {
+        messages: [
+          {
+            // Message ids are integer indices in `SendMes`/`SendMesAt`
+            // (`ref/micropolis/src/sim/s_msg.c`).
+            id: 14,
+            text: 'Residents demand police stations.',
+            tick: 3,
+            serverSeq: 2,
+          },
+          {
+            id: 16,
+            text: 'Taxes are too high.',
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.messages).toEqual([
+      {
+        id: 14,
+        text: 'Residents demand police stations.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 3,
+        serverSeq: 2,
+      },
+      {
+        id: 16,
+        text: 'Taxes are too high.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 20,
+        serverSeq: 8,
+      },
+    ]);
+  });
+
   it('ignores invalid payload fragments and keeps previous HUD values', () => {
     const afterSnapshot = projectRuntimeHudState(createInitialRuntimeHudState(), {
       kind: 'snapshot',
