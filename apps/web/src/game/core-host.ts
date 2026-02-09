@@ -1,4 +1,33 @@
+import type { ClientCommandEnvelope, CoreHostEnvelope, Stage1CoreHost } from '@city/core-bridge';
+
 import type { HelloPayload } from './handshake';
+
+/**
+ * Stage 0 canonical bridge host contract alias for web migration work.
+ * Maps this web-local host contract surface to `Stage1CoreHost` in
+ * `packages/core-bridge/src/core-host.ts`.
+ * Parity note: this is a TypeScript contract-convergence alias only; Micropolis C
+ * transport/runtime entrypoints remain in `ref/micropolis/src/sim/w_sim.c` and
+ * `ref/micropolis/src/sim/w_net.c`.
+ */
+export type CanonicalBridgeCoreHost = Stage1CoreHost;
+
+/**
+ * Stage 0 canonical bridge envelope union alias for web migration work.
+ * Maps web host event flow to `CoreHostEnvelope` in `packages/core-bridge/src/types.ts`.
+ * Parity note: typed envelopes are intentionally higher-level than Micropolis
+ * Tcl/stdin/UDP integration messages described in `ref/micropolis/spec/integration/SPEC.md`.
+ */
+export type CanonicalBridgeCoreHostEnvelope = CoreHostEnvelope;
+
+/**
+ * Stage 0 canonical bridge command envelope alias for web migration work.
+ * Maps web command ingress to `ClientCommandEnvelope` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: this explicit envelope model is intentionally not a 1:1 C command
+ * function signature from `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type CanonicalBridgeClientCommandEnvelope = ClientCommandEnvelope;
 
 /**
  * Host mode selector for web authority transport.
