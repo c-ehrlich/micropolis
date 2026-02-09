@@ -227,7 +227,7 @@ Deletion execution notes:
 ### Verification checklist
 
 - [x] `apps/web/src/game/runtime/map-state.test.ts` covers snapshot+patch reconstruction.
-- [ ] `apps/web/src/game/runtime/hud-state.test.ts` covers heads/message projection.
+- [x] `apps/web/src/game/runtime/hud-state.test.ts` covers heads/message projection.
 - [ ] `apps/web/src/game/runtime/reducer.test.ts` covers sequence drops/gap behavior.
 - [ ] `apps/web/src/game/runtime.ordering-resync.test.ts` covers resync recovery with expanded payloads.
 
