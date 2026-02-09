@@ -1113,6 +1113,8 @@ function layRail(context: ToolContext, map: Uint16Array, x: number, y: number): 
         return -2;
       }
       cost = 100;
+      // Mirror `_LayRail` in `ref/micropolis/src/sim/w_con.c` exactly:
+      // directional neighbor bounds are intentionally asymmetric in C.
 
       if (x < WORLD_X - 1) {
         const neighbor = neutralizeRoad(tileAt(map, x + 1, y));
@@ -1131,7 +1133,7 @@ function layRail(context: ToolContext, map: Uint16Array, x: number, y: number): 
         if (
           neighbor === RAILHPOWERV ||
           neighbor === HRAIL ||
-          (neighbor >= LHRAIL && neighbor < VRAILROAD)
+          (neighbor > HRAIL && neighbor < VRAILROAD)
         ) {
           setTile(context, map, x, y, HRAIL | BULLBIT);
           break;

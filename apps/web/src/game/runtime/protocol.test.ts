@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   fromCanonicalBridgeToolName,
+  getPlayableToolSpec,
   getStage0PlayableBridgeCommandType,
-  getStage2ToolSpec,
   isStage0PlayableBridgeCommandType,
+  PLAYABLE_TOOL_SPECS,
   STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
-  STAGE2_TOOL_SPECS,
   type Stage2ToolName,
   toCanonicalBridgeToolName,
 } from './protocol.ts';
@@ -25,7 +25,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     ]);
   });
 
-  it('maps Stage 2 commands to canonical bridge command type ids', () => {
+  it('maps playable runtime commands to canonical bridge command type ids', () => {
     expect(
       getStage0PlayableBridgeCommandType({
         kind: 'tool',
@@ -83,7 +83,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     ).toBe('scenario_start');
   });
 
-  it('maps Stage 2 tool ids to canonical bridge tool ids and back', () => {
+  it('maps playable tool ids to canonical bridge tool ids and back', () => {
     const tools: readonly Stage2ToolName[] = [
       'road',
       'rail',
@@ -100,13 +100,17 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     }
   });
 
-  it('keeps Stage 2 tool footprints aligned with w_tool.c toolSize/toolOffset tables', () => {
+  it('keeps playable tool footprints aligned with w_tool.c toolSize/toolOffset tables', () => {
     // Magic-number source: `toolSize[]`/`toolOffset[]` in
     // `ref/micropolis/src/sim/w_tool.c` for roadState/rrState/wireState/dozeState
     // (all 1x1, offset 0) and residentialState/commercialState/industrialState
     // (all 3x3, offset 1).
     expect(
-      STAGE2_TOOL_SPECS.map((spec) => ({ tool: spec.tool, size: spec.size, offset: spec.offset })),
+      PLAYABLE_TOOL_SPECS.map((spec) => ({
+        tool: spec.tool,
+        size: spec.size,
+        offset: spec.offset,
+      })),
     ).toEqual([
       { tool: 'road', size: 1, offset: 0 },
       { tool: 'rail', size: 1, offset: 0 },
@@ -117,8 +121,8 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       { tool: 'ind', size: 3, offset: 1 },
     ]);
 
-    expect(getStage2ToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
-    expect(getStage2ToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
+    expect(getPlayableToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
+    expect(getPlayableToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
   });
 
   it('accepts only frozen Stage 0 playable command discriminants', () => {

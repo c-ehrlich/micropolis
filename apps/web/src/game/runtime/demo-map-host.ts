@@ -17,7 +17,7 @@ import {
   type ClientEnvelope,
   type CoreHost,
   type CoreHostConnection,
-  getStage2ToolSpec,
+  getPlayableToolSpec,
   type HostEnvelope,
   type HostHudMessagePayload,
   type HostHudOptionsPayload,
@@ -1126,7 +1126,7 @@ function applyDemoToolCommand(
     return { accepted: false, reason: 'out-of-bounds' };
   }
 
-  const spec = getStage2ToolSpec(command.tool);
+  const spec = getPlayableToolSpec(command.tool);
   const startX = command.x - spec.offset;
   const startY = command.y - spec.offset;
   const endX = startX + spec.size;

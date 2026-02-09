@@ -397,7 +397,7 @@ export function fromCanonicalBridgeToolName(tool: Stage2CanonicalToolName): Stag
  * Tool footprint metadata used for pending visuals and placement validation.
  * Mirrors `toolSize[]` and `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c`.
  */
-export interface Stage2ToolSpec {
+export interface PlayableToolSpec {
   tool: Stage2ToolName;
   label: string;
   size: number;
@@ -405,7 +405,7 @@ export interface Stage2ToolSpec {
   pendingColor: string;
 }
 
-const STAGE2_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
+const PLAYABLE_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
   road: TOOL_STATE.road,
   rail: TOOL_STATE.rail,
   wire: TOOL_STATE.wire,
@@ -415,13 +415,13 @@ const STAGE2_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
   ind: TOOL_STATE.ind,
 };
 
-interface Stage2ToolVisualSpec {
+interface PlayableToolVisualSpec {
   tool: Stage2ToolName;
   label: string;
   pendingColor: string;
 }
 
-const STAGE2_TOOL_VISUAL_SPECS: readonly Stage2ToolVisualSpec[] = [
+const PLAYABLE_TOOL_VISUAL_SPECS: readonly PlayableToolVisualSpec[] = [
   { tool: 'road', label: 'Road', pendingColor: '#f6d365' },
   { tool: 'rail', label: 'Rail', pendingColor: '#c3aed6' },
   { tool: 'wire', label: 'Wire', pendingColor: '#93c5fd' },
@@ -431,33 +431,40 @@ const STAGE2_TOOL_VISUAL_SPECS: readonly Stage2ToolVisualSpec[] = [
   { tool: 'ind', label: 'I', pendingColor: '#fde047' },
 ] as const;
 
-function stage2FootprintFromToolTables(
+/**
+ * Looks up playable tool footprint dimensions from C-parity tool-state tables.
+ * Mirrors `toolSize[]` and `toolOffset[]` indexing in
+ * `ref/micropolis/src/sim/w_tool.c` (1:1 state-id lookup).
+ */
+function playableFootprintFromToolTables(
   tool: Stage2ToolName,
-): Pick<Stage2ToolSpec, 'size' | 'offset'> {
-  const stateId = STAGE2_TOOL_STATE_ID[tool];
+): Pick<PlayableToolSpec, 'size' | 'offset'> {
+  const stateId = PLAYABLE_TOOL_STATE_ID[tool];
   const size = TOOL_SIZE[stateId];
   const offset = TOOL_OFFSET[stateId];
   if (size === undefined || offset === undefined) {
-    throw new Error(`Missing tool footprint table entry for Stage 2 tool "${tool}"`);
+    throw new Error(`Missing tool footprint table entry for playable tool "${tool}"`);
   }
   return { size, offset };
 }
 
 /**
- * Stage 2 tool metadata table.
+ * Playable tool metadata table.
  * Mirrors `toolSize[]`/`toolOffset[]` entries from `ref/micropolis/src/sim/w_tool.c`
  * for road, rail, wire, bulldoze, residential, commercial, and industrial tools.
  * Parity note: `size`/`offset` values are derived from sim-core C-parity tool tables
- * (`TOOL_SIZE`, `TOOL_OFFSET`) to keep Stage 2 1x1 vs 3x3 behavior locked to Micropolis.
+ * (`TOOL_SIZE`, `TOOL_OFFSET`) to keep 1x1 vs 3x3 behavior locked to Micropolis.
  */
-export const STAGE2_TOOL_SPECS: readonly Stage2ToolSpec[] = STAGE2_TOOL_VISUAL_SPECS.map(
+export const PLAYABLE_TOOL_SPECS: readonly PlayableToolSpec[] = PLAYABLE_TOOL_VISUAL_SPECS.map(
   (spec) => ({
     ...spec,
-    ...stage2FootprintFromToolTables(spec.tool),
+    ...playableFootprintFromToolTables(spec.tool),
   }),
 );
 
-const STAGE2_TOOL_NAME_SET = new Set<Stage2ToolName>(STAGE2_TOOL_SPECS.map((spec) => spec.tool));
+const PLAYABLE_TOOL_NAME_SET = new Set<Stage2ToolName>(
+  PLAYABLE_TOOL_SPECS.map((spec) => spec.tool),
+);
 
 /**
  * Host -> client hello envelope for version/identity negotiation.
@@ -872,7 +879,7 @@ export function isStage2ToolCommand(command: unknown): command is Stage2ToolComm
   return (
     candidate.kind === 'tool' &&
     typeof candidate.tool === 'string' &&
-    STAGE2_TOOL_NAME_SET.has(candidate.tool as Stage2ToolName) &&
+    PLAYABLE_TOOL_NAME_SET.has(candidate.tool as Stage2ToolName) &&
     typeof candidate.x === 'number' &&
     typeof candidate.y === 'number'
   );
@@ -963,18 +970,18 @@ export function isStage2ScenarioCommand(command: unknown): command is Stage2Scen
 }
 
 /**
- * Looks up Stage 2 tool metadata for a tool id.
+ * Looks up playable tool metadata for a tool id.
  * Mirrors toolbar-to-tool-state lookup intent from `setWandState` in
  * `ref/micropolis/src/sim/w_tool.c`, adapted for typed web metadata.
  */
-export function getStage2ToolSpec(tool: Stage2ToolName): Stage2ToolSpec {
-  for (const spec of STAGE2_TOOL_SPECS) {
+export function getPlayableToolSpec(tool: Stage2ToolName): PlayableToolSpec {
+  for (const spec of PLAYABLE_TOOL_SPECS) {
     if (spec.tool === tool) {
       return spec;
     }
   }
 
-  throw new Error(`Unknown Stage 2 tool spec for "${tool}"`);
+  throw new Error(`Unknown playable tool spec for "${tool}"`);
 }
 
 /**

@@ -1,6 +1,6 @@
 import { type MouseEvent, useEffect, useRef } from 'react';
 
-import { getStage2ToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
+import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
 
 /**
@@ -95,7 +95,7 @@ export function MapCanvas({
         }}
       />
       {pendingTools.map((pending) => {
-        const spec = getStage2ToolSpec(pending.command.tool);
+        const spec = getPlayableToolSpec(pending.command.tool);
         const left = (pending.command.x - spec.offset) * tileSize;
         const top = (pending.command.y - spec.offset) * tileSize;
         const side = spec.size * tileSize;
