@@ -338,7 +338,7 @@ Deletion execution notes:
 
 - [x] `apps/web/src/game/runtime/hud-state.test.ts` validates heads/message projection behavior.
 - [x] `packages/sim-core/src/systems/messages.test.ts` and `packages/sim-core/src/systems/date-time.test.ts` remain green.
-- [ ] Manual: funds/date/demand/speed visibly update during simulation.
+- [x] Manual: funds/date/demand/speed visibly update during simulation.
 - [ ] Manual: messages appear/expire correctly and coordinate messages carry x/y.
 
 ---

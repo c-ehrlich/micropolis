@@ -455,4 +455,58 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(speedPatchCount).toBe(speedPatchCountAfterFirstPlay);
     expect(ackCount).toBe(4);
   });
+
+  it('visibly updates funds/date/demand/speed while simulation is running', () => {
+    vi.useFakeTimers();
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
+    });
+
+    try {
+      runtime.connect();
+      const initialHud = runtime.getState().hudState;
+      const initialDate = initialHud.dateLabel;
+      const initialDateMonth = initialHud.dateMonth;
+      const initialDateYear = initialHud.dateYear;
+      const initialDemand = initialHud.demandLabel;
+
+      vi.advanceTimersByTime(50);
+
+      const afterAmbientHud = runtime.getState().hudState;
+      // `updateDate` in `w_update.c` updates month/year from CityTime using
+      // `(CityTime % 48) >> 2` and `(CityTime / 48) + StartingYear`.
+      expect(afterAmbientHud.dateLabel).not.toBe(initialDate);
+      expect(
+        afterAmbientHud.dateMonth !== initialDateMonth ||
+          afterAmbientHud.dateYear !== initialDateYear,
+      ).toBe(true);
+      expect(afterAmbientHud.demandLabel).not.toBe(initialDemand);
+
+      runtime.sendCommand('stage5-visible-funds-1', {
+        kind: 'tool',
+        tool: 'road',
+        x: 8,
+        y: 8,
+      });
+      // Road tool cost is 10 in `CostOf[]` (`w_tool.c`).
+      expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,990');
+
+      runtime.sendCommand('stage5-visible-speed-pause-1', {
+        kind: 'sim-control',
+        control: 'pause',
+      });
+      // `setSpeed` displays 0 while paused (`sim_paused ? 0 : SimMetaSpeed`) in `w_util.c`.
+      expect(runtime.getState().hudState.speed).toBe(0);
+
+      runtime.sendCommand('stage5-visible-speed-play-1', {
+        kind: 'sim-control',
+        control: 'play',
+      });
+      // Play resumes the remembered playable speed in `Resume()`/`setSpeed` (`w_util.c`).
+      expect(runtime.getState().hudState.speed).toBe(3);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
 });
