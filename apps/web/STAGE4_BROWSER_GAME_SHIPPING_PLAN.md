@@ -286,7 +286,7 @@ Deletion execution notes:
 
 ### TS references to review
 
-- [ ] `apps/web/src/routes/index.tsx`
+- [x] `apps/web/src/routes/index.tsx`
 - [ ] `apps/web/src/game/map/map-canvas.tsx`
 - [ ] `apps/web/src/game/runtime/map-state.ts`
 - [ ] `packages/sim-core/src/core/constants.ts`
@@ -567,3 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
