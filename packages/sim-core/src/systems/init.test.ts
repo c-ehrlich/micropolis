@@ -497,4 +497,29 @@ describe('doSimInit', () => {
     expect(state.DoInitialEval).toBe(1);
     expect(hooks.doAllGraphs).toHaveBeenCalledOnce();
   });
+
+  it('matches DoSimInit new-city branch ordering and power scan count', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+    state.InitSimLoad = 2;
+    state.Fcycle = 2000;
+    state.Scycle = 2000;
+
+    const calls: string[] = [];
+    doSimInit(context, state, {
+      evalInit: () => calls.push('evalInit'),
+      doPowerScan: () => calls.push('power'),
+      mapScan: () => calls.push('scan'),
+    });
+
+    // `DoSimInit` in `ref/micropolis/src/sim/s_sim.c` runs:
+    // InitSimMemory() -> ... -> DoPowerScan()
+    // and resets Fcycle/Scycle to 0 before those calls.
+    expect(state.Fcycle).toBe(0);
+    expect(state.Scycle).toBe(0);
+    expect(calls.filter((value) => value === 'evalInit')).toHaveLength(1);
+    expect(calls.filter((value) => value === 'power')).toHaveLength(2);
+    expect(calls.filter((value) => value === 'scan')).toHaveLength(1);
+  });
 });

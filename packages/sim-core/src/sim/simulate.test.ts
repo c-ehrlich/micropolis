@@ -78,6 +78,25 @@ describe('Simulate dispatcher phases', () => {
     expect(calls).toEqual(['cityEvaluation', 'setValves', 'clearCensus']);
   });
 
+  it('resets out-of-range Scycle to 0 in phase 0', () => {
+    const context = createSimContext();
+    const calls: string[] = [];
+    const state = makeState({
+      Scycle: 2000,
+      CityTime: 9,
+      CityTax: 7,
+      AvCityTax: 0,
+    });
+
+    dispatchSimPhase(0, state, context, makeSystems(calls));
+
+    // In `Simulate` (`ref/micropolis/src/sim/s_sim.c`):
+    // `if (++Scycle > 1023) Scycle = 0;`
+    expect(state.Scycle).toBe(0);
+    expect(state.CityTime).toBe(10);
+    expect(calls).toEqual(['setValves', 'clearCensus']);
+  });
+
   it('dispatches map scan across phases 1..8', () => {
     const context = createSimContext();
 
@@ -231,6 +250,28 @@ describe('SimFrame gating and cycles', () => {
     expect(state.Fcycle).toBe(0);
     expect(state.Scycle).toBe(0);
     expect(state.CityTime).toBe(1);
+    expect(calls).toEqual(['setValves', 'clearCensus']);
+  });
+
+  it('resets out-of-range Spdcycle/Fcycle to 0 instead of bitmasking', () => {
+    const context = createSimContext();
+    const calls: string[] = [];
+    const state = makeState({
+      SimSpeed: 3,
+      Spdcycle: 2000,
+      Fcycle: 2000,
+      Scycle: 1023,
+      CityTime: 0,
+    });
+
+    const ran = runSimFrame(state, context, makeSystems(calls));
+
+    // In `SimFrame` (`ref/micropolis/src/sim/s_sim.c`):
+    // `if (++Spdcycle > 1023) Spdcycle = 0;`
+    // `if (++Fcycle > 1023) Fcycle = 0;`
+    expect(ran).toBe(true);
+    expect(state.Spdcycle).toBe(0);
+    expect(state.Fcycle).toBe(0);
     expect(calls).toEqual(['setValves', 'clearCensus']);
   });
 });

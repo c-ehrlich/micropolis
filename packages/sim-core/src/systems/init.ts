@@ -125,6 +125,11 @@ export function initWillStuff(
   runUiUpdate(state, context);
 }
 
+/**
+ * Core simulation bootstrap pass after new/load city setup.
+ * Mirrors `DoSimInit` in `ref/micropolis/src/sim/s_sim.c` (1:1 ordering),
+ * with optional system overrides for deterministic tests.
+ */
 export function doSimInit(
   context: SimContext,
   state: SimState,
@@ -169,6 +174,11 @@ export function doSimInit(
   });
 }
 
+/**
+ * New-city scalar/history initialization pass.
+ * Mirrors `InitSimMemory` in `ref/micropolis/src/sim/s_sim.c` (1:1 behavior),
+ * including the pre-scan `PowerStackNum` reset before `DoPowerScan`.
+ */
 export function initSimMemory(
   _context: SimContext,
   state: SimState,

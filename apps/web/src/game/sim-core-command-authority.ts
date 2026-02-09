@@ -160,8 +160,13 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     }
 
     this.tickHandle = this.tickScheduler.setInterval(() => {
-      runSimLoop(this.simState, this.simContext);
-      this.syncToolContextFromState();
+      this.simContext.store.beginTick();
+      try {
+        runSimLoop(this.simState, this.simContext);
+        this.syncToolContextFromState();
+      } finally {
+        this.simContext.store.commitTick();
+      }
     }, this.tickIntervalMs);
   }
 

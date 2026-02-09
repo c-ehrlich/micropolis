@@ -57,6 +57,18 @@ export interface SimLoopOptions {
   doSim?: boolean;
 }
 
+const CENSUS_RATE = 4;
+const TAX_FREQUENCY = 48;
+
+/**
+ * Advance one simulation cycle counter using Micropolis "cosmic" wrap rules.
+ * Mirrors `if (++cycle > 1023) cycle = 0` from `ref/micropolis/src/sim/s_sim.c`.
+ */
+const advanceSimCycle = (value: number): number => {
+  const next = value + 1;
+  return next > 1023 ? 0 : next;
+};
+
 const clampSpeedIndex = (simSpeed: number) => {
   if (simSpeed <= 0) {
     return 0;
@@ -67,6 +79,10 @@ const clampSpeedIndex = (simSpeed: number) => {
   return simSpeed;
 };
 
+/**
+ * Dispatch one simulation phase.
+ * Mirrors `Simulate(mod16)` in `ref/micropolis/src/sim/s_sim.c`.
+ */
 export function dispatchSimPhase(
   phase: number,
   state: SimState,
@@ -78,7 +94,7 @@ export function dispatchSimPhase(
 
   switch (mod16) {
     case 0: {
-      state.Scycle = (state.Scycle + 1) & 1023;
+      state.Scycle = advanceSimCycle(state.Scycle);
       if (state.DoInitialEval) {
         state.DoInitialEval = 0;
         systems.cityEvaluation?.(state, context);
@@ -102,11 +118,13 @@ export function dispatchSimPhase(
       systems.mapScan?.(mod16, state, context);
       return;
     case 9: {
-      if (state.CityTime % 4 === 0) {
+      if (state.CityTime % CENSUS_RATE === 0) {
         systems.takeCensus?.(state, context);
       }
-      if (state.CityTime % 48 === 0) {
+      if (state.CityTime % (CENSUS_RATE * 12) === 0) {
         systems.take2Census?.(state, context);
+      }
+      if (state.CityTime % TAX_FREQUENCY === 0) {
         systems.collectTax?.(state, context);
         systems.cityEvaluation?.(state, context);
       }
@@ -160,6 +178,10 @@ export function dispatchSimPhase(
   }
 }
 
+/**
+ * Execute one simulation frame gate.
+ * Mirrors `SimFrame` in `ref/micropolis/src/sim/s_sim.c`.
+ */
 export function runSimFrame(
   state: SimState,
   context: SimContext,
@@ -169,7 +191,7 @@ export function runSimFrame(
     return false;
   }
 
-  state.Spdcycle = (state.Spdcycle + 1) & 1023;
+  state.Spdcycle = advanceSimCycle(state.Spdcycle);
 
   if (state.SimSpeed === 1 && state.Spdcycle % 5 !== 0) {
     return false;
@@ -178,7 +200,7 @@ export function runSimFrame(
     return false;
   }
 
-  state.Fcycle = (state.Fcycle + 1) & 1023;
+  state.Fcycle = advanceSimCycle(state.Fcycle);
   dispatchSimPhase(state.Fcycle & 15, state, context, systems);
   return true;
 }
