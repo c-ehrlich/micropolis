@@ -509,6 +509,84 @@ export interface HostMapPatchPayload {
   tileWordDeltas: readonly HostMapPatchTileWordDelta[];
 }
 
+/**
+ * Authoritative date head payload emitted by host snapshot/patch envelopes.
+ * Mirrors `updateDate` output fields in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: month uses the same zero-based `0..11` indexing as C.
+ */
+export interface HostHudDatePayload {
+  label?: string;
+  month: number;
+  year: number;
+}
+
+/**
+ * Authoritative demand heads payload emitted by host snapshot/patch envelopes.
+ * Mirrors `SetDemand` output domain in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: values are already projected to the visible valve range (`-15..15`).
+ */
+export interface HostHudDemandPayload {
+  r: number;
+  c: number;
+  i: number;
+}
+
+/**
+ * Authoritative options heads payload emitted by host snapshot/patch envelopes.
+ * Mirrors `updateOptions` / `UISetOptions` in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: C packs these into one bitfield; bridge payloads expose booleans directly.
+ */
+export interface HostHudOptionsPayload {
+  autoBudget: boolean;
+  autoGo: boolean;
+  autoBulldoze: boolean;
+  disasters: boolean;
+  userSoundOn: boolean;
+  doAnimation: boolean;
+  doMessages: boolean;
+  doNotices: boolean;
+}
+
+/**
+ * One authoritative HUD message payload emitted by host snapshot/patch envelopes.
+ * Mirrors `SendMes` / `SendMesAt` payload data in `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: `(x, y) = (0, 0)` is intentionally preserved so runtime can keep
+ * C dispatch parity (`MesX || MesY` decides SendMesAt).
+ */
+export interface HostHudMessagePayload {
+  id: number;
+  text: string;
+  x?: number;
+  y?: number;
+}
+
+/**
+ * One incremental HUD message delta in Stage 2 patch payloads.
+ * Mirrors incremental message dispatch in `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: this is append-only for Stage 2 feed projection.
+ */
+export type HostMessageDeltaPayload = HostHudMessagePayload;
+
+/**
+ * Authoritative HUD heads payload carried by snapshot/patch envelopes.
+ * Mirrors `DoUpdateHeads` scalar UI updates in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: `funds` carries the canonical scalar while `fundsLabel` is retained
+ * as a temporary compatibility field during Stage 2 protocol migration.
+ */
+export interface HostHudPayload {
+  funds?: number;
+  fundsLabel?: string;
+  date?: HostHudDatePayload;
+  demand?: HostHudDemandPayload;
+  speed?: number;
+  options?: Partial<HostHudOptionsPayload>;
+  /**
+   * Legacy single-message compatibility payload retained while migration from
+   * ad-hoc message fields to explicit `messageDeltas` is in flight.
+   */
+  message?: HostHudMessagePayload;
+}
+
 interface LegacyHostMapSnapshotPayload {
   width: number;
   height: number;
@@ -530,6 +608,18 @@ interface LegacyHostMapPatchPayload {
  */
 export interface HostSnapshotPayload extends Record<string, unknown> {
   map?: HostMapSnapshotPayload | LegacyHostMapSnapshotPayload;
+  hud?: HostHudPayload;
+  /**
+   * Snapshot baseline message feed (full replacement semantics).
+   * Mirrors `SetMessageField` visible-message ownership in
+   * `ref/micropolis/src/sim/s_msg.c`.
+   */
+  messages?: readonly HostHudMessagePayload[];
+  /**
+   * Compatibility field: tolerated on snapshots so replay streams remain stable
+   * while Stage 2 payload producers are upgraded.
+   */
+  messageDeltas?: readonly HostMessageDeltaPayload[];
 }
 
 /**
@@ -540,6 +630,17 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
  */
 export interface HostPatchPayload extends Record<string, unknown> {
   map?: HostMapPatchPayload | LegacyHostMapPatchPayload;
+  hud?: HostHudPayload;
+  /**
+   * Incremental message additions for patch projection.
+   * Mirrors one-heads-cycle message dispatch deltas in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  messageDeltas?: readonly HostMessageDeltaPayload[];
+  /**
+   * Legacy message delta field retained during Stage 2 migration.
+   * Runtime consumes this as append-only deltas.
+   */
+  messages?: readonly HostHudMessagePayload[];
 }
 
 /**

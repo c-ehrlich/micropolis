@@ -9,6 +9,7 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
+  type HostPatchPayload,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -378,10 +379,21 @@ describe('createWebHostRuntime', () => {
           tileWords: [0],
         },
         hud: {
+          funds: 19_850,
           fundsLabel: 'Funds: $19,850',
           date: { label: 'Mar 1900', month: 2, year: 1900 },
           demand: { r: 4, c: -2, i: 1 },
           speed: 3,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
         },
         messages: [{ id: 14, text: 'Residents demand police stations.' }],
       },
@@ -396,13 +408,18 @@ describe('createWebHostRuntime', () => {
       payload: {
         hud: {
           speed: 0,
-          message: {
+          options: {
+            optionAutoGo: false,
+          },
+        },
+        messageDeltas: [
+          {
             // C `SendMes`/`SendMesAt` ids are integer message indexes.
             id: 16,
             text: 'Taxes are too high.',
           },
-        },
-      },
+        ],
+      } as unknown as HostPatchPayload,
     });
 
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,850');
@@ -411,6 +428,7 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().hudState.demandC).toBe(-2);
     expect(runtime.getState().hudState.demandI).toBe(1);
     expect(runtime.getState().hudState.speed).toBe(0);
+    expect(runtime.getState().hudState.options.autoGo).toBe(false);
     expect(runtime.getState().hudState.messages.map((message) => message.id)).toEqual([14, 16]);
   });
 

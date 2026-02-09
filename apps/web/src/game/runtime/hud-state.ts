@@ -1,6 +1,20 @@
 import type { SequencedHostEnvelope } from './protocol.ts';
 
 const MAX_MESSAGE_FEED = 24;
+const HUD_MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 /**
  * Message dispatch channel mirrored from Micropolis message hooks.
@@ -24,6 +38,23 @@ export interface RuntimeHudMessageEvent {
 }
 
 /**
+ * Runtime HUD options heads projection consumed by Stage 2 UI components.
+ * Mirrors `updateOptions` / `UISetOptions` output in
+ * `ref/micropolis/src/sim/w_update.c`.
+ * Difference: values are represented as explicit booleans instead of one packed bitfield.
+ */
+export interface RuntimeHudOptionsState {
+  autoBudget: boolean;
+  autoGo: boolean;
+  autoBulldoze: boolean;
+  disasters: boolean;
+  userSoundOn: boolean;
+  doAnimation: boolean;
+  doMessages: boolean;
+  doNotices: boolean;
+}
+
+/**
  * Runtime HUD projection consumed by Stage 2 UI components.
  * Mirrors scalar head updates from `DoUpdateHeads`/`updateDate`/`SetDemand`
  * in `ref/micropolis/src/sim/w_update.c`, speed updates from
@@ -41,6 +72,7 @@ export interface RuntimeHudState {
   demandC: number;
   demandI: number;
   speed: number;
+  options: RuntimeHudOptionsState;
   messages: readonly RuntimeHudMessageEvent[];
 }
 
@@ -59,6 +91,16 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
     demandC: 0,
     demandI: 0,
     speed: 0,
+    options: {
+      autoBudget: true,
+      autoGo: true,
+      autoBulldoze: true,
+      disasters: true,
+      userSoundOn: true,
+      doAnimation: true,
+      doMessages: true,
+      doNotices: true,
+    },
     messages: [],
   };
 }
@@ -92,6 +134,8 @@ export function projectRuntimeHudState(
     demandC: parsed.demandC ?? state.demandC,
     demandI: parsed.demandI ?? state.demandI,
     speed: parsed.speed ?? state.speed,
+    options:
+      parsed.options === undefined ? state.options : mergeOptions(state.options, parsed.options),
     messages:
       envelope.kind === 'snapshot'
         ? parsed.messages
@@ -114,6 +158,7 @@ interface ParsedHudPayload {
   demandC?: number;
   demandI?: number;
   speed?: number;
+  options?: Partial<RuntimeHudOptionsState>;
   messages: RuntimeHudMessageEvent[];
 }
 
@@ -140,6 +185,11 @@ function parseHudPayload(
 
   const hudRecord = readRecord(payload.hud);
   if (hudRecord !== null) {
+    const funds = readRangeInteger(hudRecord.funds, 0, 2_000_000_000);
+    if (funds !== null) {
+      parsed.fundsLabel = formatFundsLabel(funds);
+    }
+
     if (typeof hudRecord.fundsLabel === 'string') {
       parsed.fundsLabel = hudRecord.fundsLabel;
     }
@@ -158,6 +208,10 @@ function parseHudPayload(
       const year = readRangeInteger(dateRecord.year, 0, 1_000_000);
       if (year !== null) {
         parsed.dateYear = year;
+      }
+
+      if (parsed.dateLabel === undefined && month !== null && year !== null) {
+        parsed.dateLabel = formatDateLabel(month, year);
       }
     }
 
@@ -184,15 +238,43 @@ function parseHudPayload(
       parsed.speed = speed;
     }
 
+    const parsedFlatOptions = parseHudOptionsFromRecord(hudRecord);
+    if (parsedFlatOptions !== null) {
+      parsed.options = {
+        ...parsed.options,
+        ...parsedFlatOptions,
+      };
+    }
+
+    const optionsRecord = readRecord(hudRecord.options);
+    if (optionsRecord !== null) {
+      const parsedNestedOptions = parseHudOptionsFromRecord(optionsRecord);
+      if (parsedNestedOptions !== null) {
+        parsed.options = {
+          ...parsed.options,
+          ...parsedNestedOptions,
+        };
+      }
+    }
+
     const hudMessage = parseMessageInput(hudRecord.message);
     if (hudMessage !== null) {
       parsed.messages.push(toHudMessageEvent(hudMessage, tick, serverSeq));
     }
   }
 
+  if (Array.isArray(payload.messageDeltas)) {
+    for (const rawEntry of payload.messageDeltas) {
+      const message = parseMessageDeltaInput(rawEntry);
+      if (message !== null) {
+        parsed.messages.push(toHudMessageEvent(message, tick, serverSeq));
+      }
+    }
+  }
+
   if (Array.isArray(payload.messages)) {
     for (const rawEntry of payload.messages) {
-      const message = parseMessageInput(rawEntry);
+      const message = parseMessageDeltaInput(rawEntry);
       if (message !== null) {
         parsed.messages.push(toHudMessageEvent(message, tick, serverSeq));
       }
@@ -228,6 +310,20 @@ function toHudMessageEvent(
     tick,
     serverSeq,
   };
+}
+
+function parseMessageDeltaInput(value: unknown): ParsedMessageInput | null {
+  const direct = parseMessageInput(value);
+  if (direct !== null) {
+    return direct;
+  }
+
+  const record = readRecord(value);
+  if (record === null) {
+    return null;
+  }
+
+  return parseMessageInput(record.message);
 }
 
 function parseMessageInput(value: unknown): ParsedMessageInput | null {
@@ -268,6 +364,38 @@ function parseMessageInput(value: unknown): ParsedMessageInput | null {
   };
 }
 
+function parseHudOptionsFromRecord(
+  record: Record<string, unknown>,
+): Partial<RuntimeHudOptionsState> | null {
+  const options: Partial<RuntimeHudOptionsState> = {};
+  addOptionBoolean(options, 'autoBudget', record.autoBudget, record.optionAutoBudget);
+  addOptionBoolean(options, 'autoGo', record.autoGo, record.optionAutoGo);
+  addOptionBoolean(options, 'autoBulldoze', record.autoBulldoze, record.optionAutoBulldoze);
+  addOptionBoolean(options, 'disasters', record.disasters, record.optionDisasters);
+  addOptionBoolean(options, 'userSoundOn', record.userSoundOn, record.optionUserSoundOn);
+  addOptionBoolean(options, 'doAnimation', record.doAnimation, record.optionDoAnimation);
+  addOptionBoolean(options, 'doMessages', record.doMessages, record.optionDoMessages);
+  addOptionBoolean(options, 'doNotices', record.doNotices, record.optionDoNotices);
+
+  if (Object.keys(options).length === 0) {
+    return null;
+  }
+
+  return options;
+}
+
+function addOptionBoolean(
+  options: Partial<RuntimeHudOptionsState>,
+  key: keyof RuntimeHudOptionsState,
+  primary: unknown,
+  fallback: unknown,
+): void {
+  const value = readBoolean(primary) ?? readBoolean(fallback);
+  if (value !== null) {
+    options[key] = value;
+  }
+}
+
 function readRecord(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) {
     return null;
@@ -301,6 +429,13 @@ function readNullableInteger(value: unknown): number | null {
   return Math.trunc(value);
 }
 
+function readBoolean(value: unknown): boolean | null {
+  if (typeof value !== 'boolean') {
+    return null;
+  }
+  return value;
+}
+
 function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean {
   if (
     left.fundsLabel !== right.fundsLabel ||
@@ -311,6 +446,14 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     left.demandC !== right.demandC ||
     left.demandI !== right.demandI ||
     left.speed !== right.speed ||
+    left.options.autoBudget !== right.options.autoBudget ||
+    left.options.autoGo !== right.options.autoGo ||
+    left.options.autoBulldoze !== right.options.autoBulldoze ||
+    left.options.disasters !== right.options.disasters ||
+    left.options.userSoundOn !== right.options.userSoundOn ||
+    left.options.doAnimation !== right.options.doAnimation ||
+    left.options.doMessages !== right.options.doMessages ||
+    left.options.doNotices !== right.options.doNotices ||
     left.messages.length !== right.messages.length
   ) {
     return false;
@@ -337,6 +480,48 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
   }
 
   return true;
+}
+
+function mergeOptions(
+  previous: RuntimeHudOptionsState,
+  delta: Partial<RuntimeHudOptionsState>,
+): RuntimeHudOptionsState {
+  return {
+    autoBudget: delta.autoBudget ?? previous.autoBudget,
+    autoGo: delta.autoGo ?? previous.autoGo,
+    autoBulldoze: delta.autoBulldoze ?? previous.autoBulldoze,
+    disasters: delta.disasters ?? previous.disasters,
+    userSoundOn: delta.userSoundOn ?? previous.userSoundOn,
+    doAnimation: delta.doAnimation ?? previous.doAnimation,
+    doMessages: delta.doMessages ?? previous.doMessages,
+    doNotices: delta.doNotices ?? previous.doNotices,
+  };
+}
+
+function formatDateLabel(month: number, year: number): string {
+  return `${HUD_MONTH_LABELS[month] ?? 'Jan'} ${year}`;
+}
+
+function formatFundsLabel(funds: number): string {
+  return `Funds: ${formatDollarDecimal(funds)}`;
+}
+
+function formatDollarDecimal(value: number): string {
+  const raw = Math.max(0, Math.trunc(value)).toString();
+  if (raw.length <= 3) {
+    return `$${raw}`;
+  }
+
+  let left = raw.length % 3;
+  if (left === 0) {
+    left = 3;
+  }
+
+  let output = `$${raw.slice(0, left)}`;
+  for (let index = left; index < raw.length; index += 3) {
+    output += `,${raw.slice(index, index + 3)}`;
+  }
+  return output;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

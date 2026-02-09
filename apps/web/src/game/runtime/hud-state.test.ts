@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createInitialRuntimeHudState, projectRuntimeHudState } from './hud-state.ts';
-import { DEFAULT_LOCAL_CLIENT_ID, DEFAULT_LOCAL_ROOM_ID } from './protocol.ts';
+import {
+  DEFAULT_LOCAL_CLIENT_ID,
+  DEFAULT_LOCAL_ROOM_ID,
+  type HostPatchPayload,
+} from './protocol.ts';
 
 describe('runtime HUD projection', () => {
   it('hydrates funds/date/demand/speed/messages from authoritative snapshot payload', () => {
@@ -16,6 +20,7 @@ describe('runtime HUD projection', () => {
       serverSeq: 1,
       payload: {
         hud: {
+          funds: 19_980,
           fundsLabel: 'Funds: $19,980',
           date: {
             label: 'Feb 1901',
@@ -29,6 +34,16 @@ describe('runtime HUD projection', () => {
           },
           // `setSpeed` clamps to 0..3 in `ref/micropolis/src/sim/w_util.c`.
           speed: 3,
+          options: {
+            autoBudget: true,
+            autoGo: false,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: false,
+          },
         },
         messages: [{ id: 7, text: 'Residents demand a stadium.' }],
       },
@@ -42,6 +57,16 @@ describe('runtime HUD projection', () => {
     expect(next.demandC).toBe(-3);
     expect(next.demandI).toBe(1);
     expect(next.speed).toBe(3);
+    expect(next.options).toEqual({
+      autoBudget: true,
+      autoGo: false,
+      autoBulldoze: true,
+      disasters: true,
+      userSoundOn: true,
+      doAnimation: true,
+      doMessages: true,
+      doNotices: false,
+    });
     expect(next.messages).toEqual([
       {
         id: 7,
@@ -68,6 +93,16 @@ describe('runtime HUD projection', () => {
           date: { label: 'Jan 1900', month: 0, year: 1900 },
           demand: { r: 0, c: 0, i: 0 },
           speed: 2,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
         },
         messages: [{ id: 0, text: 'City initialized.' }],
       },
@@ -84,13 +119,19 @@ describe('runtime HUD projection', () => {
           fundsLabel: 'Funds: $19,900',
           demand: { r: 2, c: -1, i: 0 },
           speed: 0,
-          message: {
+          options: {
+            optionAutoGo: false,
+            optionDoAnimation: false,
+          },
+        },
+        messageDeltas: [
+          {
             // `SendMes` message id values are integral in `ref/micropolis/src/sim/s_msg.c`.
             id: 4,
             text: 'Build more roads.',
           },
-        },
-      },
+        ],
+      } as unknown as HostPatchPayload,
     });
 
     expect(afterPatch.fundsLabel).toBe('Funds: $19,900');
@@ -98,6 +139,10 @@ describe('runtime HUD projection', () => {
     expect(afterPatch.demandC).toBe(-1);
     expect(afterPatch.demandI).toBe(0);
     expect(afterPatch.speed).toBe(0);
+    expect(afterPatch.options.autoBudget).toBe(true);
+    expect(afterPatch.options.autoGo).toBe(false);
+    expect(afterPatch.options.doAnimation).toBe(false);
+    expect(afterPatch.options.doMessages).toBe(true);
     expect(afterPatch.messages).toEqual([
       {
         id: 0,
@@ -184,6 +229,16 @@ describe('runtime HUD projection', () => {
           date: { label: 'Jan 1900', month: 0, year: 1900 },
           demand: { r: 0, c: 0, i: 0 },
           speed: 3,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
         },
       },
     });
@@ -204,6 +259,9 @@ describe('runtime HUD projection', () => {
             id: 'nope',
             text: 123,
           },
+          options: {
+            autoBudget: 'not-bool',
+          },
         },
         messages: [
           {
@@ -212,7 +270,7 @@ describe('runtime HUD projection', () => {
             x: 10,
           },
         ],
-      },
+      } as unknown as HostPatchPayload,
     });
 
     expect(next).toEqual(afterSnapshot);

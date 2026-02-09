@@ -19,6 +19,9 @@ import {
   type CoreHostConnection,
   getStage2ToolSpec,
   type HostEnvelope,
+  type HostHudMessagePayload,
+  type HostHudOptionsPayload,
+  type HostPatchPayload,
   isStage2CityIoCommand,
   isStage2CityLifecycleCommand,
   isStage2ScenarioCommand,
@@ -43,6 +46,14 @@ const DEMO_INITIAL_FUNDS = 20_000;
 const DEMO_MESSAGE_LOG_LIMIT = 24;
 const DEMO_DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEMO_DEFAULT_CITY_NAME = 'New City';
+const DEMO_DEFAULT_AUTO_BUDGET = true;
+const DEMO_DEFAULT_AUTO_GO = true;
+const DEMO_DEFAULT_AUTO_BULLDOZE = true;
+const DEMO_DEFAULT_USER_SOUND_ON = true;
+const DEMO_DEFAULT_DO_ANIMATION = true;
+const DEMO_DEFAULT_DO_MESSAGES = true;
+const DEMO_DEFAULT_DO_NOTICES = true;
+const DEMO_DEFAULT_DISASTERS = true;
 
 const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
   road: 66,
@@ -127,27 +138,7 @@ export const STAGE2_SCENARIO_CHOICES: readonly Stage2ScenarioChoice[] = SCENARIO
   }),
 );
 
-interface DemoHudMessagePayload {
-  id: number;
-  text: string;
-  x?: number;
-  y?: number;
-}
-
-interface DemoHudPayload {
-  fundsLabel?: string;
-  date?: {
-    label: string;
-    month: number;
-    year: number;
-  };
-  demand?: {
-    r: number;
-    c: number;
-    i: number;
-  };
-  speed?: number;
-}
+type DemoHudMessagePayload = HostHudMessagePayload;
 
 /**
  * Export/save payload emitted by the demo host after `save-city`.
@@ -161,16 +152,10 @@ export interface DemoCityExportPayload {
   cityBytes: Uint8Array;
 }
 
-interface DemoPatchPayload {
-  map?: {
-    tileWordDeltas: Array<{ x: number; y: number; tileWord: number }>;
-  };
-  hud?: DemoHudPayload;
-  messages?: DemoHudMessagePayload[];
+interface DemoPatchPayload extends HostPatchPayload {
   cityIo?: {
     save?: DemoCityExportPayload;
   };
-  [key: string]: unknown;
 }
 
 /**
@@ -239,6 +224,14 @@ export class DemoMapHost implements CoreHost {
   private paused = false;
   private speedCycle = 0;
   private cityTax = 7;
+  private autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
+  private autoGo = DEMO_DEFAULT_AUTO_GO;
+  private autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
+  private userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
+  private doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+  private doMessages = DEMO_DEFAULT_DO_MESSAGES;
+  private doNotices = DEMO_DEFAULT_DO_NOTICES;
+  private disasters = DEMO_DEFAULT_DISASTERS;
   private cityFileName: string | null = DEMO_DEFAULT_CITY_FILE_NAME;
   private cityName = DEMO_DEFAULT_CITY_NAME;
   private currentScenarioId = 0;
@@ -403,7 +396,9 @@ export class DemoMapHost implements CoreHost {
 
     const payload: DemoPatchPayload = {
       hud: {
+        funds: this.totalFunds,
         fundsLabel: formatFundsLabel(this.totalFunds),
+        options: this.getHudOptionsHeads(),
       },
     };
 
@@ -432,6 +427,7 @@ export class DemoMapHost implements CoreHost {
     this.emitPatch(envelope.roomId, envelope.clientId, {
       hud: {
         speed: this.getVisibleSpeed(),
+        options: this.getHudOptionsHeads(),
       },
     });
   }
@@ -487,7 +483,7 @@ export class DemoMapHost implements CoreHost {
           cityBytes,
         },
       },
-      messages: [
+      messageDeltas: [
         {
           id: 30,
           text: `Saved ${this.cityName}.`,
@@ -521,6 +517,14 @@ export class DemoMapHost implements CoreHost {
     this.cityTax = loaded.cityTax;
     this.paused = loaded.paused;
     this.simMetaSpeed = loaded.simMetaSpeed;
+    this.autoBudget = loaded.autoBudget;
+    this.autoGo = loaded.autoGo;
+    this.autoBulldoze = loaded.autoBulldoze;
+    this.userSoundOn = loaded.userSoundOn;
+    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
+    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
+    this.disasters = DEMO_DEFAULT_DISASTERS;
     this.speedCycle = 0;
 
     this.resetMessageLog(`Loaded ${this.cityName}.`);
@@ -552,6 +556,14 @@ export class DemoMapHost implements CoreHost {
     this.paused = false;
     this.speedCycle = 0;
     this.cityTax = 7;
+    this.autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
+    this.autoGo = DEMO_DEFAULT_AUTO_GO;
+    this.autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
+    this.userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
+    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
+    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
+    this.disasters = DEMO_DEFAULT_DISASTERS;
 
     const scenarioMap = buildScenarioDemoMapTiles(scenario.id, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
     this.mapTiles.set(scenarioMap);
@@ -589,10 +601,12 @@ export class DemoMapHost implements CoreHost {
           ),
         },
         hud: {
+          funds: this.totalFunds,
           fundsLabel: formatFundsLabel(this.totalFunds),
           date: computeDemoDateHeads(this.cityTime),
           demand: computeDemoDemandHeads(this.tick),
           speed: this.getVisibleSpeed(),
+          options: this.getHudOptionsHeads(),
         },
         messages: this.messageLog,
       },
@@ -651,7 +665,9 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
-    if (payload.messages !== undefined) {
+    if (payload.messageDeltas !== undefined) {
+      this.recordMessages(payload.messageDeltas);
+    } else if (payload.messages !== undefined) {
       this.recordMessages(payload.messages);
     }
 
@@ -704,8 +720,11 @@ export class DemoMapHost implements CoreHost {
 
     const payload: DemoPatchPayload = {
       hud: {
+        funds: this.totalFunds,
         date: computeDemoDateHeads(this.cityTime),
         demand: computeDemoDemandHeads(this.tick),
+        speed: this.getVisibleSpeed(),
+        options: this.getHudOptionsHeads(),
       },
     };
 
@@ -724,7 +743,7 @@ export class DemoMapHost implements CoreHost {
 
     const ambientMessage = this.createAmbientMessage();
     if (ambientMessage !== null) {
-      payload.messages = [ambientMessage];
+      payload.messageDeltas = [ambientMessage];
     }
 
     this.emitPatch(roomId, clientId, payload);
@@ -830,6 +849,24 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
+   * Returns current options heads payload for HUD projection.
+   * Mirrors option booleans emitted by `updateOptions` / `UISetOptions` in
+   * `ref/micropolis/src/sim/w_update.c`.
+   */
+  private getHudOptionsHeads(): HostHudOptionsPayload {
+    return {
+      autoBudget: this.autoBudget,
+      autoGo: this.autoGo,
+      autoBulldoze: this.autoBulldoze,
+      disasters: this.disasters,
+      userSoundOn: this.userSoundOn,
+      doAnimation: this.doAnimation,
+      doMessages: this.doMessages,
+      doNotices: this.doNotices,
+    };
+  }
+
+  /**
    * Sets paused state and remembered speed metadata.
    * Mirrors `Pause`/`Resume`/`setSpeed` interactions from
    * `ref/micropolis/src/sim/w_util.c`.
@@ -866,6 +903,14 @@ export class DemoMapHost implements CoreHost {
     this.paused = false;
     this.speedCycle = 0;
     this.cityTax = 7;
+    this.autoBudget = DEMO_DEFAULT_AUTO_BUDGET;
+    this.autoGo = DEMO_DEFAULT_AUTO_GO;
+    this.autoBulldoze = DEMO_DEFAULT_AUTO_BULLDOZE;
+    this.userSoundOn = DEMO_DEFAULT_USER_SOUND_ON;
+    this.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
+    this.doMessages = DEMO_DEFAULT_DO_MESSAGES;
+    this.doNotices = DEMO_DEFAULT_DO_NOTICES;
+    this.disasters = DEMO_DEFAULT_DISASTERS;
     this.cityFileName = DEMO_DEFAULT_CITY_FILE_NAME;
     this.cityName = DEMO_DEFAULT_CITY_NAME;
     this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
@@ -878,10 +923,10 @@ export class DemoMapHost implements CoreHost {
     writeCityMeta(city.misc, {
       cityTime: Math.max(0, Math.trunc(this.cityTime)),
       totalFunds: Math.max(0, Math.trunc(this.totalFunds)),
-      autoBulldoze: true,
-      autoBudget: true,
-      autoGo: !this.paused,
-      userSoundOn: true,
+      autoBulldoze: this.autoBulldoze,
+      autoBudget: this.autoBudget,
+      autoGo: this.autoGo,
+      userSoundOn: this.userSoundOn,
       cityTax: this.cityTax,
       simSpeed: this.getVisibleSpeed(),
       policePercent: 1,
@@ -899,6 +944,10 @@ function tryDecodeImportedCity(cityBytes: Uint8Array): {
   cityTax: number;
   paused: boolean;
   simMetaSpeed: Stage2SimSpeed;
+  autoBudget: boolean;
+  autoGo: boolean;
+  autoBulldoze: boolean;
+  userSoundOn: boolean;
 } | null {
   try {
     const city = decodeCityFileForMap(cityBytes, {
@@ -915,6 +964,10 @@ function tryDecodeImportedCity(cityBytes: Uint8Array): {
       cityTax: normalized.cityTax,
       paused: normalized.simSpeed <= 0,
       simMetaSpeed: speed,
+      autoBudget: normalized.autoBudget,
+      autoGo: normalized.autoGo,
+      autoBulldoze: normalized.autoBulldoze,
+      userSoundOn: normalized.userSoundOn,
     };
   } catch {
     return null;
