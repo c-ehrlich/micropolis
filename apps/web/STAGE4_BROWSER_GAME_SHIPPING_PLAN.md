@@ -59,9 +59,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 
 ### Atomic Steps (Do + Check)
 
-- [ ] 0.1 Add a Stage 0 decision map to this file from old web contracts to canonical bridge contracts.
-- [ ] 0.1 Check: mapping explicitly lists `apps/web/src/game/core-host.ts` -> `packages/core-bridge/src/core-host.ts`.
-- [ ] 0.1 Check: mapping explicitly lists `apps/web/src/game/runtime/protocol.ts` -> `packages/core-bridge/src/types.ts`.
+- [x] 0.1 Add a Stage 0 decision map to this file from old web contracts to canonical bridge contracts.
+- [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/core-host.ts` -> `packages/core-bridge/src/core-host.ts`.
+- [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/runtime/protocol.ts` -> `packages/core-bridge/src/types.ts`.
 
 - [ ] 0.2 Freeze handshake/version ownership at bridge layer.
 - [ ] 0.2 Check: Stage 0 docs name `@city/core-bridge` as the only handshake/version owner.
@@ -101,15 +101,11 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 
 ### Stage 0 Decision Map
 
-- [ ] Web runtime interface source:
-- [ ] From `apps/web/src/game/core-host.ts`
-- [ ] To `packages/core-bridge/src/core-host.ts`
-- [ ] Web envelope type source:
-- [ ] From `apps/web/src/game/runtime/protocol.ts`
-- [ ] To `packages/core-bridge/src/types.ts`
-- [ ] Web sequencing source:
-- [ ] From local reducer-specific behavior
-- [ ] To `packages/core-bridge/src/sequencing.ts` rules
+| Decision surface | Old web contract source | Canonical bridge contract source | Stage 0 lock |
+| --- | --- | --- | --- |
+| Web runtime interface ownership | `apps/web/src/game/core-host.ts` | `packages/core-bridge/src/core-host.ts` | All Stage 1+ host/runtime work imports contract ownership from `@city/core-bridge`. |
+| Web envelope type ownership | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope definitions and command payload unions are bridge-owned only. |
+| Web sequencing/resync ownership | local reducer-specific ordering behavior | `packages/core-bridge/src/sequencing.ts` | Stale drop, server-seq gap resync, and tick-regression resync stay bridge-defined. |
 
 ### Stage 0 Exit Criteria
 
@@ -533,6 +529,4 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
-
 
