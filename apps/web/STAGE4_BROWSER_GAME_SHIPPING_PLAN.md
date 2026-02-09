@@ -53,7 +53,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] `apps/web/src/game/runtime/protocol.ts`
 - [x] `ref/micropolis/spec/integration/SPEC.md`
 - [x] `ref/micropolis/src/sim/sim.c`
-- [ ] `ref/micropolis/src/sim/s_sim.c`
+- [x] `ref/micropolis/src/sim/s_sim.c`
 - [ ] `ref/micropolis/src/sim/w_tool.c`
 - [ ] `ref/micropolis/src/sim/s_fileio.c`
 
@@ -533,3 +533,4 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
