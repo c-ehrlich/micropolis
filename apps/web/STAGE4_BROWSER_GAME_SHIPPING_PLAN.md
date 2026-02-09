@@ -362,7 +362,7 @@ Deletion execution notes:
 - [x] `packages/sim-io/src/save.ts`
 - [x] `packages/sim-io/src/scenarios.ts`
 - [x] `apps/web/src/game/runtime.persistence.test.ts`
-- [ ] `apps/web/src/routes/index.tsx`
+- [x] `apps/web/src/routes/index.tsx`
 
 ### Implementation checklist
 
@@ -567,6 +567,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
