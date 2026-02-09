@@ -25,7 +25,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 
 ### Stage 0 Scope
 
-- [ ] Stage 0 is architecture/convergence work only.
+- [x] Stage 0 is architecture/convergence work only.
 - [ ] No new gameplay features land before Stage 0 exit criteria pass.
 
 ### Locked Decisions (Already Chosen)
