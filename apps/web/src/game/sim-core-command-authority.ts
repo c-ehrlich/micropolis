@@ -6,6 +6,7 @@ import {
   type ToolContext,
   type ToolResult,
 } from '../../../../packages/sim-core/src/index.ts';
+import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
 import type {
   CoreHostAckEvent,
   CoreHostCommand,
@@ -228,6 +229,9 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private processToolCommand(command: CoreHostToolCommand): CoreHostEvent[] {
+    // Keep tool mirror state aligned with authoritative funds/options before all
+    // command outcomes (accept/reject), including preflight rejects.
+    this.syncToolContextFromState();
     const currentTick = this.currentTick();
     const previousOutcome = this.commandOutcomes.get(command.commandId);
     if (previousOutcome) {
@@ -327,7 +331,6 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private applyToolCommand(command: CoreHostToolCommand): RejectedOutcome | undefined {
-    this.syncToolContextFromState();
     this.simContext.store.beginTick();
 
     try {
@@ -340,9 +343,10 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
         tickId: this.currentTick(),
         seq: this.serverSeq,
       });
-      this.syncStateFromToolContext();
       return toToolRejectedOutcome(toolResult.result);
     } finally {
+      // Always re-sync canonical funds, even on rejected tool outcomes.
+      this.syncStateFromToolContext();
       this.simContext.store.commitTick();
     }
   }
@@ -354,7 +358,9 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private syncStateFromToolContext(): void {
-    this.simState.TotalFunds = this.toolContext.funds;
+    // Mirrors `Spend` -> `SetFunds` in `ref/micropolis/src/sim/w_stubs.c`.
+    // `setFunds` marks funds dirty, matching C `SetFunds` calling `UpdateFunds`.
+    setFunds(this.simState, this.toolContext.funds);
   }
 
   private currentTick(): number {

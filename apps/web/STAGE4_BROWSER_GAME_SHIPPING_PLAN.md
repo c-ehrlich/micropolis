@@ -243,7 +243,7 @@ Deletion execution notes:
 
 - [x] `ref/micropolis/src/sim/w_tool.c` (tool entrypoints, costs, size/offset)
 - [x] `ref/micropolis/src/sim/w_con.c` (lay road/rail/wire/bulldoze specifics)
-- [ ] `ref/micropolis/src/sim/w_stubs.c` (`Spend`, `SetFunds` update behavior)
+- [x] `ref/micropolis/src/sim/w_stubs.c` (`Spend`, `SetFunds` update behavior)
 - [ ] `ref/micropolis/src/sim/s_zone.c` (zone mutation side effects)
 
 ### TS references to review
@@ -258,7 +258,7 @@ Deletion execution notes:
 
 - [ ] Replace occupancy-only acceptance/reject logic with `applyToolAction`-backed outcomes.
 - [ ] Translate tool outcomes into stable host ack/reject codes/messages.
-- [ ] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
+- [x] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
 - [ ] Ensure reject reasons include out-of-bounds/no-funds/invalid placement cases.
 - [ ] Ensure tool footprint behavior (1x1 vs 3x3) aligns with C tool tables.
 

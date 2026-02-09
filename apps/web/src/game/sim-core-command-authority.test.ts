@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  doUpdateHeads,
+  type SimContext,
+  type SimState,
+  type ToolContext,
+} from '../../../../packages/sim-core/src/index.ts';
+import {
   createStage4CommandAuthority,
   type SimCoreAuthorityTickScheduler,
   SimCoreCommandAuthority,
@@ -236,6 +242,42 @@ describe('SimCoreCommandAuthority', () => {
       throw new Error('expected invalid-placement reject event');
     }
     expect(invalidPlacementReject.code).toBe('INVALID_PLACEMENT');
+  });
+
+  test('mirrors Spend/SetFunds funds-head update behavior after tool spends', () => {
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      // Magic-number source: `InitFunds()` in `ref/micropolis/src/sim/s_init.c`
+      // sets gameplay funds to 20,000; this test overrides to 100 for one road spend.
+      startingFunds: 100,
+    });
+    const internals = authority as unknown as {
+      simState: SimState;
+      simContext: SimContext;
+      toolContext: ToolContext;
+    };
+
+    // Start aligned so any post-tool head update depends on `SetFunds` parity
+    // (`SetFunds` -> `UpdateFunds` in `ref/micropolis/src/sim/w_stubs.c`).
+    internals.simState.LastFunds = internals.simState.TotalFunds;
+
+    const events = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-funds-update',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(events.map((event) => event.type)).toEqual(['ack', 'patch']);
+
+    // Magic-number source: road tool base cost is 10 in `CostOf[]` from
+    // `ref/micropolis/src/sim/w_tool.c`.
+    expect(internals.simState.TotalFunds).toBe(90);
+    expect(internals.toolContext.funds).toBe(90);
+
+    doUpdateHeads(internals.simState, internals.simContext);
+    expect(internals.simState.LastFunds).toBe(90);
   });
 
   test('replays snapshot baseline plus sequenced tail after a server-seq checkpoint', () => {
