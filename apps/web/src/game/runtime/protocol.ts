@@ -1,4 +1,7 @@
 import {
+  type CityCommandPayloadV1,
+  type CitySimSpeedV1,
+  type CityToolV1,
   CORE_BRIDGE_V1_LOCAL_CLIENT_ID,
   CORE_BRIDGE_V1_LOCAL_ROOM_ID,
   CORE_BRIDGE_V1_PROTOCOL_VERSION,
@@ -82,6 +85,53 @@ export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 export const DEFAULT_CORE_VERSION = 'stage-2';
 
 /**
+ * Stage 0 playable command inventory locked to canonical bridge payload types.
+ * Mirrors command classes routed through `SimCmd` + tool handlers in
+ * `ref/micropolis/src/sim/w_sim.c`, `ref/micropolis/src/sim/w_tool.c`,
+ * and `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: this inventory is an explicit TypeScript subset declaration
+ * instead of C command-string dispatch tables.
+ */
+export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
+  'tool_apply',
+  'sim_pause',
+  'sim_resume',
+  'sim_set_speed',
+  'city_new',
+  'city_load',
+  'city_save',
+  'scenario_start',
+] as const;
+
+/**
+ * Canonical bridge command-type subset used by Stage 2 playable flows.
+ * Mirrors the Stage 0 command inventory lock derived from
+ * `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts`.
+ */
+export type Stage0PlayableBridgeCommandType = (typeof STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES)[number];
+
+/**
+ * Canonical bridge command payload subset for playable Stage 2 commands.
+ * Mirrors the Stage 0 command inventory while keeping ownership in
+ * `CityCommandPayloadV1` from `packages/core-bridge/src/types.ts`.
+ */
+export type Stage0PlayableBridgeCommandPayload = Extract<
+  CityCommandPayloadV1,
+  {
+    type: Stage0PlayableBridgeCommandType;
+  }
+>;
+
+/**
+ * Stage 2 canonical bridge tool identifiers used by the playable toolbar.
+ * Mirrors tool routing in `ref/micropolis/src/sim/w_tool.c`.
+ */
+export type Stage2CanonicalToolName = Extract<
+  CityToolV1,
+  'road' | 'rail' | 'wire' | 'bulldoze' | 'residential' | 'commercial' | 'industrial'
+>;
+
+/**
  * Stage 2 tool identifiers exposed in the simple playable toolbar.
  * Mirrors tool state names from `ref/micropolis/src/sim/w_tool.c` (`roadState`,
  * `rrState`, `wireState`, `dozeState`, `residentialState`,
@@ -107,7 +157,27 @@ export interface Stage2ToolCommand {
  * and `SimCmdSpeed` input behavior in `ref/micropolis/src/sim/w_sim.c`.
  * Difference: Stage 2 UI only exposes the playable range 1..3.
  */
-export type Stage2SimSpeed = 1 | 2 | 3;
+export type Stage2SimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
+
+const STAGE2_TO_CANONICAL_TOOL_NAME: Record<Stage2ToolName, Stage2CanonicalToolName> = {
+  road: 'road',
+  rail: 'rail',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  res: 'residential',
+  com: 'commercial',
+  ind: 'industrial',
+};
+
+const CANONICAL_TO_STAGE2_TOOL_NAME: Record<Stage2CanonicalToolName, Stage2ToolName> = {
+  road: 'road',
+  rail: 'rail',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  residential: 'res',
+  commercial: 'com',
+  industrial: 'ind',
+};
 
 /**
  * Pause simulation command routed through host authority.
@@ -224,6 +294,61 @@ export type Stage2ClientCommand =
   | Stage2CityLifecycleCommand
   | Stage2CityIoCommand
   | Stage2ScenarioCommand;
+
+/**
+ * Returns the canonical bridge command type that corresponds to one Stage 2
+ * runtime command.
+ * Mirrors command routing classes in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: this mapper only emits the playable Stage 0 subset from
+ * `CityCommandPayloadV1['type']`.
+ */
+export function getStage0PlayableBridgeCommandType(
+  command: Stage2ClientCommand,
+): Stage0PlayableBridgeCommandType {
+  if (command.kind === 'tool') {
+    return 'tool_apply';
+  }
+
+  if (command.kind === 'sim-control') {
+    if (command.control === 'pause') {
+      return 'sim_pause';
+    }
+
+    if (command.control === 'play') {
+      return 'sim_resume';
+    }
+
+    return 'sim_set_speed';
+  }
+
+  if (command.kind === 'city-lifecycle') {
+    return 'city_new';
+  }
+
+  if (command.kind === 'city-io') {
+    return command.action === 'save-city' ? 'city_save' : 'city_load';
+  }
+
+  return 'scenario_start';
+}
+
+/**
+ * Maps a Stage 2 toolbar tool id to the canonical bridge tool id.
+ * Mirrors tool-name routing intent around `setWandState` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+export function toCanonicalBridgeToolName(tool: Stage2ToolName): Stage2CanonicalToolName {
+  return STAGE2_TO_CANONICAL_TOOL_NAME[tool];
+}
+
+/**
+ * Maps a canonical bridge tool id back to the Stage 2 toolbar tool id.
+ * Mirrors toolbar-state projection intent around `setWandState` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+export function fromCanonicalBridgeToolName(tool: Stage2CanonicalToolName): Stage2ToolName {
+  return CANONICAL_TO_STAGE2_TOOL_NAME[tool];
+}
 
 /**
  * Tool footprint metadata used for pending visuals and placement validation.
