@@ -6,13 +6,16 @@ const TILE_ID_DEBUG_COLOR_LOOKUP = buildStage4TileDebugColorLookup();
 
 /**
  * Normalizes one authoritative map tile word into a drawable tile id.
- * Mirrors `MemDrawBeegMapRect` / `WireDrawBeegMapRect` in
- * `ref/micropolis/src/sim/g_bigmap.c` where lookup uses `LOMASK` and wraps
- * values in `[TILE_COUNT, 1023]` back into the base tile page.
- * Parity note: this is a 1:1 port of the C lookup normalization path.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c` (tile id masked
+ * with `LOMASK` before draw-time lookup) and `MemDrawBeegMapRect` /
+ * `WireDrawBeegMapRect` in `ref/micropolis/src/sim/g_bigmap.c` (wrap ids in
+ * `[TILE_COUNT, 1023]` back into the base tile page).
+ * Parity note: this is a 1:1 port of the C tile-id normalization path used by
+ * Stage 4 debug lookup.
  */
 export function toStage4RenderableTileId(tileWord: number): number {
-  let tileId = tileWord & TileMask.LOMASK;
+  const tileValue = tileWord & 0xffff;
+  let tileId = tileValue & TileMask.LOMASK;
   if (tileId >= Tile.TILE_COUNT) {
     tileId -= Tile.TILE_COUNT;
   }

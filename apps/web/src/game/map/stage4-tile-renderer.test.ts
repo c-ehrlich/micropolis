@@ -17,6 +17,14 @@ describe('stage4 tile renderer', () => {
     expect(flaggedRoad).toBe(plainRoad);
   });
 
+  it('matches g_ani tile animation masking when ANIMBIT words retain high flags', () => {
+    // `g_ani.c` rewrites animated tiles as `aniTile[id] | tileflags`.
+    // In `ref/micropolis/src/sim/headers/animtab.h`, fire advances from 56 to 57.
+    const animatedFireWord = (Tile.FIRE + 1) | TileFlag.ANIMBIT | TileFlag.BULLBIT;
+    expect(toStage4RenderableTileId(animatedFireWord)).toBe(Tile.FIRE + 1);
+    expect(getStage4TileDebugColor(animatedFireWord)).toBe(getStage4TileDebugColor(Tile.FIRE + 1));
+  });
+
   it('keeps core terrain classes visually distinct in debug rendering', () => {
     expect(getStage4TileDebugColor(Tile.RIVER)).not.toBe(getStage4TileDebugColor(Tile.DIRT));
     expect(getStage4TileDebugColor(Tile.RESBASE)).not.toBe(getStage4TileDebugColor(Tile.ROADS));
