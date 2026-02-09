@@ -182,7 +182,7 @@ Deletion execution notes:
 
 - [x] Add a new Stage 4 authority module that creates and owns `MapStore + SimState + SimContext + ToolContext`.
 - [x] Implement host lifecycle (`connect`, `disconnect`, periodic tick loop, snapshot request support).
-- [ ] Keep deterministic authority available only for isolated tests/fallback.
+- [x] Keep deterministic authority available only for isolated tests/fallback.
 - [ ] Add host-factory flag/wiring to opt into the real authority path in web dev/runtime.
 - [ ] Ensure handshake behavior remains compatible with existing runtime bootstrapping.
 

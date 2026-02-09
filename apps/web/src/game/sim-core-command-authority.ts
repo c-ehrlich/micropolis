@@ -97,6 +97,18 @@ export interface SimCoreCommandAuthorityOptions {
 }
 
 /**
+ * Factory options for Stage 4 authority selection.
+ * Mirrors Stage 1 authority-loop ownership in `ref/micropolis/src/sim/w_sim.c`
+ * and `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: `allowDeterministicFallback` is a TypeScript-only guardrail to
+ * keep deterministic authority isolated to tests/emergency fallback wiring.
+ */
+export interface CreateStage4CommandAuthorityOptions extends SimCoreCommandAuthorityOptions {
+  readonly authorityMode?: Stage4AuthorityMode;
+  readonly allowDeterministicFallback?: boolean;
+}
+
+/**
  * Stage 1 sim-core-backed authority loop for Stage 4 hosts.
  * Mirrors Micropolis runtime ownership where simulation state/context and tool
  * application live in one authoritative process (`w_sim.c`, `s_sim.c`, `s_init.c`).
@@ -555,11 +567,14 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
  * Parity note: fallback mode is a TypeScript migration aid, not a C concept.
  */
 export function createStage4CommandAuthority(
-  options: SimCoreCommandAuthorityOptions & {
-    authorityMode?: Stage4AuthorityMode;
-  },
+  options: CreateStage4CommandAuthorityOptions,
 ): Stage4CommandAuthority {
   if (options.authorityMode === 'deterministic') {
+    if (!options.allowDeterministicFallback) {
+      throw new Error(
+        'Deterministic authority mode is restricted to isolated tests/fallback; set allowDeterministicFallback to true.',
+      );
+    }
     return new DeterministicCommandAuthority({ mode: options.mode });
   }
 

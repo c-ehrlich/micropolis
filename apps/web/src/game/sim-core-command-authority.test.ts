@@ -376,10 +376,22 @@ describe('SimCoreCommandAuthority', () => {
 });
 
 describe('createStage4CommandAuthority', () => {
+  test('rejects deterministic authority without isolated fallback opt-in', () => {
+    expect(() =>
+      createStage4CommandAuthority({
+        mode: 'local',
+        authorityMode: 'deterministic',
+      }),
+    ).toThrow(
+      'Deterministic authority mode is restricted to isolated tests/fallback; set allowDeterministicFallback to true.',
+    );
+  });
+
   test('keeps deterministic authority available for isolated fallback usage', () => {
     const authority = createStage4CommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
     });
 
     const first = authority.processCommand({

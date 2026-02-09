@@ -37,6 +37,7 @@ export interface HostFactoryEnv {
 export interface CreateCoreHostOptions {
   readonly mode?: HostMode;
   readonly authorityMode?: Stage4AuthorityMode;
+  readonly allowDeterministicFallback?: boolean;
   readonly env?: HostFactoryEnv;
   readonly createLocalHost?: () => CoreHost;
   readonly createDoHost?: () => CoreHost;
@@ -95,8 +96,20 @@ export function resolveStage4AuthorityMode(
 export function createCoreHost(options: CreateCoreHostOptions = {}): CoreHost {
   const mode = resolveHostMode(options);
   const authorityMode = resolveStage4AuthorityMode(options);
-  const createLocalHost = options.createLocalHost ?? (() => new LocalHost({ authorityMode }));
-  const createDoHost = options.createDoHost ?? (() => new DoHost({ authorityMode }));
+  const createLocalHost =
+    options.createLocalHost ??
+    (() =>
+      new LocalHost({
+        authorityMode,
+        allowDeterministicFallback: options.allowDeterministicFallback,
+      }));
+  const createDoHost =
+    options.createDoHost ??
+    (() =>
+      new DoHost({
+        authorityMode,
+        allowDeterministicFallback: options.allowDeterministicFallback,
+      }));
   return mode === 'do' ? createDoHost() : createLocalHost();
 }
 

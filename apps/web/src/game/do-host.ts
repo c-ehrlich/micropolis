@@ -18,6 +18,7 @@ export interface DoHostOptions {
   readonly clientId?: string;
   readonly helloVersions?: Partial<HelloVersions>;
   readonly authorityMode?: Stage4AuthorityMode;
+  readonly allowDeterministicFallback?: boolean;
   readonly authorityTickIntervalMs?: number;
   readonly authorityTickScheduler?: SimCoreAuthorityTickScheduler;
 }
@@ -47,6 +48,7 @@ export class DoHost implements CoreHost {
     this.commandAuthority = createStage4CommandAuthority({
       mode: this.mode,
       authorityMode: this.options.authorityMode,
+      allowDeterministicFallback: this.options.allowDeterministicFallback,
       tickIntervalMs: this.options.authorityTickIntervalMs,
       tickScheduler: this.options.authorityTickScheduler,
     });

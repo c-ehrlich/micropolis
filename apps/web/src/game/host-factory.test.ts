@@ -82,6 +82,26 @@ describe('createCoreHost', () => {
     expect(typeof host.requestSnapshot).toBe('function');
     expect(typeof host.subscribe).toBe('function');
   });
+
+  test('rejects deterministic authority for normal runtime wiring', () => {
+    expect(() =>
+      createCoreHost({
+        mode: 'local',
+        authorityMode: 'deterministic',
+      }),
+    ).toThrow(
+      'Deterministic authority mode is restricted to isolated tests/fallback; set allowDeterministicFallback to true.',
+    );
+  });
+
+  test('keeps deterministic authority available for isolated fallback wiring', () => {
+    const host = createCoreHost({
+      mode: 'local',
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+    });
+    expect(host.mode).toBe('local');
+  });
 });
 
 describe('runtime wiring parity across host modes', () => {

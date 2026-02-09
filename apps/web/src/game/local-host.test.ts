@@ -15,7 +15,10 @@ function flushMicrotasks(): Promise<void> {
 
 describe('LocalHost lifecycle', () => {
   test('treats duplicate connect/disconnect calls as no-op boundaries', () => {
-    const host = new LocalHost({ authorityMode: 'deterministic' });
+    const host = new LocalHost({
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+    });
     const eventTypes: Array<CoreHostEvent['type']> = [];
 
     host.subscribe((event) => {
@@ -31,7 +34,10 @@ describe('LocalHost lifecycle', () => {
   });
 
   test('supports requestSnapshot after connect', async () => {
-    const host = new LocalHost({ authorityMode: 'deterministic' });
+    const host = new LocalHost({
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+    });
     const events: CoreHostEvent[] = [];
 
     host.subscribe((event) => {
