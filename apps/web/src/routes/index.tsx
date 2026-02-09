@@ -226,12 +226,9 @@ function Stage4RuntimePanel() {
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
               <div>{state.hudState.fundsLabel}</div>
-              <div>Date: {state.hudState.dateLabel}</div>
-              <div>
-                Demand R/C/I: {state.hudState.demandR}/{state.hudState.demandC}/
-                {state.hudState.demandI}
-              </div>
-              <div>Speed: {formatSpeedLabel(state.hudState.speed)}</div>
+              <div>{state.hudState.dateDisplayLabel}</div>
+              <div>{state.hudState.demandLabel}</div>
+              <div>{state.hudState.speedLabel}</div>
             </div>
           </section>
 
@@ -443,18 +440,6 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
   const nextValue = counter.current;
   counter.current = nextValue + 1;
   return `${prefix}-${nextValue}`;
-}
-
-/**
- * Human-readable speed text formatter for the HUD panel.
- * Mirrors `UISetSpeed` paused-display behavior from `ref/micropolis/src/sim/w_util.c`.
- */
-function formatSpeedLabel(speed: number): string {
-  if (speed <= 0) {
-    return 'Paused';
-  }
-
-  return `x${speed}`;
 }
 
 /**

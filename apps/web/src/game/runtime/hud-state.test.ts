@@ -51,12 +51,15 @@ describe('runtime HUD projection', () => {
 
     expect(next.fundsLabel).toBe('Funds: $19,980');
     expect(next.dateLabel).toBe('Feb 1901');
+    expect(next.dateDisplayLabel).toBe('Date: Feb 1901');
     expect(next.dateMonth).toBe(1);
     expect(next.dateYear).toBe(1901);
     expect(next.demandR).toBe(6);
     expect(next.demandC).toBe(-3);
     expect(next.demandI).toBe(1);
+    expect(next.demandLabel).toBe('Demand R/C/I: 6/-3/1');
     expect(next.speed).toBe(3);
+    expect(next.speedLabel).toBe('Speed: x3');
     expect(next.options).toEqual({
       autoBudget: true,
       autoGo: false,
@@ -138,7 +141,9 @@ describe('runtime HUD projection', () => {
     expect(afterPatch.demandR).toBe(2);
     expect(afterPatch.demandC).toBe(-1);
     expect(afterPatch.demandI).toBe(0);
+    expect(afterPatch.demandLabel).toBe('Demand R/C/I: 2/-1/0');
     expect(afterPatch.speed).toBe(0);
+    expect(afterPatch.speedLabel).toBe('Speed: Paused');
     expect(afterPatch.options.autoBudget).toBe(true);
     expect(afterPatch.options.autoGo).toBe(false);
     expect(afterPatch.options.doAnimation).toBe(false);

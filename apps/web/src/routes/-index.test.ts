@@ -24,6 +24,14 @@ describe('web route runtime boundaries', () => {
     expect(ROUTE_SOURCE).toContain('Stage 4 Runtime');
   });
 
+  it('renders Stage 4 HUD labels directly from authoritative hudState fields', () => {
+    expect(ROUTE_SOURCE).toContain('{state.hudState.fundsLabel}');
+    expect(ROUTE_SOURCE).toContain('{state.hudState.dateDisplayLabel}');
+    expect(ROUTE_SOURCE).toContain('{state.hudState.demandLabel}');
+    expect(ROUTE_SOURCE).toContain('{state.hudState.speedLabel}');
+    expect(ROUTE_SOURCE).not.toContain('formatSpeedLabel(');
+  });
+
   it('does not import sim-core directly from UI route components', () => {
     // Stage plan rule: UI must consume host/runtime envelopes and avoid direct
     // simulation mutation entry points.
