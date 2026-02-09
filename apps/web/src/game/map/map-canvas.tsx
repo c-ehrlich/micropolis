@@ -2,12 +2,14 @@ import { type MouseEvent, useEffect, useRef } from 'react';
 
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
+import { getStage4TileDebugColor } from './stage4-tile-renderer.ts';
 
 /**
- * Canvas renderer for Stage 2 map snapshots and incremental tile patches.
- * Mirrors full-map vs incremental update intent from
- * `ref/micropolis/src/sim/w_map.c` + `ref/micropolis/src/sim/g_map.c`.
- * Difference: this is a minimal tile color debug view and not Micropolis art.
+ * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
+ * Mirrors full-map redraw vs incremental redraw ownership from
+ * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
+ * `ref/micropolis/src/sim/g_bigmap.c`.
+ * Difference: this remains a debug-color renderer instead of sprite atlas art.
  */
 export function MapCanvas({
   mapState,
@@ -129,7 +131,7 @@ function drawAllTiles(
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      context.fillStyle = mapTileColor(tiles[index] ?? 0);
+      context.fillStyle = getStage4TileDebugColor(tiles[index] ?? 0);
       context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
     }
   }
@@ -144,17 +146,9 @@ function drawPatchTiles(
     const width = mapState.width;
     const x = tileIndex % width;
     const y = Math.floor(tileIndex / width);
-    context.fillStyle = mapTileColor(mapState.tiles[tileIndex] ?? 0);
+    context.fillStyle = getStage4TileDebugColor(mapState.tiles[tileIndex] ?? 0);
     context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
   }
-}
-
-function mapTileColor(tile: number): string {
-  const base = tile & 0xff;
-  const hue = (base * 7) % 360;
-  const sat = 45 + ((tile >> 8) & 0x1f);
-  const light = 28 + ((tile >> 5) & 0x1f);
-  return `hsl(${hue} ${Math.min(sat, 85)}% ${Math.min(light, 72)}%)`;
 }
 
 /**

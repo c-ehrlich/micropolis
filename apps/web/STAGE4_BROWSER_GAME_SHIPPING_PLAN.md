@@ -275,7 +275,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace Stage 4 placement-dot canvas with authoritative tile-map rendering.
+- [x] Replace Stage 4 placement-dot canvas with authoritative tile-map rendering.
 
 ### C references to review
 
