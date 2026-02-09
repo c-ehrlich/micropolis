@@ -149,7 +149,8 @@ Deletion execution notes:
 - Implementation trace (2026-02-09): `apps/web/src/routes/index.tsx` now carries an explicit Stage 0 lock marker for surviving route `/` and names the duplicate protocol modules scheduled for deletion (`apps/web/src/game/core-host.ts`, `apps/web/src/game/runtime/protocol.ts`) after bridge-contract convergence.
 - [x] Snapshot/patch, resync, funds, and save/load semantics are fully locked.
 - Implementation trace (2026-02-09): lock sources are frozen in `packages/core-bridge/src/types.ts` (patch `{ x, y, tile }` + x-major snapshot indexing), `packages/core-bridge/src/sequencing.ts` (stale drop + gap/tick-regression => resync), `STAGE_0_ALIGNMENT_NOTES.md` (funds + save/load room rules), and parity/conformance checks in `packages/core-bridge/src/types.test.ts`, `packages/core-bridge/src/snapshot-index.test.ts`, `packages/core-bridge/src/sequencing.test.ts`, and `packages/sim-do-adapter/src/host-conformance.test.ts` (`city_load` in-room replacement + fresh snapshot).
-- [ ] Stage 1+ can proceed without additional architecture decisions.
+- [x] Stage 1+ can proceed without additional architecture decisions.
+- Implementation trace (2026-02-09): Stage 0 decision locks and sign-off in this document fully define bridge contract ownership, authority boundaries, sequencing/resync, funds coupling, and save/load room semantics required by Stage 1+, so remaining work is implementation-only sequencing.
 
 ---
 
