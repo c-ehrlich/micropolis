@@ -209,7 +209,7 @@ Deletion execution notes:
 
 ### TS references to review
 
-- [ ] `apps/web/src/game/core-host.ts`
+- [x] `apps/web/src/game/core-host.ts`
 - [ ] `apps/web/src/game/runtime/protocol.ts`
 - [ ] `apps/web/src/game/runtime/reducer.ts`
 - [ ] `apps/web/src/game/runtime/map-state.ts`
@@ -567,3 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
