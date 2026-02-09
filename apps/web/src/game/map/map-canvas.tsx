@@ -44,14 +44,7 @@ export function MapCanvas({
       canvas.height = heightPx;
     }
 
-    if (mapState.drawMode === 'snapshot') {
-      drawAllTiles(context, mapState, tileSize);
-      return;
-    }
-
-    if (mapState.drawMode === 'patch') {
-      drawPatchTiles(context, mapState, tileSize);
-    }
+    MAP_CANVAS_DRAW_PROCS[mapState.drawMode](context, mapState, tileSize);
   }, [mapState, tileSize]);
 
   if (!mapState.hasSnapshot) {
@@ -121,6 +114,24 @@ export function MapCanvas({
     </div>
   );
 }
+
+type MapCanvasDrawProc = (
+  context: CanvasRenderingContext2D,
+  mapState: RuntimeMapState,
+  tileSize: number,
+) => void;
+
+/**
+ * Stage 4 map draw-proc table keyed by runtime map draw mode.
+ * Mirrors `mapProcs[]` + `MemDrawMap` dispatch in `ref/micropolis/src/sim/g_map.c`.
+ * Parity note: Stage 4 currently carries only transport-level redraw modes
+ * (`none`/`snapshot`/`patch`) rather than C thematic map overlays (`ALMAP`..`DYMAP`).
+ */
+const MAP_CANVAS_DRAW_PROCS: Record<RuntimeMapState['drawMode'], MapCanvasDrawProc> = {
+  none: () => {},
+  snapshot: drawAllTiles,
+  patch: drawPatchTiles,
+};
 
 function drawAllTiles(
   context: CanvasRenderingContext2D,

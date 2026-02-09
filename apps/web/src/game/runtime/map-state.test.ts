@@ -79,6 +79,25 @@ function createPatchEnvelope(
   };
 }
 
+/**
+ * Builds one sequenced non-map envelope for draw-mode reset coverage.
+ * Mirrors command-ack sequencing participation in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function createAckEnvelope(
+  serverSeq: number,
+  tick: number,
+  commandId: string,
+): SequencedHostEnvelope {
+  return {
+    kind: 'ack',
+    roomId: DEFAULT_LOCAL_ROOM_ID,
+    clientId: DEFAULT_LOCAL_CLIENT_ID,
+    tick,
+    serverSeq,
+    commandId,
+  };
+}
+
 describe('runtime map projection', () => {
   it('applies snapshot baseline then patch deltas into row-major runtime tiles', () => {
     const initial = createInitialRuntimeMapState();
@@ -146,5 +165,50 @@ describe('runtime map projection', () => {
     expect(Array.from(replayState.tiles)).toEqual(Array.from(fullHistoryState.tiles));
     expect(Array.from(replayState.dirtyTileIndexes)).toEqual([4]);
     expect(replayState.drawMode).toBe('patch');
+  });
+
+  it('resets draw mode markers to none after non-map sequenced envelopes', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(1, 0, 3, 2, [0, 3, 1, 4, 2, 5]),
+    );
+    const afterPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [{ x: 0, y: 0, tileWord: 9 }]),
+    );
+
+    expect(afterPatch.drawMode).toBe('patch');
+    expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([0]);
+
+    const afterAck = projectRuntimeMapState(afterPatch, createAckEnvelope(3, 1, 'cmd-1'));
+
+    expect(afterAck.drawMode).toBe('none');
+    expect(Array.from(afterAck.dirtyTileIndexes)).toEqual([]);
+    expect(afterAck.renderEpoch).toBe(afterPatch.renderEpoch);
+    expect(Array.from(afterAck.tiles)).toEqual(Array.from(afterPatch.tiles));
+  });
+
+  it('clears one-shot snapshot draw markers when a patch produces no tile changes', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(1, 0, 3, 2, [0, 3, 1, 4, 2, 5]),
+    );
+
+    expect(afterSnapshot.drawMode).toBe('snapshot');
+
+    const noOpPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [
+        // This tile already has value `0` at runtime row-major index 0.
+        { x: 0, y: 0, tileWord: 0 },
+      ]),
+    );
+
+    expect(noOpPatch.drawMode).toBe('none');
+    expect(Array.from(noOpPatch.dirtyTileIndexes)).toEqual([]);
+    expect(noOpPatch.renderEpoch).toBe(afterSnapshot.renderEpoch);
+    expect(Array.from(noOpPatch.tiles)).toEqual(Array.from(afterSnapshot.tiles));
   });
 });

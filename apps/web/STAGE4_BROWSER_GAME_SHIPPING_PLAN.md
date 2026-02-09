@@ -280,7 +280,7 @@ Deletion execution notes:
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/g_bigmap.c` (tile draw loops, `LOMASK` usage)
-- [ ] `ref/micropolis/src/sim/g_map.c` (map-state draw modes)
+- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw modes)
 - [ ] `ref/micropolis/src/sim/w_map.c` (map update ownership)
 - [ ] `ref/micropolis/src/sim/g_ani.c` (tile animation masking)
 

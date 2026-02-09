@@ -5,9 +5,11 @@ const EMPTY_DIRTY_TILE_INDEXES = new Uint32Array(0);
 
 /**
  * Last map draw mode emitted by one authoritative envelope.
- * Mirrors `DoUpdateMap` full redraw vs changed-region intent from
- * `ref/micropolis/src/sim/w_map.c`; difference: Stage 2 exposes this
- * explicitly for the React canvas renderer.
+ * Mirrors `MemDrawMap` draw-proc dispatch intent in
+ * `ref/micropolis/src/sim/g_map.c`.
+ * Parity note: this Stage 4 transport-level mode (`none`/`snapshot`/`patch`)
+ * intentionally differs from C thematic map states (`ALMAP`..`DYMAP`) and is
+ * used only to route full vs dirty redraw behavior in the web canvas.
  */
 export type RuntimeMapDrawMode = 'none' | 'snapshot' | 'patch';
 
