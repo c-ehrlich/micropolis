@@ -10,48 +10,36 @@ import path from 'node:path';
  * it automates Codex task execution over the staged markdown plans rather than
  * implementing simulation behavior directly.
  */
+const SHIPPING_PLAN_PATH = 'apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md';
+
+/**
+ * Stage definitions for the single shipping plan document.
+ *
+ * Not from Micropolis C sources; this maps `## Stage N:` sections in markdown
+ * to isolated automation streams/worktrees.
+ */
 const DEFAULT_PACKAGES = [
-  {
-    id: 'stage-0',
-    stageLabel: 'Stage 0 Contract Freeze',
-    packagePath: 'repo',
-    planPath: 'STAGE_0_CONTRACT_FREEZE_PLAN.md',
-    branch: 'codex/auto-stage-0-contract-freeze',
-    worktreePath: '.worktrees/auto-stage-0-contract-freeze',
-  },
-  {
-    id: 'stage-1',
-    stageLabel: 'Stage 1 Mocked Bridge',
-    packagePath: 'repo',
-    planPath: 'STAGE_1_MOCKED_BRIDGE_PLAN.md',
-    branch: 'codex/auto-stage-1-mocked-bridge',
-    worktreePath: '.worktrees/auto-stage-1-mocked-bridge',
-  },
-  {
-    id: 'stage-2',
-    stageLabel: 'Stage 2 Simple UI',
-    packagePath: 'repo',
-    planPath: 'STAGE_2_SIMPLE_UI_PLAN.md',
-    branch: 'codex/auto-stage-2-simple-ui',
-    worktreePath: '.worktrees/auto-stage-2-simple-ui',
-  },
-  {
-    id: 'stage-3',
-    stageLabel: 'Stage 3 Real Bridge DO',
-    packagePath: 'repo',
-    planPath: 'STAGE_3_REAL_BRIDGE_DO_PLAN.md',
-    branch: 'codex/auto-stage-3-real-bridge-do',
-    worktreePath: '.worktrees/auto-stage-3-real-bridge-do',
-  },
-  {
-    id: 'stage-4',
-    stageLabel: 'Stage 4 Glue and Playable',
-    packagePath: 'repo',
-    planPath: 'STAGE_4_GLUE_AND_PLAYABLE_PLAN.md',
-    branch: 'codex/auto-stage-4-glue-and-playable',
-    worktreePath: '.worktrees/auto-stage-4-glue-and-playable',
-  },
-];
+  'Stage 0 Contract and Surface Convergence',
+  'Stage 1 Real sim-core Authority Host Skeleton',
+  'Stage 2 Protocol + Runtime State Expansion',
+  'Stage 3 Real Tool Semantics + Funds Coupling',
+  'Stage 4 Map Rendering from Authoritative Tile Words',
+  'Stage 5 HUD, Messages, and Sim Controls',
+  'Stage 6 New City + Save/Load + Scenario',
+  'Stage 7 Realtime Objects + Overlay Layer',
+  'Stage 8 Sprite Art Pass',
+  'Stage 9 Invalidation, Camera, and UX Performance',
+  'Stage 10 Consolidation, Cleanup, and Default Path Flip',
+  'Stage 11 Playable Full-Game Certification',
+].map((stageLabel, stageNumber) => ({
+  id: `stage-${stageNumber}`,
+  stageNumber,
+  stageLabel,
+  packagePath: 'repo',
+  planPath: SHIPPING_PLAN_PATH,
+  branch: `codex/auto-shipping-stage-${stageNumber}`,
+  worktreePath: `.worktrees/auto-shipping-stage-${stageNumber}`,
+}));
 
 /**
  * Default quality gates for each completed automation task.
@@ -200,6 +188,11 @@ function extractTaskId(text) {
     return boldStageId[1];
   }
 
+  const plainStageId = /^([0-9]+\.[0-9]+)\b/.exec(text);
+  if (plainStageId) {
+    return plainStageId[1];
+  }
+
   const inlineCodeId = /^`([^`]+)`/.exec(text);
   if (inlineCodeId) {
     return inlineCodeId[1];
@@ -214,40 +207,52 @@ function extractTaskId(text) {
  * Not from Micropolis C sources; this interprets staged checklist docs under
  * `STAGE_*_PLAN.md` for Codex automation.
  */
-function parseStagePlan(markdown) {
+function parseStagePlan(markdown, stageNumber = null) {
   const lines = markdown.split('\n');
   /** @type {{ lineNumber: number; text: string; id: string | null }[]} */
   const uncheckedTasks = [];
 
   let inTaskChecklist = false;
-  let inExecutionLog = false;
+  let inTargetStageSection = stageNumber === null;
   let hasTaskChecklist = false;
-  let hasExecutionLog = false;
+  let hasStageSection = stageNumber === null;
   let checkedTaskCount = 0;
   let totalTaskCount = 0;
-  let hasDatedExecutionLogEntry = false;
+  let stageTitle = null;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
-    const trimmed = line.trim();
     const levelTwoHeading = /^##\s+(.+?)\s*$/.exec(line);
 
     if (levelTwoHeading) {
       const title = levelTwoHeading[1].trim();
-      inTaskChecklist = /^Task Checklist$/i.test(title);
-      inExecutionLog = /^Execution Log$/i.test(title);
-
-      if (inTaskChecklist) {
-        hasTaskChecklist = true;
+      if (stageNumber === null) {
+        inTaskChecklist = /^Task Checklist$/i.test(title);
+        if (inTaskChecklist) {
+          hasTaskChecklist = true;
+        }
+        continue;
       }
-      if (inExecutionLog) {
-        hasExecutionLog = true;
+
+      if (inTargetStageSection) {
+        break;
+      }
+
+      const stageMatch = /^Stage\s+([0-9]+)\b/i.exec(title);
+      if (stageMatch && Number(stageMatch[1]) === stageNumber) {
+        inTargetStageSection = true;
+        hasStageSection = true;
+        stageTitle = title;
       }
       continue;
     }
 
-    if (inTaskChecklist) {
-      const checkMatch = /^- \[([ xX])\] (.+)$/.exec(line);
+    if (stageNumber !== null && !inTargetStageSection) {
+      continue;
+    }
+
+    if (stageNumber !== null || inTaskChecklist) {
+      const checkMatch = /^\s*- \[([ xX])\] (.+)$/.exec(line);
       if (!checkMatch) {
         continue;
       }
@@ -266,21 +271,16 @@ function parseStagePlan(markdown) {
         text,
         id: extractTaskId(text),
       });
-      continue;
-    }
-
-    if (inExecutionLog && /^- \[(?:x|X)\]\s+\d{4}-\d{2}-\d{2}:\s+/.test(trimmed)) {
-      hasDatedExecutionLogEntry = true;
     }
   }
 
   return {
     tasks: uncheckedTasks,
+    stageTitle,
+    hasStageSection,
     hasTaskChecklist,
-    hasExecutionLog,
     checkedTaskCount,
     totalTaskCount,
-    hasDatedExecutionLogEntry,
   };
 }
 
@@ -302,7 +302,7 @@ function parseActionablePlanTasks(markdown) {
 function getPackagePlanStatus(repoRoot, pkg) {
   const planAbsolutePath = path.join(repoRoot, pkg.planPath);
   const content = readFileSync(planAbsolutePath, 'utf8');
-  const parsed = parseStagePlan(content);
+  const parsed = parseStagePlan(content, pkg.stageNumber);
   const tasks = parsed.tasks;
   return {
     planAbsolutePath,
@@ -417,14 +417,13 @@ function buildTaskPrompt(pkg, task) {
   const taskLabel = task.id ? `${task.id} - ${task.text}` : task.text;
   return [
     `Work only on ${pkg.stageLabel} (${pkg.id}).`,
-    `Complete exactly one unchecked plan task from ${pkg.planPath}.`,
+    `Complete exactly one unchecked plan task from ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
     `Target task: ${taskLabel}`,
     'Requirements:',
     '- Read the stage plan fully, including Required Context, Agent Rules, and checklist notes.',
     '- Implement only this task and required support changes.',
-    '- Do not start tasks from any other stage plan.',
-    `- Mark this exact task as checked in ${pkg.planPath}.`,
-    "- Append an execution log line with today's date and what was completed.",
+    `- Do not start tasks from any stage section other than Stage ${pkg.stageNumber}.`,
+    `- Mark this exact task as checked in ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
     '- Keep parity behavior aligned with ref/micropolis sources where relevant.',
     '- Add JSDoc for new exported functions/classes, citing source mapping and parity notes.',
     '- Keep tests next to implementation files when adding tests.',
@@ -448,7 +447,7 @@ function buildRepairPrompt(pkg, task, failedChecksSummary) {
     'Failed checks output:',
     failedChecksSummary,
     'Constraints:',
-    `- Keep the target task checked in ${pkg.planPath}.`,
+    `- Keep the target task checked in ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
     '- Do not uncheck completed items.',
     '- Preserve parity/JSDoc/testing requirements from AGENTS.md.',
     '- End with a short summary of what you changed to pass checks.',
@@ -647,7 +646,7 @@ function taskKey(pkg, task) {
  * Picks the next stage/task candidate in plan order.
  *
  * This is intentionally different from Micropolis C scheduling. The orchestrator
- * advances Stage 0 -> Stage 4 and halts if the earliest incomplete stage task is blocked.
+ * advances Stage 0 -> Stage 11 and halts if the earliest incomplete stage task is blocked.
  */
 function pickNextCandidate(packagesWithStatus, blockedKeys) {
   if (packagesWithStatus.length === 0) {
@@ -716,8 +715,8 @@ function writeState(statePath, state) {
 /**
  * Produces a drift audit summary for stage plan consistency.
  *
- * Not from Micropolis C; this detects checklist/log structural drift in
- * `STAGE_*_PLAN.md` documents.
+ * Not from Micropolis C; this detects checklist structure drift in stage sections
+ * inside `STAGE4_BROWSER_GAME_SHIPPING_PLAN.md`.
  */
 function buildDriftReport(repoRoot, packages) {
   /** @type {{ stageId: string; stageLabel: string; uncheckedCount: number; checkedCount: number; totalTasks: number; issues: string[] }[]} */
@@ -730,17 +729,11 @@ function buildDriftReport(repoRoot, packages) {
 
     /** @type {string[]} */
     const issues = [];
-    if (!checklist.hasTaskChecklist) {
-      issues.push('Missing "## Task Checklist" section');
-    }
-    if (!checklist.hasExecutionLog) {
-      issues.push('Missing "## Execution Log" section');
+    if (!checklist.hasStageSection) {
+      issues.push(`Missing "## Stage ${pkg.stageNumber}: ..." section`);
     }
     if (checklist.totalTaskCount === 0) {
-      issues.push('No checklist tasks found');
-    }
-    if (checklist.checkedTaskCount > 0 && !checklist.hasDatedExecutionLogEntry) {
-      issues.push('Checked tasks exist but no dated checked execution-log entry was found');
+      issues.push(`No checklist tasks found in Stage ${pkg.stageNumber}`);
     }
 
     rows.push({
@@ -762,7 +755,7 @@ function buildDriftReport(repoRoot, packages) {
  * Not from Micropolis C; this is operator visibility for staged checklist work.
  */
 function printQueue(repoRoot, packages) {
-  process.stdout.write('Stage queue status:\n');
+  process.stdout.write(`Stage queue status (${SHIPPING_PLAN_PATH}):\n`);
   for (const pkg of packages) {
     const statusRoot = resolveStatusRepoRoot(repoRoot, pkg);
     const status = getPackagePlanStatus(statusRoot, pkg);
@@ -938,7 +931,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       prompt = buildRepairPrompt(
         pkg,
         task,
-        `Target task is still unchecked in ${pkg.planPath}; mark it checked and keep plan in sync.`,
+        `Target task is still unchecked in ${pkg.planPath} under Stage ${pkg.stageNumber}; mark it checked and keep plan in sync.`,
       );
       continue;
     }
@@ -949,7 +942,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       prompt = buildRepairPrompt(
         pkg,
         task,
-        `This task started unchecked, but ${pkg.planPath} was not updated in this attempt. Ensure the task check-off and execution log are updated.`,
+        `This task started unchecked, but ${pkg.planPath} was not updated in this attempt. Ensure the task check-off is updated in Stage ${pkg.stageNumber}.`,
       );
       continue;
     }
