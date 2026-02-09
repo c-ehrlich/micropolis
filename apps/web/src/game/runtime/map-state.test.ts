@@ -80,8 +80,9 @@ function createPatchEnvelope(
 }
 
 /**
- * Builds one sequenced non-map envelope for draw-mode reset coverage.
- * Mirrors command-ack sequencing participation in `ref/micropolis/src/sim/w_sim.c`.
+ * Builds one sequenced non-map envelope for map ownership coverage.
+ * Mirrors command-ack sequencing participation in `ref/micropolis/src/sim/w_sim.c`,
+ * while map invalidation ownership remains in `DoUpdateMap` from `w_map.c`.
  */
 function createAckEnvelope(
   serverSeq: number,
@@ -167,7 +168,7 @@ describe('runtime map projection', () => {
     expect(replayState.drawMode).toBe('patch');
   });
 
-  it('resets draw mode markers to none after non-map sequenced envelopes', () => {
+  it('keeps map draw markers owned by map projection across non-map envelopes', () => {
     const initial = createInitialRuntimeMapState();
     const afterSnapshot = projectRuntimeMapState(
       initial,
@@ -183,13 +184,14 @@ describe('runtime map projection', () => {
 
     const afterAck = projectRuntimeMapState(afterPatch, createAckEnvelope(3, 1, 'cmd-1'));
 
-    expect(afterAck.drawMode).toBe('none');
-    expect(Array.from(afterAck.dirtyTileIndexes)).toEqual([]);
+    expect(afterAck).toBe(afterPatch);
+    expect(afterAck.drawMode).toBe('patch');
+    expect(Array.from(afterAck.dirtyTileIndexes)).toEqual([0]);
     expect(afterAck.renderEpoch).toBe(afterPatch.renderEpoch);
     expect(Array.from(afterAck.tiles)).toEqual(Array.from(afterPatch.tiles));
   });
 
-  it('clears one-shot snapshot draw markers when a patch produces no tile changes', () => {
+  it('keeps snapshot redraw ownership when a patch produces no tile changes', () => {
     const initial = createInitialRuntimeMapState();
     const afterSnapshot = projectRuntimeMapState(
       initial,
@@ -206,7 +208,8 @@ describe('runtime map projection', () => {
       ]),
     );
 
-    expect(noOpPatch.drawMode).toBe('none');
+    expect(noOpPatch).toBe(afterSnapshot);
+    expect(noOpPatch.drawMode).toBe('snapshot');
     expect(Array.from(noOpPatch.dirtyTileIndexes)).toEqual([]);
     expect(noOpPatch.renderEpoch).toBe(afterSnapshot.renderEpoch);
     expect(Array.from(noOpPatch.tiles)).toEqual(Array.from(afterSnapshot.tiles));

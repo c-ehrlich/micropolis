@@ -18,6 +18,9 @@ export type RuntimeMapDrawMode = 'none' | 'snapshot' | 'patch';
  * Mirrors `MemDrawMap` map-buffer ownership in `ref/micropolis/src/sim/g_map.c`.
  * Difference: this stores one explicit typed tile buffer instead of the C
  * global map memory macros.
+ * Parity note: `drawMode`/`dirtyTileIndexes` are map-view owned redraw markers,
+ * matching `view->invalid` lifecycle ownership in `DoUpdateMap` from
+ * `ref/micropolis/src/sim/w_map.c`.
  */
 export interface RuntimeMapState {
   hasSnapshot: boolean;
@@ -49,7 +52,8 @@ export function createInitialRuntimeMapState(): RuntimeMapState {
  * Projects snapshot/patch host envelopes into the runtime map projection.
  * Mirrors ordered map baseline + incremental application behavior across
  * `ref/micropolis/src/sim/w_map.c` and `ref/micropolis/src/sim/g_map.c`.
- * Difference: this consumes bridge payloads instead of direct C globals.
+ * Difference: this consumes bridge payloads instead of direct C globals, and
+ * non-map envelopes intentionally do not clear map redraw markers.
  */
 export function projectRuntimeMapState(
   state: RuntimeMapState,
@@ -63,7 +67,7 @@ export function projectRuntimeMapState(
     return applyPatchPayload(state, envelope.payload);
   }
 
-  return resetMapDrawMarkers(state);
+  return state;
 }
 
 interface SnapshotPayload {
@@ -80,7 +84,7 @@ interface PatchTileDelta {
 function applySnapshotPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
   const parsed = parseSnapshotPayload(payload);
   if (parsed === null) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   return {
@@ -96,12 +100,12 @@ function applySnapshotPayload(state: RuntimeMapState, payload: unknown): Runtime
 
 function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
   if (!state.hasSnapshot) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   const deltas = parsePatchPayload(payload, state.width, state.height);
   if (deltas === null || deltas.length === 0) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   let nextTiles: Uint16Array | null = null;
@@ -125,7 +129,7 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
   }
 
   if (nextTiles === null || dirty.length === 0) {
-    return resetMapDrawMarkers(state);
+    return state;
   }
 
   return {
@@ -134,18 +138,6 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
     dirtyTileIndexes: Uint32Array.from(dirty),
     drawMode: 'patch',
     renderEpoch: state.renderEpoch + 1,
-  };
-}
-
-function resetMapDrawMarkers(state: RuntimeMapState): RuntimeMapState {
-  if (state.drawMode === 'none' && state.dirtyTileIndexes.length === 0) {
-    return state;
-  }
-
-  return {
-    ...state,
-    dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
-    drawMode: 'none',
   };
 }
 
