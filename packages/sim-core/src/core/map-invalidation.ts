@@ -1,5 +1,5 @@
 import { World } from './constants.ts';
-import { MAP_FLAGS, type MapFlagId } from './map-flags.ts';
+import { MAP_FLAG_COUNT, MAP_FLAGS, type MapFlagId } from './map-flags.ts';
 import type { Patch } from './map-store.ts';
 
 const DEFAULT_MAX_DIRTY_TILES_BEFORE_FULL_REDRAW = 2048;
@@ -148,7 +148,9 @@ export function consumeMapRedrawPlan(
   _plan: Pick<MapRedrawPlan, 'consumedFlags'>,
 ): void {
   state.NewMap = 0;
-  state.NewMapFlags.fill(0);
+  for (let index = 0; index < MAP_FLAG_COUNT; index += 1) {
+    state.NewMapFlags[index] = 0;
+  }
 }
 
 function buildDirtyRectsFromMapPatch(indexes: Uint32Array): DirtyTileRect[] {

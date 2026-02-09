@@ -156,7 +156,7 @@ describe('planMapRedraw', () => {
 });
 
 describe('consumeMapRedrawPlan', () => {
-  it('clears NewMap and all NewMapFlags entries for the update cycle', () => {
+  it('clears NewMap and all C map-flag slots for the update cycle', () => {
     const state = {
       NewMap: 1,
       NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
@@ -165,11 +165,29 @@ describe('consumeMapRedrawPlan', () => {
     state.NewMapFlags[MAP_FLAGS.PLMAP] = 1;
 
     consumeMapRedrawPlan(state, {
-      consumedFlags: ['ALMAP'],
+      consumedFlags: [],
     });
 
     expect(state.NewMap).toBe(0);
     expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(0);
     expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(0);
+  });
+
+  it('only clears the C NMAPS flag range', () => {
+    const extensionSlot = MAP_FLAG_COUNT;
+    const state = {
+      NewMap: 0,
+      // C `sim_update_maps` clears `NewMapFlags[0..NMAPS-1]` only.
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT + 1),
+    };
+    state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
+    state.NewMapFlags[extensionSlot] = 9;
+
+    consumeMapRedrawPlan(state, {
+      consumedFlags: ['DYMAP'],
+    });
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
+    expect(state.NewMapFlags[extensionSlot]).toBe(9);
   });
 });
