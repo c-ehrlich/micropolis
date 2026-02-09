@@ -214,7 +214,7 @@ Deletion execution notes:
 - [x] `apps/web/src/game/runtime/reducer.ts`
 - [x] `apps/web/src/game/runtime/map-state.ts`
 - [x] `apps/web/src/game/runtime/hud-state.ts`
-- [ ] `apps/web/src/game/runtime/runtime.ts`
+- [x] `apps/web/src/game/runtime/runtime.ts`
 
 ### Implementation checklist
 
@@ -567,6 +567,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
