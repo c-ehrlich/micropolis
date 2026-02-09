@@ -410,22 +410,14 @@ export class DemoMapHost implements CoreHost {
     this.refreshHookDrivenHud();
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
     this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-
-    const payload: DemoPatchPayload = {
-      hud: this.getHudHeadsPayload(),
-    };
-
-    if (placement.deltas.length > 0) {
-      payload.map = {
-        tileWordDeltas: placement.deltas,
-      };
-    }
-    const hookMessages = this.drainPendingHookMessages();
-    if (hookMessages.length > 0) {
-      payload.messageDeltas = hookMessages;
-    }
-
-    this.emitPatch(envelope.roomId, envelope.clientId, payload);
+    this.emitPatch(
+      envelope.roomId,
+      envelope.clientId,
+      this.buildHookDrivenPatchPayload({
+        includeHud: true,
+        mapTileWordDeltas: placement.deltas,
+      }),
+    );
   }
 
   /**
@@ -442,17 +434,11 @@ export class DemoMapHost implements CoreHost {
 
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
     this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-    const hookMessages = this.drainPendingHookMessages();
-    if (!didEmitSpeedUpdate && hookMessages.length === 0) {
+    const payload = this.buildHookDrivenPatchPayload({
+      includeHud: didEmitSpeedUpdate,
+    });
+    if (payload.hud === undefined && payload.messageDeltas === undefined) {
       return;
-    }
-
-    const payload: DemoPatchPayload = {};
-    if (didEmitSpeedUpdate) {
-      payload.hud = this.getHudHeadsPayload();
-    }
-    if (hookMessages.length > 0) {
-      payload.messageDeltas = hookMessages;
     }
 
     this.emitPatch(envelope.roomId, envelope.clientId, payload);
@@ -721,17 +707,49 @@ export class DemoMapHost implements CoreHost {
     }
 
     this.tick += 1;
+    this.emitPatch(
+      roomId,
+      clientId,
+      this.buildHookDrivenPatchPayload({
+        includeHud: true,
+      }),
+    );
+  }
 
-    const payload: DemoPatchPayload = {
-      hud: this.getHudHeadsPayload(),
-    };
+  /**
+   * Builds one patch payload from hook-driven HUD and message queues.
+   * Mirrors `DoUpdateHeads` (`ref/micropolis/src/sim/w_update.c`) and `doMessage`
+   * (`ref/micropolis/src/sim/s_msg.c`) dispatch ownership, adapted to Stage 2
+   * bridge payload fields.
+   * Difference: map deltas are passed in by host command handlers instead of
+   * being emitted directly from C update globals.
+   */
+  private buildHookDrivenPatchPayload(options: {
+    includeHud: boolean;
+    mapTileWordDeltas?: ReadonlyArray<{
+      x: number;
+      y: number;
+      tileWord: number;
+    }>;
+  }): DemoPatchPayload {
+    const payload: DemoPatchPayload = {};
+
+    if (options.includeHud) {
+      payload.hud = this.getHudHeadsPayload();
+    }
+
+    if (options.mapTileWordDeltas !== undefined && options.mapTileWordDeltas.length > 0) {
+      payload.map = {
+        tileWordDeltas: [...options.mapTileWordDeltas],
+      };
+    }
 
     const hookMessages = this.drainPendingHookMessages();
     if (hookMessages.length > 0) {
       payload.messageDeltas = hookMessages;
     }
 
-    this.emitPatch(roomId, clientId, payload);
+    return payload;
   }
 
   /**

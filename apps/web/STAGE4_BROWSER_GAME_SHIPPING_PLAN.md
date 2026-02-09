@@ -329,7 +329,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Wire `SimContext` hooks to host payload builders for HUD/message updates.
+- [x] Wire `SimContext` hooks to host payload builders for HUD/message updates.
 - [ ] Feed Stage 4 UI labels from authoritative HUD state only.
 - [x] Wire Stage 4 play/pause/speed controls to real sim speed state.
 - [ ] Preserve message timing/expiry/requeue behavior expected by C message flow.

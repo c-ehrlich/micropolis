@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -32,6 +33,47 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       expect(ambientPatchCount).toBeGreaterThan(0);
       expect(ambientPatchWithMapCount).toBe(0);
       expect(runtime.getState().mapState).toBe(initialMapState);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('emits SendMesAt hook deliveries as coordinate message deltas', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const coordinateMessages: Array<{ id: number; x: number | undefined; y: number | undefined }> =
+      [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const deltas = event.envelope.payload.messageDeltas;
+        if (deltas === undefined) {
+          return;
+        }
+
+        for (const message of deltas) {
+          coordinateMessages.push({ id: message.id, x: message.x, y: message.y });
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simState: Parameters<typeof sendMesAt>[0];
+        simContext: Parameters<typeof sendMesAt>[1];
+      };
+      // Message id 14 is one of the classic demand-warning ids from the
+      // `doMessage`/resource table flow in `ref/micropolis/src/sim/s_msg.c`.
+      expect(sendMesAt(authority.simState, authority.simContext, 14, 7, 9)).toBe(true);
+
+      vi.advanceTimersByTime(20);
+
+      expect(coordinateMessages).toContainEqual({ id: 14, x: 7, y: 9 });
     } finally {
       runtime.disconnect();
       vi.useRealTimers();
