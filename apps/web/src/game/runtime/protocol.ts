@@ -568,6 +568,30 @@ export interface HostHudMessagePayload {
 export type HostMessageDeltaPayload = HostHudMessagePayload;
 
 /**
+ * One authoritative realtime object entry carried by snapshot/patch envelopes.
+ * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
+ * represented by `SimSprite` in `packages/sim-core/src/sim/realtime.ts`.
+ * Parity note: Stage 2 carries a minimal placeholder subset; Stage 7 expands
+ * this into full overlay rendering semantics.
+ */
+export interface HostRealtimeObjectPayload {
+  name: string;
+  type: number;
+  x: number;
+  y: number;
+  frame?: number;
+}
+
+/**
+ * Realtime payload section carried by Stage 2 snapshot/patch envelopes.
+ * Mirrors realtime object stream intent from `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this payload is optional until Stage 7 and may be empty.
+ */
+export interface HostRealtimePayload {
+  objects?: readonly HostRealtimeObjectPayload[];
+}
+
+/**
  * Authoritative HUD heads payload carried by snapshot/patch envelopes.
  * Mirrors `DoUpdateHeads` scalar UI updates in `ref/micropolis/src/sim/w_update.c`.
  * Parity note: `funds` carries the canonical scalar while `fundsLabel` is retained
@@ -610,6 +634,11 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
   map?: HostMapSnapshotPayload | LegacyHostMapSnapshotPayload;
   hud?: HostHudPayload;
   /**
+   * Optional realtime object baseline for overlay projection.
+   * Mirrors sprite snapshot ownership in `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  realtime?: HostRealtimePayload;
+  /**
    * Snapshot baseline message feed (full replacement semantics).
    * Mirrors `SetMessageField` visible-message ownership in
    * `ref/micropolis/src/sim/s_msg.c`.
@@ -631,6 +660,11 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
 export interface HostPatchPayload extends Record<string, unknown> {
   map?: HostMapPatchPayload | LegacyHostMapPatchPayload;
   hud?: HostHudPayload;
+  /**
+   * Optional realtime object delta/snapshot payload for staged overlay support.
+   * Mirrors per-frame sprite update intent from `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  realtime?: HostRealtimePayload;
   /**
    * Incremental message additions for patch projection.
    * Mirrors one-heads-cycle message dispatch deltas in `ref/micropolis/src/sim/s_msg.c`.

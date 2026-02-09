@@ -23,6 +23,11 @@ import {
   type Stage2ClientCommand,
   type Stage2ToolCommand,
 } from './protocol.ts';
+import {
+  createInitialRuntimeRealtimeState,
+  projectRuntimeRealtimeState,
+  type RuntimeRealtimeState,
+} from './realtime-state.ts';
 
 /**
  * Lifecycle phases for the web host-client runtime.
@@ -66,6 +71,7 @@ export interface WebRuntimeState {
   lastAppliedTick: number;
   mapState: RuntimeMapState;
   hudState: RuntimeHudState;
+  realtimeState: RuntimeRealtimeState;
   pendingTools: readonly PendingToolCommandVisual[];
   lastRejectReason: string | null;
 }
@@ -128,6 +134,7 @@ export function createInitialWebRuntimeState(
     lastAppliedTick: 0,
     mapState: createInitialRuntimeMapState(),
     hudState: createInitialRuntimeHudState(),
+    realtimeState: createInitialRuntimeRealtimeState(),
     pendingTools: [],
     lastRejectReason: null,
   };
@@ -248,6 +255,7 @@ function applySequencedEnvelope(
   const settledState = settlePendingToolCommand(state, envelope);
   const mapState = projectRuntimeMapState(settledState.mapState, envelope);
   const hudState = projectRuntimeHudState(settledState.hudState, envelope);
+  const realtimeState = projectRuntimeRealtimeState(settledState.realtimeState, envelope);
 
   return {
     state: {
@@ -257,6 +265,7 @@ function applySequencedEnvelope(
       lastAppliedTick: envelope.tick,
       mapState,
       hudState,
+      realtimeState,
     },
     outcome: 'applied',
     effect: { kind: 'none' },
@@ -270,6 +279,7 @@ function applyResyncDirective(
   const resyncState = enterResyncingPhase(state);
   const mapState = projectRuntimeMapState(resyncState.mapState, envelope);
   const hudState = projectRuntimeHudState(resyncState.hudState, envelope);
+  const realtimeState = projectRuntimeRealtimeState(resyncState.realtimeState, envelope);
 
   return {
     state: {
@@ -278,6 +288,7 @@ function applyResyncDirective(
       lastAppliedTick: envelope.tick,
       mapState,
       hudState,
+      realtimeState,
     },
     outcome: 'applied',
     effect: {

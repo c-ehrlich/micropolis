@@ -608,6 +608,9 @@ export class DemoMapHost implements CoreHost {
           speed: this.getVisibleSpeed(),
           options: this.getHudOptionsHeads(),
         },
+        realtime: {
+          objects: [],
+        },
         messages: this.messageLog,
       },
     });

@@ -347,6 +347,47 @@ describe('reduceHostEnvelope', () => {
     expect(afterAck.state.lastRejectReason).toBeNull();
   });
 
+  it('projects optional realtime object payloads from snapshot and patch envelopes', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const afterSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        realtime: {
+          // Fields map to `SimSprite` shape from `packages/sim-core/src/sim/realtime.ts`,
+          // the TypeScript parity port of `ref/micropolis/src/sim/w_sprite.c`.
+          objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
+        },
+      },
+    });
+
+    expect(afterSnapshot.state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 64, y: 80, frame: 2 },
+    ]);
+
+    const afterPatch = reduceHostEnvelope(afterSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      payload: {
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 80, y: 96, frame: 3 }],
+        },
+      },
+    });
+
+    expect(afterPatch.state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 80, y: 96, frame: 3 },
+    ]);
+  });
+
   it('keeps authoritative projection state unchanged when enqueueing pending tool visuals', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
@@ -373,6 +414,7 @@ describe('reduceHostEnvelope', () => {
     expect(withPending.pendingTools).toHaveLength(1);
     expect(withPending.mapState).toBe(afterSnapshot.mapState);
     expect(withPending.hudState).toBe(afterSnapshot.hudState);
+    expect(withPending.realtimeState).toBe(afterSnapshot.realtimeState);
     expect(withPending.lastAppliedServerSeq).toBe(afterSnapshot.lastAppliedServerSeq);
     expect(withPending.lastAppliedTick).toBe(afterSnapshot.lastAppliedTick);
   });
