@@ -4,7 +4,7 @@ import {
   CORE_BRIDGE_V1_PROTOCOL_VERSION,
   type CoreClientEnvelope as CoreBridgeClientEnvelopeContract,
   type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
-} from '@city/core-bridge';
+} from '../../../../../packages/core-bridge/src/types.ts';
 
 /**
  * Stage 0 canonical client-envelope contract alias for web runtime migration.
