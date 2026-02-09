@@ -1,13 +1,5 @@
 import {
   applyToolAction,
-  createClassicMapStore,
-  createRng,
-  createSimContext,
-  createSimState,
-  createToolContext,
-  doSimInit,
-  initMapArrays,
-  initWillStuff,
   runSimLoop,
   type SimContext,
   type SimState,
@@ -29,6 +21,7 @@ import type {
   HostMode,
 } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
+import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
 
 interface AcceptedOutcome {
   kind: 'ack';
@@ -46,7 +39,6 @@ type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEven
 
 const { WORLD_X, WORLD_Y } = World;
 const DEFAULT_TICK_INTERVAL_MS = 100;
-const DEFAULT_STARTING_FUNDS = 20_000;
 
 /**
  * Authority engine selection for Stage 4 host wiring.
@@ -128,35 +120,13 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private simPausedSpeed = 0;
 
   public constructor(private readonly options: SimCoreCommandAuthorityOptions) {
-    const store = createClassicMapStore();
-    const simState = createSimState();
-    const simContext = createSimContext({
-      store,
-      rng: createRng(this.options.seed),
-      hooks: {
-        tickCount: () => simState.Fcycle,
-      },
-    });
-
-    initMapArrays(store);
-    initWillStuff(simContext, simState, { seed: this.options.seed });
-    simState.InitSimLoad = 2;
-    doSimInit(simContext, simState);
-    simState.TotalFunds = DEFAULT_STARTING_FUNDS;
-    simState.SimMetaSpeed = simState.SimSpeed;
-
-    this.simState = simState;
-    this.simContext = simContext;
-    this.toolContext = createToolContext({
-      store,
-      rng: simContext.rng,
-      funds: simState.TotalFunds,
-      autoBulldoze: simState.autoBulldoze,
-      doAnimation: simState.doAnimation,
-    });
+    const authorityState = new Stage4SimCoreAuthorityState({ seed: this.options.seed });
+    this.simState = authorityState.simState;
+    this.simContext = authorityState.simContext;
+    this.toolContext = authorityState.toolContext;
     this.tickIntervalMs = normalizeTickIntervalMs(this.options.tickIntervalMs);
     this.tickScheduler = this.options.tickScheduler ?? DEFAULT_TICK_SCHEDULER;
-    this.simPausedSpeed = simState.SimMetaSpeed;
+    this.simPausedSpeed = this.simState.SimMetaSpeed;
   }
 
   public connect(): void {

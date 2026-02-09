@@ -180,7 +180,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Add a new Stage 4 authority module that creates and owns `MapStore + SimState + SimContext + ToolContext`.
+- [x] Add a new Stage 4 authority module that creates and owns `MapStore + SimState + SimContext + ToolContext`.
 - [ ] Implement host lifecycle (`connect`, `disconnect`, periodic tick loop, snapshot request support).
 - [ ] Keep deterministic authority available only for isolated tests/fallback.
 - [ ] Add host-factory flag/wiring to opt into the real authority path in web dev/runtime.
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
