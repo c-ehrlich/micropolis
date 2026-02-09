@@ -123,6 +123,55 @@ describe('doMessage parity', () => {
     updateDate(state, context);
     expect(state.MesNum).toBe(0);
   });
+
+  it('plays first-display sounds only when a new message enters MesNum', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, makeSound: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // s_msg.c doMessage firstTime switch: message id 11 triggers "Siren".
+    expect(sendMes(state, context, 11)).toBe(true);
+    updateDate(state, context);
+    // sim-core sound mapping in messages.ts: city channel=0, siren sound id=4.
+    expect(hooks.makeSound).toHaveBeenCalledTimes(1);
+    expect(hooks.makeSound).toHaveBeenCalledWith(0, 4);
+
+    tick.now += 1;
+    updateDate(state, context);
+    // s_msg.c firstTime is false while the same MesNum remains active.
+    expect(hooks.makeSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays firstTime sounds for picture-to-text message requeue', () => {
+    const tick = { now: 0 };
+    const hooks = { tickCount: () => tick.now, makeSound: vi.fn(), sendMes: vi.fn() };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+
+    // s_msg.c doMessage firstTime switch: message id 30 plays "Explosion-Low" then "Siren".
+    // Picture messages requeue text via `MessagePort = pictId`, so the switch runs again next tick.
+    expect(sendMes(state, context, -30)).toBe(true);
+
+    updateDate(state, context);
+    tick.now += 1;
+    updateDate(state, context);
+
+    // sim-core sound mapping in messages.ts:
+    // city channel=0, explosion-low=6, siren=4.
+    expect(hooks.makeSound.mock.calls).toEqual([
+      [0, 6],
+      [0, 4],
+      [0, 6],
+      [0, 4],
+    ]);
+  });
 });
 
 describe('CheckGrowth', () => {

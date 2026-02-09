@@ -55,6 +55,62 @@ function dispatchMes(state: SimState, context: SimContext, id: number): void {
   context.hooks.sendMesAt(id, x, y);
 }
 
+const MESSAGE_SOUND_CHANNEL_CITY = 0;
+const MESSAGE_SOUND_HONK_MED = 1;
+const MESSAGE_SOUND_HONK_LOW = 2;
+const MESSAGE_SOUND_HONK_HIGH = 3;
+const MESSAGE_SOUND_SIREN = 4;
+const MESSAGE_SOUND_MONSTER = 5;
+const MESSAGE_SOUND_EXPLOSION_LOW = 6;
+const MESSAGE_SOUND_EXPLOSION_HIGH = 7;
+
+/**
+ * First-display sound effects for queued messages.
+ * Mirrors the `firstTime` sound switch in `doMessage` from
+ * `ref/micropolis/src/sim/s_msg.c`.
+ *
+ * Parity note: C uses named sound strings via `MakeSound("city", "...")`.
+ * sim-core forwards stable numeric `(channel, sound)` ids through `SimHooks.makeSound`.
+ */
+function playFirstDisplaySound(state: SimState, context: SimContext): void {
+  const messageId = state.MesNum < 0 ? -state.MesNum : state.MesNum;
+
+  switch (messageId) {
+    case 12:
+      if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_MED);
+      } else if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_LOW);
+      } else if (context.rng.rand(5) === 1) {
+        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_HIGH);
+      }
+      return;
+    case 11:
+    case 20:
+    case 22:
+    case 23:
+    case 24:
+    case 25:
+    case 26:
+    case 27:
+    case 44:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+    case 21:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_MONSTER);
+      return;
+    case 30:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+    case 43:
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_HIGH);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
+      return;
+  }
+}
+
 /**
  * Core message port enqueue logic.
  * Mirrors `SendMes` in `ref/micropolis/src/sim/s_msg.c`.
@@ -144,6 +200,7 @@ export function sendMesAt(
  *
  * Mirrors `doMessage` in `ref/micropolis/src/sim/s_msg.c` (core behavior, 1:1):
  * - Consumes `MessagePort` into `MesNum` and clears the port.
+ * - Triggers first-display message sounds from the `firstTime` switch table.
  * - Requeues picture messages by setting `MessagePort = pictId` so the text message
  *   is shown on the next tick.
  * - Expires active non-picture messages after `(60 * 30)` ticks via `TickCount()`.
@@ -153,11 +210,13 @@ export function sendMesAt(
  */
 export function doMessage(state: SimState, context: SimContext): void {
   const tick = context.hooks.tickCount();
+  let firstTime = false;
 
   if (state.MessagePort) {
     state.MesNum = state.MessagePort;
     state.MessagePort = 0;
     state.LastMesTime = tick;
+    firstTime = true;
   } else {
     if (state.MesNum === 0) return;
 
@@ -169,6 +228,10 @@ export function doMessage(state: SimState, context: SimContext): void {
       state.MesNum = 0;
       return;
     }
+  }
+
+  if (firstTime) {
+    playFirstDisplaySound(state, context);
   }
 
   if (state.MesNum >= 0) {
