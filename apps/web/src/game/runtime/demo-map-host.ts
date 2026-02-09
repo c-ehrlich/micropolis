@@ -437,19 +437,24 @@ export class DemoMapHost implements CoreHost {
     envelope: Extract<ClientEnvelope, { kind: 'command' }>,
     command: Stage2SimControlCommand,
   ): void {
-    this.applySimControl(command);
+    const didEmitSpeedUpdate = this.applySimControl(command);
     this.refreshAmbientInterval();
-    this.refreshHookDrivenHud();
 
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
     this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-    const payload: DemoPatchPayload = {
-      hud: this.getHudHeadsPayload(),
-    };
     const hookMessages = this.drainPendingHookMessages();
+    if (!didEmitSpeedUpdate && hookMessages.length === 0) {
+      return;
+    }
+
+    const payload: DemoPatchPayload = {};
+    if (didEmitSpeedUpdate) {
+      payload.hud = this.getHudHeadsPayload();
+    }
     if (hookMessages.length > 0) {
       payload.messageDeltas = hookMessages;
     }
+
     this.emitPatch(envelope.roomId, envelope.clientId, payload);
   }
 
@@ -1013,51 +1018,57 @@ export class DemoMapHost implements CoreHost {
    * Sets paused state and remembered speed metadata.
    * Mirrors `Pause`/`Resume`/`setSpeed` interactions from
    * `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: returns whether this command path executed `setSpeed` and
+   * therefore emitted `UISetSpeed` in C.
    */
-  private applySimControl(command: Stage2SimControlCommand): void {
+  private applySimControl(command: Stage2SimControlCommand): boolean {
     if (command.control === 'pause') {
-      this.pauseSimulation();
-      return;
+      return this.pauseSimulation();
     }
 
     if (command.control === 'play') {
-      this.resumeSimulation();
-      return;
+      return this.resumeSimulation();
     }
 
-    this.setSimulationSpeed(command.speed);
+    return this.setSimulationSpeed(command.speed);
   }
 
   /**
    * Pause semantics for Stage 2 host sim controls.
    * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: returns false on C-equivalent no-op (`sim_paused` already true).
    */
-  private pauseSimulation(): void {
+  private pauseSimulation(): boolean {
     if (this.simPaused) {
-      return;
+      return false;
     }
     this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
     this.setSimulationSpeed(0);
     this.simPaused = true;
+    return true;
   }
 
   /**
    * Resume semantics for Stage 2 host sim controls.
    * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: returns false on C-equivalent no-op (`sim_paused` already false).
    */
-  private resumeSimulation(): void {
+  private resumeSimulation(): boolean {
     if (!this.simPaused) {
-      return;
+      return false;
     }
     this.simPaused = false;
     this.setSimulationSpeed(this.simPausedSpeed);
+    return true;
   }
 
   /**
    * Speed semantics for Stage 2 host sim controls.
    * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: always returns true because C `setSpeed` always emits `UISetSpeed`,
+   * even when the clamped speed value is unchanged.
    */
-  private setSimulationSpeed(candidate: number): void {
+  private setSimulationSpeed(candidate: number): true {
     let speed = normalizePlayableSpeed(candidate);
     this.simState.SimMetaSpeed = speed;
 
@@ -1067,6 +1078,7 @@ export class DemoMapHost implements CoreHost {
     }
 
     this.simState.SimSpeed = speed;
+    return true;
   }
 
   /**

@@ -268,4 +268,61 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       vi.useRealTimers();
     }
   });
+
+  it('skips redundant HUD speed patches for no-op Pause/Resume branches', () => {
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: false }),
+    });
+    let speedPatchCount = 0;
+    let ackCount = 0;
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind === 'ack') {
+        ackCount += 1;
+        return;
+      }
+      if (event.envelope?.kind !== 'patch') {
+        return;
+      }
+      if (typeof event.envelope.payload.hud?.speed === 'number') {
+        speedPatchCount += 1;
+      }
+    });
+
+    runtime.connect();
+    expect(runtime.getState().hudState.speed).toBe(3);
+
+    runtime.sendCommand('pause-1', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+    expect(runtime.getState().hudState.speed).toBe(0);
+    const speedPatchCountAfterFirstPause = speedPatchCount;
+
+    runtime.sendCommand('pause-2', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+
+    // `Pause()` only calls `setSpeed(0)` from the `if (!sim_paused)` branch in
+    // `ref/micropolis/src/sim/w_util.c`; the second pause is a no-op.
+    expect(speedPatchCount).toBe(speedPatchCountAfterFirstPause);
+
+    runtime.sendCommand('play-1', {
+      kind: 'sim-control',
+      control: 'play',
+    });
+    expect(runtime.getState().hudState.speed).toBe(3);
+    const speedPatchCountAfterFirstPlay = speedPatchCount;
+
+    runtime.sendCommand('play-2', {
+      kind: 'sim-control',
+      control: 'play',
+    });
+
+    // `Resume()` only calls `setSpeed(sim_paused_speed)` from the `if (sim_paused)`
+    // branch in `ref/micropolis/src/sim/w_util.c`; the second resume is a no-op.
+    expect(speedPatchCount).toBe(speedPatchCountAfterFirstPlay);
+    expect(ackCount).toBe(4);
+  });
 });
