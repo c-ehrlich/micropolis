@@ -260,6 +260,54 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(runtime.getState().mapState.tiles[changedTileIndex]).toBe(savedTile);
   });
 
+  it('runs InitWillStuff and DoSimInit lifecycle resets on new-city', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    const authority = host as unknown as {
+      simState: {
+        ScenarioID: number;
+        CityTime: number;
+        CityScore: number;
+        RoadEffect: number;
+        Fcycle: number;
+        Scycle: number;
+        InitSimLoad: number;
+        DoInitialEval: number;
+        TotalPop: number;
+      };
+    };
+    authority.simState.ScenarioID = 4;
+    authority.simState.CityTime = 777;
+    authority.simState.CityScore = 1;
+    authority.simState.RoadEffect = 3;
+    authority.simState.Fcycle = 99;
+    authority.simState.Scycle = 88;
+    authority.simState.InitSimLoad = 0;
+    authority.simState.DoInitialEval = 0;
+    authority.simState.TotalPop = 1234;
+
+    runtime.sendCommand('new-city-lifecycle-1', {
+      kind: 'city-lifecycle',
+      action: 'new-city',
+    });
+
+    // Magic-number/source notes:
+    // - `InitWillStuff` sets `CityScore=500` and `RoadEffect=32` in `s_init.c`.
+    // - `DoSimInit` resets `Fcycle/Scycle` to 0, sets `TotalPop=1`, sets `DoInitialEval=1`,
+    //   and consumes `InitSimLoad` via `InitSimMemory` in `s_sim.c`.
+    expect(authority.simState.ScenarioID).toBe(0);
+    expect(authority.simState.CityTime).toBe(0);
+    expect(authority.simState.CityScore).toBe(500);
+    expect(authority.simState.RoadEffect).toBe(32);
+    expect(authority.simState.Fcycle).toBe(0);
+    expect(authority.simState.Scycle).toBe(0);
+    expect(authority.simState.InitSimLoad).toBe(0);
+    expect(authority.simState.DoInitialEval).toBe(1);
+    expect(authority.simState.TotalPop).toBe(1);
+  });
+
   it('keeps snapshot replay message ordering metadata stable after patch emission', () => {
     const runtime = createWebHostRuntime({
       host: new DemoMapHost({ enableAmbientTicks: false }),

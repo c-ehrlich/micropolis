@@ -351,7 +351,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/s_init.c` (new-city/reset lifecycle)
+- [x] `ref/micropolis/src/sim/s_init.c` (new-city/reset lifecycle)
 - [ ] `ref/micropolis/src/sim/s_gen.c` (map generation/reset behaviors)
 - [ ] `ref/micropolis/src/sim/s_fileio.c` (`loadFile`, `saveFile`, `LoadCity`, `LoadScenario`)
 - [ ] `ref/micropolis/src/sim/w_sim.c` (command routing for lifecycle/io)

@@ -1,5 +1,7 @@
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  doSimInit,
+  initWillStuff,
   runUiUpdate,
   sendMessages,
   setValves,
@@ -1156,6 +1158,23 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
+   * Runs core new-city lifecycle initialization in Micropolis order.
+   * Mirrors `GenerateSomeCity` core reset flow in `ref/micropolis/src/sim/s_gen.c`
+   * (`ScenarioID`/`CityTime`/`InitSimLoad`/`DoInitialEval` setup) plus
+   * `InitWillStuff` in `ref/micropolis/src/sim/s_init.c` and `DoSimInit` in
+   * `ref/micropolis/src/sim/s_sim.c`.
+   * Parity note: editor/map invalidation UI calls in C stay outside this host helper.
+   */
+  private runNewCityLifecycleReset(): void {
+    this.simState.ScenarioID = 0;
+    this.simState.CityTime = 0;
+    this.simState.InitSimLoad = 2;
+    this.simState.DoInitialEval = 0;
+    initWillStuff(this.simContext, this.simState);
+    doSimInit(this.simContext, this.simState);
+  }
+
+  /**
    * Applies scenario/new-city scalar heads baseline into sim-core HUD controls.
    * Mirrors scenario/reset scalar bootstrap intent from
    * `ref/micropolis/src/sim/s_fileio.c` (`LoadScenario`) and
@@ -1197,10 +1216,11 @@ export class DemoMapHost implements CoreHost {
    */
   private resetToNewCity(): void {
     this.currentScenarioId = 0;
+    this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
+    this.runNewCityLifecycleReset();
     this.applyScenarioSimulationMeta(0, DEMO_INITIAL_FUNDS);
     this.cityFileName = DEMO_DEFAULT_CITY_FILE_NAME;
     this.cityName = DEMO_DEFAULT_CITY_NAME;
-    this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
     this.resetMessageLog('Started a new city.');
   }
 
