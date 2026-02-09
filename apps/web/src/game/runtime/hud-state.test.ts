@@ -46,6 +46,7 @@ describe('runtime HUD projection', () => {
       {
         id: 7,
         text: 'Residents demand a stadium.',
+        dispatch: 'sendMes',
         x: null,
         y: null,
         tick: 48,
@@ -101,6 +102,7 @@ describe('runtime HUD projection', () => {
       {
         id: 0,
         text: 'City initialized.',
+        dispatch: 'sendMes',
         x: null,
         y: null,
         tick: 0,
@@ -109,10 +111,62 @@ describe('runtime HUD projection', () => {
       {
         id: 4,
         text: 'Build more roads.',
+        dispatch: 'sendMes',
         x: null,
         y: null,
         tick: 5,
         serverSeq: 2,
+      },
+    ]);
+  });
+
+  it('maps MesX/MesY dispatch to SendMesAt only when MesX || MesY', () => {
+    const initial = createInitialRuntimeHudState();
+    const snapshot = projectRuntimeHudState(initial, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 7,
+      serverSeq: 1,
+      payload: {
+        messages: [
+          {
+            // `doMessage` in `ref/micropolis/src/sim/s_msg.c` uses
+            // `if (MesX || MesY)` for the SendMesAt path.
+            id: 20,
+            text: 'Coordinates present.',
+            x: 0,
+            y: 4,
+          },
+          {
+            // `MesX=0 && MesY=0` follows the plain SendMes path in s_msg.c.
+            id: 21,
+            text: 'Zero coordinates should not dispatch SendMesAt.',
+            x: 0,
+            y: 0,
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.messages).toEqual([
+      {
+        id: 20,
+        text: 'Coordinates present.',
+        dispatch: 'sendMesAt',
+        x: 0,
+        y: 4,
+        tick: 7,
+        serverSeq: 1,
+      },
+      {
+        id: 21,
+        text: 'Zero coordinates should not dispatch SendMesAt.',
+        dispatch: 'sendMes',
+        x: null,
+        y: null,
+        tick: 7,
+        serverSeq: 1,
       },
     ]);
   });
@@ -151,6 +205,13 @@ describe('runtime HUD projection', () => {
             text: 123,
           },
         },
+        messages: [
+          {
+            id: 4,
+            text: 'Invalid partial coordinate.',
+            x: 10,
+          },
+        ],
       },
     });
 

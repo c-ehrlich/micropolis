@@ -3,14 +3,20 @@ import type { SequencedHostEnvelope } from './protocol.ts';
 const MAX_MESSAGE_FEED = 24;
 
 /**
+ * Message dispatch channel mirrored from Micropolis message hooks.
+ * Maps `SendMes` and `SendMesAt` in `ref/micropolis/src/sim/s_msg.c`.
+ */
+export type RuntimeHudMessageDispatch = 'sendMes' | 'sendMesAt';
+
+/**
  * One HUD message event shown in the Stage 2 message feed.
- * Mirrors `UISetMessage` delivery from `SetMessageField` in
- * `ref/micropolis/src/sim/s_msg.c`, with sequencing metadata added from
- * bridge envelopes.
+ * Mirrors `SendMes` / `SendMesAt` dispatch intent in
+ * `ref/micropolis/src/sim/s_msg.c`.
  */
 export interface RuntimeHudMessageEvent {
   id: number;
   text: string;
+  dispatch: RuntimeHudMessageDispatch;
   x: number | null;
   y: number | null;
   tick: number;
@@ -114,6 +120,7 @@ interface ParsedHudPayload {
 interface ParsedMessageInput {
   id: number;
   text: string;
+  dispatch: RuntimeHudMessageDispatch;
   x: number | null;
   y: number | null;
 }
@@ -240,12 +247,24 @@ function parseMessageInput(value: unknown): ParsedMessageInput | null {
 
   const x = readNullableInteger(record.x);
   const y = readNullableInteger(record.y);
+  const hasX = x !== null;
+  const hasY = y !== null;
+  if (hasX !== hasY) {
+    return null;
+  }
+
+  // `doMessage` in s_msg.c checks `if (MesX || MesY)` to decide SendMesAt behavior.
+  // Keep `(0, 0)` as plain `SendMes` dispatch to preserve that parity.
+  const dispatch = x !== null && y !== null && (x !== 0 || y !== 0) ? 'sendMesAt' : 'sendMes';
+  const projectedX = dispatch === 'sendMesAt' ? x : null;
+  const projectedY = dispatch === 'sendMesAt' ? y : null;
 
   return {
     id,
     text: record.text,
-    x,
-    y,
+    dispatch,
+    x: projectedX,
+    y: projectedY,
   };
 }
 
@@ -307,6 +326,7 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     if (
       leftMessage.id !== rightMessage.id ||
       leftMessage.text !== rightMessage.text ||
+      leftMessage.dispatch !== rightMessage.dispatch ||
       leftMessage.x !== rightMessage.x ||
       leftMessage.y !== rightMessage.y ||
       leftMessage.tick !== rightMessage.tick ||
