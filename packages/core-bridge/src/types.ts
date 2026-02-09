@@ -213,6 +213,47 @@ export interface CityMessageV1 {
 }
 
 /**
+ * Authoritative map delta entry in v1 `patch` payloads.
+ * Mirrors coordinate-addressed map mutations in `ref/micropolis/src/sim/w_con.c`
+ * and `ref/micropolis/src/sim/w_tool.c` where tiles are applied as `Map[x][y]`.
+ * Parity note: 1:1 coordinate addressing parity with C; intentionally disallows
+ * ambiguous linear `index` deltas in the bridge contract.
+ */
+export interface CityMapDeltaV1 {
+  readonly x: number;
+  readonly y: number;
+  readonly tile: number;
+}
+
+/**
+ * Computes the canonical v1 snapshot tile index for one map coordinate.
+ * Mirrors Micropolis map memory layout setup in `ref/micropolis/src/sim/s_alloc.c`
+ * (`Map[i] = base + i * WORLD_Y`) and flat map load/save in
+ * `ref/micropolis/src/sim/s_fileio.c` (`&Map[0][0]`, `WORLD_X * WORLD_Y` words).
+ * Parity note: 1:1 index formula parity with C contiguous map storage
+ * (`x * WORLD_Y + y` in the classic world); explicit truncation keeps TypeScript
+ * numeric behavior aligned with C integer arithmetic if non-integer inputs leak in.
+ */
+export function getCoreBridgeV1SnapshotTileIndex(x: number, y: number, mapHeight: number): number {
+  return Math.trunc(x) * Math.trunc(mapHeight) + Math.trunc(y);
+}
+
+/**
+ * Authoritative map baseline payload carried in v1 `snapshot` payloads.
+ * Mirrors contiguous `Map[WORLD_X][WORLD_Y]` storage in
+ * `ref/micropolis/src/sim/s_alloc.c` and map serialization in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: 1:1 with C x-major/column-major map layout. `tiles` uses the
+ * frozen linearization formula `index = x * height + y` (classic Micropolis:
+ * `index = x * WORLD_Y + y`).
+ */
+export interface CityMapSnapshotV1 {
+  readonly width: number;
+  readonly height: number;
+  readonly tiles: readonly number[];
+}
+
+/**
  * Full concrete v1 command payload union for city gameplay.
  * Mirrors tool and runtime command classes from
  * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_sim.c`.
@@ -279,11 +320,7 @@ export type CityCommandPayloadV1 =
  * map/hud/message/lifecycle deltas in one typed payload envelope.
  */
 export interface CityPatchPayloadV1 {
-  readonly mapDeltas: readonly Readonly<{
-    readonly x: number;
-    readonly y: number;
-    readonly tile: number;
-  }>[];
+  readonly mapDeltas: readonly CityMapDeltaV1[];
   readonly hud: Readonly<{
     readonly funds?: number;
     readonly date?: Readonly<{
@@ -330,11 +367,7 @@ export interface CityPatchPayloadV1 {
  * serializable authoritative projection with replay metadata.
  */
 export interface CitySnapshotPayloadV1 {
-  readonly map: Readonly<{
-    readonly width: number;
-    readonly height: number;
-    readonly tiles: readonly number[];
-  }>;
+  readonly map: CityMapSnapshotV1;
   readonly hud: Readonly<{
     readonly funds: number;
     readonly date: Readonly<{

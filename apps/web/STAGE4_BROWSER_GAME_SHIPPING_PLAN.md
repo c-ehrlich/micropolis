@@ -79,9 +79,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.4 Check: host owns authoritative simulation state and progression.
 - [x] 0.4 Check: client is projection-only (pending visuals only, no speculative authoritative mutation).
 
-- [ ] 0.5 Freeze snapshot/patch data conventions.
-- [ ] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
-- [ ] 0.5 Check: snapshot tile ordering is documented as x-major with explicit formula.
+- [x] 0.5 Freeze snapshot/patch data conventions.
+- [x] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
+- [x] 0.5 Check: snapshot tile ordering is documented as x-major with explicit formula.
 
 - [ ] 0.6 Freeze resync behavior by adopting existing bridge sequencing semantics unchanged.
 - [ ] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.

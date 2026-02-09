@@ -1,5 +1,7 @@
 import type {
   CityCommandPayloadV1,
+  CityMapDeltaV1,
+  CityPatchPayloadV1,
   CoreBridgeV1AckEnvelope,
   CoreBridgeV1ClientEnvelope,
   CoreBridgeV1CommandEnvelope,
@@ -43,6 +45,10 @@ type _CommandPayloadKinds = Assert<
     | 'city_save'
     | 'scenario_start'
   >
+>;
+type _PatchDeltaKeys = Assert<IsEqual<keyof CityMapDeltaV1, 'x' | 'y' | 'tile'>>;
+type _PatchDeltaElementShape = Assert<
+  IsEqual<CityPatchPayloadV1['mapDeltas'][number], CityMapDeltaV1>
 >;
 
 const _helloEnvelope: CoreBridgeV1HelloEnvelope = {
@@ -114,6 +120,12 @@ const _invalidAckMissingTick: CoreBridgeV1AckEnvelope = {
 const _invalidCommandPayload: CityCommandPayloadV1 = {
   // @ts-expect-error Unknown command payload variants are rejected by the frozen union.
   type: 'unknown_command',
+};
+
+const _invalidPatchDelta: CityMapDeltaV1 = {
+  // @ts-expect-error Canonical patch deltas are `{ x, y, tile }` and do not allow linear `index`.
+  index: 0,
+  tile: 7,
 };
 
 const _visitClientEnvelope = (envelope: CoreBridgeV1ClientEnvelope): string => {

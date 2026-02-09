@@ -56,8 +56,8 @@ Frozen default constants:
 Frozen concrete payload baselines:
 
 - `command`: typed city union (`tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`)
-- `patch`: authoritative incremental deltas (`mapDeltas`, `hud`, `messageFeed`, `lifecycle`)
-- `snapshot`: authoritative full projection (`map`, `hud`, `lifecycle`, `replay`)
+- `patch`: authoritative incremental deltas (`mapDeltas`, `hud`, `messageFeed`, `lifecycle`) where map deltas are frozen as `{ x, y, tile }` (no linear `index` deltas).
+- `snapshot`: authoritative full projection (`map`, `hud`, `lifecycle`, `replay`) where `map.tiles` ordering is frozen as x-major `index = x * height + y` (classic Micropolis world uses `index = x * WORLD_Y + y`).
 
 ## Ordering and Replay Invariants
 
