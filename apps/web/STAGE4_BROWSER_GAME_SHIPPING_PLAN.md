@@ -347,7 +347,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make lifecycle and persistence fully functional from Stage 4 controls.
+- [x] Make lifecycle and persistence fully functional from Stage 4 controls.
 
 ### C references to review
 
