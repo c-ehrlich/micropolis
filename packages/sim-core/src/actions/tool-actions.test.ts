@@ -12,6 +12,8 @@ import {
   RAIL_TABLE,
   ROAD_TABLE,
   TOOL_COST,
+  TOOL_OFFSET,
+  TOOL_SIZE,
   TOOL_STATE,
   ToolQueue,
   WIRE_TABLE,
@@ -74,6 +76,37 @@ const runTool = (
   x: number,
   y: number,
 ) => applyToolAction(context, { tool, x, y, simStep: 0, order: 0, tickId: 0, seq: 0 }).code;
+
+describe('w_tool.c metadata parity', () => {
+  it('matches CostOf[] values from w_tool.c', () => {
+    // Magic-number source: `CostOf[]` in `ref/micropolis/src/sim/w_tool.c`.
+    expect(TOOL_COST).toEqual([
+      100, 100, 100, 500, 0, 500, 5, 1, 20, 10, 0, 0, 5000, 10, 3000, 3000, 5000, 10000, 100, 0,
+    ]);
+  });
+
+  it('matches toolSize[] values from w_tool.c', () => {
+    // Magic-number source: `toolSize[]` in `ref/micropolis/src/sim/w_tool.c`.
+    expect(TOOL_SIZE).toEqual([3, 3, 3, 3, 1, 3, 1, 1, 1, 1, 0, 0, 4, 1, 4, 4, 4, 6, 1, 0]);
+  });
+
+  it('matches toolOffset[] values from w_tool.c', () => {
+    // Magic-number source: `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c`.
+    expect(TOOL_OFFSET).toEqual([1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0]);
+  });
+
+  it('keeps stage-4 playable tools mapped to expected w_tool.c state ids', () => {
+    // Magic-number source: tool state ordering in `ref/micropolis/src/sim/w_tool.c`
+    // (`CostOf[]`, `toolSize[]`, and entrypoint use by `view->tool_state`).
+    expect(TOOL_STATE.road).toBe(9);
+    expect(TOOL_STATE.rail).toBe(8);
+    expect(TOOL_STATE.wire).toBe(6);
+    expect(TOOL_STATE.bulldoze).toBe(7);
+    expect(TOOL_STATE.res).toBe(0);
+    expect(TOOL_STATE.com).toBe(1);
+    expect(TOOL_STATE.ind).toBe(2);
+  });
+});
 
 describe('ToolQueue ordering', () => {
   it('orders by simStep then order', () => {
