@@ -349,9 +349,25 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
+    if (this.routeLifecycleIoCommand(envelope)) {
+      return;
+    }
+
+    const reason = 'invalid-command';
+    this.commandOutcomes.set(envelope.commandId, { kind: 'reject', reason });
+    this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, reason);
+  }
+
+  /**
+   * Routes lifecycle + IO command classes through one command surface.
+   * Mirrors `SimCmd` command-table dispatch in `ref/micropolis/src/sim/w_sim.c`
+   * for `GenerateNewCity`, `LoadCity`, `SaveCity`/`SaveCityAs`, and `LoadScenario`.
+   * Parity note: command keys are Stage 2 discriminated unions rather than Tcl strings.
+   */
+  private routeLifecycleIoCommand(envelope: Extract<ClientEnvelope, { kind: 'command' }>): boolean {
     if (isStage2CityLifecycleCommand(envelope.command)) {
       this.handleCityLifecycleCommand(envelope.roomId, envelope.clientId, envelope.commandId);
-      return;
+      return true;
     }
 
     if (isStage2CityIoCommand(envelope.command)) {
@@ -361,7 +377,7 @@ export class DemoMapHost implements CoreHost {
         envelope.commandId,
         envelope.command,
       );
-      return;
+      return true;
     }
 
     if (isStage2ScenarioCommand(envelope.command)) {
@@ -371,12 +387,10 @@ export class DemoMapHost implements CoreHost {
         envelope.commandId,
         envelope.command,
       );
-      return;
+      return true;
     }
 
-    const reason = 'invalid-command';
-    this.commandOutcomes.set(envelope.commandId, { kind: 'reject', reason });
-    this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, reason);
+    return false;
   }
 
   /**
