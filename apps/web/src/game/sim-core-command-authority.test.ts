@@ -91,6 +91,55 @@ describe('SimCoreCommandAuthority', () => {
     authority.disconnect();
   });
 
+  test('stops and restarts periodic sim ticks across disconnect/connect lifecycle', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+    });
+
+    authority.connect();
+    scheduler.tick(3);
+    const tickWhileConnected = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-connected',
+        tool: 'road',
+        x: 14,
+        y: 14,
+      }),
+    );
+
+    authority.disconnect();
+    scheduler.tick(8);
+    const tickWhileDisconnected = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-disconnected',
+        tool: 'road',
+        x: 15,
+        y: 15,
+      }),
+    );
+    expect(tickWhileDisconnected).toBe(tickWhileConnected);
+
+    authority.connect();
+    scheduler.tick(2);
+    const tickAfterReconnect = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-reconnected',
+        tool: 'road',
+        x: 16,
+        y: 16,
+      }),
+    );
+    expect(tickAfterReconnect).toBeGreaterThan(tickWhileDisconnected);
+
+    authority.disconnect();
+  });
+
   test('keeps duplicate command idempotency and occupied-tile rejection behavior', () => {
     const authority = new SimCoreCommandAuthority({ mode: 'local', tickIntervalMs: 0 });
 

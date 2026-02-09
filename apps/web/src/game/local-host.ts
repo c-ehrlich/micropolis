@@ -52,6 +52,10 @@ export class LocalHost implements CoreHost {
   }
 
   public connect(): void {
+    if (this.connected) {
+      return;
+    }
+
     this.connected = true;
     this.commandAuthority.connect?.();
     this.emitEvent({ type: 'connected', mode: this.mode });
@@ -59,6 +63,10 @@ export class LocalHost implements CoreHost {
   }
 
   public disconnect(): void {
+    if (!this.connected) {
+      return;
+    }
+
     this.connected = false;
     this.commandAuthority.disconnect?.();
     this.emitEvent({ type: 'disconnected', mode: this.mode });
