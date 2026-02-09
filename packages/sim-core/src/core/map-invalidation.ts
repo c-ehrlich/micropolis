@@ -1,5 +1,5 @@
 import { World } from './constants.ts';
-import { MAP_FLAGS, type MapFlagId } from './map-flags.ts';
+import { MAP_FLAG_COUNT, MAP_FLAGS, type MapFlagId } from './map-flags.ts';
 import type { Patch } from './map-store.ts';
 
 const DEFAULT_MAX_DIRTY_TILES_BEFORE_FULL_REDRAW = 2048;
@@ -32,6 +32,7 @@ export interface MapRedrawPlan {
     | 'none'
     | 'new-map'
     | 'map-flag'
+    | 'shake'
     | 'patch-tile-threshold'
     | 'patch-rect-threshold'
     | 'patch-rects';
@@ -50,6 +51,7 @@ export interface PlanMapRedrawOptions {
   readonly activeMapFlag: MapFlagId;
   readonly newMap: number;
   readonly newMapFlags: Uint8Array;
+  readonly shakeNow?: number;
   readonly mapPatch?: Patch | null;
   readonly maxDirtyTilesBeforeFullRedraw?: number;
   readonly maxDirtyRectsBeforeFullRedraw?: number;
@@ -98,6 +100,15 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
     };
   }
 
+  if ((options.shakeNow ?? 0) !== 0) {
+    return {
+      reason: 'shake',
+      fullRedraw: true,
+      dirtyRects: [],
+      consumedFlags: [],
+    };
+  }
+
   const patch = options.mapPatch;
   if (!patch || patch.layer !== 'map' || patch.index.length === 0) {
     return {
@@ -136,17 +147,29 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
 }
 
 /**
- * Clear invalidation markers that were consumed by the current redraw plan.
- * Mirrors C redraw cycles where `NewMap`/`NewMapFlags` are cleared after use
- * (`ref/micropolis/src/sim/s_scan.c`, `ref/micropolis/src/sim/w_map.c`).
+ * Clear invalidation markers at the end of one map-update cycle.
+ * Mirrors `sim_update_maps` in `ref/micropolis/src/sim/sim.c`, which always
+ * resets `NewMap` and clears all `NewMapFlags[0..NMAPS-1]` after map views are
+ * processed.
+ * Parity note: `plan` is retained for diagnostics call-sites, but the clear
+ * behavior is cycle-wide and does not depend on consumed per-view flags.
  */
 export function consumeMapRedrawPlan(
   state: MapInvalidationState,
-  plan: Pick<MapRedrawPlan, 'consumedFlags'>,
+  _plan?: Pick<MapRedrawPlan, 'consumedFlags'>,
 ): void {
+  consumeMapInvalidationCycle(state);
+}
+
+/**
+ * Clear map invalidation markers after one complete map-view update cycle.
+ * Mirrors `sim_update_maps` in `ref/micropolis/src/sim/sim.c`, where `NewMap`
+ * and all `NewMapFlags[0..NMAPS-1]` entries are reset once after iterating all
+ * map views.
+ */
+export function consumeMapInvalidationCycle(state: MapInvalidationState): void {
   state.NewMap = 0;
-  for (const flag of plan.consumedFlags) {
-    const index = MAP_FLAGS[flag];
+  for (let index = 0; index < MAP_FLAG_COUNT; index += 1) {
     state.NewMapFlags[index] = 0;
   }
 }

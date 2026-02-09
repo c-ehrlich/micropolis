@@ -16,6 +16,8 @@ import {
   type WebRuntimeState,
 } from './reducer.ts';
 
+export type { WebRuntimeState } from './reducer.ts';
+
 /**
  * Listener payload for runtime state transitions and routed envelopes.
  * Mirrors deterministic command/update progression intent from
@@ -151,7 +153,7 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
         return;
       }
 
-      const reconnecting = state.lastAppliedServerSeq > 0;
+      const reconnecting = state.hasAppliedSequencedEnvelope;
       shouldRequestReconnectSnapshot = reconnecting;
 
       setState(

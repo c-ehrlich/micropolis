@@ -23,6 +23,11 @@ import {
   type Stage2ClientCommand,
   type Stage2ToolCommand,
 } from './protocol.ts';
+import {
+  createInitialRuntimeRealtimeState,
+  projectRuntimeRealtimeState,
+  type RuntimeRealtimeState,
+} from './realtime-state.ts';
 
 /**
  * Lifecycle phases for the web host-client runtime.
@@ -62,10 +67,18 @@ export interface WebRuntimeState {
   clientId: string;
   handshakeComplete: boolean;
   handshakeError: string | null;
+  /**
+   * True once at least one sequenced host envelope has been accepted.
+   * Mirrors bridge sequencing baseline semantics from
+   * `packages/core-bridge/src/sequencing.ts` (`initial_event` is only valid
+   * before the first accepted sequenced envelope).
+   */
+  hasAppliedSequencedEnvelope: boolean;
   lastAppliedServerSeq: number;
   lastAppliedTick: number;
   mapState: RuntimeMapState;
   hudState: RuntimeHudState;
+  realtimeState: RuntimeRealtimeState;
   pendingTools: readonly PendingToolCommandVisual[];
   lastRejectReason: string | null;
 }
@@ -124,10 +137,12 @@ export function createInitialWebRuntimeState(
     clientId: overrides.clientId ?? DEFAULT_LOCAL_CLIENT_ID,
     handshakeComplete: false,
     handshakeError: null,
+    hasAppliedSequencedEnvelope: false,
     lastAppliedServerSeq: 0,
     lastAppliedTick: 0,
     mapState: createInitialRuntimeMapState(),
     hudState: createInitialRuntimeHudState(),
+    realtimeState: createInitialRuntimeRealtimeState(),
     pendingTools: [],
     lastRejectReason: null,
   };
@@ -191,10 +206,7 @@ export function reduceHostEnvelope(
   }
 
   const sequenceDecision = evaluateCoreBridgeV1SequenceDecision(
-    createCoreBridgeV1SequenceState({
-      lastAppliedServerSeq: state.lastAppliedServerSeq,
-      lastTick: state.lastAppliedTick,
-    }),
+    createSequencingStateFromRuntime(state),
     {
       serverSeq: envelope.serverSeq,
       tick: envelope.tick,
@@ -248,15 +260,18 @@ function applySequencedEnvelope(
   const settledState = settlePendingToolCommand(state, envelope);
   const mapState = projectRuntimeMapState(settledState.mapState, envelope);
   const hudState = projectRuntimeHudState(settledState.hudState, envelope);
+  const realtimeState = projectRuntimeRealtimeState(settledState.realtimeState, envelope);
 
   return {
     state: {
       ...settledState,
       phase,
+      hasAppliedSequencedEnvelope: true,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
       mapState,
       hudState,
+      realtimeState,
     },
     outcome: 'applied',
     effect: { kind: 'none' },
@@ -270,14 +285,17 @@ function applyResyncDirective(
   const resyncState = enterResyncingPhase(state);
   const mapState = projectRuntimeMapState(resyncState.mapState, envelope);
   const hudState = projectRuntimeHudState(resyncState.hudState, envelope);
+  const realtimeState = projectRuntimeRealtimeState(resyncState.realtimeState, envelope);
 
   return {
     state: {
       ...resyncState,
+      hasAppliedSequencedEnvelope: true,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
       mapState,
       hudState,
+      realtimeState,
     },
     outcome: 'applied',
     effect: {
@@ -286,6 +304,17 @@ function applyResyncDirective(
       fromServerSeq: envelope.serverSeq + 1,
     },
   };
+}
+
+function createSequencingStateFromRuntime(state: WebRuntimeState) {
+  if (!state.hasAppliedSequencedEnvelope) {
+    return createCoreBridgeV1SequenceState();
+  }
+
+  return createCoreBridgeV1SequenceState({
+    lastAppliedServerSeq: state.lastAppliedServerSeq,
+    lastTick: state.lastAppliedTick,
+  });
 }
 
 function enterResyncingPhase(state: WebRuntimeState): WebRuntimeState {

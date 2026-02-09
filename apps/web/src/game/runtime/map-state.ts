@@ -1,3 +1,4 @@
+import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import type { SequencedHostEnvelope } from './protocol.ts';
 
 const EMPTY_DIRTY_TILE_INDEXES = new Uint32Array(0);
@@ -71,7 +72,7 @@ interface SnapshotPayload {
 
 interface PatchTileDelta {
   index: number;
-  tile: number;
+  tileWord: number;
 }
 
 function applySnapshotPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
@@ -96,7 +97,7 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
     return resetMapDrawMarkers(state);
   }
 
-  const deltas = parsePatchPayload(payload);
+  const deltas = parsePatchPayload(payload, state.width, state.height);
   if (deltas === null || deltas.length === 0) {
     return resetMapDrawMarkers(state);
   }
@@ -109,7 +110,7 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
     }
 
     const current = state.tiles[delta.index];
-    if (current === delta.tile) {
+    if (current === delta.tileWord) {
       continue;
     }
 
@@ -117,7 +118,7 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
       nextTiles = state.tiles.slice();
     }
 
-    nextTiles[delta.index] = delta.tile;
+    nextTiles[delta.index] = delta.tileWord;
     dirty.push(delta.index);
   }
 
@@ -159,33 +160,100 @@ function parseSnapshotPayload(payload: unknown): SnapshotPayload | null {
   }
 
   const tileCount = width * height;
-  const tiles = toUint16Array(map.tiles, tileCount);
-  if (tiles === null) {
+  if ('tileWords' in map) {
+    const tileWords = toUint16Array(map.tileWords, tileCount);
+    if (tileWords === null) {
+      return null;
+    }
+    return {
+      width,
+      height,
+      tiles: convertSnapshotTileWordsToRuntimeTiles(tileWords, width, height),
+    };
+  }
+
+  const legacyTiles = toUint16Array(map.tiles, tileCount);
+  if (legacyTiles === null) {
     return null;
   }
 
-  return { width, height, tiles };
+  return { width, height, tiles: legacyTiles };
 }
 
-function parsePatchPayload(payload: unknown): PatchTileDelta[] | null {
+function parsePatchPayload(
+  payload: unknown,
+  width: number,
+  height: number,
+): PatchTileDelta[] | null {
   const map = readMapObject(payload);
-  if (map === null || !Array.isArray(map.tiles)) {
+  if (map === null) {
     return null;
   }
 
+  if (Array.isArray(map.tileWordDeltas)) {
+    return parseTileWordCoordinateDeltas(map.tileWordDeltas, width, height);
+  }
+
+  if (Array.isArray(map.tiles)) {
+    return parseLegacyIndexDeltas(map.tiles);
+  }
+
+  return null;
+}
+
+/**
+ * Parses authoritative coordinate-addressed patch deltas into runtime indexes.
+ * Mirrors `Map[x][y]` writes in `ref/micropolis/src/sim/w_tool.c` and
+ * `ref/micropolis/src/sim/w_con.c`.
+ * Difference: converts to row-major indexes for the canvas projection buffer.
+ */
+function parseTileWordCoordinateDeltas(
+  entries: readonly unknown[],
+  width: number,
+  height: number,
+): PatchTileDelta[] {
   const deltas: PatchTileDelta[] = [];
-  for (const entry of map.tiles) {
+  for (const entry of entries) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    const x = readNonNegativeInteger(entry.x);
+    const y = readNonNegativeInteger(entry.y);
+    const tileWord = readTileValue(entry.tileWord);
+    if (x === null || y === null || tileWord === null) {
+      continue;
+    }
+    if (x >= width || y >= height) {
+      continue;
+    }
+
+    deltas.push({
+      index: toRuntimeTileIndex(x, y, width),
+      tileWord,
+    });
+  }
+  return deltas;
+}
+
+/**
+ * Parses legacy Stage 2 index-addressed deltas retained during protocol migration.
+ * Mirrors old bridge payload fixtures predating coordinate-addressed map deltas.
+ */
+function parseLegacyIndexDeltas(entries: readonly unknown[]): PatchTileDelta[] {
+  const deltas: PatchTileDelta[] = [];
+  for (const entry of entries) {
     if (!isRecord(entry)) {
       continue;
     }
 
     const index = readNonNegativeInteger(entry.index);
-    const tile = readTileValue(entry.tile);
-    if (index === null || tile === null) {
+    const tileWord = readTileValue(entry.tile);
+    if (index === null || tileWord === null) {
       continue;
     }
 
-    deltas.push({ index, tile });
+    deltas.push({ index, tileWord });
   }
 
   return deltas;
@@ -202,6 +270,36 @@ function readMapObject(payload: unknown): Record<string, unknown> | null {
   }
 
   return mapValue;
+}
+
+/**
+ * Converts authoritative snapshot x-major tile words into runtime row-major order.
+ * Mirrors classic Micropolis map layout (`Map[x][y]`) in
+ * `ref/micropolis/src/sim/s_alloc.c`.
+ * Difference: runtime keeps row-major layout to simplify canvas redraw indexing.
+ */
+function convertSnapshotTileWordsToRuntimeTiles(
+  tileWords: Uint16Array,
+  width: number,
+  height: number,
+): Uint16Array {
+  const tiles = new Uint16Array(width * height);
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const sourceIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      const runtimeIndex = toRuntimeTileIndex(x, y, width);
+      tiles[runtimeIndex] = tileWords[sourceIndex] ?? 0;
+    }
+  }
+  return tiles;
+}
+
+/**
+ * Computes the runtime row-major tile index used by the canvas projection buffer.
+ * Mirrors Stage 2 renderer indexing in `apps/web/src/game/map/map-canvas.tsx`.
+ */
+function toRuntimeTileIndex(x: number, y: number, width: number): number {
+  return y * width + x;
 }
 
 function toUint16Array(value: unknown, expectedLength: number): Uint16Array | null {

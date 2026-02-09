@@ -198,38 +198,38 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Move Stage 4 from placement-event projection to authoritative snapshot/patch game-state projection.
+- [x] Move Stage 4 from placement-event projection to authoritative snapshot/patch game-state projection.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` semantics)
-- [ ] `ref/micropolis/src/sim/sim.c` (`sim_update_maps` invalidation/clear cycle)
-- [ ] `ref/micropolis/src/sim/w_update.c` (heads/date/funds/options)
-- [ ] `ref/micropolis/src/sim/s_msg.c` (message port/dispatch semantics)
+- [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` semantics)
+- [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps` invalidation/clear cycle)
+- [x] `ref/micropolis/src/sim/w_update.c` (heads/date/funds/options)
+- [x] `ref/micropolis/src/sim/s_msg.c` (message port/dispatch semantics)
 
 ### TS references to review
 
-- [ ] `apps/web/src/game/core-host.ts`
-- [ ] `apps/web/src/game/runtime/protocol.ts`
-- [ ] `apps/web/src/game/runtime/reducer.ts`
-- [ ] `apps/web/src/game/runtime/map-state.ts`
-- [ ] `apps/web/src/game/runtime/hud-state.ts`
-- [ ] `apps/web/src/game/runtime/runtime.ts`
+- [x] `apps/web/src/game/core-host.ts`
+- [x] `apps/web/src/game/runtime/protocol.ts`
+- [x] `apps/web/src/game/runtime/reducer.ts`
+- [x] `apps/web/src/game/runtime/map-state.ts`
+- [x] `apps/web/src/game/runtime/hud-state.ts`
+- [x] `apps/web/src/game/runtime/runtime.ts`
 
 ### Implementation checklist
 
-- [ ] Extend host events/payloads to carry authoritative map snapshot/patch tile words.
-- [ ] Extend payloads for HUD heads (funds/date/demand/speed/options) and message deltas.
-- [ ] Add optional realtime object payload field now (can be empty until Stage 7).
-- [ ] Keep strict ordering behavior (`serverSeq`, `tick`) and gap handling.
-- [ ] Ensure snapshot replay can reconstruct map + HUD + messages deterministically.
+- [x] Extend host events/payloads to carry authoritative map snapshot/patch tile words.
+- [x] Extend payloads for HUD heads (funds/date/demand/speed/options) and message deltas.
+- [x] Add optional realtime object payload field now (can be empty until Stage 7).
+- [x] Keep strict ordering behavior (`serverSeq`, `tick`) and gap handling.
+- [x] Ensure snapshot replay can reconstruct map + HUD + messages deterministically.
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/map-state.test.ts` covers snapshot+patch reconstruction.
-- [ ] `apps/web/src/game/runtime/hud-state.test.ts` covers heads/message projection.
-- [ ] `apps/web/src/game/runtime/reducer.test.ts` covers sequence drops/gap behavior.
-- [ ] `apps/web/src/game/runtime.ordering-resync.test.ts` covers resync recovery with expanded payloads.
+- [x] `apps/web/src/game/runtime/map-state.test.ts` covers snapshot+patch reconstruction.
+- [x] `apps/web/src/game/runtime/hud-state.test.ts` covers heads/message projection (snapshot hydration, patch deltas, dispatch parity, replay metadata).
+- [x] `apps/web/src/game/runtime/reducer.test.ts` covers sequence drops/gap behavior.
+- [x] `apps/web/src/game/runtime.ordering-resync.test.ts` covers resync recovery with expanded payloads.
 
 ---
 
@@ -567,6 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
-
-

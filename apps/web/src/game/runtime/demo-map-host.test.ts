@@ -65,6 +65,38 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(runtime.getState().mapState.tiles[changedTileIndex]).toBe(savedTile);
   });
 
+  it('keeps snapshot replay message ordering metadata stable after patch emission', () => {
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: false }),
+    });
+    runtime.connect();
+
+    runtime.sendCommand('save-1', {
+      kind: 'city-io',
+      action: 'save-city',
+      fileName: 'snapshot-replay.cty',
+    });
+
+    const savedMessageBeforeReplay = runtime
+      .getState()
+      .hudState.messages.find((message) => message.text.startsWith('Saved '));
+    if (savedMessageBeforeReplay === undefined) {
+      throw new Error('expected save-city message to exist before replay snapshot');
+    }
+
+    runtime.requestSnapshot('manual');
+
+    const savedMessageAfterReplay = runtime
+      .getState()
+      .hudState.messages.find((message) => message.text.startsWith('Saved '));
+    if (savedMessageAfterReplay === undefined) {
+      throw new Error('expected save-city message to exist after replay snapshot');
+    }
+
+    expect(savedMessageAfterReplay.tick).toBe(savedMessageBeforeReplay.tick);
+    expect(savedMessageAfterReplay.serverSeq).toBe(savedMessageBeforeReplay.serverSeq);
+  });
+
   it('boots scenarios using C LoadScenario start funds and date constants', () => {
     const runtime = createWebHostRuntime({
       host: new DemoMapHost({ enableAmbientTicks: false }),

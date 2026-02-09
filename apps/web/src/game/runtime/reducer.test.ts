@@ -54,7 +54,7 @@ describe('reduceHostEnvelope', () => {
       clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 1,
       serverSeq: 1,
-      payload: { map: [] },
+      payload: {},
     });
 
     expect(result.outcome).toBe('ignored-until-hello');
@@ -81,6 +81,84 @@ describe('reduceHostEnvelope', () => {
     expect(afterPatch.outcome).toBe('applied');
     expect(afterPatch.state.lastAppliedServerSeq).toBe(1);
     expect(afterPatch.state.lastAppliedTick).toBe(3);
+  });
+
+  it('treats the first sequenced envelope as the ordering baseline even when serverSeq jumps', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const baselineSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors bridge `initial_event` sequencing semantics mapped from
+      // `ref/micropolis/src/sim/s_sim.c` monotonic time progression:
+      // first accepted transport event establishes the baseline cursor.
+      tick: 4,
+      serverSeq: 12,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+
+    expect(baselineSnapshot.outcome).toBe('applied');
+    expect(baselineSnapshot.state.lastAppliedServerSeq).toBe(12);
+    expect(baselineSnapshot.state.lastAppliedTick).toBe(4);
+
+    const inOrderTail = reduceHostEnvelope(baselineSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 13,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+      },
+    });
+
+    expect(inOrderTail.outcome).toBe('applied');
+    expect(inOrderTail.state.lastAppliedServerSeq).toBe(13);
+    expect(inOrderTail.state.mapState.tiles[0]).toBe(7);
+  });
+
+  it('keeps strict gap handling after a serverSeq=0 baseline snapshot', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const baselineSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Stage 0 sequencing allows an initial baseline at sequence 0; this mirrors
+      // replay baselines in bridge recovery streams mapped from `sim.c` update loops.
+      tick: 0,
+      serverSeq: 0,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [3] },
+      },
+    });
+    expect(baselineSnapshot.outcome).toBe('applied');
+    expect(baselineSnapshot.state.lastAppliedServerSeq).toBe(0);
+
+    const gap = reduceHostEnvelope(baselineSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 0,
+      serverSeq: 2,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+      },
+    });
+
+    expect(gap.outcome).toBe('gap-detected');
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 1,
+    });
+    expect(gap.state.lastAppliedServerSeq).toBe(0);
+    expect(gap.state.mapState.tiles[0]).toBe(3);
   });
 
   it('uses canonical hello `message` when the host rejects handshake', () => {
@@ -157,6 +235,104 @@ describe('reduceHostEnvelope', () => {
       kind: 'request_snapshot',
       reason: 'sequence-gap',
       fromServerSeq: 2,
+    });
+  });
+
+  it('keeps expanded authoritative projection state unchanged for stale drops and sequence gaps', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors monotonic simulation/frame progression assumptions from
+      // `ref/micropolis/src/sim/s_sim.c` and `ref/micropolis/src/sim/sim.c`.
+      tick: 10,
+      serverSeq: 10,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 1,
+        },
+        messages: [
+          {
+            // C message ids are integer table indexes in `s_msg.c`.
+            id: 14,
+            text: 'Residents demand police stations.',
+          },
+        ],
+        realtime: {
+          // Fields map to `SimSprite` in `packages/sim-core/src/sim/realtime.ts`,
+          // the TypeScript port of `ref/micropolis/src/sim/w_sprite.c`.
+          objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
+        },
+      },
+    }).state;
+    const baselineProjection = reduceHostEnvelope(afterSnapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 11,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+        hud: { speed: 2 },
+        messageDeltas: [{ id: 16, text: 'Taxes are too high.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 80, y: 96, frame: 3 }],
+        },
+      },
+    }).state;
+
+    const stale = reduceHostEnvelope(baselineProjection, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      // Stale duplicate sequence should be dropped without projection changes.
+      serverSeq: 11,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: { speed: 3 },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
+        },
+      },
+    });
+    expect(stale.outcome).toBe('dropped-stale');
+    expect(stale.state).toBe(baselineProjection);
+    expect(stale.effect).toEqual({ kind: 'none' });
+
+    const gap = reduceHostEnvelope(baselineProjection, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      // Gap from expected seq 12 to 13 must request snapshot resync.
+      serverSeq: 13,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: { speed: 3 },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
+        },
+      },
+    });
+
+    expect(gap.outcome).toBe('gap-detected');
+    expect(gap.state.phase).toBe('resyncing');
+    expect(gap.state.mapState).toBe(baselineProjection.mapState);
+    expect(gap.state.hudState).toBe(baselineProjection.hudState);
+    expect(gap.state.realtimeState).toBe(baselineProjection.realtimeState);
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 12,
     });
   });
 
@@ -287,7 +463,7 @@ describe('reduceHostEnvelope', () => {
       // Reconnect/resync snapshots can jump forward to current authority seq.
       serverSeq: 12,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
       },
     });
     expect(rebasedSnapshot.outcome).toBe('applied');
@@ -301,7 +477,7 @@ describe('reduceHostEnvelope', () => {
       tick: 9,
       serverSeq: 13,
       payload: {
-        map: { tiles: [{ index: 0, tile: 7 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
       },
     });
     expect(afterTailPatch.outcome).toBe('applied');
@@ -314,11 +490,138 @@ describe('reduceHostEnvelope', () => {
       tick: 9,
       serverSeq: 12,
       payload: {
-        map: { tiles: [{ index: 0, tile: 9 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
       },
     });
     expect(stale.outcome).toBe('dropped-stale');
     expect(stale.state.lastAppliedServerSeq).toBe(13);
+  });
+
+  it('reconstructs map/hud/messages identically from snapshot checkpoint replay plus patch tail', () => {
+    const start = reduceHostEnvelope(
+      createInitialWebRuntimeState(),
+      createAcceptedHelloEnvelope(),
+    ).state;
+
+    const liveAfterSnapshot = reduceHostEnvelope(start, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 10,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 1,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
+        },
+        messages: [
+          {
+            // C message ids are integer table indexes in `s_msg.c`.
+            id: 14,
+            text: 'Residents demand police stations.',
+          },
+        ],
+      },
+    }).state;
+    const liveAfterPatchOne = reduceHostEnvelope(liveAfterSnapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 2,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+        hud: {
+          speed: 2,
+        },
+        messageDeltas: [{ id: 16, text: 'Taxes are too high.' }],
+      },
+    }).state;
+    const liveFinal = reduceHostEnvelope(liveAfterPatchOne, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: {
+          speed: 3,
+        },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+      },
+    }).state;
+
+    const replayCheckpoint = reduceHostEnvelope(start, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 11,
+      serverSeq: 2,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [7] },
+        hud: {
+          fundsLabel: 'Funds: $20,000',
+          date: { label: 'Jan 1900', month: 0, year: 1900 },
+          demand: { r: 0, c: 0, i: 0 },
+          speed: 2,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
+        },
+        messages: [
+          {
+            id: 14,
+            text: 'Residents demand police stations.',
+            tick: 10,
+            serverSeq: 1,
+          },
+          {
+            id: 16,
+            text: 'Taxes are too high.',
+            tick: 11,
+            serverSeq: 2,
+          },
+        ],
+      },
+    }).state;
+    const replayFinal = reduceHostEnvelope(replayCheckpoint, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 12,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        hud: {
+          speed: 3,
+        },
+        messageDeltas: [{ id: 17, text: 'Road maintenance is low.' }],
+      },
+    }).state;
+
+    expect(Array.from(replayFinal.mapState.tiles)).toEqual(Array.from(liveFinal.mapState.tiles));
+    expect(replayFinal.hudState).toEqual(liveFinal.hudState);
   });
 
   it('creates pending command visuals and settles them on ack', () => {
@@ -347,6 +650,47 @@ describe('reduceHostEnvelope', () => {
     expect(afterAck.state.lastRejectReason).toBeNull();
   });
 
+  it('projects optional realtime object payloads from snapshot and patch envelopes', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const afterSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        realtime: {
+          // Fields map to `SimSprite` shape from `packages/sim-core/src/sim/realtime.ts`,
+          // the TypeScript parity port of `ref/micropolis/src/sim/w_sprite.c`.
+          objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
+        },
+      },
+    });
+
+    expect(afterSnapshot.state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 64, y: 80, frame: 2 },
+    ]);
+
+    const afterPatch = reduceHostEnvelope(afterSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      payload: {
+        realtime: {
+          objects: [{ name: 'TRA', type: 1, x: 80, y: 96, frame: 3 }],
+        },
+      },
+    });
+
+    expect(afterPatch.state.realtimeState.objects).toEqual([
+      { name: 'TRA', type: 1, x: 80, y: 96, frame: 3 },
+    ]);
+  });
+
   it('keeps authoritative projection state unchanged when enqueueing pending tool visuals', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
@@ -357,7 +701,7 @@ describe('reduceHostEnvelope', () => {
       tick: 1,
       serverSeq: 1,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
         hud: {
           fundsLabel: 'Funds: $5000',
         },
@@ -373,6 +717,7 @@ describe('reduceHostEnvelope', () => {
     expect(withPending.pendingTools).toHaveLength(1);
     expect(withPending.mapState).toBe(afterSnapshot.mapState);
     expect(withPending.hudState).toBe(afterSnapshot.hudState);
+    expect(withPending.realtimeState).toBe(afterSnapshot.realtimeState);
     expect(withPending.lastAppliedServerSeq).toBe(afterSnapshot.lastAppliedServerSeq);
     expect(withPending.lastAppliedTick).toBe(afterSnapshot.lastAppliedTick);
   });

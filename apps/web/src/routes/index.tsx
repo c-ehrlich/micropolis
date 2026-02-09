@@ -1,13 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { type MouseEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { CoreHostTool } from '../game/core-host';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
-import {
-  type CommittedPlacement,
-  describeRuntimeStatus,
-  type PendingVisualPlacement,
-} from '../game/runtime';
 import {
   DemoMapHost,
   readDemoCityExportPayload,
@@ -21,15 +15,12 @@ import {
   type Stage2ToolName,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
-import { gameRuntime } from '../game/runtime-instance';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
 type RuntimeViewMode = 'stage4' | 'stage2';
-const STAGE4_MAP_WIDTH = 120;
-const STAGE4_MAP_HEIGHT = 100;
 const STAGE4_MAP_TILE_SIZE = 6;
 const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
 const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
@@ -101,45 +92,40 @@ function HomePage() {
 }
 
 /**
- * Stage 4 host-agnostic runtime panel backed by `gameRuntime` and `CoreHost`.
- * Mirrors startup handshake + command lifecycle expectations in
- * `ref/micropolis/spec/integration/SPEC.md`, `ref/micropolis/src/sim/w_sim.c`, and
- * tool commit/reject behavior in `ref/micropolis/src/sim/w_tool.c`.
+ * Stage 4 panel projected from authoritative snapshot/patch game state.
+ * Mirrors Stage 2 data-plane intent for map/HUD/message projection from
+ * `ref/micropolis/src/sim/w_update.c`, `ref/micropolis/src/sim/sim.c`, and
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Difference: this still uses the deterministic `DemoMapHost` adapter instead
+ * of a full sim-core authority payload source.
  */
 function Stage4RuntimePanel() {
-  const state = useSyncExternalStore(
-    (onStoreChange) => gameRuntime.subscribeState(() => onStoreChange()),
-    () => gameRuntime.getState(),
-    () => gameRuntime.getState(),
-  );
-  const status = describeRuntimeStatus(state);
-  const [activeTool, setActiveTool] = useState<CoreHostTool>('road');
-  const [toolX, setToolX] = useState(60);
-  const [toolY, setToolY] = useState(50);
+  const runtime = useMemo(() => createWebHostRuntime({ host: new DemoMapHost() }), []);
+  const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
+  const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
   const commandCounter = useRef(1);
 
-  const controlsDisabled = state.status !== 'ready';
-  const recentCommitted = state.committedPlacements.slice(-16).reverse();
-  const recentLogs = state.commandLifecycleLog.slice(-20).reverse();
-  /**
-   * Sends one Stage 4 placement command and keeps coordinate inputs aligned to the click target.
-   * Mirrors `DoTool` targeting + command correlation intent in `ref/micropolis/src/sim/w_tool.c`.
-   */
-  const sendStage4Placement = (x: number, y: number): void => {
-    if (controlsDisabled) {
-      return;
-    }
-
-    setToolX(x);
-    setToolY(y);
-    gameRuntime.sendCommand({
-      type: 'tool-command',
-      commandId: nextCommandId(commandCounter, 'stage4-tool'),
-      tool: activeTool,
-      x,
-      y,
+  useEffect(() => {
+    const unsubscribe = runtime.subscribe((event) => {
+      setState(event.state);
     });
-  };
+
+    runtime.connect();
+    return () => {
+      unsubscribe();
+      runtime.disconnect();
+    };
+  }, [runtime]);
+
+  const controlsDisabled = state.phase !== 'ready';
+  const reconnectDisabled =
+    state.phase === 'connecting' || state.phase === 'negotiating' || state.phase === 'reconnecting';
+  const resyncDisabled =
+    state.phase === 'disconnected' ||
+    state.phase === 'connecting' ||
+    state.phase === 'negotiating' ||
+    state.phase === 'reconnecting' ||
+    state.phase === 'failed';
 
   return (
     <section
@@ -150,36 +136,33 @@ function Stage4RuntimePanel() {
     >
       <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
       <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-        mode={state.mode} status={state.status} seq={state.lastAppliedServerSeq} tick=
-        {state.lastAppliedTick} pending={state.pendingPlacements.length} committed=
-        {state.committedPlacements.length} resyncing={String(state.isResyncing)}
+        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
+        {state.pendingTools.length} draw={state.mapState.drawMode}
       </div>
-      <div
-        style={{
-          color: status.isError ? '#b91c1c' : '#0f766e',
-          fontFamily: 'monospace',
-          fontSize: 12,
-        }}
-      >
-        {status.headline}: {status.detail}
+      <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+        {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
+      </div>
+      <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+        {formatRuntimePhaseStatus(state.phase)}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <button
+          disabled={reconnectDisabled}
           onClick={() => {
-            gameRuntime.stop();
-            gameRuntime.start();
+            runtime.reconnect();
           }}
           type="button"
         >
-          Restart Runtime
+          Reconnect
         </button>
         <button
+          disabled={resyncDisabled}
           onClick={() => {
-            gameRuntime.host.requestSnapshot(state.lastAppliedServerSeq);
+            runtime.requestSnapshot('resync');
           }}
           type="button"
         >
-          Request Snapshot
+          Resync Snapshot
         </button>
       </div>
 
@@ -193,21 +176,25 @@ function Stage4RuntimePanel() {
         }}
       >
         <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>
-          Authoritative Placement Map
+          Authoritative Snapshot/Patch Map
         </strong>
-        <Stage4PlacementCanvas
-          committedPlacements={state.committedPlacements}
-          height={STAGE4_MAP_HEIGHT}
+        <MapCanvas
+          mapState={state.mapState}
           onTileClick={(x, y) => {
-            sendStage4Placement(x, y);
+            if (controlsDisabled) {
+              return;
+            }
+
+            runtime.sendCommand(nextCommandId(commandCounter, 'stage4-tool'), {
+              kind: 'tool',
+              tool: activeTool,
+              x,
+              y,
+            });
           }}
-          pendingPlacements={state.pendingPlacements}
+          pendingTools={state.pendingTools}
           tileSize={STAGE4_MAP_TILE_SIZE}
-          width={STAGE4_MAP_WIDTH}
         />
-        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-          Click any tile to send a `{activeTool}` placement command.
-        </div>
       </section>
 
       <section
@@ -247,44 +234,8 @@ function Stage4RuntimePanel() {
             );
           })}
         </div>
-        <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <label style={{ display: 'flex', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
-            X
-            <input
-              disabled={controlsDisabled}
-              min={0}
-              onChange={(event) => {
-                setToolX(parseTileCoordinate(event.target.value, toolX));
-              }}
-              step={1}
-              style={{ width: 70 }}
-              type="number"
-              value={toolX}
-            />
-          </label>
-          <label style={{ display: 'flex', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
-            Y
-            <input
-              disabled={controlsDisabled}
-              min={0}
-              onChange={(event) => {
-                setToolY(parseTileCoordinate(event.target.value, toolY));
-              }}
-              step={1}
-              style={{ width: 70 }}
-              type="number"
-              value={toolY}
-            />
-          </label>
-          <button
-            disabled={controlsDisabled}
-            onClick={() => {
-              sendStage4Placement(toolX, toolY);
-            }}
-            type="button"
-          >
-            Send Placement
-          </button>
+        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+          Click map tiles to submit `{activeTool}` tool commands.
         </div>
       </section>
 
@@ -294,185 +245,22 @@ function Stage4RuntimePanel() {
           borderRadius: 6,
           display: 'grid',
           gap: 8,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           padding: 10,
         }}
       >
-        <div style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Pending Placements</strong>
-          <RuntimePlacementList
-            emptyText="No pending placements."
-            placements={state.pendingPlacements.map((placement) => ({
-              commandId: placement.commandId,
-              tool: placement.tool,
-              x: placement.x,
-              y: placement.y,
-            }))}
-          />
+        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD + Messages</strong>
+        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+          <div>{state.hudState.fundsLabel}</div>
+          <div>Date: {state.hudState.dateLabel}</div>
+          <div>
+            Demand R/C/I: {state.hudState.demandR}/{state.hudState.demandC}/{state.hudState.demandI}
+          </div>
+          <div>Speed: {formatSpeedLabel(state.hudState.speed)}</div>
         </div>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>
-            Recent Committed Placements
-          </strong>
-          <RuntimePlacementList
-            emptyText="No committed placements yet."
-            placements={recentCommitted}
-          />
-        </div>
-      </section>
-
-      <section style={{ display: 'grid', gap: 6 }}>
-        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Command Lifecycle Log</strong>
-        <RuntimeLogList entries={recentLogs} />
+        <MessageFeed messages={state.hudState.messages} />
       </section>
     </section>
   );
-}
-
-/**
- * Stage 4 map canvas that visualizes authoritative placement events.
- * Mirrors map-tile redraw ownership from `ref/micropolis/src/sim/w_map.c` and
- * successful tool commit visibility from `ref/micropolis/src/sim/w_tool.c`.
- * Difference: Stage 4 currently renders placement overlays only (no full tile art map yet).
- */
-function Stage4PlacementCanvas({
-  committedPlacements,
-  height,
-  onTileClick,
-  pendingPlacements,
-  tileSize,
-  width,
-}: {
-  committedPlacements: ReadonlyArray<CommittedPlacement>;
-  height: number;
-  onTileClick: (x: number, y: number) => void;
-  pendingPlacements: ReadonlyArray<PendingVisualPlacement>;
-  tileSize: number;
-  width: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas === null) {
-      return;
-    }
-
-    const context = canvas.getContext('2d');
-    if (context === null) {
-      return;
-    }
-
-    const widthPx = width * tileSize;
-    const heightPx = height * tileSize;
-    if (canvas.width !== widthPx) {
-      canvas.width = widthPx;
-    }
-    if (canvas.height !== heightPx) {
-      canvas.height = heightPx;
-    }
-
-    context.fillStyle = '#e2e8f0';
-    context.fillRect(0, 0, widthPx, heightPx);
-
-    for (const placement of committedPlacements) {
-      if (!isTileInBoundsForCanvas(placement.x, placement.y, width, height)) {
-        continue;
-      }
-
-      context.fillStyle = resolveToolColor(placement.tool);
-      context.fillRect(placement.x * tileSize, placement.y * tileSize, tileSize, tileSize);
-    }
-
-    for (const placement of pendingPlacements) {
-      if (!isTileInBoundsForCanvas(placement.x, placement.y, width, height)) {
-        continue;
-      }
-
-      context.strokeStyle = resolveToolColor(placement.tool);
-      context.lineWidth = 1;
-      context.strokeRect(placement.x * tileSize, placement.y * tileSize, tileSize, tileSize);
-    }
-  }, [committedPlacements, height, pendingPlacements, tileSize, width]);
-
-  const widthPx = width * tileSize;
-  const heightPx = height * tileSize;
-
-  return (
-    <div
-      style={{
-        border: '1px solid #334155',
-        height: heightPx,
-        overflow: 'hidden',
-        width: widthPx,
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        onClick={(event) => {
-          const canvas = canvasRef.current;
-          if (canvas === null) {
-            return;
-          }
-
-          const tile = getCanvasTilePosition(event, canvas, tileSize);
-          if (tile === null || !isTileInBoundsForCanvas(tile.x, tile.y, width, height)) {
-            return;
-          }
-
-          onTileClick(tile.x, tile.y);
-        }}
-        style={{
-          cursor: 'crosshair',
-          display: 'block',
-          imageRendering: 'pixelated',
-        }}
-      />
-    </div>
-  );
-}
-
-/**
- * Resolve one runtime tool name into deterministic UI marker color.
- * Mirrors tool-specific visual differentiation intent from `ref/micropolis/src/sim/w_tool.c`.
- * Difference: this uses Stage 2 debug palette tokens instead of Micropolis art sprites.
- */
-function resolveToolColor(tool: CoreHostTool): string {
-  const spec = STAGE2_TOOL_SPECS.find((candidate) => candidate.tool === tool);
-  return spec?.pendingColor ?? '#334155';
-}
-
-/**
- * Converts a canvas click position into placement tile coordinates.
- * Mirrors tile-address targeting flow from `do_tool` in `ref/micropolis/src/sim/w_tool.c`,
- * adapted to HTML canvas screen-space coordinates.
- */
-function getCanvasTilePosition(
-  event: MouseEvent<HTMLCanvasElement>,
-  canvas: HTMLCanvasElement,
-  tileSize: number,
-): { x: number; y: number } | null {
-  const bounds = canvas.getBoundingClientRect();
-  if (bounds.width === 0 || bounds.height === 0) {
-    return null;
-  }
-
-  const canvasX = ((event.clientX - bounds.left) * canvas.width) / bounds.width;
-  const canvasY = ((event.clientY - bounds.top) * canvas.height) / bounds.height;
-
-  return {
-    x: Math.floor(canvasX / tileSize),
-    y: Math.floor(canvasY / tileSize),
-  };
-}
-
-/**
- * Stage 4 map bounds-check helper for placement rendering and click validation.
- * Mirrors map bound checks used by Micropolis tool entry points in
- * `ref/micropolis/src/sim/w_tool.c`.
- */
-function isTileInBoundsForCanvas(x: number, y: number, width: number, height: number): boolean {
-  return x >= 0 && y >= 0 && x < width && y < height;
 }
 
 /**
@@ -831,87 +619,6 @@ function Stage2DemoPanel() {
       </section>
     </section>
   );
-}
-
-/**
- * Renders a compact placement list for Stage 4 runtime diagnostics.
- * Mirrors placement visibility intent from `DidTool(...)` usage in
- * `ref/micropolis/src/sim/w_tool.c`, adapted to simple text rows.
- */
-function RuntimePlacementList({
-  emptyText,
-  placements,
-}: {
-  emptyText: string;
-  placements: ReadonlyArray<{ commandId: string; tool: string; x: number; y: number }>;
-}) {
-  if (placements.length === 0) {
-    return <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{emptyText}</div>;
-  }
-
-  return (
-    <div
-      style={{
-        background: '#f8fafc',
-        border: '1px solid #cbd5e1',
-        borderRadius: 4,
-        fontFamily: 'monospace',
-        fontSize: 12,
-        maxHeight: 180,
-        overflowY: 'auto',
-        padding: 8,
-      }}
-    >
-      {placements.map((placement) => (
-        <div key={`${placement.commandId}:${placement.tool}:${placement.x}:${placement.y}`}>
-          {placement.commandId} {placement.tool}@{placement.x},{placement.y}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Renders a compact reverse-chronological lifecycle log list.
- * Mirrors deterministic command/update ordering audit intent from
- * `ref/micropolis/spec/integration/SPEC.md`.
- */
-function RuntimeLogList({ entries }: { entries: readonly string[] }) {
-  if (entries.length === 0) {
-    return <div style={{ fontFamily: 'monospace', fontSize: 12 }}>No lifecycle entries yet.</div>;
-  }
-
-  return (
-    <div
-      style={{
-        background: '#f8fafc',
-        border: '1px solid #cbd5e1',
-        borderRadius: 4,
-        fontFamily: 'monospace',
-        fontSize: 12,
-        maxHeight: 220,
-        overflowY: 'auto',
-        padding: 8,
-      }}
-    >
-      {entries.map((entry, index) => (
-        <div key={`${index}-${entry}`}>{entry}</div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Parses one tile coordinate input while preserving previous valid value.
- * Mirrors integer command-coordinate validation intent in
- * `ref/micropolis/src/sim/w_tool.c`.
- */
-function parseTileCoordinate(raw: string, fallback: number): number {
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return parsed;
 }
 
 /**

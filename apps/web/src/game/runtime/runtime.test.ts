@@ -9,6 +9,7 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
+  type HostPatchPayload,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -206,7 +207,7 @@ describe('createWebHostRuntime', () => {
       tick: 1,
       serverSeq: 1,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
       },
     });
     runtime.disconnect();
@@ -239,7 +240,7 @@ describe('createWebHostRuntime', () => {
       // Reconnect snapshot can jump to latest authority sequence.
       serverSeq: 8,
       payload: {
-        map: { width: 1, height: 1, tiles: [9] },
+        map: { width: 1, height: 1, tileWords: [9] },
       },
     });
     host.emit({
@@ -249,7 +250,7 @@ describe('createWebHostRuntime', () => {
       tick: 5,
       serverSeq: 9,
       payload: {
-        map: { tiles: [{ index: 0, tile: 11 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 11 }] },
       },
     });
     host.emit({
@@ -259,13 +260,61 @@ describe('createWebHostRuntime', () => {
       tick: 5,
       serverSeq: 8,
       payload: {
-        map: { tiles: [{ index: 0, tile: 13 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 13 }] },
       },
     });
 
     expect(runtime.getState().phase).toBe('ready');
     expect(runtime.getState().lastAppliedServerSeq).toBe(9);
     expect(runtime.getState().mapState.tiles[0]).toBe(11);
+  });
+
+  it('treats a serverSeq=0 snapshot as applied ordering state for reconnect resync', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Baseline at seq 0 is valid for first applied replay state.
+      tick: 0,
+      serverSeq: 0,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+    runtime.disconnect();
+
+    runtime.connect();
+    expect(runtime.getState().phase).toBe('reconnecting');
+
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    expect(runtime.getState().phase).toBe('resyncing');
+    expect(host.sent).toContainEqual({
+      kind: 'request_snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      reason: 'resync',
+      fromServerSeq: 1,
+    });
   });
 
   it('clears pending visuals and requests snapshot when server emits resync directive', () => {
@@ -321,7 +370,7 @@ describe('createWebHostRuntime', () => {
       tick: 3,
       serverSeq: 10,
       payload: {
-        map: { width: 1, height: 1, tiles: [21] },
+        map: { width: 1, height: 1, tileWords: [21] },
       },
     });
     host.emit({
@@ -331,7 +380,7 @@ describe('createWebHostRuntime', () => {
       tick: 4,
       serverSeq: 11,
       payload: {
-        map: { tiles: [{ index: 0, tile: 22 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 22 }] },
       },
     });
     host.emit({
@@ -341,7 +390,7 @@ describe('createWebHostRuntime', () => {
       tick: 4,
       serverSeq: 10,
       payload: {
-        map: { tiles: [{ index: 0, tile: 23 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 23 }] },
       },
     });
 
@@ -375,13 +424,24 @@ describe('createWebHostRuntime', () => {
         map: {
           width: 1,
           height: 1,
-          tiles: [0],
+          tileWords: [0],
         },
         hud: {
+          funds: 19_850,
           fundsLabel: 'Funds: $19,850',
           date: { label: 'Mar 1900', month: 2, year: 1900 },
           demand: { r: 4, c: -2, i: 1 },
           speed: 3,
+          options: {
+            autoBudget: true,
+            autoGo: true,
+            autoBulldoze: true,
+            disasters: true,
+            userSoundOn: true,
+            doAnimation: true,
+            doMessages: true,
+            doNotices: true,
+          },
         },
         messages: [{ id: 14, text: 'Residents demand police stations.' }],
       },
@@ -396,13 +456,18 @@ describe('createWebHostRuntime', () => {
       payload: {
         hud: {
           speed: 0,
-          message: {
+          options: {
+            optionAutoGo: false,
+          },
+        },
+        messageDeltas: [
+          {
             // C `SendMes`/`SendMesAt` ids are integer message indexes.
             id: 16,
             text: 'Taxes are too high.',
           },
-        },
-      },
+        ],
+      } as unknown as HostPatchPayload,
     });
 
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,850');
@@ -411,6 +476,7 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().hudState.demandC).toBe(-2);
     expect(runtime.getState().hudState.demandI).toBe(1);
     expect(runtime.getState().hudState.speed).toBe(0);
+    expect(runtime.getState().hudState.options.autoGo).toBe(false);
     expect(runtime.getState().hudState.messages.map((message) => message.id)).toEqual([14, 16]);
   });
 

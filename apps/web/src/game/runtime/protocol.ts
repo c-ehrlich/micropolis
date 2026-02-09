@@ -476,13 +476,229 @@ export interface HostRejectEnvelope extends HostSequencingFields {
 }
 
 /**
+ * Authoritative snapshot map payload carried by Stage 2 host envelopes.
+ * Mirrors contiguous `Map[WORLD_X][WORLD_Y]` storage and serialization order in
+ * `ref/micropolis/src/sim/s_alloc.c` and `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: `tileWords` follows classic Micropolis x-major order
+ * (`index = x * WORLD_Y + y`).
+ */
+export interface HostMapSnapshotPayload {
+  width: number;
+  height: number;
+  tileWords: readonly number[] | Uint16Array;
+}
+
+/**
+ * One authoritative map patch delta addressed by tile coordinates.
+ * Mirrors coordinate-addressed writes to `Map[x][y]` in
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_con.c`.
+ * Parity note: this intentionally avoids ambiguous linear index deltas.
+ */
+export interface HostMapPatchTileWordDelta {
+  x: number;
+  y: number;
+  tileWord: number;
+}
+
+/**
+ * Authoritative incremental map payload carried by Stage 2 patch envelopes.
+ * Mirrors map mutation deltas consumed by `DoUpdateMap` in
+ * `ref/micropolis/src/sim/w_map.c`.
+ */
+export interface HostMapPatchPayload {
+  tileWordDeltas: readonly HostMapPatchTileWordDelta[];
+}
+
+/**
+ * Authoritative date head payload emitted by host snapshot/patch envelopes.
+ * Mirrors `updateDate` output fields in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: month uses the same zero-based `0..11` indexing as C.
+ */
+export interface HostHudDatePayload {
+  label?: string;
+  month: number;
+  year: number;
+}
+
+/**
+ * Authoritative demand heads payload emitted by host snapshot/patch envelopes.
+ * Mirrors `SetDemand` output domain in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: values are already projected to the visible valve range (`-15..15`).
+ */
+export interface HostHudDemandPayload {
+  r: number;
+  c: number;
+  i: number;
+}
+
+/**
+ * Authoritative options heads payload emitted by host snapshot/patch envelopes.
+ * Mirrors `updateOptions` / `UISetOptions` in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: C packs these into one bitfield; bridge payloads expose booleans directly.
+ */
+export interface HostHudOptionsPayload {
+  autoBudget: boolean;
+  autoGo: boolean;
+  autoBulldoze: boolean;
+  disasters: boolean;
+  userSoundOn: boolean;
+  doAnimation: boolean;
+  doMessages: boolean;
+  doNotices: boolean;
+}
+
+/**
+ * One authoritative HUD message payload emitted by host snapshot/patch envelopes.
+ * Mirrors `SendMes` / `SendMesAt` payload data in `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: `(x, y) = (0, 0)` is intentionally preserved so runtime can keep
+ * C dispatch parity (`MesX || MesY` decides SendMesAt).
+ */
+export interface HostHudMessagePayload {
+  id: number;
+  text: string;
+  x?: number;
+  y?: number;
+  /**
+   * Optional original authority tick for replay-stable snapshot baselines.
+   * Mirrors ordered message progression intent from `ref/micropolis/src/sim/s_msg.c`.
+   * Parity note: this field is bridge metadata (not present in C payloads) used
+   * so snapshot replay can preserve prior message ordering context.
+   */
+  tick?: number;
+  /**
+   * Optional original authority sequence for replay-stable snapshot baselines.
+   * Mirrors ordered update delivery intent from `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: this field is bridge metadata (not present in C payloads) used
+   * so snapshot replay can preserve prior message ordering context.
+   */
+  serverSeq?: number;
+}
+
+/**
+ * One incremental HUD message delta in Stage 2 patch payloads.
+ * Mirrors incremental message dispatch in `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: this is append-only for Stage 2 feed projection.
+ */
+export type HostMessageDeltaPayload = HostHudMessagePayload;
+
+/**
+ * One authoritative realtime object entry carried by snapshot/patch envelopes.
+ * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
+ * represented by `SimSprite` in `packages/sim-core/src/sim/realtime.ts`.
+ * Parity note: Stage 2 carries a minimal placeholder subset; Stage 7 expands
+ * this into full overlay rendering semantics.
+ */
+export interface HostRealtimeObjectPayload {
+  name: string;
+  type: number;
+  x: number;
+  y: number;
+  frame?: number;
+}
+
+/**
+ * Realtime payload section carried by Stage 2 snapshot/patch envelopes.
+ * Mirrors realtime object stream intent from `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this payload is optional until Stage 7 and may be empty.
+ */
+export interface HostRealtimePayload {
+  objects?: readonly HostRealtimeObjectPayload[];
+}
+
+/**
+ * Authoritative HUD heads payload carried by snapshot/patch envelopes.
+ * Mirrors `DoUpdateHeads` scalar UI updates in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: `funds` carries the canonical scalar while `fundsLabel` is retained
+ * as a temporary compatibility field during Stage 2 protocol migration.
+ */
+export interface HostHudPayload {
+  funds?: number;
+  fundsLabel?: string;
+  date?: HostHudDatePayload;
+  demand?: HostHudDemandPayload;
+  speed?: number;
+  options?: Partial<HostHudOptionsPayload>;
+  /**
+   * Legacy single-message compatibility payload retained while migration from
+   * ad-hoc message fields to explicit `messageDeltas` is in flight.
+   */
+  message?: HostHudMessagePayload;
+}
+
+interface LegacyHostMapSnapshotPayload {
+  width: number;
+  height: number;
+  tiles: readonly number[] | Uint16Array;
+}
+
+interface LegacyHostMapPatchPayload {
+  tiles: ReadonlyArray<{
+    index: number;
+    tile: number;
+  }>;
+}
+
+/**
+ * Stage 2 snapshot payload surface consumed by runtime projection reducers.
+ * Mirrors map snapshot ownership in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * protocol migration is in flight.
+ */
+export interface HostSnapshotPayload extends Record<string, unknown> {
+  map?: HostMapSnapshotPayload | LegacyHostMapSnapshotPayload;
+  hud?: HostHudPayload;
+  /**
+   * Optional realtime object baseline for overlay projection.
+   * Mirrors sprite snapshot ownership in `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  realtime?: HostRealtimePayload;
+  /**
+   * Snapshot baseline message feed (full replacement semantics).
+   * Mirrors `SetMessageField` visible-message ownership in
+   * `ref/micropolis/src/sim/s_msg.c`.
+   */
+  messages?: readonly HostHudMessagePayload[];
+  /**
+   * Compatibility field: tolerated on snapshots so replay streams remain stable
+   * while Stage 2 payload producers are upgraded.
+   */
+  messageDeltas?: readonly HostMessageDeltaPayload[];
+}
+
+/**
+ * Stage 2 patch payload surface consumed by runtime projection reducers.
+ * Mirrors map patch ownership in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * protocol migration is in flight.
+ */
+export interface HostPatchPayload extends Record<string, unknown> {
+  map?: HostMapPatchPayload | LegacyHostMapPatchPayload;
+  hud?: HostHudPayload;
+  /**
+   * Optional realtime object delta/snapshot payload for staged overlay support.
+   * Mirrors per-frame sprite update intent from `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  realtime?: HostRealtimePayload;
+  /**
+   * Incremental message additions for patch projection.
+   * Mirrors one-heads-cycle message dispatch deltas in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  messageDeltas?: readonly HostMessageDeltaPayload[];
+  /**
+   * Legacy message delta field retained during Stage 2 migration.
+   * Runtime consumes this as append-only deltas.
+   */
+  messages?: readonly HostHudMessagePayload[];
+}
+
+/**
  * Host incremental authoritative update envelope.
  * Mirrors post-command/update propagation intent from
- * `ref/micropolis/src/sim/w_update.c`; payload stays generic in this task.
+ * `ref/micropolis/src/sim/w_update.c`, including Stage 2 map tile-word deltas.
  */
 export interface HostPatchEnvelope extends HostSequencingFields {
   kind: 'patch';
-  payload: unknown;
+  payload: HostPatchPayload;
 }
 
 /**
@@ -492,7 +708,7 @@ export interface HostPatchEnvelope extends HostSequencingFields {
  */
 export interface HostSnapshotEnvelope extends HostSequencingFields {
   kind: 'snapshot';
-  payload: unknown;
+  payload: HostSnapshotPayload;
 }
 
 /**

@@ -4,7 +4,7 @@ This package is currently a stub. The next work is mostly wiring sim-core output
 
 ## Map invalidation (`NewMap` / `NewMapFlags`)
 - Wire `SimState.NewMap` and `SimState.NewMapFlags` into map view invalidation/redraw (base tiles + overlays + map_state modes).
-- After processing, the UI should clear `state.NewMap = 0` and clear any `state.NewMapFlags[...]` entries it consumed.
+- After one map update cycle, the UI should clear `state.NewMap = 0` and clear all C map-flag slots (`state.NewMapFlags[0..NMAPS-1]`), matching `sim_update_maps` in `ref/micropolis/src/sim/sim.c`.
 - These flags mirror the C `NewMap` / `NewMapFlags` behavior in `ref/micropolis/src/sim/s_scan.c` (and are set during scans like PTL, Crime, PopDen, Fire coverage, etc).
 
 ## Heads (`DoUpdateHeads` / `uiSet` keys)
