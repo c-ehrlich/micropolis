@@ -9,14 +9,12 @@ import {
 } from '../../../../../packages/sim-core/src/index.ts';
 import {
   applyLoadNormalization,
-  createCityFile,
   decodeCityFileForMap,
-  encodeCityFile,
   readCityMeta,
-  writeCityMeta,
 } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { deriveCityNameFromPath } from '../../../../../packages/sim-io/src/load.ts';
+import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
   getScenarioDefinition,
   SCENARIO_TABLE,
@@ -500,19 +498,19 @@ export class DemoMapHost implements CoreHost {
     command: Stage2SaveCityCommand,
   ): void {
     const fileName = sanitizeCityFileName(command.fileName);
-    this.cityFileName = fileName;
-    this.cityName = deriveCityNameFromPath(fileName);
-
-    const cityBytes = this.encodeCurrentCityFile();
+    this.syncRuntimeTilesToClassicMapLayerForSave();
+    const saveResult = saveCityAsLikeC(this.simState, this.simContext, fileName);
+    this.cityFileName = saveResult.cityFileName;
+    this.cityName = saveResult.cityName;
 
     this.commandOutcomes.set(commandId, { kind: 'ack' });
     this.emitAck(roomId, clientId, commandId);
     this.emitPatch(roomId, clientId, {
       cityIo: {
         save: {
-          fileName,
+          fileName: saveResult.cityFileName,
           cityName: this.cityName,
-          cityBytes,
+          cityBytes: saveResult.cityBytes,
         },
       },
       messageDeltas: [
@@ -1256,23 +1254,36 @@ export class DemoMapHost implements CoreHost {
     this.resetMessageLog('Started a new city.');
   }
 
-  private encodeCurrentCityFile(): Uint8Array {
-    const city = createCityFile({ width: DEMO_WORLD_WIDTH, height: DEMO_WORLD_HEIGHT });
-    city.map.set(this.mapTiles);
-    writeCityMeta(city.misc, {
-      cityTime: Math.max(0, Math.trunc(this.simState.CityTime)),
-      totalFunds: Math.max(0, Math.trunc(this.simState.TotalFunds)),
-      autoBulldoze: this.simState.autoBulldoze,
-      autoBudget: this.simState.autoBudget,
-      autoGo: this.simState.autoGo,
-      userSoundOn: this.simState.userSoundOn,
-      cityTax: this.simState.CityTax,
-      simSpeed: this.getVisibleSpeed(),
-      policePercent: 1,
-      firePercent: 1,
-      roadPercent: 1,
-    });
-    return encodeCityFile(city);
+  /**
+   * Sync row-major runtime map tiles into the classic x-major map layer before save.
+   * Mirrors `saveFile` map persistence in `ref/micropolis/src/sim/s_fileio.c`
+   * where `_save_short((&Map[0][0]), WORLD_X * WORLD_Y, f)` writes contiguous
+   * `Map[x][y]` storage.
+   * Parity note: Stage 2 host mutates row-major `mapTiles` for rendering and only
+   * mirrors into sim-core classic storage at save boundaries.
+   */
+  private syncRuntimeTilesToClassicMapLayerForSave(): void {
+    this.simContext.store.beginTick();
+    try {
+      const mapLayer = this.simContext.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error(`expected Uint16Array map layer; got ${mapLayer.constructor.name}`);
+      }
+      if (mapLayer.length < this.mapTiles.length) {
+        throw new Error(
+          `expected map layer length >= ${this.mapTiles.length}; got ${mapLayer.length}`,
+        );
+      }
+
+      copyRuntimeRowMajorTilesToClassicXMajorMap(
+        this.mapTiles,
+        mapLayer,
+        DEMO_WORLD_WIDTH,
+        DEMO_WORLD_HEIGHT,
+      );
+    } finally {
+      this.simContext.store.commitTick();
+    }
   }
 }
 
@@ -1295,11 +1306,13 @@ function tryDecodeImportedCity(cityBytes: Uint8Array): DecodedDemoCity | null {
       width: DEMO_WORLD_WIDTH,
       height: DEMO_WORLD_HEIGHT,
     });
+    const runtimeTiles = new Uint16Array(DEMO_WORLD_WIDTH * DEMO_WORLD_HEIGHT);
+    copyClassicXMajorMapToRuntimeTiles(city.map, runtimeTiles, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
     const normalized = applyLoadNormalization(readCityMeta(city.misc));
     const speed = normalized.simSpeed < 1 ? 3 : clampPlayableSpeed(normalized.simSpeed);
 
     return {
-      mapTiles: city.map.slice(),
+      mapTiles: runtimeTiles,
       cityTime: normalized.cityTime,
       totalFunds: normalized.totalFunds,
       cityTax: normalized.cityTax,
@@ -1532,6 +1545,27 @@ function copyClassicXMajorMapToRuntimeTiles(
       const sourceIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
       const runtimeIndex = y * width + x;
       runtimeTiles[runtimeIndex] = sourceTileWords[sourceIndex] ?? 0;
+    }
+  }
+}
+
+/**
+ * Copies runtime row-major tile order into classic Micropolis x-major map storage.
+ * Mirrors contiguous `Map[x][y]` map ownership consumed by `saveFile` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: Stage 2 host runtime map is row-major for canvas convenience.
+ */
+function copyRuntimeRowMajorTilesToClassicXMajorMap(
+  runtimeTiles: Uint16Array,
+  destinationTileWords: Uint16Array,
+  width: number,
+  height: number,
+): void {
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const runtimeIndex = y * width + x;
+      const destinationIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      destinationTileWords[destinationIndex] = runtimeTiles[runtimeIndex] ?? 0;
     }
   }
 }

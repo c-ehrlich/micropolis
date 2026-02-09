@@ -7,6 +7,7 @@ import {
   createSimState,
   resetForNewCityFromSeed,
 } from '../../../../../packages/sim-core/src/index.ts';
+import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
@@ -265,6 +266,49 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     expect(runtime.getState().hudState.fundsLabel).toBe(savedFundsLabel);
     expect(runtime.getState().mapState.tiles[changedTileIndex]).toBe(savedTile);
+  });
+
+  it('persists history buffers in save-city export bytes using C save packing', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    let exportedCityBytes: Uint8Array | null = null;
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind !== 'patch') {
+        return;
+      }
+      const savePayload = readDemoCityExportPayload(event.envelope.payload);
+      if (savePayload !== null) {
+        exportedCityBytes = savePayload.cityBytes;
+      }
+    });
+
+    runtime.connect();
+
+    const authority = host as unknown as {
+      simState: {
+        ResHis: Int16Array;
+        MoneyHis: Int16Array;
+      };
+    };
+    authority.simState.ResHis[5] = -1234;
+    authority.simState.MoneyHis[11] = 2345;
+
+    runtime.sendCommand('save-history-pack-1', {
+      kind: 'city-io',
+      action: 'save-city',
+      fileName: 'history-pack.cty',
+    });
+
+    if (exportedCityBytes === null) {
+      throw new Error('expected save-city export bytes');
+    }
+
+    const decoded = decodeCityFileForMap(exportedCityBytes, { width: 120, height: 100 });
+    // `saveFile` writes all six history arrays with `_save_short(..., HISTLEN / 2, ...)`
+    // in `ref/micropolis/src/sim/s_fileio.c`.
+    expect(decoded.histories.res[5]).toBe(-1234);
+    expect(decoded.histories.money[11]).toBe(2345);
   });
 
   it('runs InitWillStuff and DoSimInit lifecycle resets on new-city', () => {
