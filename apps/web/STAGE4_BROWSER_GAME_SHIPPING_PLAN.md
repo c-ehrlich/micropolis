@@ -52,7 +52,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] `apps/web/src/game/core-host.ts`
 - [x] `apps/web/src/game/runtime/protocol.ts`
 - [x] `ref/micropolis/spec/integration/SPEC.md`
-- [ ] `ref/micropolis/src/sim/sim.c`
+- [x] `ref/micropolis/src/sim/sim.c`
 - [ ] `ref/micropolis/src/sim/s_sim.c`
 - [ ] `ref/micropolis/src/sim/w_tool.c`
 - [ ] `ref/micropolis/src/sim/s_fileio.c`
