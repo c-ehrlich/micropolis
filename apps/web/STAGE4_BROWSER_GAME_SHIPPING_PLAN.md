@@ -260,7 +260,7 @@ Deletion execution notes:
 - [x] Translate tool outcomes into stable host ack/reject codes/messages.
 - [x] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
 - [x] Ensure reject reasons include out-of-bounds/no-funds/invalid placement cases.
-- [ ] Ensure tool footprint behavior (1x1 vs 3x3) aligns with C tool tables.
+- [x] Ensure tool footprint behavior (1x1 vs 3x3) aligns with C tool tables.
 
 ### Verification checklist
 
@@ -567,5 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 

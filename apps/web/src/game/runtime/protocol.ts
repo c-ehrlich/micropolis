@@ -9,6 +9,11 @@ import {
   type CoreClientEnvelope as CoreBridgeClientEnvelopeContract,
   type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
 } from '../../../../../packages/core-bridge/src/types.ts';
+import {
+  TOOL_OFFSET,
+  TOOL_SIZE,
+  TOOL_STATE,
+} from '../../../../../packages/sim-core/src/actions/tool-actions.ts';
 
 /**
  * Stage 0 canonical client-envelope contract alias for web runtime migration.
@@ -400,20 +405,57 @@ export interface Stage2ToolSpec {
   pendingColor: string;
 }
 
+const STAGE2_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
+  road: TOOL_STATE.road,
+  rail: TOOL_STATE.rail,
+  wire: TOOL_STATE.wire,
+  bulldoze: TOOL_STATE.bulldoze,
+  res: TOOL_STATE.res,
+  com: TOOL_STATE.com,
+  ind: TOOL_STATE.ind,
+};
+
+interface Stage2ToolVisualSpec {
+  tool: Stage2ToolName;
+  label: string;
+  pendingColor: string;
+}
+
+const STAGE2_TOOL_VISUAL_SPECS: readonly Stage2ToolVisualSpec[] = [
+  { tool: 'road', label: 'Road', pendingColor: '#f6d365' },
+  { tool: 'rail', label: 'Rail', pendingColor: '#c3aed6' },
+  { tool: 'wire', label: 'Wire', pendingColor: '#93c5fd' },
+  { tool: 'bulldoze', label: 'Bulldoze', pendingColor: '#fca5a5' },
+  { tool: 'res', label: 'R', pendingColor: '#86efac' },
+  { tool: 'com', label: 'C', pendingColor: '#7dd3fc' },
+  { tool: 'ind', label: 'I', pendingColor: '#fde047' },
+] as const;
+
+function stage2FootprintFromToolTables(
+  tool: Stage2ToolName,
+): Pick<Stage2ToolSpec, 'size' | 'offset'> {
+  const stateId = STAGE2_TOOL_STATE_ID[tool];
+  const size = TOOL_SIZE[stateId];
+  const offset = TOOL_OFFSET[stateId];
+  if (size === undefined || offset === undefined) {
+    throw new Error(`Missing tool footprint table entry for Stage 2 tool "${tool}"`);
+  }
+  return { size, offset };
+}
+
 /**
  * Stage 2 tool metadata table.
  * Mirrors `toolSize[]`/`toolOffset[]` entries from `ref/micropolis/src/sim/w_tool.c`
  * for road, rail, wire, bulldoze, residential, commercial, and industrial tools.
+ * Parity note: `size`/`offset` values are derived from sim-core C-parity tool tables
+ * (`TOOL_SIZE`, `TOOL_OFFSET`) to keep Stage 2 1x1 vs 3x3 behavior locked to Micropolis.
  */
-export const STAGE2_TOOL_SPECS: readonly Stage2ToolSpec[] = [
-  { tool: 'road', label: 'Road', size: 1, offset: 0, pendingColor: '#f6d365' },
-  { tool: 'rail', label: 'Rail', size: 1, offset: 0, pendingColor: '#c3aed6' },
-  { tool: 'wire', label: 'Wire', size: 1, offset: 0, pendingColor: '#93c5fd' },
-  { tool: 'bulldoze', label: 'Bulldoze', size: 1, offset: 0, pendingColor: '#fca5a5' },
-  { tool: 'res', label: 'R', size: 3, offset: 1, pendingColor: '#86efac' },
-  { tool: 'com', label: 'C', size: 3, offset: 1, pendingColor: '#7dd3fc' },
-  { tool: 'ind', label: 'I', size: 3, offset: 1, pendingColor: '#fde047' },
-] as const;
+export const STAGE2_TOOL_SPECS: readonly Stage2ToolSpec[] = STAGE2_TOOL_VISUAL_SPECS.map(
+  (spec) => ({
+    ...spec,
+    ...stage2FootprintFromToolTables(spec.tool),
+  }),
+);
 
 const STAGE2_TOOL_NAME_SET = new Set<Stage2ToolName>(STAGE2_TOOL_SPECS.map((spec) => spec.tool));
 

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   fromCanonicalBridgeToolName,
   getStage0PlayableBridgeCommandType,
+  getStage2ToolSpec,
   isStage0PlayableBridgeCommandType,
   STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
+  STAGE2_TOOL_SPECS,
   type Stage2ToolName,
   toCanonicalBridgeToolName,
 } from './protocol.ts';
@@ -96,6 +98,27 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       const canonical = toCanonicalBridgeToolName(tool);
       expect(fromCanonicalBridgeToolName(canonical)).toBe(tool);
     }
+  });
+
+  it('keeps Stage 2 tool footprints aligned with w_tool.c toolSize/toolOffset tables', () => {
+    // Magic-number source: `toolSize[]`/`toolOffset[]` in
+    // `ref/micropolis/src/sim/w_tool.c` for roadState/rrState/wireState/dozeState
+    // (all 1x1, offset 0) and residentialState/commercialState/industrialState
+    // (all 3x3, offset 1).
+    expect(
+      STAGE2_TOOL_SPECS.map((spec) => ({ tool: spec.tool, size: spec.size, offset: spec.offset })),
+    ).toEqual([
+      { tool: 'road', size: 1, offset: 0 },
+      { tool: 'rail', size: 1, offset: 0 },
+      { tool: 'wire', size: 1, offset: 0 },
+      { tool: 'bulldoze', size: 1, offset: 0 },
+      { tool: 'res', size: 3, offset: 1 },
+      { tool: 'com', size: 3, offset: 1 },
+      { tool: 'ind', size: 3, offset: 1 },
+    ]);
+
+    expect(getStage2ToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
+    expect(getStage2ToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
   });
 
   it('accepts only frozen Stage 0 playable command discriminants', () => {
