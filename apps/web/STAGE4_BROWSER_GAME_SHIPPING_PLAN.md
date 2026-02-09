@@ -170,7 +170,7 @@ Deletion execution notes:
 ### TS references to review
 
 - [x] `apps/web/src/game/host-factory.ts`
-- [ ] `apps/web/src/game/local-host.ts`
+- [x] `apps/web/src/game/local-host.ts`
 - [ ] `apps/web/src/game/do-host.ts`
 - [ ] `apps/web/src/game/runtime.ts`
 - [ ] `packages/sim-core/src/core/sim-state.ts`
@@ -567,4 +567,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
