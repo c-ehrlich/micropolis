@@ -20,7 +20,6 @@ export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
-type RuntimeViewMode = 'stage4' | 'stage2';
 const STAGE4_MAP_TILE_SIZE = 6;
 const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
 const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
@@ -29,15 +28,13 @@ const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
 ] as const;
 
 /**
- * Route-level host/runtime switcher for Stage 4 and Stage 2 browser views.
- * Mirrors Micropolis transport-path switching intent in `ref/micropolis/src/sim/w_sim.c`:
- * one UI surface can target local in-process flows and network-ready host flows.
- * Difference: Stage 2 remains a temporary migration scaffold while `/` is the
- * locked surviving gameplay surface during bridge convergence.
+ * Primary Stage 4 gameplay route rendered at `/`.
+ * Mirrors the single command-surface gameplay intent from `w_sim.c` in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: bridge convergence still runs through the deterministic
+ * `DemoMapHost` adapter rather than direct sim-core authority payloads.
  */
 function HomePage() {
-  const [viewMode, setViewMode] = useState<RuntimeViewMode>('stage4');
-
   return (
     <main
       style={{
@@ -52,228 +49,20 @@ function HomePage() {
         duplicate protocol surfaces after bridge-contract port:{' '}
         {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button
-          onClick={() => {
-            setViewMode('stage4');
-          }}
-          style={{
-            background: viewMode === 'stage4' ? '#dbeafe' : '#f8fafc',
-            border: '1px solid #334155',
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            fontSize: 12,
-            padding: '6px 10px',
-          }}
-          type="button"
-        >
-          Stage 4 Runtime (Default)
-        </button>
-        <button
-          onClick={() => {
-            setViewMode('stage2');
-          }}
-          style={{
-            background: viewMode === 'stage2' ? '#dbeafe' : '#f8fafc',
-            border: '1px solid #334155',
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            fontSize: 12,
-            padding: '6px 10px',
-          }}
-          type="button"
-        >
-          Stage 2 Demo Map
-        </button>
-      </div>
-      {viewMode === 'stage4' ? <Stage4RuntimePanel /> : <Stage2DemoPanel />}
+      <Stage4RuntimePanel />
     </main>
   );
 }
 
 /**
- * Stage 4 panel projected from authoritative snapshot/patch game state.
- * Mirrors Stage 2 data-plane intent for map/HUD/message projection from
- * `ref/micropolis/src/sim/w_update.c`, `ref/micropolis/src/sim/sim.c`, and
- * `ref/micropolis/src/sim/s_msg.c`.
- * Difference: this still uses the deterministic `DemoMapHost` adapter instead
- * of a full sim-core authority payload source.
- */
-function Stage4RuntimePanel() {
-  const runtime = useMemo(() => createWebHostRuntime({ host: new DemoMapHost() }), []);
-  const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
-  const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
-  const commandCounter = useRef(1);
-  const authoritativeMapState = state.mapState;
-  const authoritativeMapStatus = authoritativeMapState.hasSnapshot
-    ? `${authoritativeMapState.width}x${authoritativeMapState.height} draw=${authoritativeMapState.drawMode} epoch=${authoritativeMapState.renderEpoch}`
-    : 'awaiting authoritative snapshot';
-
-  useEffect(() => {
-    const unsubscribe = runtime.subscribe((event) => {
-      setState(event.state);
-    });
-
-    runtime.connect();
-    return () => {
-      unsubscribe();
-      runtime.disconnect();
-    };
-  }, [runtime]);
-
-  const controlsDisabled = state.phase !== 'ready';
-  const reconnectDisabled =
-    state.phase === 'connecting' || state.phase === 'negotiating' || state.phase === 'reconnecting';
-  const resyncDisabled =
-    state.phase === 'disconnected' ||
-    state.phase === 'connecting' ||
-    state.phase === 'negotiating' ||
-    state.phase === 'reconnecting' ||
-    state.phase === 'failed';
-
-  return (
-    <section
-      style={{
-        display: 'grid',
-        gap: 12,
-      }}
-    >
-      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
-      <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
-        {state.pendingTools.length} map={authoritativeMapStatus}
-      </div>
-      <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
-      </div>
-      <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {formatRuntimePhaseStatus(state.phase)}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button
-          disabled={reconnectDisabled}
-          onClick={() => {
-            runtime.reconnect();
-          }}
-          type="button"
-        >
-          Reconnect
-        </button>
-        <button
-          disabled={resyncDisabled}
-          onClick={() => {
-            runtime.requestSnapshot('resync');
-          }}
-          type="button"
-        >
-          Resync Snapshot
-        </button>
-      </div>
-
-      <section
-        style={{
-          border: '1px solid #334155',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 8,
-          padding: 10,
-        }}
-      >
-        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>
-          Authoritative Snapshot/Patch Map
-        </strong>
-        <MapCanvas
-          mapState={authoritativeMapState}
-          onTileClick={(x, y) => {
-            if (controlsDisabled) {
-              return;
-            }
-
-            runtime.sendCommand(nextCommandId(commandCounter, 'stage4-tool'), {
-              kind: 'tool',
-              tool: activeTool,
-              x,
-              y,
-            });
-          }}
-          pendingTools={state.pendingTools}
-          tileSize={STAGE4_MAP_TILE_SIZE}
-        />
-      </section>
-
-      <section
-        style={{
-          border: '1px solid #334155',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 10,
-          padding: 10,
-        }}
-      >
-        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Tool Command</strong>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {PLAYABLE_TOOL_SPECS.map((spec) => {
-            const active = activeTool === spec.tool;
-            return (
-              <button
-                key={spec.tool}
-                disabled={controlsDisabled}
-                onClick={() => {
-                  setActiveTool(spec.tool);
-                }}
-                style={{
-                  background: active ? spec.pendingColor : '#f3f4f6',
-                  border: '1px solid #334155',
-                  borderRadius: 4,
-                  cursor: controlsDisabled ? 'not-allowed' : 'pointer',
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  opacity: controlsDisabled ? 0.6 : 1,
-                  padding: '6px 8px',
-                }}
-                type="button"
-              >
-                {spec.label}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-          Click map tiles to submit `{activeTool}` tool commands.
-        </div>
-      </section>
-
-      <section
-        style={{
-          border: '1px solid #334155',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 8,
-          padding: 10,
-        }}
-      >
-        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD + Messages</strong>
-        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-          <div>{state.hudState.fundsLabel}</div>
-          <div>Date: {state.hudState.dateLabel}</div>
-          <div>
-            Demand R/C/I: {state.hudState.demandR}/{state.hudState.demandC}/{state.hudState.demandI}
-          </div>
-          <div>Speed: {formatSpeedLabel(state.hudState.speed)}</div>
-        </div>
-        <MessageFeed messages={state.hudState.messages} />
-      </section>
-    </section>
-  );
-}
-
-/**
- * Stage 2 route panel that renders map, HUD, controls, and message feed from host envelopes.
+ * Stage 4 route panel that renders map, HUD, controls, and message feed from host envelopes.
  * Mirrors map/tool/heads flows in `ref/micropolis/src/sim/w_map.c`,
  * `ref/micropolis/src/sim/w_tool.c`, `ref/micropolis/src/sim/w_update.c`, and
  * `ref/micropolis/src/sim/s_msg.c`, adapted to React + typed bridge state.
+ * Parity note: this replaces the earlier Stage 4 placement-only primary panel
+ * with the full authoritative map/HUD/control projection path.
  */
-function Stage2DemoPanel() {
+function Stage4RuntimePanel() {
   const runtime = useMemo(() => createWebHostRuntime({ host: new DemoMapHost() }), []);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
@@ -329,7 +118,7 @@ function Stage2DemoPanel() {
         gap: 12,
       }}
     >
-      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 2 Demo Map Runtime</h2>
+      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
         phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
         {state.pendingTools.length}
@@ -420,7 +209,7 @@ function Stage2DemoPanel() {
               });
             }}
             pendingTools={state.pendingTools}
-            tileSize={5}
+            tileSize={STAGE4_MAP_TILE_SIZE}
           />
         </div>
 
