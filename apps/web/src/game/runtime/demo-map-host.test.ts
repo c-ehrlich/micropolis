@@ -311,6 +311,73 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(decoded.histories.money[11]).toBe(2345);
   });
 
+  it('applies C loadFile lifecycle init and history restore on load-city', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    let exportedCityBytes: Uint8Array | null = null;
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind !== 'patch') {
+        return;
+      }
+      const savePayload = readDemoCityExportPayload(event.envelope.payload);
+      if (savePayload !== null) {
+        exportedCityBytes = savePayload.cityBytes;
+      }
+    });
+
+    runtime.connect();
+
+    const authority = host as unknown as {
+      simState: {
+        ResHis: Int16Array;
+        ScenarioID: number;
+        Fcycle: number;
+        Scycle: number;
+        InitSimLoad: number;
+        DoInitialEval: number;
+      };
+    };
+
+    authority.simState.ResHis[9] = -2222;
+    runtime.sendCommand('save-load-orchestration-1', {
+      kind: 'city-io',
+      action: 'save-city',
+      fileName: 'load-orchestration.cty',
+    });
+
+    if (exportedCityBytes === null) {
+      throw new Error('expected save-city export bytes');
+    }
+
+    authority.simState.ResHis[9] = 777;
+    authority.simState.ScenarioID = 6;
+    authority.simState.Fcycle = 41;
+    authority.simState.Scycle = 17;
+    authority.simState.InitSimLoad = 9;
+    authority.simState.DoInitialEval = 0;
+
+    runtime.sendCommand('load-load-orchestration-1', {
+      kind: 'city-io',
+      action: 'load-city',
+      fileName: 'load-orchestration.cty',
+      cityBytes: exportedCityBytes,
+    });
+
+    // Magic-number/source notes:
+    // - `loadFile` copies all history arrays (`ResHis`, etc.) and clears
+    //   `ScenarioID=0` in `ref/micropolis/src/sim/s_fileio.c`.
+    // - `loadFile` then runs `DoSimInit`, which resets `Fcycle/Scycle` to `0`,
+    //   consumes `InitSimLoad` back to `0`, and sets `DoInitialEval=1`
+    //   in `ref/micropolis/src/sim/s_sim.c`.
+    expect(authority.simState.ResHis[9]).toBe(-2222);
+    expect(authority.simState.ScenarioID).toBe(0);
+    expect(authority.simState.Fcycle).toBe(0);
+    expect(authority.simState.Scycle).toBe(0);
+    expect(authority.simState.InitSimLoad).toBe(0);
+    expect(authority.simState.DoInitialEval).toBe(1);
+  });
+
   it('runs InitWillStuff and DoSimInit lifecycle resets on new-city', () => {
     const host = new DemoMapHost({ enableAmbientTicks: false });
     const runtime = createWebHostRuntime({ host });

@@ -7,13 +7,8 @@ import {
   type SimContext,
   type SimState,
 } from '../../../../../packages/sim-core/src/index.ts';
-import {
-  applyLoadNormalization,
-  decodeCityFileForMap,
-  readCityMeta,
-} from '../../../../../packages/sim-core/src/io/cty.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
-import { deriveCityNameFromPath } from '../../../../../packages/sim-io/src/load.ts';
+import { loadCityLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
   getScenarioDefinition,
@@ -40,7 +35,6 @@ import {
   type Stage2LoadScenarioCommand,
   type Stage2SaveCityCommand,
   type Stage2SimControlCommand,
-  type Stage2SimSpeed,
   type Stage2ToolCommand,
   type Stage2ToolName,
 } from './protocol.ts';
@@ -528,21 +522,24 @@ export class DemoMapHost implements CoreHost {
     commandId: string,
     command: Stage2LoadCityCommand,
   ): void {
-    const loaded = tryDecodeImportedCity(command.cityBytes);
-    if (loaded === null) {
+    const fileName = sanitizeCityFileName(command.fileName);
+
+    let loadResult: ReturnType<typeof loadCityLikeC>;
+    try {
+      loadResult = loadCityLikeC(this.simState, this.simContext, fileName, command.cityBytes);
+    } catch {
       const reason = 'invalid-city-file';
       this.commandOutcomes.set(commandId, { kind: 'reject', reason });
       this.emitReject(roomId, clientId, commandId, reason);
       return;
     }
 
-    const fileName = sanitizeCityFileName(command.fileName);
-    this.cityFileName = fileName;
-    this.cityName = deriveCityNameFromPath(fileName);
+    this.cityFileName = loadResult.cityFileName;
+    this.cityName = loadResult.cityName;
     this.currentScenarioId = 0;
 
-    this.mapTiles.set(loaded.mapTiles);
-    this.applyLoadedSimulationMeta(loaded);
+    this.syncRuntimeTilesFromClassicMapLayer();
+    this.syncHostLoadStateFromSimState();
 
     this.resetMessageLog(`Loaded ${this.cityName}.`);
 
@@ -1135,38 +1132,14 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Applies decoded `.cty` scalar state into authoritative sim-core HUD controls.
-   * Mirrors `loadFile` scalar restoration in `ref/micropolis/src/sim/s_fileio.c`,
-   * then refreshes heads via the `DoUpdateHeads` pathway.
-   * Parity note: map tile restoration still follows Stage 2 demo map ownership.
+   * Applies host-side pause/timer/HUD sync after `loadCityLikeC`.
+   * Mirrors `loadFile` + `setSpeed` + `DoSimInit` ownership in
+   * `ref/micropolis/src/sim/s_fileio.c`, while preserving TypeScript-only host
+   * pause bookkeeping.
    */
-  private applyLoadedSimulationMeta(loaded: DecodedDemoCity): void {
-    this.simState.CityTime = loaded.cityTime;
-    setFunds(this.simState, loaded.totalFunds);
-    this.simState.CityTax = loaded.cityTax;
-    this.simState.autoBudget = loaded.autoBudget;
-    this.simState.autoGo = loaded.autoGo;
-    this.simState.autoBulldoze = loaded.autoBulldoze;
-    this.simState.userSoundOn = loaded.userSoundOn;
-    this.simState.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-    this.simState.doMessages = DEMO_DEFAULT_DO_MESSAGES;
-    this.simState.doNotices = DEMO_DEFAULT_DO_NOTICES;
-    this.simState.NoDisasters = !DEMO_DEFAULT_DISASTERS;
-    this.simState.MustUpdateOptions = 1;
-    this.simState.ValveFlag = 1;
-    this.simState.MessagePort = 0;
-    this.simState.MesNum = 0;
-    this.simState.MesX = 0;
-    this.simState.MesY = 0;
-    this.simState.LastPicNum = 0;
-    this.simState.LastMesTime = 0;
-
+  private syncHostLoadStateFromSimState(): void {
     this.simPaused = false;
-    this.setSimulationSpeed(loaded.simMetaSpeed);
-    if (loaded.paused) {
-      this.pauseSimulation();
-    }
-
+    this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
     this.pendingHookMessages = [];
     this.refreshAmbientInterval();
     this.refreshHookDrivenHud();
@@ -1189,20 +1162,7 @@ export class DemoMapHost implements CoreHost {
       curveLevel: DEMO_NEW_CITY_CURVE_LEVEL,
       createIsland: DEMO_NEW_CITY_CREATE_ISLAND,
     });
-
-    const mapLayer = this.simContext.store.snapshot('map');
-    if (!(mapLayer instanceof Uint16Array)) {
-      throw new Error(
-        `expected Uint16Array map layer for new-city reset; got ${mapLayer.constructor.name}`,
-      );
-    }
-
-    copyClassicXMajorMapToRuntimeTiles(
-      mapLayer,
-      this.mapTiles,
-      DEMO_WORLD_WIDTH,
-      DEMO_WORLD_HEIGHT,
-    );
+    this.syncRuntimeTilesFromClassicMapLayer();
   }
 
   /**
@@ -1285,46 +1245,27 @@ export class DemoMapHost implements CoreHost {
       this.simContext.store.commitTick();
     }
   }
-}
 
-type DecodedDemoCity = {
-  mapTiles: Uint16Array;
-  cityTime: number;
-  totalFunds: number;
-  cityTax: number;
-  paused: boolean;
-  simMetaSpeed: Stage2SimSpeed;
-  autoBudget: boolean;
-  autoGo: boolean;
-  autoBulldoze: boolean;
-  userSoundOn: boolean;
-};
+  /**
+   * Mirrors one authoritative classic map snapshot into runtime row-major tiles.
+   * Mirrors `Map[x][y]` ownership in `ref/micropolis/src/sim/s_alloc.c` and
+   * load/new-city map copy boundaries in `ref/micropolis/src/sim/s_fileio.c`
+   * and `ref/micropolis/src/sim/s_gen.c`.
+   */
+  private syncRuntimeTilesFromClassicMapLayer(): void {
+    const mapLayer = this.simContext.store.snapshot('map');
+    if (!(mapLayer instanceof Uint16Array)) {
+      throw new Error(
+        `expected Uint16Array map layer for runtime tile sync; got ${mapLayer.constructor.name}`,
+      );
+    }
 
-function tryDecodeImportedCity(cityBytes: Uint8Array): DecodedDemoCity | null {
-  try {
-    const city = decodeCityFileForMap(cityBytes, {
-      width: DEMO_WORLD_WIDTH,
-      height: DEMO_WORLD_HEIGHT,
-    });
-    const runtimeTiles = new Uint16Array(DEMO_WORLD_WIDTH * DEMO_WORLD_HEIGHT);
-    copyClassicXMajorMapToRuntimeTiles(city.map, runtimeTiles, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
-    const normalized = applyLoadNormalization(readCityMeta(city.misc));
-    const speed = normalized.simSpeed < 1 ? 3 : clampPlayableSpeed(normalized.simSpeed);
-
-    return {
-      mapTiles: runtimeTiles,
-      cityTime: normalized.cityTime,
-      totalFunds: normalized.totalFunds,
-      cityTax: normalized.cityTax,
-      paused: normalized.simSpeed <= 0,
-      simMetaSpeed: speed,
-      autoBudget: normalized.autoBudget,
-      autoGo: normalized.autoGo,
-      autoBulldoze: normalized.autoBulldoze,
-      userSoundOn: normalized.userSoundOn,
-    };
-  } catch {
-    return null;
+    copyClassicXMajorMapToRuntimeTiles(
+      mapLayer,
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+    );
   }
 }
 
@@ -1379,16 +1320,6 @@ function normalizePlayableSpeed(value: number): number {
     return 3;
   }
   return speed;
-}
-
-function clampPlayableSpeed(value: number): Stage2SimSpeed {
-  if (value <= 1) {
-    return 1;
-  }
-  if (value >= 3) {
-    return 3;
-  }
-  return 2;
 }
 
 /**
