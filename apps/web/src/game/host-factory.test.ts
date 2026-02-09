@@ -45,6 +45,12 @@ describe('resolveHostMode', () => {
 });
 
 describe('resolveStage4AuthorityMode', () => {
+  test('treats the real-authority opt-in flag as sim-core mode', () => {
+    expect(resolveStage4AuthorityMode({ env: { VITE_STAGE4_REAL_AUTHORITY: '1' } })).toBe(
+      'sim-core',
+    );
+  });
+
   test('defaults to sim-core authority when no config is provided', () => {
     expect(resolveStage4AuthorityMode({ env: {} })).toBe(DEFAULT_STAGE4_AUTHORITY_MODE);
   });
@@ -59,6 +65,21 @@ describe('resolveStage4AuthorityMode', () => {
     expect(() =>
       resolveStage4AuthorityMode({ env: { VITE_STAGE4_AUTHORITY_MODE: 'invalid-authority-mode' } }),
     ).toThrow('Unsupported stage4 authority mode: invalid-authority-mode');
+  });
+
+  test('lets explicit authority mode override real-authority env wiring', () => {
+    expect(
+      resolveStage4AuthorityMode({
+        authorityMode: 'deterministic',
+        env: { VITE_STAGE4_REAL_AUTHORITY: '1' },
+      }),
+    ).toBe('deterministic');
+  });
+
+  test('throws on unsupported real-authority opt-in values', () => {
+    expect(() =>
+      resolveStage4AuthorityMode({ env: { VITE_STAGE4_REAL_AUTHORITY: 'maybe' } }),
+    ).toThrow('Unsupported stage4 real authority flag: maybe');
   });
 });
 
@@ -99,6 +120,17 @@ describe('createCoreHost', () => {
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
+    });
+    expect(host.mode).toBe('local');
+  });
+
+  test('uses sim-core authority when real-authority env opt-in is enabled', () => {
+    const host = createCoreHost({
+      mode: 'local',
+      env: {
+        VITE_STAGE4_AUTHORITY_MODE: 'deterministic',
+        VITE_STAGE4_REAL_AUTHORITY: '1',
+      },
     });
     expect(host.mode).toBe('local');
   });

@@ -27,6 +27,8 @@ export const DEFAULT_STAGE4_AUTHORITY_MODE: Stage4AuthorityMode = 'sim-core';
 export interface HostFactoryEnv {
   readonly VITE_CORE_HOST_MODE?: string;
   readonly VITE_STAGE4_AUTHORITY_MODE?: string;
+  // Stage 1 dev/runtime opt-in flag for sim-core authority ownership.
+  readonly VITE_STAGE4_REAL_AUTHORITY?: string;
 }
 
 /**
@@ -64,7 +66,7 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
 }
 
 /**
- * Resolve Stage 4 authority mode from explicit options, then env, then sim-core default.
+ * Resolve Stage 4 authority mode from explicit options, then dev opt-in flag, then env mode.
  * Mirrors Stage 1 host-authority migration intent rooted in `ref/micropolis/src/sim/w_sim.c`
  * and simulation ownership in `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: fallback to deterministic authority is a temporary TypeScript migration seam.
@@ -72,10 +74,23 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
 export function resolveStage4AuthorityMode(
   options: CreateCoreHostOptions = {},
 ): Stage4AuthorityMode {
+  if (options.authorityMode !== undefined) {
+    return options.authorityMode;
+  }
+
+  const realAuthorityOptIn =
+    options.env?.VITE_STAGE4_REAL_AUTHORITY ?? import.meta.env.VITE_STAGE4_REAL_AUTHORITY;
+  if (realAuthorityOptIn !== undefined && realAuthorityOptIn !== '') {
+    if (isEnabledFlag(realAuthorityOptIn)) {
+      return 'sim-core';
+    }
+    if (!isDisabledFlag(realAuthorityOptIn)) {
+      throw new Error(`Unsupported stage4 real authority flag: ${realAuthorityOptIn}`);
+    }
+  }
+
   const configuredMode =
-    options.authorityMode ??
-    options.env?.VITE_STAGE4_AUTHORITY_MODE ??
-    import.meta.env.VITE_STAGE4_AUTHORITY_MODE;
+    options.env?.VITE_STAGE4_AUTHORITY_MODE ?? import.meta.env.VITE_STAGE4_AUTHORITY_MODE;
   if (configuredMode === undefined || configuredMode === '') {
     return DEFAULT_STAGE4_AUTHORITY_MODE;
   }
@@ -119,4 +134,12 @@ function isHostMode(value: string): value is HostMode {
 
 function isStage4AuthorityMode(value: string): value is Stage4AuthorityMode {
   return value === 'sim-core' || value === 'deterministic';
+}
+
+function isEnabledFlag(value: string): boolean {
+  return value === '1' || value.toLowerCase() === 'true';
+}
+
+function isDisabledFlag(value: string): boolean {
+  return value === '0' || value.toLowerCase() === 'false';
 }
