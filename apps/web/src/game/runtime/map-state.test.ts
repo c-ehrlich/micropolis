@@ -38,7 +38,9 @@ describe('runtime map projection', () => {
         map: {
           width: 3,
           height: 2,
-          tiles: [0, 1, 2, 3, 4, 5],
+          // C map storage is x-major (`Map[x][y]`) in `s_alloc.c`/`s_fileio.c`:
+          // index = x * height + y, so this decodes to runtime row-major [0,1,2,3,4,5].
+          tileWords: [0, 3, 1, 4, 2, 5],
         },
       },
     });
@@ -58,9 +60,9 @@ describe('runtime map projection', () => {
       serverSeq: 2,
       payload: {
         map: {
-          tiles: [
-            { index: 0, tile: 9 },
-            { index: 4, tile: 10 },
+          tileWordDeltas: [
+            { x: 0, y: 0, tileWord: 9 },
+            { x: 1, y: 1, tileWord: 10 },
           ],
         },
       },
@@ -85,7 +87,7 @@ describe('runtime map projection', () => {
         map: {
           width: 2,
           height: 2,
-          tiles: [1, 2, 3, 4],
+          tileWords: [1, 3, 2, 4],
         },
       },
     }).state;
@@ -97,7 +99,7 @@ describe('runtime map projection', () => {
       serverSeq: 2,
       payload: {
         map: {
-          tiles: [{ index: 1, tile: 7 }],
+          tileWordDeltas: [{ x: 1, y: 0, tileWord: 7 }],
         },
       },
     }).state;
@@ -112,7 +114,7 @@ describe('runtime map projection', () => {
       serverSeq: 2,
       payload: {
         map: {
-          tiles: [{ index: 3, tile: 9 }],
+          tileWordDeltas: [{ x: 1, y: 1, tileWord: 9 }],
         },
       },
     });

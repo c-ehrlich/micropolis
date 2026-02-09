@@ -218,7 +218,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Extend host events/payloads to carry authoritative map snapshot/patch tile words.
+- [x] Extend host events/payloads to carry authoritative map snapshot/patch tile words.
 - [ ] Extend payloads for HUD heads (funds/date/demand/speed/options) and message deltas.
 - [ ] Add optional realtime object payload field now (can be empty until Stage 7).
 - [ ] Keep strict ordering behavior (`serverSeq`, `tick`) and gap handling.
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 

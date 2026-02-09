@@ -476,13 +476,80 @@ export interface HostRejectEnvelope extends HostSequencingFields {
 }
 
 /**
+ * Authoritative snapshot map payload carried by Stage 2 host envelopes.
+ * Mirrors contiguous `Map[WORLD_X][WORLD_Y]` storage and serialization order in
+ * `ref/micropolis/src/sim/s_alloc.c` and `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: `tileWords` follows classic Micropolis x-major order
+ * (`index = x * WORLD_Y + y`).
+ */
+export interface HostMapSnapshotPayload {
+  width: number;
+  height: number;
+  tileWords: readonly number[] | Uint16Array;
+}
+
+/**
+ * One authoritative map patch delta addressed by tile coordinates.
+ * Mirrors coordinate-addressed writes to `Map[x][y]` in
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_con.c`.
+ * Parity note: this intentionally avoids ambiguous linear index deltas.
+ */
+export interface HostMapPatchTileWordDelta {
+  x: number;
+  y: number;
+  tileWord: number;
+}
+
+/**
+ * Authoritative incremental map payload carried by Stage 2 patch envelopes.
+ * Mirrors map mutation deltas consumed by `DoUpdateMap` in
+ * `ref/micropolis/src/sim/w_map.c`.
+ */
+export interface HostMapPatchPayload {
+  tileWordDeltas: readonly HostMapPatchTileWordDelta[];
+}
+
+interface LegacyHostMapSnapshotPayload {
+  width: number;
+  height: number;
+  tiles: readonly number[] | Uint16Array;
+}
+
+interface LegacyHostMapPatchPayload {
+  tiles: ReadonlyArray<{
+    index: number;
+    tile: number;
+  }>;
+}
+
+/**
+ * Stage 2 snapshot payload surface consumed by runtime projection reducers.
+ * Mirrors map snapshot ownership in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * protocol migration is in flight.
+ */
+export interface HostSnapshotPayload extends Record<string, unknown> {
+  map?: HostMapSnapshotPayload | LegacyHostMapSnapshotPayload;
+}
+
+/**
+ * Stage 2 patch payload surface consumed by runtime projection reducers.
+ * Mirrors map patch ownership in `ref/micropolis/src/sim/w_update.c`.
+ * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * protocol migration is in flight.
+ */
+export interface HostPatchPayload extends Record<string, unknown> {
+  map?: HostMapPatchPayload | LegacyHostMapPatchPayload;
+}
+
+/**
  * Host incremental authoritative update envelope.
  * Mirrors post-command/update propagation intent from
- * `ref/micropolis/src/sim/w_update.c`; payload stays generic in this task.
+ * `ref/micropolis/src/sim/w_update.c`, including Stage 2 map tile-word deltas.
  */
 export interface HostPatchEnvelope extends HostSequencingFields {
   kind: 'patch';
-  payload: unknown;
+  payload: HostPatchPayload;
 }
 
 /**
@@ -492,7 +559,7 @@ export interface HostPatchEnvelope extends HostSequencingFields {
  */
 export interface HostSnapshotEnvelope extends HostSequencingFields {
   kind: 'snapshot';
-  payload: unknown;
+  payload: HostSnapshotPayload;
 }
 
 /**

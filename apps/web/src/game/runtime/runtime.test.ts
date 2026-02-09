@@ -206,7 +206,7 @@ describe('createWebHostRuntime', () => {
       tick: 1,
       serverSeq: 1,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
       },
     });
     runtime.disconnect();
@@ -239,7 +239,7 @@ describe('createWebHostRuntime', () => {
       // Reconnect snapshot can jump to latest authority sequence.
       serverSeq: 8,
       payload: {
-        map: { width: 1, height: 1, tiles: [9] },
+        map: { width: 1, height: 1, tileWords: [9] },
       },
     });
     host.emit({
@@ -249,7 +249,7 @@ describe('createWebHostRuntime', () => {
       tick: 5,
       serverSeq: 9,
       payload: {
-        map: { tiles: [{ index: 0, tile: 11 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 11 }] },
       },
     });
     host.emit({
@@ -259,7 +259,7 @@ describe('createWebHostRuntime', () => {
       tick: 5,
       serverSeq: 8,
       payload: {
-        map: { tiles: [{ index: 0, tile: 13 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 13 }] },
       },
     });
 
@@ -321,7 +321,7 @@ describe('createWebHostRuntime', () => {
       tick: 3,
       serverSeq: 10,
       payload: {
-        map: { width: 1, height: 1, tiles: [21] },
+        map: { width: 1, height: 1, tileWords: [21] },
       },
     });
     host.emit({
@@ -331,7 +331,7 @@ describe('createWebHostRuntime', () => {
       tick: 4,
       serverSeq: 11,
       payload: {
-        map: { tiles: [{ index: 0, tile: 22 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 22 }] },
       },
     });
     host.emit({
@@ -341,7 +341,7 @@ describe('createWebHostRuntime', () => {
       tick: 4,
       serverSeq: 10,
       payload: {
-        map: { tiles: [{ index: 0, tile: 23 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 23 }] },
       },
     });
 
@@ -375,7 +375,7 @@ describe('createWebHostRuntime', () => {
         map: {
           width: 1,
           height: 1,
-          tiles: [0],
+          tileWords: [0],
         },
         hud: {
           fundsLabel: 'Funds: $19,850',

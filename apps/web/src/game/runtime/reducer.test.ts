@@ -54,7 +54,7 @@ describe('reduceHostEnvelope', () => {
       clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 1,
       serverSeq: 1,
-      payload: { map: [] },
+      payload: {},
     });
 
     expect(result.outcome).toBe('ignored-until-hello');
@@ -287,7 +287,7 @@ describe('reduceHostEnvelope', () => {
       // Reconnect/resync snapshots can jump forward to current authority seq.
       serverSeq: 12,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
       },
     });
     expect(rebasedSnapshot.outcome).toBe('applied');
@@ -301,7 +301,7 @@ describe('reduceHostEnvelope', () => {
       tick: 9,
       serverSeq: 13,
       payload: {
-        map: { tiles: [{ index: 0, tile: 7 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
       },
     });
     expect(afterTailPatch.outcome).toBe('applied');
@@ -314,7 +314,7 @@ describe('reduceHostEnvelope', () => {
       tick: 9,
       serverSeq: 12,
       payload: {
-        map: { tiles: [{ index: 0, tile: 9 }] },
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
       },
     });
     expect(stale.outcome).toBe('dropped-stale');
@@ -357,7 +357,7 @@ describe('reduceHostEnvelope', () => {
       tick: 1,
       serverSeq: 1,
       payload: {
-        map: { width: 1, height: 1, tiles: [5] },
+        map: { width: 1, height: 1, tileWords: [5] },
         hud: {
           fundsLabel: 'Funds: $5000',
         },

@@ -1,3 +1,4 @@
+import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   applyLoadNormalization,
   createCityFile,
@@ -162,13 +163,14 @@ export interface DemoCityExportPayload {
 
 interface DemoPatchPayload {
   map?: {
-    tiles: Array<{ index: number; tile: number }>;
+    tileWordDeltas: Array<{ x: number; y: number; tileWord: number }>;
   };
   hud?: DemoHudPayload;
   messages?: DemoHudMessagePayload[];
   cityIo?: {
     save?: DemoCityExportPayload;
   };
+  [key: string]: unknown;
 }
 
 /**
@@ -407,7 +409,7 @@ export class DemoMapHost implements CoreHost {
 
     if (placement.deltas.length > 0) {
       payload.map = {
-        tiles: placement.deltas,
+        tileWordDeltas: placement.deltas,
       };
     }
 
@@ -580,7 +582,11 @@ export class DemoMapHost implements CoreHost {
         map: {
           width: DEMO_WORLD_WIDTH,
           height: DEMO_WORLD_HEIGHT,
-          tiles: this.mapTiles.slice(),
+          tileWords: buildSnapshotTileWordsFromRuntimeMap(
+            this.mapTiles,
+            DEMO_WORLD_WIDTH,
+            DEMO_WORLD_HEIGHT,
+          ),
         },
         hud: {
           fundsLabel: formatFundsLabel(this.totalFunds),
@@ -670,7 +676,7 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
-    const deltas: Array<{ index: number; tile: number }> = [];
+    const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
     for (let i = 0; i < DEMO_PATCH_TILE_COUNT; i += 1) {
       const index = this.nextRandom() % this.mapTiles.length;
       const currentTile = this.mapTiles[index];
@@ -680,7 +686,11 @@ export class DemoMapHost implements CoreHost {
 
       const nextTile = (currentTile + 1 + (this.tick & 31) + i) & 0xffff;
       this.mapTiles[index] = nextTile;
-      deltas.push({ index, tile: nextTile });
+      deltas.push({
+        x: index % DEMO_WORLD_WIDTH,
+        y: Math.trunc(index / DEMO_WORLD_WIDTH),
+        tileWord: nextTile,
+      });
     }
 
     this.tick += 1;
@@ -708,7 +718,7 @@ export class DemoMapHost implements CoreHost {
 
     if (deltas.length > 0) {
       payload.map = {
-        tiles: deltas,
+        tileWordDeltas: deltas,
       };
     }
 
@@ -1016,7 +1026,7 @@ function applyDemoToolCommand(
   height: number,
   command: Stage2ToolCommand,
 ):
-  | { accepted: true; deltas: Array<{ index: number; tile: number }> }
+  | { accepted: true; deltas: Array<{ x: number; y: number; tileWord: number }> }
   | { accepted: false; reason: string } {
   if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) {
     return { accepted: false, reason: 'out-of-bounds' };
@@ -1032,7 +1042,7 @@ function applyDemoToolCommand(
     return { accepted: false, reason: 'out-of-bounds' };
   }
 
-  const deltas: Array<{ index: number; tile: number }> = [];
+  const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
 
   if (ZONE_TOOLS.has(command.tool)) {
     const base = TOOL_TILE_VALUES[command.tool];
@@ -1060,7 +1070,7 @@ function writeDemoTile(
   x: number,
   y: number,
   tile: number,
-  deltas: Array<{ index: number; tile: number }>,
+  deltas: Array<{ x: number; y: number; tileWord: number }>,
 ): void {
   const index = y * width + x;
   if (tiles[index] === tile) {
@@ -1068,7 +1078,30 @@ function writeDemoTile(
   }
 
   tiles[index] = tile;
-  deltas.push({ index, tile });
+  deltas.push({ x, y, tileWord: tile });
+}
+
+/**
+ * Builds authoritative snapshot tile words in classic Micropolis x-major order.
+ * Mirrors contiguous `Map[x][y]` storage in `ref/micropolis/src/sim/s_alloc.c`
+ * and flat map IO ordering in `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: demo host stores working tiles row-major for canvas convenience,
+ * then converts to authoritative snapshot order at the payload boundary.
+ */
+function buildSnapshotTileWordsFromRuntimeMap(
+  runtimeTiles: Uint16Array,
+  width: number,
+  height: number,
+): Uint16Array {
+  const snapshotTileWords = new Uint16Array(width * height);
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const runtimeIndex = y * width + x;
+      const snapshotIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      snapshotTileWords[snapshotIndex] = runtimeTiles[runtimeIndex] ?? 0;
+    }
+  }
+  return snapshotTileWords;
 }
 
 /**
