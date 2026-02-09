@@ -225,7 +225,8 @@ export class DemoMapHost implements CoreHost {
   private activeClientId: string | undefined;
   private serverSeq = 0;
   private tick = 0;
-  private hookTickCount = 0;
+  private readonly messageClockStartMs = Date.now();
+  private lastMessageTickCount = 0;
   private simPaused = false;
   private simPausedSpeed = 3;
   private cityFileName: string | null = DEMO_DEFAULT_CITY_FILE_NAME;
@@ -250,7 +251,7 @@ export class DemoMapHost implements CoreHost {
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
     const authorityState = new Stage4SimCoreAuthorityState({
       hooks: {
-        tickCount: () => this.hookTickCount,
+        tickCount: () => this.readMessageTickCount(),
         uiSet: (key, value) => this.captureUiSet(key, value),
         sendMes: (id) => this.captureMessage(id),
         sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
@@ -695,7 +696,6 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
-    this.hookTickCount += 1;
     this.simContext.store.beginTick();
     try {
       this.simState.CityTime += 1;
@@ -714,6 +714,24 @@ export class DemoMapHost implements CoreHost {
         includeHud: true,
       }),
     );
+  }
+
+  /**
+   * Hook clock used by sim-core message expiry checks.
+   * Mirrors `TickCount()` from `ref/micropolis/src/sim/w_stubs.c` as consumed by
+   * `doMessage()` in `ref/micropolis/src/sim/s_msg.c` (`> 60 * 30` timeout).
+   *
+   * Parity note: message timing is wall-clock based in C, not simulation-step based.
+   * This keeps the hook monotonic even if wall-clock time moves backward.
+   */
+  private readMessageTickCount(): number {
+    const elapsedMs = Date.now() - this.messageClockStartMs;
+    const candidateTicks = elapsedMs > 0 ? Math.trunc((elapsedMs * 60) / 1000) : 0;
+    if (candidateTicks <= this.lastMessageTickCount) {
+      return this.lastMessageTickCount;
+    }
+    this.lastMessageTickCount = candidateTicks;
+    return candidateTicks;
   }
 
   /**

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
+import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -74,6 +74,94 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       vi.advanceTimersByTime(20);
 
       expect(coordinateMessages).toContainEqual({ id: 14, x: 7, y: 9 });
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('requeues picture messages as text deltas on the following heads tick', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const messageIds: number[] = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const deltas = event.envelope.payload.messageDeltas;
+        if (deltas === undefined) {
+          return;
+        }
+
+        for (const message of deltas) {
+          messageIds.push(message.id);
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+      // s_msg.c doMessage: picture ids dispatch first, then enqueue positive id
+      // through `MessagePort = pictId` for next heads tick text delivery.
+      expect(sendMes(authority.simState, authority.simContext, -10)).toBe(true);
+
+      vi.advanceTimersByTime(30);
+
+      expect(messageIds).toContain(-10);
+      expect(messageIds).toContain(10);
+      expect(messageIds.indexOf(-10)).toBeLessThan(messageIds.indexOf(10));
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses wall-clock TickCount timing for message expiry (~30 seconds)', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 180 });
+    const runtime = createWebHostRuntime({ host });
+
+    try {
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+      // Keep ambient SendMessages() thresholds quiet so MesNum lifetime is driven by
+      // the explicit test message only (s_msg.c SendMessages case gates).
+      authority.simState.ResZPop = 1;
+      authority.simState.ComZPop = 1;
+      authority.simState.IndZPop = 1;
+      authority.simState.TotalPop = 0;
+      authority.simState.ResPop = 0;
+      authority.simState.ComPop = 0;
+      authority.simState.IndPop = 0;
+      authority.simState.RoadTotal = 0;
+      authority.simState.RailTotal = 0;
+      authority.simState.CityTax = 7;
+      authority.simState.CrimeAverage = 0;
+      authority.simState.PolluteAverage = 0;
+      authority.simState.TrafficAverage = 0;
+
+      // s_msg.c doMessage: active text messages expire only when
+      // `TickCount() - LastMesTime > (60 * 30)`.
+      expect(sendMes(authority.simState, authority.simContext, 12)).toBe(true);
+
+      vi.advanceTimersByTime(500);
+      expect(authority.simState.MesNum).toBe(12);
+
+      vi.advanceTimersByTime(29_000);
+      expect(authority.simState.MesNum).toBe(12);
+
+      vi.advanceTimersByTime(2_000);
+      expect(authority.simState.MesNum).toBe(0);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();

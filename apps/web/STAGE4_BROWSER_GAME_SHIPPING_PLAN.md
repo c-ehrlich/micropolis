@@ -332,7 +332,7 @@ Deletion execution notes:
 - [x] Wire `SimContext` hooks to host payload builders for HUD/message updates.
 - [x] Feed Stage 4 UI labels from authoritative HUD state only.
 - [x] Wire Stage 4 play/pause/speed controls to real sim speed state.
-- [ ] Preserve message timing/expiry/requeue behavior expected by C message flow.
+- [x] Preserve message timing/expiry/requeue behavior expected by C message flow.
 
 ### Verification checklist
 
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
