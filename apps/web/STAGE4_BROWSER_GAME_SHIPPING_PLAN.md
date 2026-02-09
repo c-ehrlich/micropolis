@@ -198,7 +198,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Move Stage 4 from placement-event projection to authoritative snapshot/patch game-state projection.
+- [x] Move Stage 4 from placement-event projection to authoritative snapshot/patch game-state projection.
 
 ### C references to review
 
@@ -567,6 +567,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 

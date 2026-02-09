@@ -14,12 +14,11 @@ describe('web route runtime boundaries', () => {
     expect(ROUTE_SOURCE).toContain('Stage 2 Demo Map');
   });
 
-  it('wires Stage 4 panel state from the shared runtime singleton', () => {
-    expect(ROUTE_SOURCE).toContain('gameRuntime.subscribeState');
-    expect(ROUTE_SOURCE).toContain('describeRuntimeStatus');
-    expect(ROUTE_SOURCE).toContain("type: 'tool-command'");
-    expect(ROUTE_SOURCE).toContain('gameRuntime.sendCommand');
-    expect(ROUTE_SOURCE).toContain('Authoritative Placement Map');
+  it('projects Stage 4 from authoritative snapshot/patch runtime state', () => {
+    expect(ROUTE_SOURCE).toContain('createWebHostRuntime({ host: new DemoMapHost() })');
+    expect(ROUTE_SOURCE).toContain("kind: 'tool'");
+    expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
+    expect(ROUTE_SOURCE).toContain('Authoritative Snapshot/Patch Map');
   });
 
   it('does not import sim-core directly from UI route components', () => {
