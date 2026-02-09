@@ -366,7 +366,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Implement Stage 4 `new-city` command path using real sim init + terrain reset flow.
+- [x] Implement Stage 4 `new-city` command path using real sim init + terrain reset flow.
 - [ ] Implement Stage 4 save command path using `sim-io` C-style save packing.
 - [ ] Implement Stage 4 load command path using `sim-io` C-style load orchestration.
 - [ ] Implement scenario start path using `snro.*` data and scenario metadata constants.
