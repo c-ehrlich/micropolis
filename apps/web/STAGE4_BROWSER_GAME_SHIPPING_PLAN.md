@@ -324,7 +324,7 @@ Deletion execution notes:
 - [x] `packages/sim-core/src/systems/date-time.ts`
 - [x] `packages/sim-core/src/systems/messages.ts`
 - [x] `apps/web/src/game/runtime/hud-state.ts`
-- [ ] `apps/web/src/routes/index.tsx`
+- [x] `apps/web/src/routes/index.tsx`
 - [ ] `packages/sim-ui/IMPORTANT.md`
 
 ### Implementation checklist
@@ -567,6 +567,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
