@@ -316,7 +316,7 @@ Deletion execution notes:
 
 - [x] `ref/micropolis/src/sim/w_update.c` (`DoUpdateHeads`, date/funds/options)
 - [x] `ref/micropolis/src/sim/s_msg.c` (`SendMes`, `SendMesAt`, `doMessage`)
-- [ ] `ref/micropolis/src/sim/w_util.c` (`Pause`, `Resume`, `setSpeed`)
+- [x] `ref/micropolis/src/sim/w_util.c` (`Pause`, `Resume`, `setSpeed`)
 
 ### TS references to review
 
@@ -331,7 +331,7 @@ Deletion execution notes:
 
 - [ ] Wire `SimContext` hooks to host payload builders for HUD/message updates.
 - [ ] Feed Stage 4 UI labels from authoritative HUD state only.
-- [ ] Wire Stage 4 play/pause/speed controls to real sim speed state.
+- [x] Wire Stage 4 play/pause/speed controls to real sim speed state.
 - [ ] Preserve message timing/expiry/requeue behavior expected by C message flow.
 
 ### Verification checklist

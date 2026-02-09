@@ -221,6 +221,8 @@ export class DemoMapHost implements CoreHost {
   private readonly simContext: SimContext;
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
+  private activeRoomId: string | undefined;
+  private activeClientId: string | undefined;
   private serverSeq = 0;
   private tick = 0;
   private hookTickCount = 0;
@@ -270,6 +272,8 @@ export class DemoMapHost implements CoreHost {
       },
       disconnect: () => {
         this.stopInterval();
+        this.activeRoomId = undefined;
+        this.activeClientId = undefined;
         this.onEnvelope = undefined;
       },
     };
@@ -286,6 +290,8 @@ export class DemoMapHost implements CoreHost {
     }
 
     if (envelope.kind === 'hello') {
+      this.activeRoomId = envelope.roomId;
+      this.activeClientId = envelope.clientId;
       this.onEnvelope({
         kind: 'hello',
         roomId: envelope.roomId,
@@ -296,7 +302,7 @@ export class DemoMapHost implements CoreHost {
       });
 
       this.emitSnapshot(envelope.roomId, envelope.clientId);
-      this.startInterval(envelope.roomId, envelope.clientId);
+      this.refreshAmbientInterval();
       return;
     }
 
@@ -432,6 +438,7 @@ export class DemoMapHost implements CoreHost {
     command: Stage2SimControlCommand,
   ): void {
     this.applySimControl(command);
+    this.refreshAmbientInterval();
     this.refreshHookDrivenHud();
 
     this.commandOutcomes.set(envelope.commandId, { kind: 'ack' });
@@ -735,6 +742,32 @@ export class DemoMapHost implements CoreHost {
     this.intervalHandle = setInterval(() => {
       this.emitAmbientPatch(roomId, clientId);
     }, this.patchIntervalMs);
+  }
+
+  /**
+   * Syncs ambient timer state with effective simulation speed.
+   * Mirrors timer start/stop behavior in `setSpeed(short)` from
+   * `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: browser host timer wiring substitutes for C
+   * `StartMicropolisTimer()`/`StopMicropolisTimer()` callbacks.
+   */
+  private refreshAmbientInterval(): void {
+    if (
+      !this.enableAmbientTicks ||
+      this.onEnvelope === undefined ||
+      this.activeRoomId === undefined ||
+      this.activeClientId === undefined ||
+      this.simState.SimSpeed === 0
+    ) {
+      this.stopInterval();
+      return;
+    }
+
+    if (this.intervalHandle !== undefined) {
+      return;
+    }
+
+    this.startInterval(this.activeRoomId, this.activeClientId);
   }
 
   /**
@@ -1070,6 +1103,7 @@ export class DemoMapHost implements CoreHost {
     }
 
     this.pendingHookMessages = [];
+    this.refreshAmbientInterval();
     this.refreshHookDrivenHud();
   }
 
@@ -1104,6 +1138,7 @@ export class DemoMapHost implements CoreHost {
     this.simPaused = false;
     this.setSimulationSpeed(3);
     this.pendingHookMessages = [];
+    this.refreshAmbientInterval();
     this.refreshHookDrivenHud();
   }
 

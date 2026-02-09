@@ -203,4 +203,69 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(runtime.getState().hudState.options.autoBudget).toBe(true);
     expect(runtime.getState().hudState.options.autoGo).toBe(true);
   });
+
+  it('mirrors w_util.c Pause/Resume/setSpeed timer gating and visible speed updates', () => {
+    vi.useFakeTimers();
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
+    });
+    const patchSpeeds: number[] = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+
+        const speed = event.envelope.payload.hud?.speed;
+        if (typeof speed === 'number') {
+          patchSpeeds.push(speed);
+        }
+      });
+
+      runtime.connect();
+      vi.advanceTimersByTime(30);
+      expect(patchSpeeds.length).toBeGreaterThan(0);
+
+      runtime.sendCommand('pause-1', {
+        kind: 'sim-control',
+        control: 'pause',
+      });
+
+      // Magic-number source: `setSpeed(short)` emits `UISetSpeed 0` while paused
+      // (`sim_paused ? 0 : SimMetaSpeed`) in `ref/micropolis/src/sim/w_util.c`.
+      expect(runtime.getState().hudState.speed).toBe(0);
+      const patchCountAfterPause = patchSpeeds.length;
+      vi.advanceTimersByTime(50);
+      expect(patchSpeeds.length).toBe(patchCountAfterPause);
+
+      runtime.sendCommand('set-speed-while-paused-1', {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 2,
+      });
+
+      // Magic-number source: paused `setSpeed` keeps visible speed at `0` in
+      // `ref/micropolis/src/sim/w_util.c` even when `SimMetaSpeed` changes.
+      expect(runtime.getState().hudState.speed).toBe(0);
+      const patchCountAfterPausedSetSpeed = patchSpeeds.length;
+      vi.advanceTimersByTime(50);
+      expect(patchSpeeds.length).toBe(patchCountAfterPausedSetSpeed);
+
+      runtime.sendCommand('play-1', {
+        kind: 'sim-control',
+        control: 'play',
+      });
+
+      // Magic-number source: `SimCmdSpeed`/`setSpeed` playable speeds include `2`
+      // (`0..3` clamp) in `ref/micropolis/src/sim/w_sim.c` and `w_util.c`.
+      expect(runtime.getState().hudState.speed).toBe(2);
+      const patchCountAfterPlay = patchSpeeds.length;
+      vi.advanceTimersByTime(50);
+      expect(patchSpeeds.length).toBeGreaterThan(patchCountAfterPlay);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
 });
