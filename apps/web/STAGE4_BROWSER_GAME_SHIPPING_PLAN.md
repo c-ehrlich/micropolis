@@ -100,9 +100,19 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.9 Check: plan names exact modules to delete once port is complete.
 - [x] 0.9 Check: plan states one surviving `/` gameplay route after convergence.
 
-- [ ] 0.10 Record Stage 0 sign-off, then unblock Stage 1 implementation.
-- [ ] 0.10 Check: all Stage 0 decisions are marked locked and referenced by later stages.
-- [ ] 0.10 Check: no unresolved Stage 0 architecture questions remain.
+- [x] 0.10 Record Stage 0 sign-off, then unblock Stage 1 implementation.
+- [x] 0.10 Check: all Stage 0 decisions are marked locked and referenced by later stages.
+- [x] 0.10 Check: no unresolved Stage 0 architecture questions remain.
+
+### Stage 0 Sign-off (0.10)
+
+Stage 0 is signed off as of 2026-02-09.
+
+- All Stage 0 decision locks above are frozen and remain the contract baseline for implementation stages.
+- Later stages explicitly inherit these locks via their referenced bridge/sim sources, with no re-opening of Stage 0 architecture decisions:
+  - Stage 1-3 consume bridge contract ownership, authority boundaries, sequencing/resync, and funds coupling locks.
+  - Stage 4-10 consume authoritative map/HUD/message/persistence payload ownership and snapshot/patch conventions locked in Stage 0.
+- Stage 1 implementation is unblocked; remaining Stage 1 items are implementation sequencing tasks, not architecture decision tasks.
 
 ### Stage 0 Decision Map
 

@@ -181,9 +181,11 @@ Migration boundary notes:
 
 - `packages/sim-integration/INTEGRATION-CONTRACT.md` (Stage 0 bridge migration points)
 
-## Unresolved Questions for Stage 1 Consumers
+## Stage 1 Implementation Queue (Non-Architecture)
 
-1. `CoreHost` final API surface is still pending Stage 1 task 1.1; do not fork envelope types while defining host signatures.
-2. Mock/local host lifecycle sequencing details (`connect`, `disconnect`, snapshot replay triggers) are pending Stage 1 tasks 1.2 to 1.4.
-3. Final UI-facing reject/error lifecycle correlation helper behavior is pending Stage 1 task 1.5.
-4. Shared host conformance harness details for `LocalHost` and future `DoHost` are pending Stage 1 task 1.6.
+Stage 0 architecture decisions are closed and frozen. The remaining Stage 1 items are implementation sequencing tasks that must reuse the frozen Stage 0 contract surface without introducing new web-local protocol forks.
+
+1. Define the `CoreHost` API surface in Stage 1 task 1.1 while preserving bridge-owned envelope typing.
+2. Implement mock/local host lifecycle sequencing details (`connect`, `disconnect`, snapshot replay triggers) in Stage 1 tasks 1.2 to 1.4.
+3. Implement UI-facing reject/error lifecycle correlation helper behavior in Stage 1 task 1.5.
+4. Implement the shared host conformance harness details for `LocalHost` and future `DoHost` in Stage 1 task 1.6.
