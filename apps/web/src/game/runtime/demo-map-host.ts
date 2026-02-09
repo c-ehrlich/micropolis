@@ -1,7 +1,6 @@
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
-  doSimInit,
-  initWillStuff,
+  resetForNewCityFromSeed,
   runUiUpdate,
   sendMessages,
   setValves,
@@ -63,6 +62,10 @@ const DEMO_DEFAULT_DO_ANIMATION = true;
 const DEMO_DEFAULT_DO_MESSAGES = true;
 const DEMO_DEFAULT_DO_NOTICES = true;
 const DEMO_DEFAULT_DISASTERS = true;
+const DEMO_NEW_CITY_TREE_LEVEL = -1;
+const DEMO_NEW_CITY_LAKE_LEVEL = -1;
+const DEMO_NEW_CITY_CURVE_LEVEL = -1;
+const DEMO_NEW_CITY_CREATE_ISLAND = -1;
 
 const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
   road: 66,
@@ -1158,20 +1161,36 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Runs core new-city lifecycle initialization in Micropolis order.
-   * Mirrors `GenerateSomeCity` core reset flow in `ref/micropolis/src/sim/s_gen.c`
-   * (`ScenarioID`/`CityTime`/`InitSimLoad`/`DoInitialEval` setup) plus
-   * `InitWillStuff` in `ref/micropolis/src/sim/s_init.c` and `DoSimInit` in
-   * `ref/micropolis/src/sim/s_sim.c`.
+   * Runs core new-city map generation + lifecycle initialization in Micropolis order.
+   * Mirrors `GenerateSomeCity` in `ref/micropolis/src/sim/s_gen.c`:
+   * `GenerateMap(Rand16())` followed by core reset lifecycle init (`InitWillStuff`,
+   * `DoSimInit`) and the same default terrain globals (`TreeLevel/LakeLevel/CurveLevel/
+   * CreateIsland` all `-1`).
    * Parity note: editor/map invalidation UI calls in C stay outside this host helper.
    */
   private runNewCityLifecycleReset(): void {
-    this.simState.ScenarioID = 0;
-    this.simState.CityTime = 0;
-    this.simState.InitSimLoad = 2;
-    this.simState.DoInitialEval = 0;
-    initWillStuff(this.simContext, this.simState);
-    doSimInit(this.simContext, this.simState);
+    const terrainSeed = this.simContext.rng.next16();
+    resetForNewCityFromSeed(this.simState, this.simContext, {
+      seed: terrainSeed,
+      treeLevel: DEMO_NEW_CITY_TREE_LEVEL,
+      lakeLevel: DEMO_NEW_CITY_LAKE_LEVEL,
+      curveLevel: DEMO_NEW_CITY_CURVE_LEVEL,
+      createIsland: DEMO_NEW_CITY_CREATE_ISLAND,
+    });
+
+    const mapLayer = this.simContext.store.snapshot('map');
+    if (!(mapLayer instanceof Uint16Array)) {
+      throw new Error(
+        `expected Uint16Array map layer for new-city reset; got ${mapLayer.constructor.name}`,
+      );
+    }
+
+    copyClassicXMajorMapToRuntimeTiles(
+      mapLayer,
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+    );
   }
 
   /**
@@ -1216,7 +1235,6 @@ export class DemoMapHost implements CoreHost {
    */
   private resetToNewCity(): void {
     this.currentScenarioId = 0;
-    this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
     this.runNewCityLifecycleReset();
     this.applyScenarioSimulationMeta(0, DEMO_INITIAL_FUNDS);
     this.cityFileName = DEMO_DEFAULT_CITY_FILE_NAME;
@@ -1480,6 +1498,28 @@ function buildSnapshotTileWordsFromRuntimeMap(
     }
   }
   return snapshotTileWords;
+}
+
+/**
+ * Copies classic Micropolis x-major map storage (`Map[x][y]`) into runtime row-major
+ * tile order for the browser projection buffer.
+ * Mirrors x-major ownership in `ref/micropolis/src/sim/s_alloc.c` and terrain writes in
+ * `ref/micropolis/src/sim/s_gen.c`.
+ * Difference: the runtime buffer stays row-major for canvas-friendly indexing.
+ */
+function copyClassicXMajorMapToRuntimeTiles(
+  sourceTileWords: Uint16Array,
+  runtimeTiles: Uint16Array,
+  width: number,
+  height: number,
+): void {
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const sourceIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      const runtimeIndex = y * width + x;
+      runtimeTiles[runtimeIndex] = sourceTileWords[sourceIndex] ?? 0;
+    }
+  }
 }
 
 /**

@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  createClassicMapStore,
+  createRng,
+  createSimContext,
+  createSimState,
+  resetForNewCityFromSeed,
+} from '../../../../../packages/sim-core/src/index.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
@@ -308,6 +315,55 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(authority.simState.TotalPop).toBe(1);
   });
 
+  it('generates new-city terrain using GenerateMap defaults before lifecycle init', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    const authority = host as unknown as {
+      simContext: { rng: { seed: (value: number) => void; next16: () => number } };
+    };
+
+    // `GenerateNewCity` in `s_gen.c` calls `GenerateSomeCity(Rand16())`.
+    const sourceSeed = 0x2468;
+    authority.simContext.rng.seed(sourceSeed);
+    const expectedTerrainSeed = createRng(sourceSeed).next16();
+
+    const expectedStore = createClassicMapStore();
+    const expectedState = createSimState();
+    const expectedContext = createSimContext({
+      store: expectedStore,
+      rng: createRng(1),
+    });
+    resetForNewCityFromSeed(expectedState, expectedContext, {
+      seed: expectedTerrainSeed,
+      // `TreeLevel/LakeLevel/CurveLevel/CreateIsland` globals default to `-1` in `s_gen.c`.
+      treeLevel: -1,
+      lakeLevel: -1,
+      curveLevel: -1,
+      createIsland: -1,
+      // Clock reseeds happen after map generation and do not affect resulting tiles.
+      reseedAfter: false,
+      initWillStuff: { seed: 1 },
+    });
+
+    const expectedMapLayer = expectedStore.snapshot('map');
+    if (!(expectedMapLayer instanceof Uint16Array)) {
+      throw new Error(
+        `expected map layer to be Uint16Array; got ${expectedMapLayer.constructor.name}`,
+      );
+    }
+
+    runtime.sendCommand('new-city-terrain-1', {
+      kind: 'city-lifecycle',
+      action: 'new-city',
+    });
+
+    expect(runtime.getState().mapState.tiles).toEqual(
+      convertClassicXMajorToRuntimeRowMajor(expectedMapLayer, 120, 100),
+    );
+  });
+
   it('keeps snapshot replay message ordering metadata stable after patch emission', () => {
     const runtime = createWebHostRuntime({
       host: new DemoMapHost({ enableAmbientTicks: false }),
@@ -589,3 +645,23 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 });
+
+/**
+ * Converts classic Micropolis x-major map tiles (`Map[x][y]`) into runtime row-major
+ * order for direct comparison against `RuntimeMapState.tiles`.
+ * Mirrors map storage/indexing in `ref/micropolis/src/sim/s_alloc.c` and `s_gen.c`.
+ */
+function convertClassicXMajorToRuntimeRowMajor(
+  source: Uint16Array,
+  width: number,
+  height: number,
+): Uint16Array {
+  const rowMajor = new Uint16Array(width * height);
+  for (let x = 0; x < width; x += 1) {
+    const sourceColumnStart = x * height;
+    for (let y = 0; y < height; y += 1) {
+      rowMajor[y * width + x] = source[sourceColumnStart + y] ?? 0;
+    }
+  }
+  return rowMajor;
+}

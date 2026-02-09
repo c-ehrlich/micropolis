@@ -352,7 +352,7 @@ Deletion execution notes:
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/s_init.c` (new-city/reset lifecycle)
-- [ ] `ref/micropolis/src/sim/s_gen.c` (map generation/reset behaviors)
+- [x] `ref/micropolis/src/sim/s_gen.c` (map generation/reset behaviors)
 - [ ] `ref/micropolis/src/sim/s_fileio.c` (`loadFile`, `saveFile`, `LoadCity`, `LoadScenario`)
 - [ ] `ref/micropolis/src/sim/w_sim.c` (command routing for lifecycle/io)
 
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
