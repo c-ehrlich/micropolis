@@ -1,3 +1,5 @@
+import type { readFile as nodeReadFile } from 'node:fs/promises';
+
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   resetForNewCityFromSeed,
@@ -8,7 +10,7 @@ import {
   type SimState,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
-import { loadCityLikeC } from '../../../../../packages/sim-io/src/load.ts';
+import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
   getScenarioDefinition,
@@ -58,6 +60,28 @@ const DEMO_NEW_CITY_TREE_LEVEL = -1;
 const DEMO_NEW_CITY_LAKE_LEVEL = -1;
 const DEMO_NEW_CITY_CURVE_LEVEL = -1;
 const DEMO_NEW_CITY_CREATE_ISLAND = -1;
+const DEMO_SCENARIO_FILE_NAMES = [
+  'snro.111',
+  'snro.222',
+  'snro.333',
+  'snro.444',
+  'snro.555',
+  'snro.666',
+  'snro.777',
+  'snro.888',
+] as const;
+type DemoScenarioFileName = (typeof DEMO_SCENARIO_FILE_NAMES)[number];
+const DEMO_SCENARIO_RESOURCE_URLS: Readonly<Record<DemoScenarioFileName, URL>> = Object.freeze(
+  Object.fromEntries(
+    DEMO_SCENARIO_FILE_NAMES.map((fileName) => [
+      fileName,
+      new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url),
+    ]),
+  ) as Record<DemoScenarioFileName, URL>,
+);
+type NodeFsPromisesModule = {
+  readFile: typeof nodeReadFile;
+};
 
 const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
   road: 66,
@@ -199,6 +223,13 @@ export function readDemoCityExportPayload(payload: unknown): DemoCityExportPaylo
 export interface DemoMapHostOptions {
   enableAmbientTicks?: boolean;
   patchIntervalMs?: number;
+  /**
+   * Optional scenario byte loader for `snro.*` resources.
+   * Mirrors `_load_file(fname, ResourceDir)` in `LoadScenario` from
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: function injection is a TypeScript test seam.
+   */
+  scenarioResourceLoader?: (fileName: string) => Uint8Array | Promise<Uint8Array>;
 }
 
 /**
@@ -232,6 +263,8 @@ export class DemoMapHost implements CoreHost {
   private readonly hookHudState: HookDrivenHudState = createInitialHookDrivenHudState();
   private pendingHookMessages: DemoHudMessagePayload[] = [];
   private readonly mapTiles = buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
+  private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
+  private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly messageLog: DemoHudMessagePayload[] = [
     {
       id: 0,
@@ -246,6 +279,11 @@ export class DemoMapHost implements CoreHost {
   constructor(options: DemoMapHostOptions = {}) {
     this.enableAmbientTicks = options.enableAmbientTicks ?? true;
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
+    const scenarioResourceLoader = options.scenarioResourceLoader;
+    this.scenarioResourceLoader =
+      scenarioResourceLoader === undefined
+        ? (fileName) => this.loadScenarioResourceBytes(fileName)
+        : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
     const authorityState = new Stage4SimCoreAuthorityState({
       hooks: {
         tickCount: () => this.readMessageTickCount(),
@@ -550,9 +588,10 @@ export class DemoMapHost implements CoreHost {
 
   /**
    * Applies scenario start through host authority.
-   * Mirrors `LoadScenario` constants in `ref/micropolis/src/sim/s_fileio.c`.
-   * Difference: this Stage 2 demo uses deterministic synthetic map seeding
-   * instead of loading `snro.*` map resources.
+   * Mirrors `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c` by applying
+   * scenario metadata constants and loading the corresponding `snro.*` bytes.
+   * Parity note: async resource reads replace C's synchronous file API, but the
+   * resulting state/order of `loadScenarioLikeC` effects remains aligned.
    */
   private handleScenarioCommand(
     roomId: string,
@@ -561,41 +600,82 @@ export class DemoMapHost implements CoreHost {
     command: Stage2LoadScenarioCommand,
   ): void {
     const scenario = getScenarioDefinition(command.scenarioId);
-    this.currentScenarioId = scenario.id;
-    this.cityName = scenario.name;
-    this.cityFileName = `${scenario.fileName}.cty`;
-    this.applyScenarioSimulationMeta(scenario.startCityTime, scenario.startFunds);
+    const commandTick = this.tick;
+    void this.handleScenarioCommandAsync(roomId, clientId, commandId, scenario.id, commandTick);
+  }
 
-    const scenarioMap = buildScenarioDemoMapTiles(scenario.id, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
-    this.mapTiles.set(scenarioMap);
-    this.resetMessageLog(`Scenario: ${scenario.name} (${scenario.startYear})`);
+  /**
+   * Async `LoadScenario` orchestration with `snro.*` payload bytes.
+   * Mirrors `LoadScenario` resource read + init ordering in
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: `loadScenarioLikeC` owns the C-equivalent scalar/map lifecycle;
+   * this host wrapper translates completion into bridge `ack`/`snapshot` envelopes.
+   */
+  private async handleScenarioCommandAsync(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    scenarioId: number,
+    commandTick: number,
+  ): Promise<void> {
+    const scenario = getScenarioDefinition(scenarioId);
+
+    let scenarioBytes: Uint8Array;
+    try {
+      scenarioBytes = await this.scenarioResourceLoader(scenario.fileName);
+    } catch {
+      const reason = 'invalid-scenario-file';
+      this.commandOutcomes.set(commandId, { kind: 'reject', reason });
+      this.emitReject(roomId, clientId, commandId, reason, commandTick);
+      return;
+    }
+
+    let loadResult: ReturnType<typeof loadScenarioLikeC>;
+    try {
+      loadResult = loadScenarioLikeC(this.simState, this.simContext, scenario.id, scenarioBytes);
+    } catch {
+      const reason = 'invalid-scenario-file';
+      this.commandOutcomes.set(commandId, { kind: 'reject', reason });
+      this.emitReject(roomId, clientId, commandId, reason, commandTick);
+      return;
+    }
+
+    this.currentScenarioId = loadResult.scenario.id;
+    this.cityName = loadResult.scenario.name;
+    this.cityFileName = `${loadResult.scenario.fileName}.cty`;
+    this.syncRuntimeTilesFromClassicMapLayer();
+    this.syncHostLoadStateFromSimState();
+    this.resetMessageLog(
+      `Scenario: ${loadResult.scenario.name} (${loadResult.scenario.startYear})`,
+    );
 
     this.commandOutcomes.set(commandId, { kind: 'ack' });
-    this.emitAck(roomId, clientId, commandId);
-    this.emitSnapshot(roomId, clientId);
+    this.emitAck(roomId, clientId, commandId, commandTick);
+    this.emitSnapshot(roomId, clientId, commandTick);
   }
 
   /**
    * Emits an authoritative snapshot baseline with map + HUD + message feed.
    * Mirrors full refresh intent in `ref/micropolis/src/sim/w_update.c`.
    */
-  private emitSnapshot(roomId: string, clientId: string): void {
+  private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
     if (this.onEnvelope === undefined) {
       return;
     }
 
     const snapshotServerSeq = this.serverSeq + 1;
+    const snapshotTick = tickOverride;
     const pendingMessages = this.drainPendingHookMessages();
     if (pendingMessages.length > 0) {
-      this.recordMessages(pendingMessages, this.tick, snapshotServerSeq);
+      this.recordMessages(pendingMessages, snapshotTick, snapshotServerSeq);
     }
-    this.ensureMessageLogReplayMetadata(this.tick, snapshotServerSeq);
+    this.ensureMessageLogReplayMetadata(snapshotTick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
       kind: 'snapshot',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: snapshotTick,
       serverSeq: snapshotServerSeq,
       payload: {
         map: {
@@ -623,7 +703,12 @@ export class DemoMapHost implements CoreHost {
    * Mirrors successful command completion signaling in
    * `ref/micropolis/src/sim/w_sim.c`.
    */
-  private emitAck(roomId: string, clientId: string, commandId: string): void {
+  private emitAck(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -633,7 +718,7 @@ export class DemoMapHost implements CoreHost {
       kind: 'ack',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
     });
@@ -643,7 +728,13 @@ export class DemoMapHost implements CoreHost {
    * Emits a command `reject` envelope.
    * Mirrors expected-denial command results in `ref/micropolis/src/sim/w_sim.c`.
    */
-  private emitReject(roomId: string, clientId: string, commandId: string, reason: string): void {
+  private emitReject(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    reason: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -653,7 +744,7 @@ export class DemoMapHost implements CoreHost {
       kind: 'reject',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
       reason,
@@ -1267,6 +1358,27 @@ export class DemoMapHost implements CoreHost {
       DEMO_WORLD_HEIGHT,
     );
   }
+
+  /**
+   * Resolve and cache one scenario resource payload from canonical `snro.*` files.
+   * Mirrors `_load_file(fname, ResourceDir)` lookup identity from `LoadScenario`
+   * in `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: cache lifetime is host-process scoped, matching C resource reuse intent.
+   */
+  private loadScenarioResourceBytes(fileName: string): Promise<Uint8Array> {
+    const cached = this.scenarioResourceBytesCache.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const resourceUrl = getScenarioResourceUrl(fileName);
+    const pendingLoad = readBinaryResourceFromUrl(resourceUrl).catch(() => {
+      this.scenarioResourceBytesCache.delete(fileName);
+      throw new Error(`failed to load scenario resource ${fileName}`);
+    });
+    this.scenarioResourceBytesCache.set(fileName, pendingLoad);
+    return pendingLoad;
+  }
 }
 
 function sanitizeCityFileName(fileName: string): string {
@@ -1519,26 +1631,30 @@ function buildInitialDemoMapTiles(width: number, height: number): Uint16Array {
   return tiles;
 }
 
-/**
- * Builds a deterministic per-scenario map seed for the Stage 2 demo host.
- * Mirrors `LoadScenario` city reset intent in `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: map bytes are synthetic in this Stage 2 scripted host and do not
- * match Micropolis `snro.*` payloads 1:1.
- */
-function buildScenarioDemoMapTiles(scenarioId: number, width: number, height: number): Uint16Array {
-  const tiles = new Uint16Array(width * height);
-  const salt = (scenarioId & 0xff) << 8;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      const band = ((x + scenarioId * 5) >> 2) & 63;
-      const stripe = ((y + scenarioId * 7) >> 1) & 63;
-      tiles[index] = (salt | (band << 3) | stripe) & 0xffff;
-    }
-  }
-  return tiles;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
+}
+
+function getScenarioResourceUrl(fileName: string): URL {
+  if (fileName in DEMO_SCENARIO_RESOURCE_URLS) {
+    return DEMO_SCENARIO_RESOURCE_URLS[fileName as keyof typeof DEMO_SCENARIO_RESOURCE_URLS];
+  }
+
+  throw new Error(`unsupported scenario file: ${fileName}`);
+}
+
+async function readBinaryResourceFromUrl(resourceUrl: URL): Promise<Uint8Array> {
+  if (resourceUrl.protocol === 'file:') {
+    const fsPromisesSpecifier = 'node:fs/promises';
+    const fsPromises = (await import(
+      /* @vite-ignore */ fsPromisesSpecifier
+    )) as NodeFsPromisesModule;
+    return new Uint8Array(await fsPromises.readFile(resourceUrl));
+  }
+
+  const response = await fetch(resourceUrl);
+  if (!response.ok) {
+    throw new Error(`failed to fetch scenario resource ${resourceUrl}: ${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
 }

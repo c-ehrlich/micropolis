@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -6,11 +8,17 @@ import {
   createSimContext,
   createSimState,
   resetForNewCityFromSeed,
+  TileMask,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
+
+const SCENARIO_222_FIXTURE_URL = new URL(
+  '../../../../../ref/micropolis/res/snro.222',
+  import.meta.url,
+);
 
 describe('DemoMapHost city lifecycle and persistence flows', () => {
   it('keeps ambient patches out of map payload ownership', () => {
@@ -507,17 +515,27 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(savedMessageAfterReplay.serverSeq).toBe(savedMessageBeforeReplay.serverSeq);
   });
 
-  it('boots scenarios using C LoadScenario start funds and date constants', () => {
+  it('boots scenarios from snro bytes with C LoadScenario metadata constants', async () => {
     const runtime = createWebHostRuntime({
       host: new DemoMapHost({ enableAmbientTicks: false }),
     });
     runtime.connect();
+
+    const scenario222Bytes = new Uint8Array(readFileSync(SCENARIO_222_FIXTURE_URL));
+    const decodedScenario222 = decodeCityFileForMap(scenario222Bytes, {
+      width: 120,
+      height: 100,
+    });
 
     runtime.sendCommand('scenario-1', {
       kind: 'scenario',
       action: 'load-scenario',
       scenarioId: 1,
     });
+    await waitForRuntimeState(
+      () => runtime.getState().hudState.fundsLabel === 'Funds: $5,000',
+      'scenario 1 funds update',
+    );
     // Scenario 1 starts with 5000 funds in `LoadScenario` switch table
     // (`ref/micropolis/src/sim/s_fileio.c` case 1).
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $5,000');
@@ -527,6 +545,12 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       action: 'load-scenario',
       scenarioId: 2,
     });
+    await waitForRuntimeState(
+      () =>
+        runtime.getState().hudState.fundsLabel === 'Funds: $20,000' &&
+        runtime.getState().hudState.dateLabel === 'Jan 1906',
+      'scenario 2 metadata update',
+    );
 
     // Scenario 2 starts with 20000 funds and year 1906 in `LoadScenario`
     // (`ref/micropolis/src/sim/s_fileio.c` case 2), and month remains Jan because
@@ -534,6 +558,17 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $20,000');
     expect(runtime.getState().hudState.dateLabel).toBe('Jan 1906');
     expect(runtime.getState().hudState.speed).toBe(3);
+    const expectedScenarioTiles = convertClassicXMajorToRuntimeRowMajor(
+      decodedScenario222.map,
+      120,
+      100,
+    );
+    // `DoSimInit` can rewrite high-bit tile flags after `_load_file`; compare
+    // masked tile identities (`LOMASK`) to assert the loaded `snro.*` map content.
+    // Sources: `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/g_bigmap.c`.
+    expect(Array.from(runtime.getState().mapState.tiles, (tile) => tile & TileMask.LOMASK)).toEqual(
+      Array.from(expectedScenarioTiles, (tile) => tile & TileMask.LOMASK),
+    );
   });
 
   it('rejects invalid import bytes with deterministic reason', () => {
@@ -775,4 +810,21 @@ function convertClassicXMajorToRuntimeRowMajor(
     }
   }
   return rowMajor;
+}
+
+async function waitForRuntimeState(
+  predicate: () => boolean,
+  label: string,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+  throw new Error(`timed out waiting for runtime state: ${label}`);
 }
