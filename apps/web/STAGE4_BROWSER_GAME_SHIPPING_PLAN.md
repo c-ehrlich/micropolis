@@ -83,9 +83,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
 - [x] 0.5 Check: snapshot tile ordering is documented as x-major with explicit formula.
 
-- [ ] 0.6 Freeze resync behavior by adopting existing bridge sequencing semantics unchanged.
-- [ ] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.
-- [ ] 0.6 Check: no alternative sequencing policy is introduced in Stage 0 docs.
+- [x] 0.6 Freeze resync behavior by adopting existing bridge sequencing semantics unchanged.
+- [x] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.
+- [x] 0.6 Check: no alternative sequencing policy is introduced in Stage 0 docs.
 
 - [ ] 0.7 Freeze funds coupling semantics.
 - [ ] 0.7 Check: `SimState.TotalFunds` is explicitly documented as canonical.

@@ -160,6 +160,39 @@ describe('reduceHostEnvelope', () => {
     });
   });
 
+  it('requests resync when tick regresses even if serverSeq is in-order', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterFirst = reduceHostEnvelope(afterHello, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors monotonic tick progression intent in `s_sim.c` (`CityTime` never decreases),
+      // reusing the same small deterministic sequence vectors as bridge sequencing tests.
+      tick: 7,
+      serverSeq: 1,
+      payload: { baseline: true },
+    }).state;
+
+    const tickRegression = reduceHostEnvelope(afterFirst, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 6,
+      serverSeq: 2,
+      payload: { regressed: true },
+    });
+
+    expect(tickRegression.outcome).toBe('gap-detected');
+    expect(tickRegression.state.phase).toBe('resyncing');
+    expect(tickRegression.state.lastAppliedServerSeq).toBe(1);
+    expect(tickRegression.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 2,
+    });
+  });
+
   it('clears pending visuals when a sequence gap forces resync', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
