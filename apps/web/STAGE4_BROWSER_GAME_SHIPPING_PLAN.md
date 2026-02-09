@@ -302,7 +302,7 @@ Deletion execution notes:
 
 - [x] `apps/web/src/game/runtime/map-state.test.ts` verifies snapshot and patch draw modes.
 - [x] Manual: Stage 4 shows full map immediately after snapshot.
-- [ ] Manual: patch updates no longer appear as random debug noise paint.
+- [x] Manual: patch updates no longer appear as random debug noise paint.
 
 ---
 
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-

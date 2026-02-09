@@ -1,9 +1,43 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
 describe('DemoMapHost city lifecycle and persistence flows', () => {
+  it('keeps ambient patches out of map payload ownership', () => {
+    vi.useFakeTimers();
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
+    });
+
+    try {
+      let ambientPatchCount = 0;
+      let ambientPatchWithMapCount = 0;
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+
+        ambientPatchCount += 1;
+        if (event.envelope.payload.map !== undefined) {
+          ambientPatchWithMapCount += 1;
+        }
+      });
+
+      runtime.connect();
+      const initialMapState = runtime.getState().mapState;
+
+      vi.advanceTimersByTime(60);
+
+      expect(ambientPatchCount).toBeGreaterThan(0);
+      expect(ambientPatchWithMapCount).toBe(0);
+      expect(runtime.getState().mapState).toBe(initialMapState);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   it('round-trips save/export bytes through load/import in the web runtime', () => {
     const runtime = createWebHostRuntime({
       host: new DemoMapHost({ enableAmbientTicks: false }),

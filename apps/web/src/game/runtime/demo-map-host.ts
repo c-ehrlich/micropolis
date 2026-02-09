@@ -40,7 +40,6 @@ import {
 const DEMO_WORLD_WIDTH = 120;
 const DEMO_WORLD_HEIGHT = 100;
 const DEMO_PATCH_INTERVAL_MS = 180;
-const DEMO_PATCH_TILE_COUNT = 28;
 const DEMO_STARTING_YEAR = 1900;
 const DEMO_INITIAL_FUNDS = 20_000;
 const DEMO_MESSAGE_LOG_LIMIT = 24;
@@ -689,30 +688,17 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Runs one ambient simulation slice and emits map/HUD/message deltas.
+   * Runs one ambient simulation slice and emits HUD/message deltas.
    * Mirrors speed-gated frame stepping in `ref/micropolis/src/sim/s_sim.c`
    * plus head updates in `ref/micropolis/src/sim/w_update.c`.
+   * Parity note: unlike earlier Stage 2 scaffolding, this no longer emits
+   * synthetic random map tile churn; map deltas are reserved for authoritative
+   * map mutations (tools/new city/load/scenario), matching `DoUpdateMap`
+   * invalidation ownership in `ref/micropolis/src/sim/w_map.c`.
    */
   private emitAmbientPatch(roomId: string, clientId: string): void {
     if (!this.shouldAdvanceSimulation()) {
       return;
-    }
-
-    const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
-    for (let i = 0; i < DEMO_PATCH_TILE_COUNT; i += 1) {
-      const index = this.nextRandom() % this.mapTiles.length;
-      const currentTile = this.mapTiles[index];
-      if (currentTile === undefined) {
-        continue;
-      }
-
-      const nextTile = (currentTile + 1 + (this.tick & 31) + i) & 0xffff;
-      this.mapTiles[index] = nextTile;
-      deltas.push({
-        x: index % DEMO_WORLD_WIDTH,
-        y: Math.trunc(index / DEMO_WORLD_WIDTH),
-        tileWord: nextTile,
-      });
     }
 
     this.tick += 1;
@@ -739,12 +725,6 @@ export class DemoMapHost implements CoreHost {
         payload.hud = {};
       }
       payload.hud.fundsLabel = formatFundsLabel(this.totalFunds);
-    }
-
-    if (deltas.length > 0) {
-      payload.map = {
-        tileWordDeltas: deltas,
-      };
     }
 
     const ambientMessage = this.createAmbientMessage();
