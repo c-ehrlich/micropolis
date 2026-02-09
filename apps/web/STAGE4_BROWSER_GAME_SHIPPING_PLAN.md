@@ -50,7 +50,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] `packages/core-bridge/src/sequencing.ts`
 - [x] `packages/sim-integration/INTEGRATION-CONTRACT.md`
 - [x] `apps/web/src/game/core-host.ts`
-- [ ] `apps/web/src/game/runtime/protocol.ts`
+- [x] `apps/web/src/game/runtime/protocol.ts`
 - [ ] `ref/micropolis/spec/integration/SPEC.md`
 - [ ] `ref/micropolis/src/sim/sim.c`
 - [ ] `ref/micropolis/src/sim/s_sim.c`

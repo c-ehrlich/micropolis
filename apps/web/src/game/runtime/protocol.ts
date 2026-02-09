@@ -1,16 +1,69 @@
+import {
+  CORE_BRIDGE_V1_LOCAL_CLIENT_ID,
+  CORE_BRIDGE_V1_LOCAL_ROOM_ID,
+  CORE_BRIDGE_V1_PROTOCOL_VERSION,
+  type CoreClientEnvelope as CoreBridgeClientEnvelopeContract,
+  type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
+} from '../../../../../packages/core-bridge/src/types.ts';
+
+/**
+ * Stage 0 canonical client-envelope contract alias for web runtime migration.
+ * Maps this web-local protocol surface to `CoreClientEnvelope` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: bridge envelopes intentionally differ from Micropolis Tcl command
+ * strings in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type CanonicalBridgeClientEnvelopeContract = CoreBridgeClientEnvelopeContract;
+
+/**
+ * Stage 0 canonical host-envelope contract alias for web runtime migration.
+ * Maps this web-local protocol surface to `CoreHostEnvelope` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: bridge envelopes intentionally differ from Micropolis update
+ * callbacks in `ref/micropolis/src/sim/w_update.c`.
+ */
+export type CanonicalBridgeHostEnvelopeContract = CoreBridgeHostEnvelopeContract;
+
+/**
+ * Stage 0 canonical bridge local-room identity constant.
+ * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_ROOM_ID` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: room ids are a TypeScript bridge concept; Micropolis C transport
+ * does not expose a first-class room id field in `ref/micropolis/src/sim/w_net.c`.
+ */
+export const CANONICAL_BRIDGE_LOCAL_ROOM_ID = CORE_BRIDGE_V1_LOCAL_ROOM_ID;
+
+/**
+ * Stage 0 canonical bridge local-client identity constant.
+ * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_CLIENT_ID` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: client ids are a TypeScript bridge concept; Micropolis C
+ * integration uses implicit process/socket identity.
+ */
+export const CANONICAL_BRIDGE_LOCAL_CLIENT_ID = CORE_BRIDGE_V1_LOCAL_CLIENT_ID;
+
+/**
+ * Stage 0 canonical bridge protocol token.
+ * Maps web runtime protocol ownership to `CORE_BRIDGE_V1_PROTOCOL_VERSION` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: protocol tokens are a bridge abstraction rather than direct
+ * `SimCmdVersion` string values in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export const CANONICAL_BRIDGE_PROTOCOL_VERSION = CORE_BRIDGE_V1_PROTOCOL_VERSION;
+
 /**
  * Default local room identity for the Stage 2 LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
  * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
  */
-export const DEFAULT_LOCAL_ROOM_ID = 'local-room';
+export const DEFAULT_LOCAL_ROOM_ID = CANONICAL_BRIDGE_LOCAL_ROOM_ID;
 
 /**
  * Default local client identity for the Stage 2 LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
  * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
  */
-export const DEFAULT_LOCAL_CLIENT_ID = 'local-client';
+export const DEFAULT_LOCAL_CLIENT_ID = CANONICAL_BRIDGE_LOCAL_CLIENT_ID;
 
 /**
  * Default protocol version used by the Stage 2 web runtime handshake.
