@@ -23,10 +23,12 @@ export function MapCanvas({
   tileSize?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastRenderedEpochRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null || !mapState.hasSnapshot) {
+      lastRenderedEpochRef.current = 0;
       return;
     }
 
@@ -37,14 +39,24 @@ export function MapCanvas({
 
     const widthPx = mapState.width * tileSize;
     const heightPx = mapState.height * tileSize;
+    let resized = false;
     if (canvas.width !== widthPx) {
       canvas.width = widthPx;
+      resized = true;
     }
     if (canvas.height !== heightPx) {
       canvas.height = heightPx;
+      resized = true;
     }
 
-    MAP_CANVAS_DRAW_PROCS[mapState.drawMode](context, mapState, tileSize);
+    const drawMode = selectMapCanvasDrawMode({
+      mapDrawMode: mapState.drawMode,
+      renderEpoch: mapState.renderEpoch,
+      lastRenderedEpoch: lastRenderedEpochRef.current,
+      resized,
+    });
+    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize);
+    lastRenderedEpochRef.current = mapState.renderEpoch;
   }, [mapState, tileSize]);
 
   if (!mapState.hasSnapshot) {
@@ -120,6 +132,36 @@ type MapCanvasDrawProc = (
   mapState: RuntimeMapState,
   tileSize: number,
 ) => void;
+
+/**
+ * Selects canvas redraw mode from authoritative map draw metadata.
+ * Mirrors `DoUpdateMap` invalidation ownership in `ref/micropolis/src/sim/w_map.c`,
+ * where invalid/backing-store resets force full `MemDrawMap` redraw before
+ * incremental updates continue.
+ * Parity note: browser mode detects invalidation via resized canvas backing
+ * store and skipped render epochs (React batched snapshot+patch states).
+ */
+export function selectMapCanvasDrawMode({
+  mapDrawMode,
+  renderEpoch,
+  lastRenderedEpoch,
+  resized,
+}: {
+  mapDrawMode: RuntimeMapState['drawMode'];
+  renderEpoch: number;
+  lastRenderedEpoch: number;
+  resized: boolean;
+}): RuntimeMapState['drawMode'] {
+  if (mapDrawMode === 'snapshot' || resized || lastRenderedEpoch === 0) {
+    return 'snapshot';
+  }
+
+  if (renderEpoch > lastRenderedEpoch + 1) {
+    return 'snapshot';
+  }
+
+  return mapDrawMode;
+}
 
 /**
  * Stage 4 map draw-proc table keyed by runtime map draw mode.
