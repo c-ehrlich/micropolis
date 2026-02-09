@@ -67,6 +67,13 @@ export interface WebRuntimeState {
   clientId: string;
   handshakeComplete: boolean;
   handshakeError: string | null;
+  /**
+   * True once at least one sequenced host envelope has been accepted.
+   * Mirrors bridge sequencing baseline semantics from
+   * `packages/core-bridge/src/sequencing.ts` (`initial_event` is only valid
+   * before the first accepted sequenced envelope).
+   */
+  hasAppliedSequencedEnvelope: boolean;
   lastAppliedServerSeq: number;
   lastAppliedTick: number;
   mapState: RuntimeMapState;
@@ -130,6 +137,7 @@ export function createInitialWebRuntimeState(
     clientId: overrides.clientId ?? DEFAULT_LOCAL_CLIENT_ID,
     handshakeComplete: false,
     handshakeError: null,
+    hasAppliedSequencedEnvelope: false,
     lastAppliedServerSeq: 0,
     lastAppliedTick: 0,
     mapState: createInitialRuntimeMapState(),
@@ -198,10 +206,7 @@ export function reduceHostEnvelope(
   }
 
   const sequenceDecision = evaluateCoreBridgeV1SequenceDecision(
-    createCoreBridgeV1SequenceState({
-      lastAppliedServerSeq: state.lastAppliedServerSeq,
-      lastTick: state.lastAppliedTick,
-    }),
+    createSequencingStateFromRuntime(state),
     {
       serverSeq: envelope.serverSeq,
       tick: envelope.tick,
@@ -261,6 +266,7 @@ function applySequencedEnvelope(
     state: {
       ...settledState,
       phase,
+      hasAppliedSequencedEnvelope: true,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
       mapState,
@@ -284,6 +290,7 @@ function applyResyncDirective(
   return {
     state: {
       ...resyncState,
+      hasAppliedSequencedEnvelope: true,
       lastAppliedServerSeq: envelope.serverSeq,
       lastAppliedTick: envelope.tick,
       mapState,
@@ -297,6 +304,17 @@ function applyResyncDirective(
       fromServerSeq: envelope.serverSeq + 1,
     },
   };
+}
+
+function createSequencingStateFromRuntime(state: WebRuntimeState) {
+  if (!state.hasAppliedSequencedEnvelope) {
+    return createCoreBridgeV1SequenceState();
+  }
+
+  return createCoreBridgeV1SequenceState({
+    lastAppliedServerSeq: state.lastAppliedServerSeq,
+    lastTick: state.lastAppliedTick,
+  });
 }
 
 function enterResyncingPhase(state: WebRuntimeState): WebRuntimeState {

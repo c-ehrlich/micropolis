@@ -151,7 +151,7 @@ export function createWebHostRuntime(options: CreateWebHostRuntimeOptions): WebH
         return;
       }
 
-      const reconnecting = state.lastAppliedServerSeq > 0;
+      const reconnecting = state.hasAppliedSequencedEnvelope;
       shouldRequestReconnectSnapshot = reconnecting;
 
       setState(

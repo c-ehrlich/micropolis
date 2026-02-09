@@ -269,6 +269,54 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().mapState.tiles[0]).toBe(11);
   });
 
+  it('treats a serverSeq=0 snapshot as applied ordering state for reconnect resync', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Baseline at seq 0 is valid for first applied replay state.
+      tick: 0,
+      serverSeq: 0,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+    runtime.disconnect();
+
+    runtime.connect();
+    expect(runtime.getState().phase).toBe('reconnecting');
+
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    expect(runtime.getState().phase).toBe('resyncing');
+    expect(host.sent).toContainEqual({
+      kind: 'request_snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      reason: 'resync',
+      fromServerSeq: 1,
+    });
+  });
+
   it('clears pending visuals and requests snapshot when server emits resync directive', () => {
     const host = new FakeLocalHost();
     const runtime = createWebHostRuntime({ host });

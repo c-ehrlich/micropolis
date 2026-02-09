@@ -83,6 +83,84 @@ describe('reduceHostEnvelope', () => {
     expect(afterPatch.state.lastAppliedTick).toBe(3);
   });
 
+  it('treats the first sequenced envelope as the ordering baseline even when serverSeq jumps', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const baselineSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors bridge `initial_event` sequencing semantics mapped from
+      // `ref/micropolis/src/sim/s_sim.c` monotonic time progression:
+      // first accepted transport event establishes the baseline cursor.
+      tick: 4,
+      serverSeq: 12,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+
+    expect(baselineSnapshot.outcome).toBe('applied');
+    expect(baselineSnapshot.state.lastAppliedServerSeq).toBe(12);
+    expect(baselineSnapshot.state.lastAppliedTick).toBe(4);
+
+    const inOrderTail = reduceHostEnvelope(baselineSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 13,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 7 }] },
+      },
+    });
+
+    expect(inOrderTail.outcome).toBe('applied');
+    expect(inOrderTail.state.lastAppliedServerSeq).toBe(13);
+    expect(inOrderTail.state.mapState.tiles[0]).toBe(7);
+  });
+
+  it('keeps strict gap handling after a serverSeq=0 baseline snapshot', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+
+    const baselineSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Stage 0 sequencing allows an initial baseline at sequence 0; this mirrors
+      // replay baselines in bridge recovery streams mapped from `sim.c` update loops.
+      tick: 0,
+      serverSeq: 0,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [3] },
+      },
+    });
+    expect(baselineSnapshot.outcome).toBe('applied');
+    expect(baselineSnapshot.state.lastAppliedServerSeq).toBe(0);
+
+    const gap = reduceHostEnvelope(baselineSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 0,
+      serverSeq: 2,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+      },
+    });
+
+    expect(gap.outcome).toBe('gap-detected');
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 1,
+    });
+    expect(gap.state.lastAppliedServerSeq).toBe(0);
+    expect(gap.state.mapState.tiles[0]).toBe(3);
+  });
+
   it('uses canonical hello `message` when the host rejects handshake', () => {
     const state = createInitialWebRuntimeState();
     const rejected = reduceHostEnvelope(state, {
