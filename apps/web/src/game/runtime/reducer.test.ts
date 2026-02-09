@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_CORE_VERSION,
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
+  type Stage2ClientCommand,
   type Stage2ToolCommand,
 } from './protocol.ts';
 import {
@@ -22,8 +25,8 @@ function createAcceptedHelloEnvelope(): HostEnvelope {
     kind: 'hello',
     roomId: DEFAULT_LOCAL_ROOM_ID,
     clientId: DEFAULT_LOCAL_CLIENT_ID,
-    protocolVersion: 'v1',
-    coreVersion: 'stage-2',
+    protocolVersion: DEFAULT_PROTOCOL_VERSION,
+    coreVersion: DEFAULT_CORE_VERSION,
     accepted: true,
   };
 }
@@ -80,6 +83,24 @@ describe('reduceHostEnvelope', () => {
     expect(afterPatch.state.lastAppliedTick).toBe(3);
   });
 
+  it('uses canonical hello `message` when the host rejects handshake', () => {
+    const state = createInitialWebRuntimeState();
+    const rejected = reduceHostEnvelope(state, {
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: false,
+      message: 'protocol mismatch',
+    });
+
+    expect(rejected.outcome).toBe('hello-rejected');
+    expect(rejected.state.phase).toBe('failed');
+    expect(rejected.state.handshakeComplete).toBe(false);
+    expect(rejected.state.handshakeError).toBe('protocol mismatch');
+  });
+
   it('drops stale envelopes', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
@@ -133,6 +154,39 @@ describe('reduceHostEnvelope', () => {
     expect(gap.state.phase).toBe('resyncing');
     expect(gap.state.lastAppliedServerSeq).toBe(1);
     expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 2,
+    });
+  });
+
+  it('requests resync when tick regresses even if serverSeq is in-order', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterFirst = reduceHostEnvelope(afterHello, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // Mirrors monotonic tick progression intent in `s_sim.c` (`CityTime` never decreases),
+      // reusing the same small deterministic sequence vectors as bridge sequencing tests.
+      tick: 7,
+      serverSeq: 1,
+      payload: { baseline: true },
+    }).state;
+
+    const tickRegression = reduceHostEnvelope(afterFirst, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 6,
+      serverSeq: 2,
+      payload: { regressed: true },
+    });
+
+    expect(tickRegression.outcome).toBe('gap-detected');
+    expect(tickRegression.state.phase).toBe('resyncing');
+    expect(tickRegression.state.lastAppliedServerSeq).toBe(1);
+    expect(tickRegression.effect).toEqual({
       kind: 'request_snapshot',
       reason: 'sequence-gap',
       fromServerSeq: 2,
@@ -293,6 +347,36 @@ describe('reduceHostEnvelope', () => {
     expect(afterAck.state.lastRejectReason).toBeNull();
   });
 
+  it('keeps authoritative projection state unchanged when enqueueing pending tool visuals', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const afterSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tiles: [5] },
+        hud: {
+          fundsLabel: 'Funds: $5000',
+        },
+      },
+    }).state;
+
+    const withPending = enqueuePendingToolCommandVisual(
+      afterSnapshot,
+      'cmd-pending',
+      createToolCommand('road'),
+    );
+
+    expect(withPending.pendingTools).toHaveLength(1);
+    expect(withPending.mapState).toBe(afterSnapshot.mapState);
+    expect(withPending.hudState).toBe(afterSnapshot.hudState);
+    expect(withPending.lastAppliedServerSeq).toBe(afterSnapshot.lastAppliedServerSeq);
+    expect(withPending.lastAppliedTick).toBe(afterSnapshot.lastAppliedTick);
+  });
+
   it('rolls back pending visual markers on reject', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
@@ -362,5 +446,17 @@ describe('reduceHostEnvelope', () => {
     expect(afterDuplicateReject.pendingTools.map((pending) => pending.commandId)).toEqual([
       'cmd-2',
     ]);
+  });
+
+  it('does not enqueue pending visuals for non-tool commands', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const pauseCommand: Stage2ClientCommand = {
+      kind: 'sim-control',
+      control: 'pause',
+    };
+
+    const next = enqueuePendingToolCommandVisual(afterHello, 'cmd-pause', pauseCommand);
+    expect(next).toBe(afterHello);
   });
 });

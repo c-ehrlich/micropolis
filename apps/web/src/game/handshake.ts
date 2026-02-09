@@ -1,19 +1,28 @@
+import {
+  LOCAL_HOST_DEFAULT_CORE_VERSION,
+  LOCAL_HOST_DEFAULT_PROTOCOL_VERSION,
+} from '../../../../packages/core-bridge/src/local-host.ts';
+
 /**
  * Canonical bridge protocol version expected by the web runtime `hello` handshake.
  * Mirrors the strict version-lockstep requirement documented in
  * `ref/micropolis/spec/integration/SPEC.md` via Stage contract mapping.
- * Parity note: Micropolis C integration does not define this websocket `hello` envelope;
- * this constant is an intentional bridge-layer addition for Stage 4.
+ * 1:1 ownership mapping note: this is sourced directly from
+ * `LOCAL_HOST_DEFAULT_PROTOCOL_VERSION` in
+ * `packages/core-bridge/src/local-host.ts` so handshake/version ownership stays
+ * in `@city/core-bridge`.
  */
-export const BRIDGE_PROTOCOL_VERSION = 'bridge-v1';
+export const BRIDGE_PROTOCOL_VERSION = LOCAL_HOST_DEFAULT_PROTOCOL_VERSION;
 
 /**
  * Canonical simulation core version expected by the web runtime `hello` handshake.
  * Mirrors Stage lockstep compatibility constraints mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
- * Parity note: this version token is a bridge contract artifact, not a direct C symbol.
+ * 1:1 ownership mapping note: this is sourced directly from
+ * `LOCAL_HOST_DEFAULT_CORE_VERSION` in `packages/core-bridge/src/local-host.ts`
+ * so handshake/version ownership stays in `@city/core-bridge`.
  */
-export const BRIDGE_CORE_VERSION = 'core-v1';
+export const BRIDGE_CORE_VERSION = LOCAL_HOST_DEFAULT_CORE_VERSION;
 
 /**
  * Canonical handshake failure code for `hello` protocol/core incompatibility.

@@ -31,12 +31,18 @@ type RuntimeViewMode = 'stage4' | 'stage2';
 const STAGE4_MAP_WIDTH = 120;
 const STAGE4_MAP_HEIGHT = 100;
 const STAGE4_MAP_TILE_SIZE = 6;
+const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
+const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
+  'apps/web/src/game/core-host.ts',
+  'apps/web/src/game/runtime/protocol.ts',
+] as const;
 
 /**
  * Route-level host/runtime switcher for Stage 4 and Stage 2 browser views.
  * Mirrors Micropolis transport-path switching intent in `ref/micropolis/src/sim/w_sim.c`:
  * one UI surface can target local in-process flows and network-ready host flows.
- * Difference: this route adds an explicit developer toggle to expose both runtime paths.
+ * Difference: Stage 2 remains a temporary migration scaffold while `/` is the
+ * locked surviving gameplay surface during bridge convergence.
  */
 function HomePage() {
   const [viewMode, setViewMode] = useState<RuntimeViewMode>('stage4');
@@ -50,6 +56,11 @@ function HomePage() {
       }}
     >
       <h1 style={{ fontSize: 20, margin: 0 }}>City Runtime</h1>
+      <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>
+        Stage 0 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`. Delete
+        duplicate protocol surfaces after bridge-contract port:{' '}
+        {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <button
           onClick={() => {

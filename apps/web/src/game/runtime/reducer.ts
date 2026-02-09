@@ -1,4 +1,10 @@
 import {
+  CoreBridgeV1SequenceAction,
+  CoreBridgeV1SequenceReason,
+  createCoreBridgeV1SequenceState,
+  evaluateCoreBridgeV1SequenceDecision,
+} from '../../../../../packages/core-bridge/src/sequencing.ts';
+import {
   createInitialRuntimeHudState,
   projectRuntimeHudState,
   type RuntimeHudState,
@@ -184,7 +190,18 @@ export function reduceHostEnvelope(
     };
   }
 
-  if (envelope.serverSeq <= state.lastAppliedServerSeq || envelope.tick < state.lastAppliedTick) {
+  const sequenceDecision = evaluateCoreBridgeV1SequenceDecision(
+    createCoreBridgeV1SequenceState({
+      lastAppliedServerSeq: state.lastAppliedServerSeq,
+      lastTick: state.lastAppliedTick,
+    }),
+    {
+      serverSeq: envelope.serverSeq,
+      tick: envelope.tick,
+    },
+  );
+
+  if (sequenceDecision.action === CoreBridgeV1SequenceAction.DROP) {
     return {
       state,
       outcome: 'dropped-stale',
@@ -192,13 +209,15 @@ export function reduceHostEnvelope(
     };
   }
 
-  const expectedServerSeq = state.lastAppliedServerSeq + 1;
-  if (envelope.serverSeq > expectedServerSeq) {
+  if (sequenceDecision.action === CoreBridgeV1SequenceAction.RESYNC) {
     if (envelope.kind === 'resync') {
       return applyResyncDirective(state, envelope);
     }
 
-    const canApplyResyncSnapshot = state.phase === 'resyncing' && envelope.kind === 'snapshot';
+    const canApplyResyncSnapshot =
+      state.phase === 'resyncing' &&
+      envelope.kind === 'snapshot' &&
+      sequenceDecision.reason === CoreBridgeV1SequenceReason.SERVER_SEQ_GAP;
     if (canApplyResyncSnapshot) {
       return applySequencedEnvelope(state, envelope);
     }
@@ -209,7 +228,7 @@ export function reduceHostEnvelope(
       effect: {
         kind: 'request_snapshot',
         reason: 'sequence-gap',
-        fromServerSeq: expectedServerSeq,
+        fromServerSeq: sequenceDecision.expectedServerSeq,
       },
     };
   }
@@ -334,7 +353,7 @@ function getHelloRejectionReason(
   envelope: Extract<HostEnvelope, { kind: 'hello' }>,
 ): string | null {
   if (!envelope.accepted) {
-    return envelope.reason ?? 'host rejected hello';
+    return envelope.reason ?? envelope.message ?? 'host rejected hello';
   }
 
   if (envelope.roomId !== state.roomId) {

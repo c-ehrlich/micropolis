@@ -25,8 +25,8 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 
 ### Stage 0 Scope
 
-- [ ] Stage 0 is architecture/convergence work only.
-- [ ] No new gameplay features land before Stage 0 exit criteria pass.
+- [x] Stage 0 is architecture/convergence work only.
+- [x] No new gameplay features land before Stage 0 exit criteria pass.
 
 ### Locked Decisions (Already Chosen)
 
@@ -36,87 +36,121 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] Web-local protocol forks are deleted after bridge-contract port:
 - [x] `apps/web/src/game/core-host.ts`
 - [x] `apps/web/src/game/runtime/protocol.ts`
+- [x] Handshake/version defaults are bridge-owned in `@city/core-bridge` (`packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts`).
+- [x] Web surfaces (`apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts`) consume handshake/version defaults from `@city/core-bridge` and do not define new web-local handshake/version constants.
 - [x] Keep existing sequencing/resync policy from `packages/core-bridge/src/sequencing.ts` (no re-evaluation unless blocker).
 - [x] Snapshot/patch map rule: patch deltas use `{ x, y, tile }`; snapshot tile order is explicit x-major (`x * WORLD_Y + y`).
-- [x] Funds rule: `SimState.TotalFunds` is canonical; `ToolContext.funds` is synchronized derived state.
-- [x] Save/load room rule: `load-city` replaces current authoritative room state and emits fresh snapshot.
+- [x] Funds rule: `SimState.TotalFunds` is canonical authoritative funds state; `ToolContext.funds` is synchronized derived state and must be refreshed from canonical funds before tool evaluation and resynchronized after every tool outcome (success or reject).
+- [x] Save/load room rule: `load-city` replaces current authoritative room/session state in-place and emits fresh snapshot.
+- [x] Room/session lifecycle rule: creating/selecting a new room/session is separate host lifecycle behavior (connect/binding), not a `load-city` side effect.
+- [x] Single-player playable command inventory is frozen to the bridge-owned `CityCommandPayloadV1` subset (`tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`).
+- [x] Host/client authority rule: host owns authoritative simulation state progression; web client is projection-only except non-authoritative pending tool visuals.
 - [x] Multiplayer/presence is out of scope for playable shipping.
 
 ### Required References
 
-- [ ] `STAGE_0_ALIGNMENT_NOTES.md`
-- [ ] `packages/core-bridge/src/core-host.ts`
-- [ ] `packages/core-bridge/src/types.ts`
-- [ ] `packages/core-bridge/src/sequencing.ts`
-- [ ] `packages/sim-integration/INTEGRATION-CONTRACT.md`
-- [ ] `apps/web/src/game/core-host.ts`
-- [ ] `apps/web/src/game/runtime/protocol.ts`
-- [ ] `ref/micropolis/spec/integration/SPEC.md`
-- [ ] `ref/micropolis/src/sim/sim.c`
-- [ ] `ref/micropolis/src/sim/s_sim.c`
-- [ ] `ref/micropolis/src/sim/w_tool.c`
-- [ ] `ref/micropolis/src/sim/s_fileio.c`
+- [x] `STAGE_0_ALIGNMENT_NOTES.md`
+- [x] `packages/core-bridge/src/core-host.ts`
+- [x] `packages/core-bridge/src/types.ts`
+- [x] `packages/core-bridge/src/sequencing.ts`
+- [x] `packages/sim-integration/INTEGRATION-CONTRACT.md`
+- [x] `apps/web/src/game/core-host.ts`
+- [x] `apps/web/src/game/runtime/protocol.ts`
+- [x] `ref/micropolis/spec/integration/SPEC.md`
+- [x] `ref/micropolis/src/sim/sim.c`
+- [x] `ref/micropolis/src/sim/s_sim.c`
+- [x] `ref/micropolis/src/sim/w_tool.c`
+- [x] `ref/micropolis/src/sim/s_fileio.c`
 
 ### Atomic Steps (Do + Check)
 
-- [ ] 0.1 Add a Stage 0 decision map to this file from old web contracts to canonical bridge contracts.
-- [ ] 0.1 Check: mapping explicitly lists `apps/web/src/game/core-host.ts` -> `packages/core-bridge/src/core-host.ts`.
-- [ ] 0.1 Check: mapping explicitly lists `apps/web/src/game/runtime/protocol.ts` -> `packages/core-bridge/src/types.ts`.
+- [x] 0.1 Add a Stage 0 decision map to this file from old web contracts to canonical bridge contracts.
+- [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/core-host.ts` -> `packages/core-bridge/src/core-host.ts`.
+- [x] 0.1 Check: mapping explicitly lists `apps/web/src/game/runtime/protocol.ts` -> `packages/core-bridge/src/types.ts`.
 
-- [ ] 0.2 Freeze handshake/version ownership at bridge layer.
-- [ ] 0.2 Check: Stage 0 docs name `@city/core-bridge` as the only handshake/version owner.
-- [ ] 0.2 Check: no Stage 0 step asks for new web-local handshake constants.
+- [x] 0.2 Freeze handshake/version ownership at bridge layer.
+- [x] 0.2 Check: Stage 0 docs name `@city/core-bridge` as the only handshake/version owner.
+- [x] 0.2 Check: no Stage 0 step asks for new web-local handshake constants.
 
-- [ ] 0.3 Freeze playable command inventory for single-player shipping.
-- [ ] 0.3 Check: inventory includes tool apply, sim pause/resume/set speed, city new/load/save, scenario start.
-- [ ] 0.3 Check: command inventory references bridge payload types, not web-local unions.
+- [x] 0.3 Freeze playable command inventory for single-player shipping.
+- [x] 0.3 Check: inventory includes tool apply, sim pause/resume/set speed, city new/load/save, scenario start.
+- [x] 0.3 Check: command inventory references bridge payload types, not web-local unions (`Stage0PlayableBridgeCommandPayload`, `STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES`, and `isStage0PlayableBridgeCommandType` in `apps/web/src/game/runtime/protocol.ts`).
 
-- [ ] 0.4 Freeze host/client authority boundary.
-- [ ] 0.4 Check: host owns authoritative simulation state and progression.
-- [ ] 0.4 Check: client is projection-only (pending visuals only, no speculative authoritative mutation).
+- [x] 0.4 Freeze host/client authority boundary.
+- [x] 0.4 Check: host owns authoritative simulation state and progression.
+- [x] 0.4 Check: client is projection-only (pending visuals only, no speculative authoritative mutation).
 
-- [ ] 0.5 Freeze snapshot/patch data conventions.
-- [ ] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
-- [ ] 0.5 Check: snapshot tile ordering is documented as x-major with explicit formula.
+- [x] 0.5 Freeze snapshot/patch data conventions.
+- [x] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
+- [x] 0.5 Check: snapshot tile ordering is documented as x-major with explicit formula.
 
-- [ ] 0.6 Freeze resync behavior by adopting existing bridge sequencing semantics unchanged.
-- [ ] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.
-- [ ] 0.6 Check: no alternative sequencing policy is introduced in Stage 0 docs.
+- [x] 0.6 Freeze resync behavior by adopting existing bridge sequencing semantics unchanged.
+- [x] 0.6 Check: stale drop and gap => resync rules match `packages/core-bridge/src/sequencing.ts`.
+- [x] 0.6 Check: no alternative sequencing policy is introduced in Stage 0 docs.
 
-- [ ] 0.7 Freeze funds coupling semantics.
-- [ ] 0.7 Check: `SimState.TotalFunds` is explicitly documented as canonical.
-- [ ] 0.7 Check: all tool-flow docs require `ToolContext.funds` synchronization from canonical funds state.
+- [x] 0.7 Freeze funds coupling semantics.
+- [x] 0.7 Check: `SimState.TotalFunds` is explicitly documented as canonical.
+- [x] 0.7 Check: all tool-flow docs require `ToolContext.funds` synchronization from canonical funds state.
 
-- [ ] 0.8 Freeze save/load room semantics for local and DO-backed hosts.
-- [ ] 0.8 Check: `load-city` semantics are explicitly “replace state in current room/session + emit snapshot”.
-- [ ] 0.8 Check: “create new room/session” is documented as separate lifecycle behavior.
+- [x] 0.8 Freeze save/load room semantics for local and DO-backed hosts.
+- [x] 0.8 Check: `load-city` semantics are explicitly “replace state in current room/session + emit snapshot”.
+- [x] 0.8 Check: “create new room/session” is documented as separate lifecycle behavior.
 
-- [ ] 0.9 Create explicit delete plan for duplicate frontend protocol surfaces.
-- [ ] 0.9 Check: plan names exact modules to delete once port is complete.
-- [ ] 0.9 Check: plan states one surviving `/` gameplay route after convergence.
+- [x] 0.9 Create explicit delete plan for duplicate frontend protocol surfaces.
+- [x] 0.9 Check: plan names exact modules to delete once port is complete.
+- [x] 0.9 Check: plan states one surviving `/` gameplay route after convergence.
 
-- [ ] 0.10 Record Stage 0 sign-off, then unblock Stage 1 implementation.
-- [ ] 0.10 Check: all Stage 0 decisions are marked locked and referenced by later stages.
-- [ ] 0.10 Check: no unresolved Stage 0 architecture questions remain.
+- [x] 0.10 Record Stage 0 sign-off, then unblock Stage 1 implementation.
+- [x] 0.10 Check: all Stage 0 decisions are marked locked and referenced by later stages.
+- [x] 0.10 Check: no unresolved Stage 0 architecture questions remain.
+
+### Stage 0 Sign-off (0.10)
+
+Stage 0 is signed off as of 2026-02-09.
+
+- All Stage 0 decision locks above are frozen and remain the contract baseline for implementation stages.
+- Later stages explicitly inherit these locks via their referenced bridge/sim sources, with no re-opening of Stage 0 architecture decisions:
+  - Stage 1-3 consume bridge contract ownership, authority boundaries, sequencing/resync, and funds coupling locks.
+  - Stage 4-10 consume authoritative map/HUD/message/persistence payload ownership and snapshot/patch conventions locked in Stage 0.
+- Stage 1 implementation is unblocked; remaining Stage 1 items are implementation sequencing tasks, not architecture decision tasks.
 
 ### Stage 0 Decision Map
 
-- [ ] Web runtime interface source:
-- [ ] From `apps/web/src/game/core-host.ts`
-- [ ] To `packages/core-bridge/src/core-host.ts`
-- [ ] Web envelope type source:
-- [ ] From `apps/web/src/game/runtime/protocol.ts`
-- [ ] To `packages/core-bridge/src/types.ts`
-- [ ] Web sequencing source:
-- [ ] From local reducer-specific behavior
-- [ ] To `packages/core-bridge/src/sequencing.ts` rules
+| Decision surface | Old web contract source | Canonical bridge contract source | Stage 0 lock |
+| --- | --- | --- | --- |
+| Web runtime interface ownership | `apps/web/src/game/core-host.ts` | `packages/core-bridge/src/core-host.ts` | All Stage 1+ host/runtime work imports contract ownership from `@city/core-bridge`. |
+| Web envelope type ownership | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope definitions and command payload unions are bridge-owned only. |
+| Web handshake/version ownership | `apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts` | Handshake/version defaults are owned by `@city/core-bridge`; web modules only re-export or consume bridge-owned values. |
+| Web sequencing/resync ownership | local reducer-specific ordering behavior | `packages/core-bridge/src/sequencing.ts` | Stale drop, server-seq gap resync, and tick-regression resync stay bridge-defined. |
+| Funds coupling ownership | ad-hoc funds mirroring in early web tool flows | `SimState.TotalFunds` in `packages/sim-core/src/core/sim-state.ts` with mutation helpers in `packages/sim-core/src/systems/funds.ts` and tool mirror state in `packages/sim-core/src/actions/tool-actions.ts` | `SimState.TotalFunds` is canonical for all tool flows. `ToolContext.funds` is derived-only and must synchronize from canonical funds before tool evaluation and after each accept/reject result, matching Micropolis `TotalFunds` + `Spend`/`SetFunds` semantics in `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_stubs.c`. |
+| Save/load room semantics ownership | ad-hoc interpretation of `load-city` as either state import or room reset | `city_load` command + host lifecycle boundaries in `packages/core-bridge/src/types.ts`, `packages/core-bridge/src/core-host.ts`, and DO/local host conformance coverage in `packages/sim-do-adapter/src/host-conformance.test.ts` | `load-city` replaces authoritative state within the current room/session and emits a fresh snapshot; creating/selecting a new room/session is a separate host lifecycle operation. |
+| Single-player playable command inventory ownership | Stage 2-local command unions in `apps/web/src/game/runtime/protocol.ts` | `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts` (using Stage 0 subset extraction in `apps/web/src/game/runtime/protocol.ts`) | Stage 0 playable inventory is exactly `tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`; no web-local payload union may redefine these bridge payload shapes. |
+| Host/client authority boundary ownership | client runtime pending-visual UX state in `apps/web/src/game/runtime/reducer.ts` | host-ordered authority events in `packages/core-bridge/src/core-host.ts` + `packages/core-bridge/src/types.ts` | Host remains authoritative for simulation/map/HUD progression; client runtime is projection-only and may track pending visuals only until host `ack`/`reject` or resync. |
+
+### Stage 0 Duplicate Frontend Protocol Surface Delete Plan (0.9)
+
+Delete only after the Stage 1+ bridge-contract port is complete and all web call sites consume bridge-owned contracts directly.
+
+| Delete phase | Exact module(s) to delete | Replacement source | Deletion gate |
+| --- | --- | --- | --- |
+| Protocol contract convergence | `apps/web/src/game/core-host.ts` | `packages/core-bridge/src/core-host.ts` | All web runtime/host modules import host contracts from `@city/core-bridge`; no remaining app-local type imports from `apps/web/src/game/core-host.ts`. |
+| Envelope + command contract convergence | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope and command payload typing is bridge-owned; web runtime adapters only translate UI state and do not redefine bridge payload unions. |
+| Route convergence to one playable surface | Stage 2 panel/render path in `apps/web/src/routes/index.tsx` (including Stage 2 map/HUD projection branch) | Single Stage 4 gameplay panel at `/` backed by bridge contracts | Default and only gameplay surface is `/`; Stage 2/Stage 4 split toggle is removed from user-visible route UI. |
+
+Deletion execution notes:
+
+- Remove now-obsolete tests that only validate deleted web-local protocol surfaces (for example, bridge-ownership assertions tied to removed modules), and keep coverage on bridge contract behavior through runtime integration tests.
+- Keep handshake/version defaults bridge-owned (`@city/core-bridge`) during and after deletions; web code may consume/re-export but must not redefine protocol/core version constants.
 
 ### Stage 0 Exit Criteria
 
-- [ ] Canonical bridge contract is selected and documented as the only runtime contract for upcoming web work.
-- [ ] Single surviving UI surface (`/`) is selected and duplicate protocol surface deletion is planned.
-- [ ] Snapshot/patch, resync, funds, and save/load semantics are fully locked.
-- [ ] Stage 1+ can proceed without additional architecture decisions.
+- [x] Canonical bridge contract is selected and documented as the only runtime contract for upcoming web work.
+- [x] Single surviving UI surface (`/`) is selected and duplicate protocol surface deletion is planned.
+- Implementation trace (2026-02-09): `apps/web/src/routes/index.tsx` now carries an explicit Stage 0 lock marker for surviving route `/` and names the duplicate protocol modules scheduled for deletion (`apps/web/src/game/core-host.ts`, `apps/web/src/game/runtime/protocol.ts`) after bridge-contract convergence.
+- [x] Snapshot/patch, resync, funds, and save/load semantics are fully locked.
+- Implementation trace (2026-02-09): lock sources are frozen in `packages/core-bridge/src/types.ts` (patch `{ x, y, tile }` + x-major snapshot indexing), `packages/core-bridge/src/sequencing.ts` (stale drop + gap/tick-regression => resync), `STAGE_0_ALIGNMENT_NOTES.md` (funds + save/load room rules), and parity/conformance checks in `packages/core-bridge/src/types.test.ts`, `packages/core-bridge/src/snapshot-index.test.ts`, `packages/core-bridge/src/sequencing.test.ts`, and `packages/sim-do-adapter/src/host-conformance.test.ts` (`city_load` in-room replacement + fresh snapshot).
+- [x] Stage 1+ can proceed without additional architecture decisions.
+- Implementation trace (2026-02-09): Stage 0 decision locks and sign-off in this document fully define bridge contract ownership, authority boundaries, sequencing/resync, funds coupling, and save/load room semantics required by Stage 1+, so remaining work is implementation-only sequencing.
 
 ---
 

@@ -1,31 +1,173 @@
+import { LOCAL_HOST_DEFAULT_CORE_VERSION } from '../../../../../packages/core-bridge/src/local-host.ts';
+import {
+  type CityCommandPayloadV1,
+  type CitySimSpeedV1,
+  type CityToolV1,
+  CORE_BRIDGE_V1_LOCAL_CLIENT_ID,
+  CORE_BRIDGE_V1_LOCAL_ROOM_ID,
+  CORE_BRIDGE_V1_PROTOCOL_VERSION,
+  type CoreClientEnvelope as CoreBridgeClientEnvelopeContract,
+  type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
+} from '../../../../../packages/core-bridge/src/types.ts';
+
+/**
+ * Stage 0 canonical client-envelope contract alias for web runtime migration.
+ * Maps this web-local protocol surface to `CoreClientEnvelope` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: bridge envelopes intentionally differ from Micropolis Tcl command
+ * strings in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type CanonicalBridgeClientEnvelopeContract = CoreBridgeClientEnvelopeContract;
+
+/**
+ * Stage 0 canonical host-envelope contract alias for web runtime migration.
+ * Maps this web-local protocol surface to `CoreHostEnvelope` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: bridge envelopes intentionally differ from Micropolis update
+ * callbacks in `ref/micropolis/src/sim/w_update.c`.
+ */
+export type CanonicalBridgeHostEnvelopeContract = CoreBridgeHostEnvelopeContract;
+
+/**
+ * Stage 0 canonical bridge local-room identity constant.
+ * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_ROOM_ID` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: room ids are a TypeScript bridge concept; Micropolis C transport
+ * does not expose a first-class room id field in `ref/micropolis/src/sim/w_net.c`.
+ */
+export const CANONICAL_BRIDGE_LOCAL_ROOM_ID = CORE_BRIDGE_V1_LOCAL_ROOM_ID;
+
+/**
+ * Stage 0 canonical bridge local-client identity constant.
+ * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_CLIENT_ID` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: client ids are a TypeScript bridge concept; Micropolis C
+ * integration uses implicit process/socket identity.
+ */
+export const CANONICAL_BRIDGE_LOCAL_CLIENT_ID = CORE_BRIDGE_V1_LOCAL_CLIENT_ID;
+
+/**
+ * Stage 0 canonical bridge protocol token.
+ * Maps web runtime protocol ownership to `CORE_BRIDGE_V1_PROTOCOL_VERSION` in
+ * `packages/core-bridge/src/types.ts`.
+ * Parity note: protocol tokens are a bridge abstraction rather than direct
+ * `SimCmdVersion` string values in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export const CANONICAL_BRIDGE_PROTOCOL_VERSION = CORE_BRIDGE_V1_PROTOCOL_VERSION;
+
 /**
  * Default local room identity for the Stage 2 LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
  * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
  */
-export const DEFAULT_LOCAL_ROOM_ID = 'local-room';
+export const DEFAULT_LOCAL_ROOM_ID = CANONICAL_BRIDGE_LOCAL_ROOM_ID;
 
 /**
  * Default local client identity for the Stage 2 LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
  * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
  */
-export const DEFAULT_LOCAL_CLIENT_ID = 'local-client';
+export const DEFAULT_LOCAL_CLIENT_ID = CANONICAL_BRIDGE_LOCAL_CLIENT_ID;
 
 /**
  * Default protocol version used by the Stage 2 web runtime handshake.
- * Mirrors the mandatory hello/version lockstep rules from
- * `ref/micropolis/src/sim/w_sim.c` command-gate behavior, adapted to the
- * bridge envelope handshake model.
+ * Maps Stage 2 runtime handshake defaults to
+ * `CORE_BRIDGE_V1_PROTOCOL_VERSION` in `packages/core-bridge/src/types.ts`.
+ * Parity note: protocol tokens are a bridge abstraction rather than direct
+ * `SimCmdVersion` Tcl command strings in `ref/micropolis/src/sim/w_sim.c`.
  */
-export const DEFAULT_PROTOCOL_VERSION = 'v1';
+export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 
 /**
  * Default core version announced by the Stage 2 web runtime handshake.
- * Mirrors strict lockstep intent from `ref/micropolis/src/sim/w_sim.c` while
- * intentionally using a string token instead of the C Tcl `sim Version` path.
+ * Maps Stage 2 runtime handshake defaults to
+ * `LOCAL_HOST_DEFAULT_CORE_VERSION` in `packages/core-bridge/src/local-host.ts`.
+ * Parity note: explicit version tokens are a bridge abstraction rather than
+ * direct C Tcl `sim Version` return strings in `ref/micropolis/src/sim/w_sim.c`.
  */
-export const DEFAULT_CORE_VERSION = 'stage-2';
+export const DEFAULT_CORE_VERSION = LOCAL_HOST_DEFAULT_CORE_VERSION;
+
+/**
+ * Stage 0 playable command inventory locked to canonical bridge payload types.
+ * Mirrors command classes routed through `SimCmd` + tool handlers in
+ * `ref/micropolis/src/sim/w_sim.c`, `ref/micropolis/src/sim/w_tool.c`,
+ * and `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: this inventory is an explicit TypeScript subset declaration
+ * instead of C command-string dispatch tables.
+ */
+export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
+  'tool_apply',
+  'sim_pause',
+  'sim_resume',
+  'sim_set_speed',
+  'city_new',
+  'city_load',
+  'city_save',
+  'scenario_start',
+] as const satisfies readonly CityCommandPayloadV1['type'][];
+
+/**
+ * Canonical bridge command-type subset used by Stage 2 playable flows.
+ * Mirrors the Stage 0 command inventory lock derived from
+ * `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts`.
+ */
+export type Stage0PlayableBridgeCommandType = (typeof STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES)[number];
+
+type _Stage0MissingPlayableBridgeCommandTypes = Exclude<
+  CityCommandPayloadV1['type'],
+  Stage0PlayableBridgeCommandType
+>;
+
+type _Stage0ExtraPlayableBridgeCommandTypes = Exclude<
+  Stage0PlayableBridgeCommandType,
+  CityCommandPayloadV1['type']
+>;
+
+const _STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_EXHAUSTIVENESS_CHECK: Record<
+  _Stage0MissingPlayableBridgeCommandTypes | _Stage0ExtraPlayableBridgeCommandTypes,
+  never
+> = {};
+
+/**
+ * Canonical bridge command payload subset for playable Stage 2 commands.
+ * Mirrors the Stage 0 command inventory while keeping ownership in
+ * `CityCommandPayloadV1` from `packages/core-bridge/src/types.ts`.
+ */
+export type Stage0PlayableBridgeCommandPayload = Extract<
+  CityCommandPayloadV1,
+  {
+    type: Stage0PlayableBridgeCommandType;
+  }
+>;
+
+const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET = new Set<Stage0PlayableBridgeCommandType>(
+  STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
+);
+
+/**
+ * Returns true when a canonical bridge command type is in the Stage 0 playable
+ * single-player inventory.
+ * Mirrors Stage 0 command gating intent from `SimCmd` in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: this checks typed bridge command discriminants instead of Tcl
+ * command names.
+ */
+export function isStage0PlayableBridgeCommandType(
+  commandType: CityCommandPayloadV1['type'],
+): commandType is Stage0PlayableBridgeCommandType {
+  return STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET.has(
+    commandType as Stage0PlayableBridgeCommandType,
+  );
+}
+
+/**
+ * Stage 2 canonical bridge tool identifiers used by the playable toolbar.
+ * Mirrors tool routing in `ref/micropolis/src/sim/w_tool.c`.
+ */
+export type Stage2CanonicalToolName = Extract<
+  CityToolV1,
+  'road' | 'rail' | 'wire' | 'bulldoze' | 'residential' | 'commercial' | 'industrial'
+>;
 
 /**
  * Stage 2 tool identifiers exposed in the simple playable toolbar.
@@ -53,7 +195,27 @@ export interface Stage2ToolCommand {
  * and `SimCmdSpeed` input behavior in `ref/micropolis/src/sim/w_sim.c`.
  * Difference: Stage 2 UI only exposes the playable range 1..3.
  */
-export type Stage2SimSpeed = 1 | 2 | 3;
+export type Stage2SimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
+
+const STAGE2_TO_CANONICAL_TOOL_NAME: Record<Stage2ToolName, Stage2CanonicalToolName> = {
+  road: 'road',
+  rail: 'rail',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  res: 'residential',
+  com: 'commercial',
+  ind: 'industrial',
+};
+
+const CANONICAL_TO_STAGE2_TOOL_NAME: Record<Stage2CanonicalToolName, Stage2ToolName> = {
+  road: 'road',
+  rail: 'rail',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  residential: 'res',
+  commercial: 'com',
+  industrial: 'ind',
+};
 
 /**
  * Pause simulation command routed through host authority.
@@ -172,6 +334,61 @@ export type Stage2ClientCommand =
   | Stage2ScenarioCommand;
 
 /**
+ * Returns the canonical bridge command type that corresponds to one Stage 2
+ * runtime command.
+ * Mirrors command routing classes in `ref/micropolis/src/sim/w_sim.c`.
+ * Difference: this mapper only emits the playable Stage 0 subset from
+ * `CityCommandPayloadV1['type']`.
+ */
+export function getStage0PlayableBridgeCommandType(
+  command: Stage2ClientCommand,
+): Stage0PlayableBridgeCommandType {
+  if (command.kind === 'tool') {
+    return 'tool_apply';
+  }
+
+  if (command.kind === 'sim-control') {
+    if (command.control === 'pause') {
+      return 'sim_pause';
+    }
+
+    if (command.control === 'play') {
+      return 'sim_resume';
+    }
+
+    return 'sim_set_speed';
+  }
+
+  if (command.kind === 'city-lifecycle') {
+    return 'city_new';
+  }
+
+  if (command.kind === 'city-io') {
+    return command.action === 'save-city' ? 'city_save' : 'city_load';
+  }
+
+  return 'scenario_start';
+}
+
+/**
+ * Maps a Stage 2 toolbar tool id to the canonical bridge tool id.
+ * Mirrors tool-name routing intent around `setWandState` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+export function toCanonicalBridgeToolName(tool: Stage2ToolName): Stage2CanonicalToolName {
+  return STAGE2_TO_CANONICAL_TOOL_NAME[tool];
+}
+
+/**
+ * Maps a canonical bridge tool id back to the Stage 2 toolbar tool id.
+ * Mirrors toolbar-state projection intent around `setWandState` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+export function fromCanonicalBridgeToolName(tool: Stage2CanonicalToolName): Stage2ToolName {
+  return CANONICAL_TO_STAGE2_TOOL_NAME[tool];
+}
+
+/**
  * Tool footprint metadata used for pending visuals and placement validation.
  * Mirrors `toolSize[]` and `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c`.
  */
@@ -212,6 +429,15 @@ export interface HostHelloEnvelope {
   protocolVersion: string;
   coreVersion: string;
   accepted: boolean;
+  /**
+   * Canonical bridge hello rejection detail field from
+   * `packages/core-bridge/src/types.ts` `HostHelloEnvelope.message`.
+   */
+  message?: string;
+  /**
+   * Legacy Stage 2 hello rejection detail field retained for local-host
+   * compatibility while Stage 0 convergence work is still in flight.
+   */
   reason?: string;
 }
 
