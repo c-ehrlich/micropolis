@@ -77,6 +77,23 @@ Decision surface:
 - `CoreBridgeV1SequenceAction`: `apply`, `drop`, `resync`
 - `CoreBridgeV1SequenceReason`: `initial_event`, `in_order`, `stale_server_seq`, `server_seq_gap`, `tick_regression`
 
+## Host/Client Authority Boundary (Frozen)
+
+Authority contract sources:
+
+- `packages/core-bridge/src/core-host.ts`
+- `packages/core-bridge/src/types.ts`
+- `apps/web/src/game/runtime/reducer.ts`
+- `apps/web/src/game/runtime/map-state.ts`
+- `apps/web/src/game/runtime/hud-state.ts`
+
+Rules:
+
+1. Host owns authoritative simulation progression and state publication (`ack`, `reject`, `patch`, `snapshot`, `resync`) through sequenced envelopes.
+2. Client runtime is projection-only for authoritative state: map and HUD are updated only from host envelopes, never from client-issued commands.
+3. Client may keep local pending tool visuals keyed by `commandId` (`pendingTools`) for UX parity with pending tool feedback intent in `ref/micropolis/src/sim/w_tool.c`; these markers are non-authoritative and must not mutate authoritative map/HUD projections.
+4. Pending visuals settle only when host emits command outcomes (`ack`/`reject`) or resync transitions clear them.
+
 ## Handshake and Validation Behavior
 
 Contract source: `packages/core-bridge/src/validation.ts`.

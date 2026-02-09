@@ -43,6 +43,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] Funds rule: `SimState.TotalFunds` is canonical; `ToolContext.funds` is synchronized derived state.
 - [x] Save/load room rule: `load-city` replaces current authoritative room state and emits fresh snapshot.
 - [x] Single-player playable command inventory is frozen to the bridge-owned `CityCommandPayloadV1` subset (`tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`).
+- [x] Host/client authority rule: host owns authoritative simulation state progression; web client is projection-only except non-authoritative pending tool visuals.
 - [x] Multiplayer/presence is out of scope for playable shipping.
 
 ### Required References
@@ -74,9 +75,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.3 Check: inventory includes tool apply, sim pause/resume/set speed, city new/load/save, scenario start.
 - [x] 0.3 Check: command inventory references bridge payload types, not web-local unions (`Stage0PlayableBridgeCommandPayload`, `STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES`, and `isStage0PlayableBridgeCommandType` in `apps/web/src/game/runtime/protocol.ts`).
 
-- [ ] 0.4 Freeze host/client authority boundary.
-- [ ] 0.4 Check: host owns authoritative simulation state and progression.
-- [ ] 0.4 Check: client is projection-only (pending visuals only, no speculative authoritative mutation).
+- [x] 0.4 Freeze host/client authority boundary.
+- [x] 0.4 Check: host owns authoritative simulation state and progression.
+- [x] 0.4 Check: client is projection-only (pending visuals only, no speculative authoritative mutation).
 
 - [ ] 0.5 Freeze snapshot/patch data conventions.
 - [ ] 0.5 Check: patch deltas are `{ x, y, tile }` (no ambiguous linear index deltas).
@@ -111,6 +112,7 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 | Web handshake/version ownership | `apps/web/src/game/handshake.ts`, `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/local-host.ts`, `packages/core-bridge/src/types.ts` | Handshake/version defaults are owned by `@city/core-bridge`; web modules only re-export or consume bridge-owned values. |
 | Web sequencing/resync ownership | local reducer-specific ordering behavior | `packages/core-bridge/src/sequencing.ts` | Stale drop, server-seq gap resync, and tick-regression resync stay bridge-defined. |
 | Single-player playable command inventory ownership | Stage 2-local command unions in `apps/web/src/game/runtime/protocol.ts` | `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts` (using Stage 0 subset extraction in `apps/web/src/game/runtime/protocol.ts`) | Stage 0 playable inventory is exactly `tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`; no web-local payload union may redefine these bridge payload shapes. |
+| Host/client authority boundary ownership | client runtime pending-visual UX state in `apps/web/src/game/runtime/reducer.ts` | host-ordered authority events in `packages/core-bridge/src/core-host.ts` + `packages/core-bridge/src/types.ts` | Host remains authoritative for simulation/map/HUD progression; client runtime is projection-only and may track pending visuals only until host `ack`/`reject` or resync. |
 
 ### Stage 0 Exit Criteria
 
