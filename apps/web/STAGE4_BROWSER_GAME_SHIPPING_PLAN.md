@@ -96,9 +96,9 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 - [x] 0.8 Check: `load-city` semantics are explicitly “replace state in current room/session + emit snapshot”.
 - [x] 0.8 Check: “create new room/session” is documented as separate lifecycle behavior.
 
-- [ ] 0.9 Create explicit delete plan for duplicate frontend protocol surfaces.
-- [ ] 0.9 Check: plan names exact modules to delete once port is complete.
-- [ ] 0.9 Check: plan states one surviving `/` gameplay route after convergence.
+- [x] 0.9 Create explicit delete plan for duplicate frontend protocol surfaces.
+- [x] 0.9 Check: plan names exact modules to delete once port is complete.
+- [x] 0.9 Check: plan states one surviving `/` gameplay route after convergence.
 
 - [ ] 0.10 Record Stage 0 sign-off, then unblock Stage 1 implementation.
 - [ ] 0.10 Check: all Stage 0 decisions are marked locked and referenced by later stages.
@@ -116,6 +116,21 @@ Ship one Stage 4 browser route that behaves like a playable Micropolis game:
 | Save/load room semantics ownership | ad-hoc interpretation of `load-city` as either state import or room reset | `city_load` command + host lifecycle boundaries in `packages/core-bridge/src/types.ts`, `packages/core-bridge/src/core-host.ts`, and DO/local host conformance coverage in `packages/sim-do-adapter/src/host-conformance.test.ts` | `load-city` replaces authoritative state within the current room/session and emits a fresh snapshot; creating/selecting a new room/session is a separate host lifecycle operation. |
 | Single-player playable command inventory ownership | Stage 2-local command unions in `apps/web/src/game/runtime/protocol.ts` | `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts` (using Stage 0 subset extraction in `apps/web/src/game/runtime/protocol.ts`) | Stage 0 playable inventory is exactly `tool_apply`, `sim_pause`, `sim_resume`, `sim_set_speed`, `city_new`, `city_load`, `city_save`, `scenario_start`; no web-local payload union may redefine these bridge payload shapes. |
 | Host/client authority boundary ownership | client runtime pending-visual UX state in `apps/web/src/game/runtime/reducer.ts` | host-ordered authority events in `packages/core-bridge/src/core-host.ts` + `packages/core-bridge/src/types.ts` | Host remains authoritative for simulation/map/HUD progression; client runtime is projection-only and may track pending visuals only until host `ack`/`reject` or resync. |
+
+### Stage 0 Duplicate Frontend Protocol Surface Delete Plan (0.9)
+
+Delete only after the Stage 1+ bridge-contract port is complete and all web call sites consume bridge-owned contracts directly.
+
+| Delete phase | Exact module(s) to delete | Replacement source | Deletion gate |
+| --- | --- | --- | --- |
+| Protocol contract convergence | `apps/web/src/game/core-host.ts` | `packages/core-bridge/src/core-host.ts` | All web runtime/host modules import host contracts from `@city/core-bridge`; no remaining app-local type imports from `apps/web/src/game/core-host.ts`. |
+| Envelope + command contract convergence | `apps/web/src/game/runtime/protocol.ts` | `packages/core-bridge/src/types.ts` | Envelope and command payload typing is bridge-owned; web runtime adapters only translate UI state and do not redefine bridge payload unions. |
+| Route convergence to one playable surface | Stage 2 panel/render path in `apps/web/src/routes/index.tsx` (including Stage 2 map/HUD projection branch) | Single Stage 4 gameplay panel at `/` backed by bridge contracts | Default and only gameplay surface is `/`; Stage 2/Stage 4 split toggle is removed from user-visible route UI. |
+
+Deletion execution notes:
+
+- Remove now-obsolete tests that only validate deleted web-local protocol surfaces (for example, bridge-ownership assertions tied to removed modules), and keep coverage on bridge contract behavior through runtime integration tests.
+- Keep handshake/version defaults bridge-owned (`@city/core-bridge`) during and after deletions; web code may consume/re-export but must not redefine protocol/core version constants.
 
 ### Stage 0 Exit Criteria
 
