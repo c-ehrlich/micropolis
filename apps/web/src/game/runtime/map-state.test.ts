@@ -121,6 +121,7 @@ describe('runtime map projection', () => {
     expect(afterSnapshot.renderEpoch).toBe(1);
     expect(Array.from(afterSnapshot.tiles)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(Array.from(afterSnapshot.dirtyTileIndexes)).toEqual([]);
+    expect(afterSnapshot.dirtyRects).toEqual([]);
 
     const afterPatch = projectRuntimeMapState(
       afterSnapshot,
@@ -133,6 +134,11 @@ describe('runtime map projection', () => {
     expect(afterPatch.drawMode).toBe('patch');
     expect(afterPatch.renderEpoch).toBe(2);
     expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([0, 5]);
+    expect(afterPatch.dirtyRects).toEqual([
+      // Two isolated dirty tiles stay as separate 1x1 dirty redraw rects.
+      { x: 0, y: 0, width: 1, height: 1 },
+      { x: 2, y: 1, width: 1, height: 1 },
+    ]);
     expect(Array.from(afterPatch.tiles)).toEqual([9, 1, 2, 3, 4, 10]);
   });
 
@@ -165,6 +171,7 @@ describe('runtime map projection', () => {
     expect(Array.from(replayState.tiles)).toEqual([9, 1, 2, 3, 11, 10]);
     expect(Array.from(replayState.tiles)).toEqual(Array.from(fullHistoryState.tiles));
     expect(Array.from(replayState.dirtyTileIndexes)).toEqual([4]);
+    expect(replayState.dirtyRects).toEqual([{ x: 1, y: 1, width: 1, height: 1 }]);
     expect(replayState.drawMode).toBe('patch');
   });
 
@@ -181,12 +188,14 @@ describe('runtime map projection', () => {
 
     expect(afterPatch.drawMode).toBe('patch');
     expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([0]);
+    expect(afterPatch.dirtyRects).toEqual([{ x: 0, y: 0, width: 1, height: 1 }]);
 
     const afterAck = projectRuntimeMapState(afterPatch, createAckEnvelope(3, 1, 'cmd-1'));
 
     expect(afterAck).toBe(afterPatch);
     expect(afterAck.drawMode).toBe('patch');
     expect(Array.from(afterAck.dirtyTileIndexes)).toEqual([0]);
+    expect(afterAck.dirtyRects).toEqual([{ x: 0, y: 0, width: 1, height: 1 }]);
     expect(afterAck.renderEpoch).toBe(afterPatch.renderEpoch);
     expect(Array.from(afterAck.tiles)).toEqual(Array.from(afterPatch.tiles));
   });
@@ -211,7 +220,39 @@ describe('runtime map projection', () => {
     expect(noOpPatch).toBe(afterSnapshot);
     expect(noOpPatch.drawMode).toBe('snapshot');
     expect(Array.from(noOpPatch.dirtyTileIndexes)).toEqual([]);
+    expect(noOpPatch.dirtyRects).toEqual([]);
     expect(noOpPatch.renderEpoch).toBe(afterSnapshot.renderEpoch);
     expect(Array.from(noOpPatch.tiles)).toEqual(Array.from(afterSnapshot.tiles));
+  });
+
+  it('coalesces patch dirty indexes into deterministic redraw rects', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(
+        1,
+        0,
+        4,
+        4,
+        [
+          // C x-major (`index = x * height + y`) for row-major zero baseline.
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+      ),
+    );
+
+    const afterPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [
+        // These two 2x1 runs at y=0 and y=1 merge into one 2x2 rect.
+        { x: 1, y: 0, tileWord: 5 },
+        { x: 2, y: 0, tileWord: 6 },
+        { x: 1, y: 1, tileWord: 7 },
+        { x: 2, y: 1, tileWord: 8 },
+      ]),
+    );
+
+    expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([1, 2, 5, 6]);
+    expect(afterPatch.dirtyRects).toEqual([{ x: 1, y: 0, width: 2, height: 2 }]);
   });
 });

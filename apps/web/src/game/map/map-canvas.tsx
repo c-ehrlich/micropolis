@@ -153,12 +153,37 @@ function drawPatchTiles(
   mapState: RuntimeMapState,
   tileSize: number,
 ): void {
+  if (mapState.dirtyRects.length > 0) {
+    drawPatchRects(context, mapState, tileSize);
+    return;
+  }
+
   for (const tileIndex of mapState.dirtyTileIndexes) {
     const width = mapState.width;
     const x = tileIndex % width;
     const y = Math.floor(tileIndex / width);
     context.fillStyle = getStage4TileDebugColor(mapState.tiles[tileIndex] ?? 0);
     context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+  }
+}
+
+function drawPatchRects(
+  context: CanvasRenderingContext2D,
+  mapState: RuntimeMapState,
+  tileSize: number,
+): void {
+  for (const rect of mapState.dirtyRects) {
+    const startX = Math.max(0, rect.x);
+    const startY = Math.max(0, rect.y);
+    const endX = Math.min(mapState.width, rect.x + rect.width);
+    const endY = Math.min(mapState.height, rect.y + rect.height);
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        const index = y * mapState.width + x;
+        context.fillStyle = getStage4TileDebugColor(mapState.tiles[index] ?? 0);
+        context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      }
+    }
   }
 }
 
