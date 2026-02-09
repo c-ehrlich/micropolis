@@ -22,6 +22,7 @@ import type {
   CoreHostPlacement,
   CoreHostRejectCode,
   CoreHostRejectEvent,
+  CoreHostSimControlCommand,
   CoreHostSnapshotEvent,
   CoreHostSnapshotPlacement,
   CoreHostToolCommand,
@@ -31,7 +32,7 @@ import { DeterministicCommandAuthority } from './deterministic-command-authority
 
 interface AcceptedOutcome {
   kind: 'ack';
-  placement: CoreHostPlacement;
+  placement?: CoreHostPlacement;
 }
 
 interface RejectedOutcome {
@@ -122,6 +123,9 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private readonly tickIntervalMs: number | undefined;
   private readonly tickScheduler: SimCoreAuthorityTickScheduler;
   private tickHandle: unknown;
+  private connected = false;
+  private simPaused = false;
+  private simPausedSpeed = 0;
 
   public constructor(private readonly options: SimCoreCommandAuthorityOptions) {
     const store = createClassicMapStore();
@@ -152,9 +156,33 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     });
     this.tickIntervalMs = normalizeTickIntervalMs(this.options.tickIntervalMs);
     this.tickScheduler = this.options.tickScheduler ?? DEFAULT_TICK_SCHEDULER;
+    this.simPausedSpeed = simState.SimMetaSpeed;
   }
 
   public connect(): void {
+    if (this.connected) {
+      return;
+    }
+
+    this.connected = true;
+    this.refreshTickLoop();
+  }
+
+  public disconnect(): void {
+    if (!this.connected && this.tickHandle === undefined) {
+      return;
+    }
+
+    this.connected = false;
+    this.stopTickLoop();
+  }
+
+  /**
+   * Starts the periodic authority loop when simulation speed is active.
+   * Mirrors `StartMicropolisTimer()` call sites in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: this is a TypeScript scheduler adapter around the same start intent.
+   */
+  private startTickLoop(): void {
     if (this.tickIntervalMs === undefined || this.tickHandle !== undefined) {
       return;
     }
@@ -170,7 +198,12 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     }, this.tickIntervalMs);
   }
 
-  public disconnect(): void {
+  /**
+   * Stops the periodic authority loop when paused/stopped.
+   * Mirrors `StopMicropolisTimer()` call sites in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: this is a TypeScript scheduler adapter around the same stop intent.
+   */
+  private stopTickLoop(): void {
     if (this.tickHandle === undefined) {
       return;
     }
@@ -179,12 +212,28 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     this.tickHandle = undefined;
   }
 
+  /**
+   * Applies C-like timer gating based on host connection and effective sim speed.
+   * Mirrors timer gating in `setSpeed(short)` from `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: this keeps start/stop decisions in one authority-side helper.
+   */
+  private refreshTickLoop(): void {
+    if (!this.connected || this.tickIntervalMs === undefined || this.simState.SimSpeed === 0) {
+      this.stopTickLoop();
+      return;
+    }
+
+    this.startTickLoop();
+  }
+
   public processCommand(command: CoreHostCommand): CoreHostEvent[] {
     // Mirrors `SimCmd` routing in `ref/micropolis/src/sim/w_sim.c`:
     // one command ingress dispatches to command-specific handlers.
     switch (command.type) {
       case 'tool-command':
         return this.processToolCommand(command);
+      case 'sim-control-command':
+        return this.processSimControlCommand(command);
     }
   }
 
@@ -261,7 +310,44 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     return [snapshot, ...tail];
   }
 
-  private applyToolCommand(command: CoreHostCommand): RejectedOutcome | undefined {
+  /**
+   * Processes host pause/resume/set-speed commands through authoritative state.
+   * Mirrors `SimCmdPause`, `SimCmdResume`, and `SimCmdSpeed` in
+   * `ref/micropolis/src/sim/w_sim.c`.
+   * Parity note: this emits existing Stage 4 ack events without new payload types.
+   */
+  private processSimControlCommand(command: CoreHostSimControlCommand): CoreHostEvent[] {
+    const currentTick = this.currentTick();
+    const previousOutcome = this.commandOutcomes.get(command.commandId);
+    if (previousOutcome) {
+      if (previousOutcome.kind === 'ack') {
+        return [this.recordSequenced(this.createAck(command.commandId, currentTick))];
+      }
+      return [
+        this.recordSequenced(
+          this.createReject(
+            command.commandId,
+            previousOutcome.code,
+            previousOutcome.message,
+            currentTick,
+          ),
+        ),
+      ];
+    }
+
+    if (command.control === 'pause') {
+      this.pauseSimulation();
+    } else if (command.control === 'resume') {
+      this.resumeSimulation();
+    } else {
+      this.setSimulationSpeed(command.speed);
+    }
+
+    this.commandOutcomes.set(command.commandId, { kind: 'ack' });
+    return [this.recordSequenced(this.createAck(command.commandId, currentTick))];
+  }
+
+  private applyToolCommand(command: CoreHostToolCommand): RejectedOutcome | undefined {
     if (!isWithinWorldBounds(command.x, command.y)) {
       return {
         kind: 'reject',
@@ -325,6 +411,55 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
 
   private currentTick(): number {
     return this.simState.Fcycle;
+  }
+
+  /**
+   * Pause semantics for Stage 1 sim-core authority.
+   * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: this is a 1:1 ordering port of pause state transitions.
+   */
+  private pauseSimulation(): void {
+    if (this.simPaused) {
+      return;
+    }
+
+    this.simPausedSpeed = this.simState.SimMetaSpeed;
+    this.setSimulationSpeed(0);
+    this.simPaused = true;
+  }
+
+  /**
+   * Resume semantics for Stage 1 sim-core authority.
+   * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: this is a 1:1 ordering port of resume state transitions.
+   */
+  private resumeSimulation(): void {
+    if (!this.simPaused) {
+      return;
+    }
+
+    this.simPaused = false;
+    this.setSimulationSpeed(this.simPausedSpeed);
+  }
+
+  /**
+   * Speed semantics for Stage 1 sim-core authority.
+   * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: values are explicitly truncated/clamped to `0..3` to preserve
+   * C integer and clamp behavior in TypeScript.
+   */
+  private setSimulationSpeed(candidate: number): void {
+    let speed = normalizePlayableSpeed(candidate);
+
+    this.simState.SimMetaSpeed = speed;
+
+    if (this.simPaused) {
+      this.simPausedSpeed = this.simState.SimMetaSpeed;
+      speed = 0;
+    }
+
+    this.simState.SimSpeed = speed;
+    this.refreshTickLoop();
   }
 
   private recordReject(
@@ -498,4 +633,25 @@ function normalizeTickIntervalMs(candidate: number | undefined): number | undefi
   }
 
   return Math.trunc(candidate);
+}
+
+/**
+ * Converts host speed requests into Micropolis playable speed domain.
+ * Mirrors clamping in `setSpeed(short)` from `ref/micropolis/src/sim/w_util.c`.
+ * Parity note: explicit truncation preserves C integer behavior in TypeScript.
+ */
+function normalizePlayableSpeed(candidate: number): number {
+  if (!Number.isFinite(candidate)) {
+    return 0;
+  }
+
+  const speed = Math.trunc(candidate);
+  if (speed < 0) {
+    return 0;
+  }
+  if (speed > 3) {
+    return 3;
+  }
+
+  return speed;
 }

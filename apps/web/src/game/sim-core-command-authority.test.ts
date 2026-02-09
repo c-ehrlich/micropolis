@@ -33,6 +33,30 @@ class ManualTickScheduler implements SimCoreAuthorityTickScheduler {
       }
     }
   }
+
+  /**
+   * Returns number of active timer callbacks in this deterministic scheduler.
+   * Mirrors assertions around `StartMicropolisTimer`/`StopMicropolisTimer` parity
+   * in `ref/micropolis/src/sim/w_util.c`.
+   */
+  public activeIntervalCount(): number {
+    return this.callbacks.size;
+  }
+}
+
+/**
+ * Reads one ack tick from authority command output.
+ * Mirrors ack tick assertions used to verify `setSpeed`/`Pause` behavior from
+ * `ref/micropolis/src/sim/w_util.c` and frame gating in `ref/micropolis/src/sim/s_sim.c`.
+ */
+function expectAckTick(events: ReturnType<SimCoreCommandAuthority['processCommand']>): number {
+  const ack = events[0];
+  expect(ack?.type).toBe('ack');
+  if (ack?.type !== 'ack') {
+    throw new Error('expected ack event');
+  }
+
+  return ack.tick;
 }
 
 describe('SimCoreCommandAuthority', () => {
@@ -132,6 +156,173 @@ describe('SimCoreCommandAuthority', () => {
     expect(snapshot.baseServerSeq).toBe(2);
     expect(snapshot.placements).toEqual([{ commandId: 'cmd-a', tool: 'road', x: 2, y: 2 }]);
     expect(tail.map((event) => event.type)).toEqual(['ack', 'patch']);
+  });
+
+  test('mirrors Pause/Resume timer stop-start behavior from w_util.c', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+    });
+
+    authority.connect();
+    expect(scheduler.activeIntervalCount()).toBe(1);
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-pause',
+      control: 'pause',
+    });
+    expect(scheduler.activeIntervalCount()).toBe(0);
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-set-speed-while-paused',
+      control: 'set-speed',
+      speed: 2,
+    });
+    expect(scheduler.activeIntervalCount()).toBe(0);
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-resume',
+      control: 'resume',
+    });
+    expect(scheduler.activeIntervalCount()).toBe(1);
+
+    authority.disconnect();
+    expect(scheduler.activeIntervalCount()).toBe(0);
+  });
+
+  test('keeps paused tick frozen and restores remembered speed on resume', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+    });
+
+    authority.connect();
+    scheduler.tick(3);
+
+    const tickBeforePause = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-before-pause',
+        tool: 'road',
+        x: 7,
+        y: 7,
+      }),
+    );
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-pause',
+      control: 'pause',
+    });
+
+    scheduler.tick(10);
+    const tickWhilePaused = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-while-paused',
+        tool: 'road',
+        x: 8,
+        y: 8,
+      }),
+    );
+    expect(tickWhilePaused).toBe(tickBeforePause);
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-speed-while-paused',
+      control: 'set-speed',
+      speed: 1,
+    });
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-resume',
+      control: 'resume',
+    });
+
+    // Magic numbers trace to C `SimFrame`/`setSpeed` behavior:
+    // - `setSpeed` clamps playable speed to 0..3 in `ref/micropolis/src/sim/w_util.c`.
+    // - speed 1 advances only every 5th spdCycle in `ref/micropolis/src/sim/s_sim.c`.
+    scheduler.tick(4);
+    const tickAfterFourSchedulerSteps = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-after-four-steps',
+        tool: 'road',
+        x: 9,
+        y: 9,
+      }),
+    );
+    expect(tickAfterFourSchedulerSteps - tickWhilePaused).toBe(1);
+
+    authority.disconnect();
+  });
+
+  test('clamps set-speed command into w_util.c playable range', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+    });
+
+    authority.connect();
+    scheduler.tick(1);
+    const tickBeforeClampTest = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-before-clamp',
+        tool: 'road',
+        x: 11,
+        y: 11,
+      }),
+    );
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-set-speed-overflow',
+      control: 'set-speed',
+      // Magic number source: `SimCmdSpeed` accepts up to 7 in `w_sim.c`,
+      // then `setSpeed` clamps to 3 in `w_util.c`.
+      speed: 7,
+    });
+    scheduler.tick(2);
+    const tickAfterOverflow = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-after-overflow',
+        tool: 'road',
+        x: 12,
+        y: 12,
+      }),
+    );
+    expect(tickAfterOverflow - tickBeforeClampTest).toBe(2);
+
+    authority.processCommand({
+      type: 'sim-control-command',
+      commandId: 'cmd-set-speed-negative',
+      control: 'set-speed',
+      speed: -4,
+    });
+    scheduler.tick(4);
+    const tickAfterNegative = expectAckTick(
+      authority.processCommand({
+        type: 'tool-command',
+        commandId: 'cmd-after-negative',
+        tool: 'road',
+        x: 13,
+        y: 13,
+      }),
+    );
+    expect(tickAfterNegative).toBe(tickAfterOverflow);
+
+    authority.disconnect();
   });
 });
 

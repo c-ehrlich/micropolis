@@ -422,6 +422,25 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         return;
       }
 
+      if (command.type === 'sim-control-command') {
+        updateState((current) => {
+          const hasPendingCommand = current.pendingCommands.includes(command.commandId);
+
+          return {
+            ...current,
+            pendingCommands: hasPendingCommand
+              ? current.pendingCommands
+              : [...current.pendingCommands, command.commandId],
+            commandLifecycleLog: [
+              ...current.commandLifecycleLog,
+              `pending:${command.commandId}:sim-control:${command.control}`,
+            ],
+          };
+        });
+        host.sendCommand(command);
+        return;
+      }
+
       updateState((current) => {
         const hasPendingCommand = current.pendingCommands.includes(command.commandId);
         const hasPendingPlacement = current.pendingPlacements.some(
