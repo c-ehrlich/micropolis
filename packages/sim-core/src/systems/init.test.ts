@@ -108,6 +108,33 @@ describe('initWillStuff', () => {
     expect(hooks.doUpdateHeads).toHaveBeenCalledOnce();
   });
 
+  it('re-arms heads/funds UI emission on repeated InitWillStuff runs', () => {
+    const store = createClassicMapStore();
+    const uiSet = vi.fn();
+    const context = createSimContext({ store, rng: createRng(1), hooks: { uiSet } });
+    const state = createSimState();
+
+    state.TotalFunds = 20_000;
+    state.RValve = 400;
+    state.CValve = -300;
+    state.IValve = 200;
+
+    initWillStuff(context, state, { seed: 123 });
+    uiSet.mockClear();
+
+    initWillStuff(context, state, { seed: 456 });
+
+    // `InitWillStuff` in `ref/micropolis/src/sim/s_init.c` resets LastR/LastC/LastI
+    // and LastFunds before `DoUpdateHeads()`, so the second init pass must emit
+    // demand + funds heads again even when values are unchanged.
+    const emittedHeadKeys = uiSet.mock.calls.map(([key]) => key);
+    expect(emittedHeadKeys.filter((key) => key === 'demandR')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'demandC')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'demandI')).toHaveLength(1);
+    expect(emittedHeadKeys.filter((key) => key === 'funds')).toHaveLength(1);
+    expect(state.LastFunds).toBe(state.TotalFunds);
+  });
+
   it('clears all derived layers listed in the spec', () => {
     const store = createClassicMapStore();
     const context = createSimContext({ store, rng: createRng(1) });

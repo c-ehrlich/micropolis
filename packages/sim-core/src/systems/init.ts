@@ -4,7 +4,7 @@ import { CLASSIC_LAYER_DEFS } from '../core/map-store.ts';
 import { randomSeedFromTime } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
-import { runUiUpdate } from './date-time.ts';
+import { resetHeadsCachesForInit, runUiUpdate } from './date-time.ts';
 import { mapScanSlice } from './map-scan.ts';
 import { setZPowerAt } from './power.ts';
 
@@ -81,6 +81,16 @@ export function initMapArrays(store: MapStore): void {
   });
 }
 
+/**
+ * Core "will-stuff" initialization/reset pass.
+ * Mirrors `InitWillStuff` in `ref/micropolis/src/sim/s_init.c` for core state,
+ * including scalar resets, derived-layer clears, sprite teardown, and immediate
+ * `DoUpdateHeads` execution.
+ *
+ * Intentional divergence:
+ * - UI/editor-only calls in C (`ResetLastKeys`, `DoNewGame`) are host/UI scope
+ *   and not executed inside sim-core.
+ */
 export function initWillStuff(
   context: SimContext,
   state: SimState,
@@ -122,6 +132,7 @@ export function initWillStuff(
   });
 
   context.hooks.destroyAllSprites();
+  resetHeadsCachesForInit(state);
   runUiUpdate(state, context);
 }
 

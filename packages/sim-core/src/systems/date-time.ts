@@ -76,6 +76,22 @@ export function markFundsDirty(state: SimState): void {
 }
 
 /**
+ * Reset transient heads/funds caches for a fresh init/new-city UI pass.
+ * Mirrors the reset intent from `InitWillStuff` in `ref/micropolis/src/sim/s_init.c`
+ * together with `LastR/LastC/LastI` + funds-gate reset behavior from
+ * `UpdateHeads` in `ref/micropolis/src/sim/w_update.c`.
+ *
+ * Parity note:
+ * - C stores these as globals (`LastR`, `LastC`, `LastI`, `MustUpdateFunds`).
+ * - sim-core stores equivalent runtime-only values in WeakMap caches, so init
+ *   paths explicitly clear cache entries before running `DoUpdateHeads`.
+ */
+export function resetHeadsCachesForInit(state: SimState): void {
+  HEADS_CACHE.delete(state);
+  FUNDS_CACHE.delete(state);
+}
+
+/**
  * Dollar formatter used by the funds head.
  * Mirrors `makeDollarDecimalStr` in `ref/micropolis/src/sim/w_util.c` (1:1 output).
  */
