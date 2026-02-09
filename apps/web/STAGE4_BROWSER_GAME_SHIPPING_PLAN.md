@@ -184,7 +184,7 @@ Deletion execution notes:
 - [x] Implement host lifecycle (`connect`, `disconnect`, periodic tick loop, snapshot request support).
 - [x] Keep deterministic authority available only for isolated tests/fallback.
 - [x] Add host-factory flag/wiring to opt into the real authority path in web dev/runtime.
-- [ ] Ensure handshake behavior remains compatible with existing runtime bootstrapping.
+- [x] Ensure handshake behavior remains compatible with existing runtime bootstrapping.
 
 ### Verification checklist
 
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
