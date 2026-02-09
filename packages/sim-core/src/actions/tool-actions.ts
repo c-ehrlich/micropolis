@@ -1133,7 +1133,7 @@ function layRail(context: ToolContext, map: Uint16Array, x: number, y: number): 
         if (
           neighbor === RAILHPOWERV ||
           neighbor === HRAIL ||
-          (neighbor > HRAIL && neighbor < VRAILROAD)
+          (neighbor >= LHRAIL && neighbor < VRAILROAD)
         ) {
           setTile(context, map, x, y, HRAIL | BULLBIT);
           break;
