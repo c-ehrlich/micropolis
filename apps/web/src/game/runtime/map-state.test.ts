@@ -100,6 +100,44 @@ function createAckEnvelope(
 }
 
 describe('runtime map projection', () => {
+  it('switches draw modes between snapshot and patch based on authoritative map events', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(1, 0, 2, 2, [0, 2, 1, 3]),
+    );
+
+    expect(afterSnapshot.drawMode).toBe('snapshot');
+    expect(Array.from(afterSnapshot.dirtyTileIndexes)).toEqual([]);
+    expect(afterSnapshot.dirtyRects).toEqual([]);
+
+    const afterPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [{ x: 1, y: 0, tileWord: 9 }]),
+    );
+
+    expect(afterPatch.drawMode).toBe('patch');
+    expect(Array.from(afterPatch.dirtyTileIndexes)).toEqual([1]);
+    expect(afterPatch.dirtyRects).toEqual([{ x: 1, y: 0, width: 1, height: 1 }]);
+
+    const afterResnapshot = projectRuntimeMapState(
+      afterPatch,
+      createSnapshotEnvelope(
+        3,
+        2,
+        2,
+        2,
+        // C x-major order (`index = x * height + y`) for row-major `[4, 5, 6, 7]`.
+        [4, 6, 5, 7],
+      ),
+    );
+
+    expect(afterResnapshot.drawMode).toBe('snapshot');
+    expect(Array.from(afterResnapshot.tiles)).toEqual([4, 5, 6, 7]);
+    expect(Array.from(afterResnapshot.dirtyTileIndexes)).toEqual([]);
+    expect(afterResnapshot.dirtyRects).toEqual([]);
+  });
+
   it('applies snapshot baseline then patch deltas into row-major runtime tiles', () => {
     const initial = createInitialRuntimeMapState();
     const afterSnapshot = projectRuntimeMapState(

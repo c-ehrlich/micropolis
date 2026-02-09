@@ -300,7 +300,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime/map-state.test.ts` verifies snapshot and patch draw modes.
+- [x] `apps/web/src/game/runtime/map-state.test.ts` verifies snapshot and patch draw modes.
 - [ ] Manual: Stage 4 shows full map immediately after snapshot.
 - [ ] Manual: patch updates no longer appear as random debug noise paint.
 
