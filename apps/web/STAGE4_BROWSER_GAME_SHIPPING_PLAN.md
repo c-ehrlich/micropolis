@@ -237,7 +237,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Route Stage 4 tool commands through real sim-core tool application logic with Micropolis-like costs/rejects/map mutation.
+- [x] Route Stage 4 tool commands through real sim-core tool application logic with Micropolis-like costs/rejects/map mutation.
 
 ### C references to review
 

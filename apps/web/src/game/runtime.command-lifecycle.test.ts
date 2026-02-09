@@ -146,7 +146,7 @@ describe('runtime command lifecycle parity across host modes', () => {
       'ack:cmd-place-ok',
       'patch:cmd-place-ok:road@10,10',
       'pending:cmd-place-reject:road@10,10',
-      'reject:cmd-place-reject:TILE_OCCUPIED',
+      'reject:cmd-place-reject:INVALID_PLACEMENT',
     ];
 
     expect(localLifecycleLog).toEqual(expectedLog);

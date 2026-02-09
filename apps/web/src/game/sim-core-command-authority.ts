@@ -4,7 +4,7 @@ import {
   type SimContext,
   type SimState,
   type ToolContext,
-  World,
+  type ToolResult,
 } from '../../../../packages/sim-core/src/index.ts';
 import type {
   CoreHostAckEvent,
@@ -37,7 +37,6 @@ interface RejectedOutcome {
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
 
-const { WORLD_X, WORLD_Y } = World;
 const DEFAULT_TICK_INTERVAL_MS = 100;
 
 /**
@@ -92,6 +91,13 @@ const DEFAULT_TICK_SCHEDULER: SimCoreAuthorityTickScheduler = {
 export interface SimCoreCommandAuthorityOptions {
   readonly mode: HostMode;
   readonly seed?: number;
+  /**
+   * Optional starting funds override for Stage 4 authority-owned `TotalFunds`.
+   * Mirrors `TotalFunds` bootstrap ownership in `ref/micropolis/src/sim/w_stubs.c`
+   * and init paths in `ref/micropolis/src/sim/s_init.c`.
+   * Parity note: explicit injection is a TypeScript test seam.
+   */
+  readonly startingFunds?: number;
   readonly tickIntervalMs?: number;
   readonly tickScheduler?: SimCoreAuthorityTickScheduler;
 }
@@ -117,7 +123,6 @@ export interface CreateStage4CommandAuthorityOptions extends SimCoreCommandAutho
  */
 export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private serverSeq = 0;
-  private readonly occupiedTiles = new Set<string>();
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
   private readonly sequencedEvents: SequencedEvent[] = [];
   private readonly patchEvents: CoreHostPatchEvent[] = [];
@@ -132,7 +137,10 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private simPausedSpeed = 0;
 
   public constructor(private readonly options: SimCoreCommandAuthorityOptions) {
-    const authorityState = new Stage4SimCoreAuthorityState({ seed: this.options.seed });
+    const authorityState = new Stage4SimCoreAuthorityState({
+      seed: this.options.seed,
+      startingFunds: this.options.startingFunds,
+    });
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
     this.toolContext = authorityState.toolContext;
@@ -247,22 +255,11 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
       );
     }
 
-    const tileKey = toTileKey(command.x, command.y);
-    if (this.occupiedTiles.has(tileKey)) {
-      return this.recordReject(
-        command.commandId,
-        'TILE_OCCUPIED',
-        'target tile is already occupied',
-        currentTick,
-      );
-    }
-
     const toolReject = this.applyToolCommand(command);
     if (toolReject !== undefined) {
       return this.recordReject(command.commandId, toolReject.code, toolReject.message, currentTick);
     }
 
-    this.occupiedTiles.add(tileKey);
     const placement: CoreHostPlacement = {
       tool: command.tool,
       x: command.x,
@@ -330,14 +327,6 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private applyToolCommand(command: CoreHostToolCommand): RejectedOutcome | undefined {
-    if (!isWithinWorldBounds(command.x, command.y)) {
-      return {
-        kind: 'reject',
-        code: 'OUT_OF_BOUNDS',
-        message: 'tool coordinates are out of bounds',
-      };
-    }
-
     this.syncToolContextFromState();
     this.simContext.store.beginTick();
 
@@ -352,30 +341,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
         seq: this.serverSeq,
       });
       this.syncStateFromToolContext();
-
-      if (toolResult.result === 'ok') {
-        return undefined;
-      }
-      if (toolResult.result === 'out-of-bounds') {
-        return {
-          kind: 'reject',
-          code: 'OUT_OF_BOUNDS',
-          message: 'tool coordinates are out of bounds',
-        };
-      }
-      if (toolResult.result === 'no-funds') {
-        return {
-          kind: 'reject',
-          code: 'TILE_OCCUPIED',
-          message: 'insufficient funds for tool placement',
-        };
-      }
-
-      return {
-        kind: 'reject',
-        code: 'TILE_OCCUPIED',
-        message: 'target tile is already occupied',
-      };
+      return toToolRejectedOutcome(toolResult.result);
     } finally {
       this.simContext.store.commitTick();
     }
@@ -582,15 +548,43 @@ export function createStage4CommandAuthority(
 }
 
 function isPlacementCoordinate(x: number, y: number): boolean {
-  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0;
+  return Number.isInteger(x) && Number.isInteger(y);
 }
 
-function isWithinWorldBounds(x: number, y: number): boolean {
-  return x < WORLD_X && y < WORLD_Y;
-}
+/**
+ * Maps one sim-core tool result into a stable Stage 4 host rejection shape.
+ * Mirrors `DoTool` result handling in `ref/micropolis/src/sim/w_tool.c`:
+ * - `-1` => out of bounds
+ * - `-2` => no funds
+ * - `0`/other non-success => invalid placement
+ * Parity note: typed reject codes are a bridge-level TypeScript addition.
+ */
+function toToolRejectedOutcome(result: ToolResult): RejectedOutcome | undefined {
+  if (result === 'ok') {
+    return undefined;
+  }
 
-function toTileKey(x: number, y: number): string {
-  return `${x},${y}`;
+  if (result === 'out-of-bounds') {
+    return {
+      kind: 'reject',
+      code: 'OUT_OF_BOUNDS',
+      message: 'tool coordinates are out of bounds',
+    };
+  }
+
+  if (result === 'no-funds') {
+    return {
+      kind: 'reject',
+      code: 'NO_FUNDS',
+      message: 'insufficient funds for tool placement',
+    };
+  }
+
+  return {
+    kind: 'reject',
+    code: 'INVALID_PLACEMENT',
+    message: 'tool placement was rejected by simulation rules',
+  };
 }
 
 function normalizeServerSeq(candidate: number, highestKnown: number): number {

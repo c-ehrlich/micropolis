@@ -140,7 +140,7 @@ describe('SimCoreCommandAuthority', () => {
     authority.disconnect();
   });
 
-  test('keeps duplicate command idempotency and occupied-tile rejection behavior', () => {
+  test('keeps duplicate command idempotency and sim-core invalid-placement rejection behavior', () => {
     const authority = new SimCoreCommandAuthority({ mode: 'local', tickIntervalMs: 0 });
 
     const first = authority.processCommand({
@@ -173,7 +173,69 @@ describe('SimCoreCommandAuthority', () => {
     if (rejectEvent?.type !== 'reject') {
       throw new Error('expected reject event');
     }
-    expect(rejectEvent.code).toBe('TILE_OCCUPIED');
+    expect(rejectEvent.code).toBe('INVALID_PLACEMENT');
+  });
+
+  test('maps sim-core tool reject outcomes to stable host reject codes', () => {
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      startingFunds: 0,
+    });
+
+    const outOfBounds = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-oob',
+      tool: 'road',
+      x: -1,
+      y: 10,
+    });
+    expect(outOfBounds.map((event) => event.type)).toEqual(['reject']);
+    const outOfBoundsReject = outOfBounds[0];
+    if (outOfBoundsReject?.type !== 'reject') {
+      throw new Error('expected out-of-bounds reject event');
+    }
+    expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+
+    const noFunds = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-no-funds',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(noFunds.map((event) => event.type)).toEqual(['reject']);
+    const noFundsReject = noFunds[0];
+    if (noFundsReject?.type !== 'reject') {
+      throw new Error('expected no-funds reject event');
+    }
+    expect(noFundsReject.code).toBe('NO_FUNDS');
+
+    const invalidAuthority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      startingFunds: 100,
+    });
+    invalidAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-place-first',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+    const invalidPlacement = invalidAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-place-invalid',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+    expect(invalidPlacement.map((event) => event.type)).toEqual(['reject']);
+    const invalidPlacementReject = invalidPlacement[0];
+    if (invalidPlacementReject?.type !== 'reject') {
+      throw new Error('expected invalid-placement reject event');
+    }
+    expect(invalidPlacementReject.code).toBe('INVALID_PLACEMENT');
   });
 
   test('replays snapshot baseline plus sequenced tail after a server-seq checkpoint', () => {
