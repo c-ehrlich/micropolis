@@ -45,6 +45,26 @@ function initFundingLevelOnState(state: SimState): void {
 }
 
 /**
+ * Apply C `setSpeed(short)` scalar side effects used by load/scenario flows.
+ * Mirrors `setSpeed` in `ref/micropolis/src/sim/w_util.c` for `SimMetaSpeed`
+ * and `SimSpeed` assignment/clamping.
+ *
+ * Parity note: `sim_paused`/timer callbacks are host-owned in TypeScript, so
+ * this helper only applies persisted simulation speed scalars.
+ */
+function applyLoadedSpeedLikeC(state: SimState, value: number): void {
+  let speed = Math.trunc(value);
+  if (speed < 0) {
+    speed = 0;
+  } else if (speed > 3) {
+    speed = 3;
+  }
+
+  state.SimMetaSpeed = speed;
+  state.SimSpeed = speed;
+}
+
+/**
  * Copy `.cty`/`snro.*` history + misc buffers into `SimState`.
  * Mirrors `_load_file` array assignment targets in `ref/micropolis/src/sim/s_fileio.c`.
  */
@@ -123,6 +143,8 @@ export function loadFileLikeC(
 
   const loadedMeta = readCityMeta(city.misc);
   applyLoadedCityMetaToState(state, loadedMeta);
+  // C `loadFile` calls `setSpeed(SimSpeed)` after loading metadata.
+  applyLoadedSpeedLikeC(state, state.SimSpeed);
   context.hooks.changeCensus();
 
   // C `setSkips(0)` resets runtime skip counters after load; sim-core models
@@ -180,7 +202,8 @@ export function loadScenarioLikeC(
   state.CityTime = scenario.startCityTime;
   setFunds(state, scenario.startFunds);
 
-  state.SimSpeed = 3;
+  // C `LoadScenario` applies `setSpeed(3)`.
+  applyLoadedSpeedLikeC(state, 3);
   state.CityTax = 7;
   state.Spdcycle = 0;
 
