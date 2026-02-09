@@ -9,8 +9,8 @@ import {
 } from '../game/runtime/demo-map-host.ts';
 import {
   createWebHostRuntime,
+  PLAYABLE_TOOL_SPECS,
   type RuntimeHudMessageEvent,
-  STAGE2_TOOL_SPECS,
   type Stage2SimSpeed,
   type Stage2ToolName,
   type WebRuntimeState,
@@ -208,7 +208,7 @@ function Stage4RuntimePanel() {
       >
         <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Tool Command</strong>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {STAGE2_TOOL_SPECS.map((spec) => {
+          {PLAYABLE_TOOL_SPECS.map((spec) => {
             const active = activeTool === spec.tool;
             return (
               <button
@@ -374,7 +374,7 @@ function Stage2DemoPanel() {
       >
         <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {STAGE2_TOOL_SPECS.map((spec) => {
+            {PLAYABLE_TOOL_SPECS.map((spec) => {
               const active = activeTool === spec.tool;
               return (
                 <button

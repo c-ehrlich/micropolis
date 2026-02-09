@@ -4,8 +4,8 @@ import {
   type SimContext,
   type SimState,
   type ToolContext,
-  World,
 } from '../../../../packages/sim-core/src/index.ts';
+import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
 import type {
   CoreHostAckEvent,
   CoreHostCommand,
@@ -22,22 +22,22 @@ import type {
 } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
 import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import {
+  createOutOfBoundsHostRejectOutcome,
+  type HostToolRejectOutcome,
+  translateToolResultToHostOutcome,
+} from './tool-outcome-host-translation';
 
 interface AcceptedOutcome {
   kind: 'ack';
   placement?: CoreHostPlacement;
 }
 
-interface RejectedOutcome {
-  kind: 'reject';
-  code: CoreHostRejectCode;
-  message: string;
-}
+type RejectedOutcome = HostToolRejectOutcome;
 
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
 
-const { WORLD_X, WORLD_Y } = World;
 const DEFAULT_TICK_INTERVAL_MS = 100;
 
 /**
@@ -92,6 +92,13 @@ const DEFAULT_TICK_SCHEDULER: SimCoreAuthorityTickScheduler = {
 export interface SimCoreCommandAuthorityOptions {
   readonly mode: HostMode;
   readonly seed?: number;
+  /**
+   * Optional starting funds override for Stage 4 authority-owned `TotalFunds`.
+   * Mirrors `TotalFunds` bootstrap ownership in `ref/micropolis/src/sim/w_stubs.c`
+   * and init paths in `ref/micropolis/src/sim/s_init.c`.
+   * Parity note: explicit injection is a TypeScript test seam.
+   */
+  readonly startingFunds?: number;
   readonly tickIntervalMs?: number;
   readonly tickScheduler?: SimCoreAuthorityTickScheduler;
 }
@@ -117,7 +124,6 @@ export interface CreateStage4CommandAuthorityOptions extends SimCoreCommandAutho
  */
 export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private serverSeq = 0;
-  private readonly occupiedTiles = new Set<string>();
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
   private readonly sequencedEvents: SequencedEvent[] = [];
   private readonly patchEvents: CoreHostPatchEvent[] = [];
@@ -132,7 +138,10 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private simPausedSpeed = 0;
 
   public constructor(private readonly options: SimCoreCommandAuthorityOptions) {
-    const authorityState = new Stage4SimCoreAuthorityState({ seed: this.options.seed });
+    const authorityState = new Stage4SimCoreAuthorityState({
+      seed: this.options.seed,
+      startingFunds: this.options.startingFunds,
+    });
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
     this.toolContext = authorityState.toolContext;
@@ -220,6 +229,9 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private processToolCommand(command: CoreHostToolCommand): CoreHostEvent[] {
+    // Keep tool mirror state aligned with authoritative funds/options before all
+    // command outcomes (accept/reject), including preflight rejects.
+    this.syncToolContextFromState();
     const currentTick = this.currentTick();
     const previousOutcome = this.commandOutcomes.get(command.commandId);
     if (previousOutcome) {
@@ -239,20 +251,11 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     }
 
     if (!isPlacementCoordinate(command.x, command.y)) {
+      const outOfBoundsReject = createOutOfBoundsHostRejectOutcome();
       return this.recordReject(
         command.commandId,
-        'OUT_OF_BOUNDS',
-        'tool coordinates are out of bounds',
-        currentTick,
-      );
-    }
-
-    const tileKey = toTileKey(command.x, command.y);
-    if (this.occupiedTiles.has(tileKey)) {
-      return this.recordReject(
-        command.commandId,
-        'TILE_OCCUPIED',
-        'target tile is already occupied',
+        outOfBoundsReject.code,
+        outOfBoundsReject.message,
         currentTick,
       );
     }
@@ -262,7 +265,6 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
       return this.recordReject(command.commandId, toolReject.code, toolReject.message, currentTick);
     }
 
-    this.occupiedTiles.add(tileKey);
     const placement: CoreHostPlacement = {
       tool: command.tool,
       x: command.x,
@@ -330,15 +332,6 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private applyToolCommand(command: CoreHostToolCommand): RejectedOutcome | undefined {
-    if (!isWithinWorldBounds(command.x, command.y)) {
-      return {
-        kind: 'reject',
-        code: 'OUT_OF_BOUNDS',
-        message: 'tool coordinates are out of bounds',
-      };
-    }
-
-    this.syncToolContextFromState();
     this.simContext.store.beginTick();
 
     try {
@@ -351,32 +344,14 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
         tickId: this.currentTick(),
         seq: this.serverSeq,
       });
-      this.syncStateFromToolContext();
-
-      if (toolResult.result === 'ok') {
+      const hostOutcome = translateToolResultToHostOutcome(toolResult.result);
+      if (hostOutcome.kind === 'ack') {
         return undefined;
       }
-      if (toolResult.result === 'out-of-bounds') {
-        return {
-          kind: 'reject',
-          code: 'OUT_OF_BOUNDS',
-          message: 'tool coordinates are out of bounds',
-        };
-      }
-      if (toolResult.result === 'no-funds') {
-        return {
-          kind: 'reject',
-          code: 'TILE_OCCUPIED',
-          message: 'insufficient funds for tool placement',
-        };
-      }
-
-      return {
-        kind: 'reject',
-        code: 'TILE_OCCUPIED',
-        message: 'target tile is already occupied',
-      };
+      return hostOutcome;
     } finally {
+      // Always re-sync canonical funds, even on rejected tool outcomes.
+      this.syncStateFromToolContext();
       this.simContext.store.commitTick();
     }
   }
@@ -388,7 +363,9 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   private syncStateFromToolContext(): void {
-    this.simState.TotalFunds = this.toolContext.funds;
+    // Mirrors `Spend` -> `SetFunds` in `ref/micropolis/src/sim/w_stubs.c`.
+    // `setFunds` marks funds dirty, matching C `SetFunds` calling `UpdateFunds`.
+    setFunds(this.simState, this.toolContext.funds);
   }
 
   private currentTick(): number {
@@ -575,22 +552,18 @@ export function createStage4CommandAuthority(
         'Deterministic authority mode is restricted to isolated tests/fallback; set allowDeterministicFallback to true.',
       );
     }
-    return new DeterministicCommandAuthority({ mode: options.mode });
+    return new DeterministicCommandAuthority({
+      mode: options.mode,
+      seed: options.seed,
+      startingFunds: options.startingFunds,
+    });
   }
 
   return new SimCoreCommandAuthority(options);
 }
 
 function isPlacementCoordinate(x: number, y: number): boolean {
-  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0;
-}
-
-function isWithinWorldBounds(x: number, y: number): boolean {
-  return x < WORLD_X && y < WORLD_Y;
-}
-
-function toTileKey(x: number, y: number): string {
-  return `${x},${y}`;
+  return Number.isInteger(x) && Number.isInteger(y);
 }
 
 function normalizeServerSeq(candidate: number, highestKnown: number): number {

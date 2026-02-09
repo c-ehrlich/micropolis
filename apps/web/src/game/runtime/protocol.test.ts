@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   fromCanonicalBridgeToolName,
+  getPlayableToolSpec,
   getStage0PlayableBridgeCommandType,
   isStage0PlayableBridgeCommandType,
+  PLAYABLE_TOOL_SPECS,
   STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
   type Stage2ToolName,
   toCanonicalBridgeToolName,
@@ -23,7 +25,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     ]);
   });
 
-  it('maps Stage 2 commands to canonical bridge command type ids', () => {
+  it('maps playable runtime commands to canonical bridge command type ids', () => {
     expect(
       getStage0PlayableBridgeCommandType({
         kind: 'tool',
@@ -81,7 +83,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     ).toBe('scenario_start');
   });
 
-  it('maps Stage 2 tool ids to canonical bridge tool ids and back', () => {
+  it('maps playable tool ids to canonical bridge tool ids and back', () => {
     const tools: readonly Stage2ToolName[] = [
       'road',
       'rail',
@@ -96,6 +98,31 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       const canonical = toCanonicalBridgeToolName(tool);
       expect(fromCanonicalBridgeToolName(canonical)).toBe(tool);
     }
+  });
+
+  it('keeps playable tool footprints aligned with w_tool.c toolSize/toolOffset tables', () => {
+    // Magic-number source: `toolSize[]`/`toolOffset[]` in
+    // `ref/micropolis/src/sim/w_tool.c` for roadState/rrState/wireState/dozeState
+    // (all 1x1, offset 0) and residentialState/commercialState/industrialState
+    // (all 3x3, offset 1).
+    expect(
+      PLAYABLE_TOOL_SPECS.map((spec) => ({
+        tool: spec.tool,
+        size: spec.size,
+        offset: spec.offset,
+      })),
+    ).toEqual([
+      { tool: 'road', size: 1, offset: 0 },
+      { tool: 'rail', size: 1, offset: 0 },
+      { tool: 'wire', size: 1, offset: 0 },
+      { tool: 'bulldoze', size: 1, offset: 0 },
+      { tool: 'res', size: 3, offset: 1 },
+      { tool: 'com', size: 3, offset: 1 },
+      { tool: 'ind', size: 3, offset: 1 },
+    ]);
+
+    expect(getPlayableToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
+    expect(getPlayableToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
   });
 
   it('accepts only frozen Stage 0 playable command discriminants', () => {

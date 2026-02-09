@@ -1,3 +1,9 @@
+import {
+  applyToolAction,
+  type SimState,
+  type ToolContext,
+} from '../../../../packages/sim-core/src/index.ts';
+import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
 import type {
   CoreHostAckEvent,
   CoreHostCommand,
@@ -10,17 +16,19 @@ import type {
   CoreHostSnapshotPlacement,
   HostMode,
 } from './core-host';
+import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import {
+  createOutOfBoundsHostRejectOutcome,
+  type HostToolRejectOutcome,
+  translateToolResultToHostOutcome,
+} from './tool-outcome-host-translation';
 
 interface AcceptedOutcome {
   kind: 'ack';
   placement?: CoreHostPlacement;
 }
 
-interface RejectedOutcome {
-  kind: 'reject';
-  code: CoreHostRejectCode;
-  message: string;
-}
+type RejectedOutcome = HostToolRejectOutcome;
 
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
@@ -29,27 +37,40 @@ type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEven
  * Construction options for the deterministic Stage 4 command authority shim.
  * Mirrors transport-specific host identity branching around shared command logic in
  * `ref/micropolis/src/sim/w_tool.c`.
+ * Parity note: `seed`/`startingFunds` mirror bootstrap seams from
+ * `ref/micropolis/src/sim/s_init.c` and funds ownership in
+ * `ref/micropolis/src/sim/w_stubs.c`.
  */
 export interface DeterministicCommandAuthorityOptions {
   readonly mode: HostMode;
+  readonly seed?: number;
+  readonly startingFunds?: number;
 }
 
 /**
  * Deterministic command authority used by both `LocalHost` and `DoHost`.
  * Mirrors tool success/reject/idempotency intent from `ref/micropolis/src/sim/w_tool.c`
- * where failed tools do not mutate map state and successful tools apply exactly once.
- * Parity note: this class is a bridge-layer simulator for Stage 4 host parity tests,
- * not a 1:1 replacement for Micropolis global simulation state.
+ * by delegating tool execution to sim-core `applyToolAction` return codes.
+ * Parity note: this remains a deterministic fallback harness for isolated tests,
+ * not a full timer-driven authority loop from `ref/micropolis/src/sim/s_sim.c`.
  */
 export class DeterministicCommandAuthority {
   private serverSeq = 0;
   private tick = 0;
-  private readonly occupiedTiles = new Set<string>();
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
   private readonly sequencedEvents: SequencedEvent[] = [];
   private readonly patchEvents: CoreHostPatchEvent[] = [];
+  private readonly simState: SimState;
+  private readonly toolContext: ToolContext;
 
-  public constructor(private readonly options: DeterministicCommandAuthorityOptions) {}
+  public constructor(private readonly options: DeterministicCommandAuthorityOptions) {
+    const authorityState = new Stage4SimCoreAuthorityState({
+      seed: this.options.seed,
+      startingFunds: this.options.startingFunds,
+    });
+    this.simState = authorityState.simState;
+    this.toolContext = authorityState.toolContext;
+  }
 
   public processCommand(command: CoreHostCommand): CoreHostEvent[] {
     if (command.type === 'sim-control-command') {
@@ -70,25 +91,21 @@ export class DeterministicCommandAuthority {
     }
 
     if (!isPlacementCoordinate(command.x, command.y)) {
+      const outOfBoundsReject = createOutOfBoundsHostRejectOutcome();
       return this.recordReject(
         command.commandId,
-        'OUT_OF_BOUNDS',
-        'tool coordinates are out of bounds',
+        outOfBoundsReject.code,
+        outOfBoundsReject.message,
         tick,
       );
     }
 
-    const tileKey = toTileKey(command.x, command.y);
-    if (this.occupiedTiles.has(tileKey)) {
-      return this.recordReject(
-        command.commandId,
-        'TILE_OCCUPIED',
-        'target tile is already occupied',
-        tick,
-      );
+    this.syncToolContextFromState();
+    const toolReject = this.applyToolCommand(command, tick);
+    if (toolReject !== undefined) {
+      return this.recordReject(command.commandId, toolReject.code, toolReject.message, tick);
     }
 
-    this.occupiedTiles.add(tileKey);
     const placement: CoreHostPlacement = {
       tool: command.tool,
       x: command.x,
@@ -127,6 +144,43 @@ export class DeterministicCommandAuthority {
 
     this.commandOutcomes.set(commandId, { kind: 'ack' });
     return [this.recordSequenced(this.createAck(commandId, tick))];
+  }
+
+  private applyToolCommand(
+    command: Extract<CoreHostCommand, { type: 'tool-command' }>,
+    tick: number,
+  ): RejectedOutcome | undefined {
+    this.toolContext.store.beginTick();
+
+    try {
+      const toolResult = applyToolAction(this.toolContext, {
+        tool: command.tool,
+        x: command.x,
+        y: command.y,
+        simStep: this.simState.Scycle,
+        order: 0,
+        tickId: tick,
+        seq: this.serverSeq,
+      });
+      const hostOutcome = translateToolResultToHostOutcome(toolResult.result);
+      if (hostOutcome.kind === 'ack') {
+        return undefined;
+      }
+      return hostOutcome;
+    } finally {
+      this.syncStateFromToolContext();
+      this.toolContext.store.commitTick();
+    }
+  }
+
+  private syncToolContextFromState(): void {
+    this.toolContext.funds = this.simState.TotalFunds;
+    this.toolContext.autoBulldoze = this.simState.autoBulldoze;
+    this.toolContext.doAnimation = this.simState.doAnimation;
+  }
+
+  private syncStateFromToolContext(): void {
+    setFunds(this.simState, this.toolContext.funds);
   }
 
   /**
@@ -264,11 +318,7 @@ export class DeterministicCommandAuthority {
 }
 
 function isPlacementCoordinate(x: number, y: number): boolean {
-  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0;
-}
-
-function toTileKey(x: number, y: number): string {
-  return `${x},${y}`;
+  return Number.isInteger(x) && Number.isInteger(y);
 }
 
 function normalizeServerSeq(candidate: number, highestKnown: number): number {

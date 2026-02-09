@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  doUpdateHeads,
+  type SimContext,
+  type SimState,
+  type ToolContext,
+} from '../../../../packages/sim-core/src/index.ts';
+import {
   createStage4CommandAuthority,
   type SimCoreAuthorityTickScheduler,
   SimCoreCommandAuthority,
@@ -140,7 +146,7 @@ describe('SimCoreCommandAuthority', () => {
     authority.disconnect();
   });
 
-  test('keeps duplicate command idempotency and occupied-tile rejection behavior', () => {
+  test('keeps duplicate command idempotency and sim-core invalid-placement rejection behavior', () => {
     const authority = new SimCoreCommandAuthority({ mode: 'local', tickIntervalMs: 0 });
 
     const first = authority.processCommand({
@@ -173,7 +179,108 @@ describe('SimCoreCommandAuthority', () => {
     if (rejectEvent?.type !== 'reject') {
       throw new Error('expected reject event');
     }
-    expect(rejectEvent.code).toBe('TILE_OCCUPIED');
+    expect(rejectEvent.code).toBe('INVALID_PLACEMENT');
+  });
+
+  test('maps sim-core tool reject outcomes to stable host reject codes', () => {
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      startingFunds: 0,
+    });
+
+    const outOfBounds = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-oob',
+      tool: 'road',
+      x: -1,
+      y: 10,
+    });
+    expect(outOfBounds.map((event) => event.type)).toEqual(['reject']);
+    const outOfBoundsReject = outOfBounds[0];
+    if (outOfBoundsReject?.type !== 'reject') {
+      throw new Error('expected out-of-bounds reject event');
+    }
+    expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+    expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
+
+    const noFunds = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-no-funds',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(noFunds.map((event) => event.type)).toEqual(['reject']);
+    const noFundsReject = noFunds[0];
+    if (noFundsReject?.type !== 'reject') {
+      throw new Error('expected no-funds reject event');
+    }
+    expect(noFundsReject.code).toBe('NO_FUNDS');
+    expect(noFundsReject.message).toBe('insufficient funds for tool placement');
+
+    const invalidAuthority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      startingFunds: 100,
+    });
+    invalidAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-place-first',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+    const invalidPlacement = invalidAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-place-invalid',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+    expect(invalidPlacement.map((event) => event.type)).toEqual(['reject']);
+    const invalidPlacementReject = invalidPlacement[0];
+    if (invalidPlacementReject?.type !== 'reject') {
+      throw new Error('expected invalid-placement reject event');
+    }
+    expect(invalidPlacementReject.code).toBe('INVALID_PLACEMENT');
+    expect(invalidPlacementReject.message).toBe('tool placement was rejected by simulation rules');
+  });
+
+  test('mirrors Spend/SetFunds funds-head update behavior after tool spends', () => {
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 0,
+      // Magic-number source: `InitFunds()` in `ref/micropolis/src/sim/s_init.c`
+      // sets gameplay funds to 20,000; this test overrides to 100 for one road spend.
+      startingFunds: 100,
+    });
+    const internals = authority as unknown as {
+      simState: SimState;
+      simContext: SimContext;
+      toolContext: ToolContext;
+    };
+
+    // Start aligned so any post-tool head update depends on `SetFunds` parity
+    // (`SetFunds` -> `UpdateFunds` in `ref/micropolis/src/sim/w_stubs.c`).
+    internals.simState.LastFunds = internals.simState.TotalFunds;
+
+    const events = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-funds-update',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(events.map((event) => event.type)).toEqual(['ack', 'patch']);
+
+    // Magic-number source: road tool base cost is 10 in `CostOf[]` from
+    // `ref/micropolis/src/sim/w_tool.c`.
+    expect(internals.simState.TotalFunds).toBe(90);
+    expect(internals.toolContext.funds).toBe(90);
+
+    doUpdateHeads(internals.simState, internals.simContext);
+    expect(internals.simState.LastFunds).toBe(90);
   });
 
   test('replays snapshot baseline plus sequenced tail after a server-seq checkpoint', () => {
@@ -411,5 +518,48 @@ describe('createStage4CommandAuthority', () => {
 
     expect(first.map((event) => event.type)).toEqual(['ack', 'patch']);
     expect(occupied.map((event) => event.type)).toEqual(['reject']);
+  });
+
+  test('routes deterministic fallback tool rejects through sim-core tool result mapping', () => {
+    const outOfBoundsAuthority = createStage4CommandAuthority({
+      mode: 'local',
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+    });
+    const outOfBounds = outOfBoundsAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-det-oob',
+      tool: 'road',
+      x: -1,
+      y: 5,
+    });
+    expect(outOfBounds.map((event) => event.type)).toEqual(['reject']);
+    const outOfBoundsReject = outOfBounds[0];
+    if (outOfBoundsReject?.type !== 'reject') {
+      throw new Error('expected deterministic out-of-bounds reject event');
+    }
+    expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
+    expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
+
+    const noFundsAuthority = createStage4CommandAuthority({
+      mode: 'local',
+      authorityMode: 'deterministic',
+      allowDeterministicFallback: true,
+      startingFunds: 0,
+    });
+    const noFunds = noFundsAuthority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-det-no-funds',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(noFunds.map((event) => event.type)).toEqual(['reject']);
+    const noFundsReject = noFunds[0];
+    if (noFundsReject?.type !== 'reject') {
+      throw new Error('expected deterministic no-funds reject event');
+    }
+    expect(noFundsReject.code).toBe('NO_FUNDS');
+    expect(noFundsReject.message).toBe('insufficient funds for tool placement');
   });
 });

@@ -237,37 +237,37 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Route Stage 4 tool commands through real sim-core tool application logic with Micropolis-like costs/rejects/map mutation.
+- [x] Route Stage 4 tool commands through real sim-core tool application logic with Micropolis-like costs/rejects/map mutation.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_tool.c` (tool entrypoints, costs, size/offset)
-- [ ] `ref/micropolis/src/sim/w_con.c` (lay road/rail/wire/bulldoze specifics)
-- [ ] `ref/micropolis/src/sim/w_stubs.c` (`Spend`, `SetFunds` update behavior)
-- [ ] `ref/micropolis/src/sim/s_zone.c` (zone mutation side effects)
+- [x] `ref/micropolis/src/sim/w_tool.c` (tool entrypoints, costs, size/offset)
+- [x] `ref/micropolis/src/sim/w_con.c` (lay road/rail/wire/bulldoze specifics)
+- [x] `ref/micropolis/src/sim/w_stubs.c` (`Spend`, `SetFunds` update behavior)
+- [x] `ref/micropolis/src/sim/s_zone.c` (zone mutation side effects)
 
 ### TS references to review
 
-- [ ] `packages/sim-core/src/actions/tool-actions.ts`
-- [ ] `packages/sim-core/src/systems/funds.ts`
-- [ ] `packages/sim-core/src/systems/date-time.ts`
-- [ ] `apps/web/src/game/runtime.command-lifecycle.test.ts`
-- [ ] `apps/web/src/game/runtime.ts`
+- [x] `packages/sim-core/src/actions/tool-actions.ts`
+- [x] `packages/sim-core/src/systems/funds.ts`
+- [x] `packages/sim-core/src/systems/date-time.ts`
+- [x] `apps/web/src/game/runtime.command-lifecycle.test.ts`
+- [x] `apps/web/src/game/runtime.ts`
 
 ### Implementation checklist
 
-- [ ] Replace occupancy-only acceptance/reject logic with `applyToolAction`-backed outcomes.
-- [ ] Translate tool outcomes into stable host ack/reject codes/messages.
-- [ ] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
-- [ ] Ensure reject reasons include out-of-bounds/no-funds/invalid placement cases.
-- [ ] Ensure tool footprint behavior (1x1 vs 3x3) aligns with C tool tables.
+- [x] Replace occupancy-only acceptance/reject logic with `applyToolAction`-backed outcomes.
+- [x] Translate tool outcomes into stable host ack/reject codes/messages.
+- [x] Sync `ToolContext.funds` and `SimState.TotalFunds` in both success and failure paths.
+- [x] Ensure reject reasons include out-of-bounds/no-funds/invalid placement cases.
+- [x] Ensure tool footprint behavior (1x1 vs 3x3) aligns with C tool tables.
 
 ### Verification checklist
 
-- [ ] `packages/sim-core/src/actions/tool-actions.test.ts` remains green.
-- [ ] `packages/sim-core/src/actions/tool-actions.c-oracle.test.ts` remains green.
-- [ ] `apps/web/src/game/runtime.command-lifecycle.test.ts` validates tool success+reject against authoritative state.
-- [ ] Manual: road/rail/wire/bulldoze/R/C/I cost and placement behavior match expected Micropolis semantics.
+- [x] `packages/sim-core/src/actions/tool-actions.test.ts` remains green.
+- [x] `packages/sim-core/src/actions/tool-actions.c-oracle.test.ts` remains green.
+- [x] `apps/web/src/game/runtime.command-lifecycle.test.ts` validates tool success+reject against authoritative state.
+- [x] Manual: road/rail/wire/bulldoze/R/C/I cost and placement behavior match expected Micropolis semantics.
 
 ---
 
@@ -567,3 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+

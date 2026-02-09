@@ -72,6 +72,11 @@ const { ANIMBIT, BNCNBIT, BULLBIT, BURNBIT, CONDBIT, ZONEBIT } = TileFlag;
 const { LOMASK } = TileMask;
 const { WORLD_X, WORLD_Y } = World;
 
+/**
+ * Tool-state ids used by Micropolis tool dispatch.
+ * Mirrors tool ordering consumed by `road_tool`/`rail_tool`/`wire_tool`/etc in
+ * `ref/micropolis/src/sim/w_tool.c` (1:1 state ids).
+ */
 export const TOOL_STATE = {
   res: 0,
   com: 1,
@@ -96,14 +101,26 @@ export const TOOL_STATE = {
 
 export type ToolName = keyof typeof TOOL_STATE;
 
+/**
+ * Tool base costs indexed by `tool_state`.
+ * Mirrors `CostOf[]` in `ref/micropolis/src/sim/w_tool.c` (1:1 values/order).
+ */
 export const TOOL_COST: readonly number[] = [
   100, 100, 100, 500, 0, 500, 5, 1, 20, 10, 0, 0, 5000, 10, 3000, 3000, 5000, 10000, 100, 0,
 ];
 
+/**
+ * Tool footprint size indexed by `tool_state`.
+ * Mirrors `toolSize[]` in `ref/micropolis/src/sim/w_tool.c` (1:1 values/order).
+ */
 export const TOOL_SIZE: readonly number[] = [
   3, 3, 3, 3, 1, 3, 1, 1, 1, 1, 0, 0, 4, 1, 4, 4, 4, 6, 1, 0,
 ];
 
+/**
+ * Tool cursor offset indexed by `tool_state`.
+ * Mirrors `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c` (1:1 values/order).
+ */
 export const TOOL_OFFSET: readonly number[] = [
   1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0,
 ];
@@ -1096,6 +1113,8 @@ function layRail(context: ToolContext, map: Uint16Array, x: number, y: number): 
         return -2;
       }
       cost = 100;
+      // Mirror `_LayRail` in `ref/micropolis/src/sim/w_con.c` exactly:
+      // directional neighbor bounds are intentionally asymmetric in C.
 
       if (x < WORLD_X - 1) {
         const neighbor = neutralizeRoad(tileAt(map, x + 1, y));
@@ -1114,7 +1133,7 @@ function layRail(context: ToolContext, map: Uint16Array, x: number, y: number): 
         if (
           neighbor === RAILHPOWERV ||
           neighbor === HRAIL ||
-          (neighbor > HRAIL && neighbor < VRAILROAD)
+          (neighbor >= LHRAIL && neighbor < VRAILROAD)
         ) {
           setTile(context, map, x, y, HRAIL | BULLBIT);
           break;

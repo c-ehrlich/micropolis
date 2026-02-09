@@ -176,8 +176,15 @@ export interface CoreHostPlacement {
  * Canonical rejection code for expected command denials.
  * Mirrors expected failure paths in `ref/micropolis/src/sim/w_tool.c` where
  * invalid placements return failure codes instead of mutating map state.
+ * Parity note: `TILE_OCCUPIED` remains as a legacy bridge-compatibility code,
+ * while current Stage 4 authority paths map C-style tool return codes to
+ * `OUT_OF_BOUNDS`/`NO_FUNDS`/`INVALID_PLACEMENT`.
  */
-export type CoreHostRejectCode = 'OUT_OF_BOUNDS' | 'TILE_OCCUPIED';
+export type CoreHostRejectCode =
+  | 'OUT_OF_BOUNDS'
+  | 'NO_FUNDS'
+  | 'INVALID_PLACEMENT'
+  | 'TILE_OCCUPIED';
 
 /**
  * Success acknowledgement emitted for accepted commands.
