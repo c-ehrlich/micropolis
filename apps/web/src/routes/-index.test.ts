@@ -16,6 +16,9 @@ describe('web route runtime boundaries', () => {
 
   it('projects Stage 4 from authoritative snapshot/patch runtime state', () => {
     expect(ROUTE_SOURCE).toContain('createWebHostRuntime({ host: new DemoMapHost() })');
+    expect(ROUTE_SOURCE).toContain('const authoritativeMapState = state.mapState;');
+    expect(ROUTE_SOURCE).toContain('map={authoritativeMapStatus}');
+    expect(ROUTE_SOURCE).toContain('mapState={authoritativeMapState}');
     expect(ROUTE_SOURCE).toContain("kind: 'tool'");
     expect(ROUTE_SOURCE).toContain('runtime.sendCommand');
     expect(ROUTE_SOURCE).toContain('Authoritative Snapshot/Patch Map');

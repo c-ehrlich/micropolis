@@ -293,7 +293,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Stage 4 panel reads and renders authoritative `RuntimeMapState`.
+- [x] Stage 4 panel reads and renders authoritative `RuntimeMapState`.
 - [ ] Tile lookup masks map words with `TileMask.LOMASK` before sprite/debug lookup.
 - [ ] Full redraw occurs on snapshot; patch redraw occurs only on dirty tiles/rects.
 - [ ] Remove Stage 4 placement-only canvas from primary UI path.
@@ -567,7 +567,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 

@@ -104,6 +104,10 @@ function Stage4RuntimePanel() {
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
   const commandCounter = useRef(1);
+  const authoritativeMapState = state.mapState;
+  const authoritativeMapStatus = authoritativeMapState.hasSnapshot
+    ? `${authoritativeMapState.width}x${authoritativeMapState.height} draw=${authoritativeMapState.drawMode} epoch=${authoritativeMapState.renderEpoch}`
+    : 'awaiting authoritative snapshot';
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe((event) => {
@@ -137,7 +141,7 @@ function Stage4RuntimePanel() {
       <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
       <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
         phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
-        {state.pendingTools.length} draw={state.mapState.drawMode}
+        {state.pendingTools.length} map={authoritativeMapStatus}
       </div>
       <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
@@ -179,7 +183,7 @@ function Stage4RuntimePanel() {
           Authoritative Snapshot/Patch Map
         </strong>
         <MapCanvas
-          mapState={state.mapState}
+          mapState={authoritativeMapState}
           onTileClick={(x, y) => {
             if (controlsDisabled) {
               return;
