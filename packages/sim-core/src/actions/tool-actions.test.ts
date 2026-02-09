@@ -40,6 +40,7 @@ const {
   SOMETINYEXP,
   TELEBASE,
   VPOWER,
+  VRAIL,
   VRAILROAD,
   VROADPOWER,
   WOODS2,
@@ -531,6 +532,26 @@ describe('Road, rail, and wire tools', () => {
     const map = store.getLayer('map') as Uint16Array;
     expect(getTile(map, 12, 12) & LOMASK).toBe(HRAIL);
     expect(context.funds).toBe(100);
+  });
+
+  it('rejects west-side rail tunnel when only adjacent tile is VRAIL', () => {
+    // Magic-number source: `_LayRail` in `ref/micropolis/src/sim/w_con.c`.
+    // West check allows 221, 224, or 226..237 (`Tile > 225 && Tile < 238`), so 225 (`VRAIL`) is rejected.
+    const store = createStore();
+    const context = createToolContext({
+      store,
+      rng: new MicropolisRng(1),
+      funds: 200,
+    });
+
+    setTile(store, 12, 12, RIVER);
+    setTile(store, 11, 12, VRAIL | BULLBIT | BURNBIT);
+
+    expect(runTool(context, 'rail', 12, 12)).toBe(0);
+
+    const map = store.getLayer('map') as Uint16Array;
+    expect(getTile(map, 12, 12) & LOMASK).toBe(RIVER);
+    expect(context.funds).toBe(200);
   });
 
   it('lays wires on dirt and crossings', () => {

@@ -242,7 +242,7 @@ Deletion execution notes:
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/w_tool.c` (tool entrypoints, costs, size/offset)
-- [ ] `ref/micropolis/src/sim/w_con.c` (lay road/rail/wire/bulldoze specifics)
+- [x] `ref/micropolis/src/sim/w_con.c` (lay road/rail/wire/bulldoze specifics)
 - [ ] `ref/micropolis/src/sim/w_stubs.c` (`Spend`, `SetFunds` update behavior)
 - [ ] `ref/micropolis/src/sim/s_zone.c` (zone mutation side effects)
 
