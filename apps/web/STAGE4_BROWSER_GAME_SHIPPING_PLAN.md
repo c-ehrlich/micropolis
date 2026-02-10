@@ -395,6 +395,7 @@ Deletion execution notes:
 - [x] `ref/micropolis/src/sim/s_msg.c` (`SendMesAt` event coupling)
 - [x] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
 - Stage 7 update: authoritative host tick now mirrors `DoAnimation && SimSpeed` realtime timing gate and `ANIMBIT` remap behavior for overlay payload cadence.
+- Stage 7 update (2026-02-10): map overlay projection now sorts objects by deterministic id/type/name/position/frame ordering and uses stable id-first plus legacy type/name keys so overlay reconciliation stays deterministic across payload ordering while map patch redraw cadence remains unchanged.
 
 ### TS references to review
 
@@ -413,7 +414,7 @@ Deletion execution notes:
 ### Verification checklist
 
 - [ ] `packages/sim-core/src/sim/realtime.test.ts` remains green.
-- [ ] Add/extend web runtime tests for overlay payload projection.
+- [x] Add/extend web runtime tests for overlay payload projection.
 - [ ] Manual: realtime entities appear and move while sim runs.
 - [ ] Manual: disasters/events produce coherent overlay + message behavior.
 
@@ -568,4 +569,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-

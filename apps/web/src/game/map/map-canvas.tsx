@@ -359,7 +359,7 @@ export function projectRealtimeOverlaySprites({
   const overlayKeyCounts = new Map<string, number>();
 
   for (const entry of deterministicObjects) {
-    const { object, sourceIndex } = entry;
+    const { object } = entry;
     if (object.frame <= 0) {
       continue;
     }
@@ -375,7 +375,7 @@ export function projectRealtimeOverlaySprites({
     }
 
     overlays.push({
-      key: buildRealtimeOverlayKey(object, sourceIndex, overlayKeyCounts),
+      key: buildRealtimeOverlayKey(object, overlayKeyCounts),
       name: spec.displayName,
       frame: object.frame,
       label: spec.label,
@@ -423,20 +423,15 @@ function compareRealtimeOverlayObjectReferences(
 ): number {
   const leftId = left.object.id;
   const rightId = right.object.id;
-  if (leftId === undefined && rightId === undefined) {
-    return left.sourceIndex - right.sourceIndex;
-  }
-
-  if (leftId === undefined) {
+  if (leftId !== undefined && rightId !== undefined) {
+    const idCompare = leftId.localeCompare(rightId);
+    if (idCompare !== 0) {
+      return idCompare;
+    }
+  } else if (leftId === undefined && rightId !== undefined) {
     return 1;
-  }
-  if (rightId === undefined) {
+  } else if (leftId !== undefined && rightId === undefined) {
     return -1;
-  }
-
-  const idCompare = leftId.localeCompare(rightId);
-  if (idCompare !== 0) {
-    return idCompare;
   }
 
   if (left.object.type !== right.object.type) {
@@ -463,13 +458,10 @@ function compareRealtimeOverlayObjectReferences(
 
 function buildRealtimeOverlayKey(
   object: RuntimeRealtimeObject,
-  sourceIndex: number,
   seenKeyBases: Map<string, number>,
 ): string {
   const keyBase =
-    object.id !== undefined
-      ? `id:${object.id}`
-      : `legacy:${object.type}:${object.name}:${sourceIndex}`;
+    object.id !== undefined ? `id:${object.id}` : `legacy:${object.type}:${object.name}`;
   const seenCount = seenKeyBases.get(keyBase) ?? 0;
   seenKeyBases.set(keyBase, seenCount + 1);
   return seenCount === 0 ? keyBase : `${keyBase}:${seenCount}`;
