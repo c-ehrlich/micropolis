@@ -214,6 +214,13 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
   };
 }
 
+/**
+ * Tile animation remap table used by Micropolis animated terrain.
+ * Mirrors `aniTile[]` from `ref/micropolis/src/sim/animtab.h`, consumed by
+ * `animateTiles` in `ref/micropolis/src/sim/g_ani.c`.
+ * Parity note: this follows the active one-step `aniTile` path; the optional
+ * `tileSynch`/`aniSynch` branch in `g_ani.c` is compiled out behind `#if 0`.
+ */
 export const ANI_TILE = Uint16Array.from([
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
   27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
@@ -638,6 +645,12 @@ export function updatePowerBlink(context: RealtimeContext) {
   context.powerBlink = context.powerBlinkTick < POWER_BLINK_TICKS;
 }
 
+/**
+ * Animate all `ANIMBIT` tiles in the map by one frame.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c`.
+ * Parity note: high flag bits (`ALLBITS`) are preserved while only the low
+ * tile-id bits (`LOMASK`) are remapped through `ANI_TILE`.
+ */
 export function animateTiles(context: RealtimeContext, map?: Uint16Array) {
   const mapLayer = map ?? (context.store.getLayer('map') as Uint16Array);
   for (let i = 0; i < mapLayer.length; i += 1) {
@@ -654,6 +667,13 @@ export function animateTiles(context: RealtimeContext, map?: Uint16Array) {
   }
 }
 
+/**
+ * Run one realtime object/animation pass for the active world.
+ * Mirrors `MoveObjects` in `ref/micropolis/src/sim/w_sprite.c` and the
+ * `DoAnimation && SimSpeed` animation gate in `ref/micropolis/src/sim/w_editor.c`.
+ * Parity note: C uses `TilesAnimated` to avoid duplicate animation across multiple
+ * views; this port runs a single authoritative pass per tick.
+ */
 export function runRealtimeTick(context: RealtimeContext) {
   updatePowerBlink(context);
   if (context.simSpeed <= 0) {
