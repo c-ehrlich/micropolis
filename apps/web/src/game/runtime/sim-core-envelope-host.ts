@@ -1,4 +1,5 @@
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
+import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
   ClientEnvelope,
   CoreHost,
@@ -13,7 +14,8 @@ import type {
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_update.c`.
  * Parity note: this phase establishes the deterministic envelope lifecycle and
  * authoritative snapshot surface; full command semantics are migrated in
- * subsequent checklist tasks.
+ * subsequent checklist tasks. It also accepts `createPlayableRuntimeHost(...)`
+ * compatibility options so route call sites/tests can migrate without option-surface churn.
  */
 export class SimCoreEnvelopeHost implements CoreHost {
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
@@ -37,8 +39,24 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly mapHeight: number;
   private serverSeq = 0;
   private tick = 0;
+  private readonly compatibilityOptions: Required<
+    Pick<PlayableRuntimeHostOptions, 'enableAmbientTicks' | 'seedRealtimeDemoObject'>
+  > &
+    Pick<PlayableRuntimeHostOptions, 'patchIntervalMs'> & {
+      scenarioResourceLoader: ((fileName: string) => Promise<Uint8Array>) | undefined;
+    };
 
-  public constructor() {
+  public constructor(options: PlayableRuntimeHostOptions = {}) {
+    const scenarioResourceLoader = options.scenarioResourceLoader;
+    this.compatibilityOptions = {
+      enableAmbientTicks: options.enableAmbientTicks ?? true,
+      patchIntervalMs: options.patchIntervalMs,
+      seedRealtimeDemoObject: options.seedRealtimeDemoObject ?? true,
+      scenarioResourceLoader:
+        scenarioResourceLoader === undefined
+          ? undefined
+          : (fileName) => Promise.resolve(scenarioResourceLoader(fileName)),
+    };
     this.authorityState = new SimCoreRuntimeState();
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
     this.mapWidth = mapLayerInfo.width;

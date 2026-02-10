@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { World } from '../../../../../packages/sim-core/src/index.ts';
 import { type HostEnvelope } from './protocol.ts';
@@ -31,6 +31,43 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
 }
 
 describe('SimCoreEnvelopeHost', () => {
+  it('accepts createPlayableRuntimeHost compatibility options while call sites migrate', () => {
+    const scenarioResourceLoader = vi.fn((_fileName: string) => new Uint8Array([1, 2, 3]));
+    const host = new SimCoreEnvelopeHost({
+      enableAmbientTicks: false,
+      patchIntervalMs: 10,
+      seedRealtimeDemoObject: false,
+      scenarioResourceLoader,
+    });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'compat-room',
+      clientId: 'compat-client',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    expect(captured.envelopes).toHaveLength(2);
+    expect(captured.envelopes[0]).toEqual({
+      kind: 'hello',
+      roomId: 'compat-room',
+      clientId: 'compat-client',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+      accepted: true,
+    });
+    expect(captured.envelopes[1]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'compat-room',
+      clientId: 'compat-client',
+      tick: 0,
+      serverSeq: 1,
+    });
+    expect(scenarioResourceLoader).not.toHaveBeenCalled();
+  });
+
   it('accepts hello and emits a protocol-valid snapshot backed by authoritative sim-core state', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);

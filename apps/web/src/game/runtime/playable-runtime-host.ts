@@ -1,12 +1,14 @@
 import {
   DemoMapHost,
-  type DemoMapHostOptions,
   MANUAL_REALTIME_EVENT_CHOICES,
   type ManualRealtimeEventId,
   PLAYABLE_SCENARIO_CHOICES as DEMO_PLAYABLE_SCENARIO_CHOICES,
   type PlayableScenarioChoice as DemoPlayableScenarioChoice,
 } from './demo-map-host.ts';
+import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type { CoreHost } from './protocol.ts';
+
+export type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 
 /**
  * Manual disaster button definitions for the playable route UI.
@@ -47,14 +49,6 @@ export interface CityExportPayload {
   cityName: string;
   cityBytes: Uint8Array;
 }
-
-/**
- * Authoritative Runtime default-host configuration for the primary playable route.
- * Mirrors startup/runtime option intent in `ref/micropolis/src/sim/w_sim.c`,
- * where one command surface can be wired to different runtime conditions.
- * Parity note: this is a direct TypeScript alias of `DemoMapHost` options.
- */
-export type PlayableRuntimeHostOptions = DemoMapHostOptions;
 
 /**
  * Build the default Authoritative Runtime playable route host.
