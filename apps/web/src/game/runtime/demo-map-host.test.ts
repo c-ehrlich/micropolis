@@ -180,6 +180,75 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('routes repeated realtime tornado picture events into message feed deltas', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const tornadoPictureMessages: Array<{
+      id: number;
+      x: number | undefined;
+      y: number | undefined;
+    }> = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const deltas = event.envelope.payload.messageDeltas;
+        if (deltas === undefined) {
+          return;
+        }
+        for (const message of deltas) {
+          if (message.id === -22) {
+            tornadoPictureMessages.push({ id: message.id, x: message.x, y: message.y });
+          }
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simContext: {
+          rng: { seed: (value: number) => void };
+          hooks: { makeTornado: () => void };
+        };
+        realtimeContext: {
+          globalSprites: Array<{ frame: number } | null>;
+        };
+      };
+
+      authority.simContext.rng.seed(0x1234);
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(30);
+
+      const tornadoSprite = authority.realtimeContext.globalSprites[6];
+      if (tornadoSprite == null) {
+        throw new Error('expected active tornado sprite after initial makeTornado');
+      }
+      tornadoSprite.frame = 0;
+
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(30);
+
+      // w_sprite.c `MakeTornado` calls `ClearMes(); SendMesAt(-22, ...)`, so each
+      // new tornado event should emit a fresh picture message to the feed.
+      expect(tornadoPictureMessages.length).toBeGreaterThanOrEqual(2);
+      expect(tornadoPictureMessages.every((message) => message.x !== undefined)).toBe(true);
+      expect(tornadoPictureMessages.every((message) => message.y !== undefined)).toBe(true);
+      expect(
+        runtime
+          .getState()
+          .hudState.messages.filter(
+            (message) => message.id === -22 && message.dispatch === 'sendMesAt',
+          ).length,
+      ).toBeGreaterThanOrEqual(2);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   it('emits SendMesAt hook deliveries as coordinate message deltas', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });

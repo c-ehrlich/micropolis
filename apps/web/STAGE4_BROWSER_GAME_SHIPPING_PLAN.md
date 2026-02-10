@@ -409,7 +409,7 @@ Deletion execution notes:
 - [x] Extend authority payloads with realtime object snapshots/deltas per tick.
 - [x] Add overlay renderer for trains/ships/planes/copter/monster/tornado/explosion.
 - [x] Ensure overlay updates are deterministic and compatible with map patch redraw cadence.
-- [ ] Hook realtime event messages to message feed when applicable.
+- [x] Hook realtime event messages to message feed when applicable.
 
 ### Verification checklist
 

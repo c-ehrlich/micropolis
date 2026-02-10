@@ -274,4 +274,52 @@ describe('Realtime systems', () => {
 
     store.commitTick();
   });
+
+  it('clears prior message-port state before tornado picture dispatch when coupling is configured', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const rng = new MicropolisRng(1);
+    const sendMes = vi.fn();
+    const sendMesAtHook = vi.fn();
+    const simContext = createSimContext({
+      store,
+      rng,
+      hooks: {
+        sendMes,
+        sendMesAt: sendMesAtHook,
+        tickCount: () => 100,
+      },
+    });
+    const simState = createSimState();
+    simState.MessagePort = 17;
+    simState.LastPicNum = -22;
+    const toolContext = createToolContext({ store, rng, funds: 0 });
+    const context = createRealtimeContext({
+      store,
+      rng,
+      toolContext,
+      messageCoupling: { state: simState, context: simContext },
+      onMessage: vi.fn(),
+    });
+
+    makeTornado(context);
+
+    // w_sprite.c `MakeTornado` calls `ClearMes()` then `SendMesAt(-22, ...)`:
+    // - `ClearMes` clears MessagePort and LastPicNum in s_msg.c.
+    // - `SendMesAt` then enqueues picture id `-22` with coordinates.
+    expect(simState.MessagePort).toBe(-22);
+    expect(simState.LastPicNum).toBe(-22);
+    expect(simState.MesX).toBeGreaterThan(0);
+    expect(simState.MesY).toBeGreaterThan(0);
+    const queuedX = simState.MesX;
+    const queuedY = simState.MesY;
+
+    doMessage(simState, simContext);
+    expect(sendMes).not.toHaveBeenCalled();
+    expect(sendMesAtHook).toHaveBeenCalledTimes(1);
+    expect(sendMesAtHook).toHaveBeenCalledWith(-22, queuedX, queuedY);
+
+    store.commitTick();
+  });
 });

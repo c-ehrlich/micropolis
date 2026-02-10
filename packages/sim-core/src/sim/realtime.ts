@@ -6,7 +6,7 @@ import type { MapStore } from '../core/map-store.ts';
 import type { MicropolisRng } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
-import { sendMesAt } from '../systems/messages.ts';
+import { clearMes, sendMesAt } from '../systems/messages.ts';
 
 const { WORLD_X, WORLD_Y, HWLDX, HWLDY, SmX, SmY } = World;
 const { ALLBITS, LOMASK } = TileMask;
@@ -447,6 +447,11 @@ function makeSound(context: RealtimeContext, channel: string, id: string) {
 }
 
 function clearMessages(context: RealtimeContext) {
+  if (context.messageCoupling !== undefined) {
+    // w_sprite.c disaster entrypoints call ClearMes() before SendMesAt(...) so
+    // repeated picture/event ids (e.g. tornado/monster) are not suppressed.
+    clearMes(context.messageCoupling.state);
+  }
   context.onClearMessages?.();
 }
 
