@@ -599,7 +599,16 @@ export class SimCoreEnvelopeHost implements CoreHost {
     command: PlayableScenarioCommand,
     commandTick: number,
   ): Promise<void> {
-    const scenario = getScenarioDefinition(command.scenarioId);
+    let scenario: ReturnType<typeof getScenarioDefinition>;
+    try {
+      scenario = getScenarioDefinition(command.scenarioId);
+    } catch {
+      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+        return;
+      }
+      this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
+      return;
+    }
 
     let scenarioBytes: Uint8Array;
     try {

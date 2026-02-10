@@ -731,6 +731,48 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('rejects scenario load when scenario id resolution fails before bytes are loaded', async () => {
+    const scenarioResourceLoader = vi.fn(async (_fileName: string) => new Uint8Array([1, 2, 3]));
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-scenario-id-reject',
+      clientId: 'client-scenario-id-reject',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-scenario-id-reject',
+      clientId: 'client-scenario-id-reject',
+      commandId: 'cmd-scenario-id-reject',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: Number.NaN,
+      },
+    });
+    await Promise.resolve();
+
+    expect(
+      captured.envelopes.some(
+        (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-id-reject',
+      ),
+    ).toBe(false);
+
+    expect(captured.envelopes.some((envelope) => envelope.kind === 'reject')).toBe(true);
+    expect(captured.envelopes[2]).toMatchObject({
+      kind: 'reject',
+      roomId: 'room-scenario-id-reject',
+      clientId: 'client-scenario-id-reject',
+      commandId: 'cmd-scenario-id-reject',
+      reason: 'invalid-scenario-file',
+    });
+    expect(scenarioResourceLoader).not.toHaveBeenCalled();
+  });
+
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
