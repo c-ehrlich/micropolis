@@ -3,6 +3,10 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   applyToolAction,
+  consumeMapRedrawPlan,
+  type MapRedrawPlan,
+  type Patch,
+  planMapRedraw,
   resetForNewCityFromSeed,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
@@ -20,6 +24,8 @@ import type {
   CoreHost,
   CoreHostConnection,
   HostEnvelope,
+  HostMapPatchTileWordDelta,
+  HostMapRedrawPlanPayload,
   HostPatchPayload,
   HostSnapshotPayload,
   PlayableClientCommand,
@@ -53,6 +59,10 @@ interface SessionCommandQueueState {
   pending: CommandClientEnvelope[];
   draining: boolean;
 }
+interface ToolCommandOutcome {
+  rejectReason: string | undefined;
+  mapPatch: Patch | null;
+}
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
@@ -61,6 +71,8 @@ const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
 const NEW_CITY_CURVE_LEVEL = -1;
 const NEW_CITY_CREATE_ISLAND = -1;
+// `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
+const ACTIVE_MAP_STATE = 0;
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 type NodeFsPromisesModule = {
   readFile: typeof nodeReadFile;
@@ -323,21 +335,30 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     this.advanceCommandTick();
     if (envelope.command.kind === 'tool') {
-      const rejectReason = this.applyToolCommand(envelope.command);
-      if (rejectReason !== undefined) {
-        this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, rejectReason);
+      const toolOutcome = this.applyToolCommand(envelope.command);
+      if (toolOutcome.rejectReason !== undefined) {
+        this.emitReject(
+          envelope.roomId,
+          envelope.clientId,
+          envelope.commandId,
+          toolOutcome.rejectReason,
+        );
         return undefined;
       }
 
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-      this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
+      this.emitPatch(
+        envelope.roomId,
+        envelope.clientId,
+        this.buildPatchPayload(toolOutcome.mapPatch),
+      );
       return undefined;
     }
 
     if (envelope.command.kind === 'sim-control') {
       this.applySimControlCommand(envelope.command);
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
-      this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
+      this.emitPatch(envelope.roomId, envelope.clientId, this.buildPatchPayload(null));
       return undefined;
     }
 
@@ -362,7 +383,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       if (cityIoOutcome.kind === 'save') {
-        this.emitPatch(envelope.roomId, envelope.clientId, cityIoOutcome.patchPayload);
+        this.emitPatch(
+          envelope.roomId,
+          envelope.clientId,
+          this.buildPatchPayload(null, cityIoOutcome.patchPayload),
+        );
         return undefined;
       }
 
@@ -444,14 +469,62 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Builds the temporary patch payload emitted for acknowledged tool commands.
-   * Mirrors command/update settlement ordering from `ref/micropolis/src/sim/w_sim.c`
-   * and `ref/micropolis/src/sim/w_update.c`.
-   * Parity note: Phase 2 keeps map patch payload empty while Phase 3 ports
-   * authoritative map tile deltas/redraw plans.
+   * Builds one authoritative patch payload including map deltas + redraw planning.
+   * Mirrors `DoUpdateMap` invalidation ownership in
+   * `ref/micropolis/src/sim/w_map.c` and map-update cycle clearing in
+   * `ref/micropolis/src/sim/sim.c`.
+   * Parity note: redraw policy is planned by sim-core (`planMapRedraw`) and
+   * consumed through `consumeMapRedrawPlan`; this helper only projects to the
+   * envelope payload contract.
    */
-  private buildNoOpPatchPayload(): HostPatchPayload {
-    return {};
+  private buildPatchPayload(
+    mapPatch: Patch | null,
+    basePayload: HostPatchPayload = {},
+  ): HostPatchPayload {
+    const payload: HostPatchPayload = { ...basePayload };
+    const mapPayload = this.buildMapPatchPayload(mapPatch);
+    if (mapPayload !== undefined) {
+      payload.map = mapPayload;
+    }
+    return payload;
+  }
+
+  /**
+   * Builds one map patch payload from authoritative map patch + redraw signals.
+   * Mirrors per-cycle map update invalidation gating in `DoUpdateMap`
+   * (`ref/micropolis/src/sim/w_map.c`).
+   * Parity note: coordinate deltas are projected from classic map indexes
+   * (`x * WORLD_Y + y`) while redraw decisions stay in sim-core invalidation helpers.
+   */
+  private buildMapPatchPayload(mapPatch: Patch | null): HostPatchPayload['map'] | undefined {
+    const redrawPlan = this.planAndConsumeMapRedraw(mapPatch);
+    const tileWordDeltas = toHostMapTileWordDeltas(mapPatch, this.mapHeight);
+    const hasPlanDrivenRedraw = redrawPlan.fullRedraw || redrawPlan.dirtyRects.length > 0;
+    if (tileWordDeltas.length === 0 && !hasPlanDrivenRedraw) {
+      return undefined;
+    }
+
+    return {
+      tileWordDeltas,
+      redrawPlan,
+    };
+  }
+
+  /**
+   * Plans one redraw outcome from authoritative invalidation markers and map
+   * patch deltas, then consumes the cycle markers.
+   * Mirrors `DoUpdateMap` invalidation gating in `ref/micropolis/src/sim/w_map.c`
+   * and `sim_update_maps` clear behavior in `ref/micropolis/src/sim/sim.c`.
+   */
+  private planAndConsumeMapRedraw(mapPatch: Patch | null): HostMapRedrawPlanPayload {
+    const redrawPlan = planMapRedraw({
+      activeMapState: ACTIVE_MAP_STATE,
+      newMap: this.authorityState.simState.NewMap,
+      newMapFlags: this.authorityState.simState.NewMapFlags,
+      mapPatch,
+    });
+    consumeMapRedrawPlan(this.authorityState.simState, redrawPlan);
+    return toHostMapRedrawPlanPayload(redrawPlan);
   }
 
   /**
@@ -459,15 +532,20 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors `DoTool` dispatch and return-code behavior in
    * `ref/micropolis/src/sim/w_tool.c` by routing through sim-core
    * `applyToolAction` and translating outcome classes into host reject reasons.
-   * Parity note: this stage intentionally leaves patch payload map deltas empty;
-   * Phase 3 ports authoritative map delta/redraw payload emission.
+   * Parity note: map-layer patch extraction from `MapStore.commitTick()` drives
+   * bridge map delta payload projection without demo-host tile stamping.
    */
-  private applyToolCommand(command: PlayableToolCommand): string | undefined {
+  private applyToolCommand(command: PlayableToolCommand): ToolCommandOutcome {
     if (!isPlacementCoordinate(command.x, command.y)) {
-      return 'out-of-bounds';
+      return {
+        rejectReason: 'out-of-bounds',
+        mapPatch: null,
+      };
     }
 
     this.syncToolContextFromState();
+    let rejectReason: string | undefined;
+    let mapPatch: Patch | null = null;
     this.authorityState.toolContext.store.beginTick();
     try {
       const toolResult = applyToolAction(this.authorityState.toolContext, {
@@ -479,11 +557,17 @@ export class SimCoreEnvelopeHost implements CoreHost {
         tickId: this.tick,
         seq: this.serverSeq,
       });
-      return rejectReasonFromToolResult(toolResult.result);
+      rejectReason = rejectReasonFromToolResult(toolResult.result);
     } finally {
       this.syncStateFundsFromToolContext();
-      this.authorityState.toolContext.store.commitTick();
+      const tickResult = this.authorityState.toolContext.store.commitTick();
+      mapPatch = readMapPatchFromTickResult(tickResult.patches);
     }
+
+    return {
+      rejectReason,
+      mapPatch,
+    };
   }
 
   /**
@@ -826,6 +910,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     tickOverride = this.tick,
     options?: EmitSequencedEnvelopeOptions,
   ): void {
+    this.consumeMapInvalidationCycleAfterSnapshot();
     this.emitSnapshotFromPayload(
       roomId,
       clientId,
@@ -833,6 +918,18 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tickOverride,
       options,
     );
+  }
+
+  /**
+   * Clears map invalidation cycle markers after emitting one authoritative
+   * full-map snapshot baseline.
+   * Mirrors map-cycle invalidation clear ownership in
+   * `ref/micropolis/src/sim/sim.c` (`sim_update_maps`).
+   * Parity note: replay snapshots are excluded and do not consume live
+   * invalidation markers.
+   */
+  private consumeMapInvalidationCycleAfterSnapshot(): void {
+    consumeMapRedrawPlan(this.authorityState.simState);
   }
 
   /**
@@ -1044,6 +1141,70 @@ export class SimCoreEnvelopeHost implements CoreHost {
       },
     };
   }
+}
+
+/**
+ * Reads the authoritative `map` patch from one committed map-store tick.
+ * Mirrors classic `Map[x][y]` mutation ownership in `ref/micropolis/src/sim/w_tool.c`
+ * where map writes are accumulated per update cycle before map redraw handling.
+ */
+function readMapPatchFromTickResult(patches: ReadonlyArray<Patch>): Patch | null {
+  for (const patch of patches) {
+    if (patch.layer === 'map') {
+      return patch;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Converts one sim-core redraw plan to the Playable Runtime host payload shape.
+ * Mirrors redraw metadata produced by `planMapRedraw` in
+ * `packages/sim-core/src/core/map-invalidation.ts`.
+ */
+function toHostMapRedrawPlanPayload(plan: MapRedrawPlan): HostMapRedrawPlanPayload {
+  return {
+    reason: plan.reason,
+    fullRedraw: plan.fullRedraw,
+    dirtyRects: plan.dirtyRects.map((rect) => ({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    })),
+  };
+}
+
+/**
+ * Projects one authoritative map patch into coordinate-addressed tile deltas.
+ * Mirrors `Map[x][y]` index math in `ref/micropolis/src/sim/s_alloc.c`
+ * (`index = x * WORLD_Y + y`) used by map update paths in `w_tool.c`/`w_con.c`.
+ */
+function toHostMapTileWordDeltas(
+  mapPatch: Patch | null,
+  mapHeight: number,
+): HostMapPatchTileWordDelta[] {
+  if (mapPatch === null || mapPatch.layer !== 'map') {
+    return [];
+  }
+
+  const tileWordDeltas: HostMapPatchTileWordDelta[] = [];
+  for (let cursor = 0; cursor < mapPatch.index.length; cursor += 1) {
+    const index = mapPatch.index[cursor];
+    const tileWord = mapPatch.next[cursor];
+    if (index === undefined || tileWord === undefined) {
+      continue;
+    }
+
+    tileWordDeltas.push({
+      x: Math.floor(index / mapHeight),
+      y: index % mapHeight,
+      tileWord,
+    });
+  }
+
+  return tileWordDeltas;
 }
 
 /**

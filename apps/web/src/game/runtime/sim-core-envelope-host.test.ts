@@ -11,7 +11,7 @@ import {
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
-import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
+import { type HostEnvelope, type HostMapPatchPayload, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
@@ -83,6 +83,30 @@ function readSaveCityPayload(payload: unknown): {
     cityName: candidate.cityName,
     cityBytes: candidate.cityBytes,
   };
+}
+
+/**
+ * Reads map patch payloads from patch envelopes when the host emits
+ * coordinate-addressed tile deltas.
+ * Mirrors map payload ownership projected from `DoUpdateMap` in
+ * `ref/micropolis/src/sim/w_map.c`.
+ */
+function readMapPatchPayloadFromEnvelope(envelope: HostEnvelope): HostMapPatchPayload | null {
+  if (envelope.kind !== 'patch') {
+    return null;
+  }
+
+  const mapPayload = (envelope.payload as { map?: unknown }).map;
+  if (mapPayload === null || typeof mapPayload !== 'object') {
+    return null;
+  }
+
+  const tileWordDeltas = (mapPayload as { tileWordDeltas?: unknown }).tileWordDeltas;
+  if (!Array.isArray(tileWordDeltas)) {
+    return null;
+  }
+
+  return mapPayload as HostMapPatchPayload;
 }
 
 describe('SimCoreEnvelopeHost', () => {
@@ -1168,13 +1192,31 @@ describe('SimCoreEnvelopeHost', () => {
 
       if (settlement.kind === 'ack') {
         expect(settlement.commandId).toBe(commandId);
-        expect(newEnvelopes[1]).toMatchObject({
+        const patchEnvelope = newEnvelopes[1];
+        expect(patchEnvelope).toMatchObject({
           kind: 'patch',
           roomId: 'room-tools',
           clientId: 'client-tools',
           tick: settlement.tick,
           serverSeq: settlement.serverSeq + 1,
-          payload: {},
+        });
+        if (patchEnvelope === undefined || patchEnvelope.kind !== 'patch') {
+          throw new Error(`missing patch envelope for ${spec.tool}`);
+        }
+
+        const mapPatch = readMapPatchPayloadFromEnvelope(patchEnvelope);
+        if (spec.tool === 'query') {
+          expect(mapPatch).toBeNull();
+          continue;
+        }
+
+        if (mapPatch === null) {
+          throw new Error(`expected map patch payload for ${spec.tool}`);
+        }
+        expect(mapPatch.tileWordDeltas.length).toBeGreaterThan(0);
+        expect(mapPatch.redrawPlan).toMatchObject({
+          reason: 'patch-rects',
+          fullRedraw: false,
         });
         continue;
       }
@@ -1246,27 +1288,46 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-wire-on-road',
     });
-    expect(captured.envelopes[3]).toEqual({
+    expect(captured.envelopes[3]).toMatchObject({
       kind: 'patch',
       roomId: 'room-wire-on-road',
       clientId: 'client-wire-on-road',
       tick: 1,
       serverSeq: 3,
-      payload: {},
     });
+    const wirePatchEnvelope = captured.envelopes[3];
+    if (wirePatchEnvelope === undefined) {
+      throw new Error('expected wire patch envelope');
+    }
+    const wirePatchPayload = readMapPatchPayloadFromEnvelope(wirePatchEnvelope);
+    if (wirePatchPayload === null) {
+      throw new Error('expected wire map patch payload');
+    }
+    expect(wirePatchPayload.redrawPlan).toMatchObject({
+      reason: 'patch-rects',
+      fullRedraw: false,
+    });
+    const wireDelta = wirePatchPayload.tileWordDeltas.find(
+      (delta) => delta.x === x && delta.y === y,
+    );
+    if (wireDelta === undefined) {
+      throw new Error('expected wire tile delta at command coordinates');
+    }
+    // `_LayWire` in `ref/micropolis/src/sim/w_con.c` maps road tile 66 (`ROADS`)
+    // to 77 (`HROADPOWER`) for wire-on-road placement.
+    expect(wireDelta.tileWord & TileMask.LOMASK).toBe(Tile.HROADPOWER);
+    expect(wireDelta.tileWord & TileFlag.CONDBIT).not.toBe(0);
+    const tileAfter = wireDelta.tileWord;
 
     const mapAfter = hostInternals.authorityState.store.snapshot('map');
     if (!(mapAfter instanceof Uint16Array)) {
       throw new Error('expected authoritative map layer snapshot to be Uint16Array');
     }
-    const tileAfter = mapAfter[tileIndex];
-    if (tileAfter === undefined) {
+    const authoritativeTileAfter = mapAfter[tileIndex];
+    if (authoritativeTileAfter === undefined) {
       throw new Error(`expected map tile at index ${tileIndex}`);
     }
-    // `_LayWire` in `ref/micropolis/src/sim/w_con.c` maps road tile 66 (`ROADS`)
-    // to 77 (`HROADPOWER`) for wire-on-road placement.
-    expect(tileAfter & TileMask.LOMASK).toBe(Tile.HROADPOWER);
-    expect(tileAfter & TileFlag.CONDBIT).not.toBe(0);
+    expect(authoritativeTileAfter).toBe(tileAfter);
   });
 
   it('rejects wire placement on unsupported road shapes while preserving funds', () => {
@@ -1468,16 +1529,86 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-road-spend',
     });
-    expect(captured.envelopes[3]).toEqual({
+    expect(captured.envelopes[3]).toMatchObject({
       kind: 'patch',
       roomId: 'room-funds-spend',
       clientId: 'client-funds-spend',
       tick: 1,
       serverSeq: 3,
-      payload: {},
+    });
+    const spendPatchEnvelope = captured.envelopes[3];
+    if (spendPatchEnvelope === undefined) {
+      throw new Error('expected spend patch envelope');
+    }
+    const spendMapPatch = readMapPatchPayloadFromEnvelope(spendPatchEnvelope);
+    if (spendMapPatch === null) {
+      throw new Error('expected spend map patch payload');
+    }
+    expect(spendMapPatch.tileWordDeltas.length).toBeGreaterThan(0);
+    expect(spendMapPatch.redrawPlan).toMatchObject({
+      reason: 'patch-rects',
+      fullRedraw: false,
     });
     expect(authorityState.simState.TotalFunds).toBe(90);
     expect(authorityState.toolContext.funds).toBe(90);
+  });
+
+  it('emits full-redraw map metadata and consumes invalidation markers when NewMap is dirty', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          NewMap: number;
+          NewMapFlags: Uint8Array;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-map-redraw-new-map',
+      clientId: 'client-map-redraw-new-map',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    hostInternals.authorityState.simState.NewMap = 1;
+    hostInternals.authorityState.simState.NewMapFlags[3] = 1;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-map-redraw-new-map',
+      clientId: 'client-map-redraw-new-map',
+      commandId: 'cmd-pause-redraw',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const redrawPatchEnvelope = captured.envelopes[3];
+    if (redrawPatchEnvelope === undefined) {
+      throw new Error('expected redraw patch envelope');
+    }
+    const redrawMapPatch = readMapPatchPayloadFromEnvelope(redrawPatchEnvelope);
+    if (redrawMapPatch === null) {
+      throw new Error('expected redraw map payload');
+    }
+
+    // `DoUpdateMap` in `ref/micropolis/src/sim/w_map.c` forces full redraw when
+    // `NewMap` is set, and `sim_update_maps` in `ref/micropolis/src/sim/sim.c`
+    // clears `NewMap` plus `NewMapFlags[0..NMAPS-1]` after each map-update cycle.
+    expect(redrawMapPatch.tileWordDeltas).toHaveLength(0);
+    expect(redrawMapPatch.redrawPlan).toEqual({
+      reason: 'new-map',
+      fullRedraw: true,
+      dirtyRects: [],
+    });
+    expect(hostInternals.authorityState.simState.NewMap).toBe(0);
+    expect(
+      Array.from(hostInternals.authorityState.simState.NewMapFlags).every((flag) => flag === 0),
+    ).toBe(true);
   });
 
   it('serves explicit snapshot requests and stops emitting after disconnect', () => {
