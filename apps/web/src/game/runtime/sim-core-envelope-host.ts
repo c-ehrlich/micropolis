@@ -39,24 +39,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly mapHeight: number;
   private serverSeq = 0;
   private tick = 0;
-  private readonly compatibilityOptions: Required<
-    Pick<PlayableRuntimeHostOptions, 'enableAmbientTicks' | 'seedRealtimeDemoObject'>
-  > &
-    Pick<PlayableRuntimeHostOptions, 'patchIntervalMs'> & {
-      scenarioResourceLoader: ((fileName: string) => Promise<Uint8Array>) | undefined;
-    };
 
-  public constructor(options: PlayableRuntimeHostOptions = {}) {
-    const scenarioResourceLoader = options.scenarioResourceLoader;
-    this.compatibilityOptions = {
-      enableAmbientTicks: options.enableAmbientTicks ?? true,
-      patchIntervalMs: options.patchIntervalMs,
-      seedRealtimeDemoObject: options.seedRealtimeDemoObject ?? true,
-      scenarioResourceLoader:
-        scenarioResourceLoader === undefined
-          ? undefined
-          : (fileName) => Promise.resolve(scenarioResourceLoader(fileName)),
-    };
+  public constructor(_options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState();
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
     this.mapWidth = mapLayerInfo.width;

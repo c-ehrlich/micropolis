@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { World } from '../../../../../packages/sim-core/src/index.ts';
 import { type HostEnvelope } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
+
+const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
 
 /**
  * Captures host envelopes from one connected runtime host instance.
@@ -31,6 +35,13 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
 }
 
 describe('SimCoreEnvelopeHost', () => {
+  it('does not include demo synthetic tile bootstrap dependencies', () => {
+    const sourceText = readFileSync(SIM_CORE_ENVELOPE_HOST_SOURCE_URL, 'utf8');
+
+    expect(sourceText).not.toContain('buildInitialDemoMapTiles');
+    expect(sourceText).not.toContain('./demo-map-host.ts');
+  });
+
   it('accepts createPlayableRuntimeHost compatibility options while call sites migrate', () => {
     const scenarioResourceLoader = vi.fn((_fileName: string) => new Uint8Array([1, 2, 3]));
     const host = new SimCoreEnvelopeHost({

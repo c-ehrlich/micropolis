@@ -58,7 +58,7 @@ Acceptance checks:
 - [x] Back it with authoritative state from `SimCoreRuntimeState`.
 - [x] Route `hello`, `command`, `request_snapshot`, and `disconnect` through one deterministic host lifecycle.
 - [x] Keep compatibility options currently exposed by `createPlayableRuntimeHost(...)` while migrating call sites/tests.
-- [ ] Ensure no synthetic tile bootstrap path exists in the new host.
+- [x] Ensure no synthetic tile bootstrap path exists in the new host.
 
 Acceptance checks:
 
