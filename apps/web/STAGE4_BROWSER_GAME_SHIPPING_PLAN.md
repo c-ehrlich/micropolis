@@ -504,6 +504,10 @@ Deletion execution notes:
 ### Goal
 
 - [x] Make Stage 4 the primary playable route and retire user-visible dependence on legacy demo/placement paths.
+- Stage 10 update (2026-02-10): consolidated Stage 4 default-route host wiring behind
+  `createStage4PrimaryPlayableHost(...)`, preserving one lifecycle/tool/io command surface
+  aligned with `ref/micropolis/src/sim/w_sim.c` while removing route-level dependence on
+  legacy `Demo*` parser naming.
 
 ### C references to review
 
