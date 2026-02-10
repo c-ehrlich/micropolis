@@ -63,7 +63,7 @@ Acceptance checks:
 Acceptance checks:
 
 - [x] New host can serve valid `hello`, `ack`/`reject`, `patch`, and `snapshot` envelopes.
-- [ ] New host has no dependency on `buildInitialDemoMapTiles` or demo custom placement functions.
+- [x] New host has no dependency on `buildInitialDemoMapTiles` or demo custom placement functions.
 
 ### Phase 2: Command Semantics with C-Parity Decisions
 

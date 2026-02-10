@@ -35,10 +35,15 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
 }
 
 describe('SimCoreEnvelopeHost', () => {
-  it('does not include demo synthetic tile bootstrap dependencies', () => {
+  it('does not include demo synthetic tile bootstrap or demo placement dependencies', () => {
     const sourceText = readFileSync(SIM_CORE_ENVELOPE_HOST_SOURCE_URL, 'utf8');
 
     expect(sourceText).not.toContain('buildInitialDemoMapTiles');
+    expect(sourceText).not.toContain('applyDemoToolCommand');
+    expect(sourceText).not.toContain('applyDemoWireToolCommand');
+    expect(sourceText).not.toContain('canPlaceDemoZoneOnTile');
+    expect(sourceText).not.toContain('collectDemoWireFixupCoordinates');
+    expect(sourceText).not.toContain('fixDemoWireTileAt');
     expect(sourceText).not.toContain('./demo-map-host.ts');
   });
 
