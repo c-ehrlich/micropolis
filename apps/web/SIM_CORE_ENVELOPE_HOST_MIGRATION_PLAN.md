@@ -125,7 +125,7 @@ Acceptance checks:
 
 Acceptance checks:
 
-- [ ] Manual disaster controls continue working on route `/` without `DemoMapHost`.
+- [x] Manual disaster controls continue working on route `/` without `DemoMapHost`.
 - [ ] Disaster-triggered message/realtime payload behavior remains C-parity-aligned.
 
 ### Phase 5: Route Cutover + Demo Host Deletion

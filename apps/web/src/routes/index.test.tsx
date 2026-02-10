@@ -5,7 +5,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
 
-import { Route } from './index.tsx';
+import { PLAYABLE_DISASTER_CHOICES } from '../game/runtime/playable-runtime-host.ts';
+import type { HostEnvelope } from '../game/runtime/protocol.ts';
+import { SimCoreEnvelopeHost } from '../game/runtime/sim-core-envelope-host.ts';
+import { Route, triggerRouteDisasterControl } from './index.tsx';
 
 /**
  * Default Authoritative Runtime route ownership checks for `/`.
@@ -35,5 +38,48 @@ describe('routes/index default gameplay path', () => {
     expect(markup).toContain('Envelope runtime contract for `/`');
     expect(markup).toContain('apps/web/src/game/runtime/protocol.ts');
     expect(markup).toContain('Micropolis');
+  });
+
+  test('keeps manual disaster controls working on "/" with SimCoreEnvelopeHost (no DemoMapHost)', () => {
+    const host = new SimCoreEnvelopeHost({ enableAmbientTicks: false });
+    const hostEnvelopes: HostEnvelope[] = [];
+    const connection = host.connect((envelope) => {
+      hostEnvelopes.push(envelope);
+    });
+
+    try {
+      connection.send({
+        kind: 'hello',
+        roomId: 'route-manual-disaster-room',
+        clientId: 'route-manual-disaster-client',
+        protocolVersion: 'bridge-v1',
+        coreVersion: 'sim-core',
+      });
+
+      const earthquakeChoice = PLAYABLE_DISASTER_CHOICES.find(
+        (choice) => choice.id === 'earthquake',
+      );
+      if (earthquakeChoice === undefined) {
+        throw new Error('Expected earthquake disaster choice to exist');
+      }
+
+      const envelopeCountBeforeTrigger = hostEnvelopes.length;
+      const status = triggerRouteDisasterControl(host, earthquakeChoice.id, earthquakeChoice.label);
+      expect(status).toBe('Trigger Earthquake.');
+
+      const newEnvelopes = hostEnvelopes.slice(envelopeCountBeforeTrigger);
+      const earthquakePatch = newEnvelopes.find((envelope) => envelope.kind === 'patch');
+      if (earthquakePatch === undefined) {
+        throw new Error('Expected route disaster control trigger to emit a patch envelope');
+      }
+
+      // Message id `-23` comes from `MakeEarthquake` -> `SendMesAt` in
+      // `ref/micropolis/src/sim/s_disast.c`.
+      expect(earthquakePatch.payload.messageDeltas?.some((message) => message.id === -23)).toBe(
+        true,
+      );
+    } finally {
+      connection.disconnect();
+    }
   });
 });

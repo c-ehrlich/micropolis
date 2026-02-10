@@ -20,9 +20,11 @@ import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
   PLAYABLE_SCENARIO_CHOICES,
+  type PlayableDisasterChoiceId,
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
+import type { CoreHost } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -35,6 +37,26 @@ const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
   'apps/web/src/game/core-host.ts',
   'apps/web/src/game/runtime/protocol.ts',
 ] as const;
+
+/**
+ * Triggers one playable-route manual disaster control click and returns status text.
+ * Mirrors Disasters menu entrypoint ownership in `ref/micropolis/res/whead.tcl`,
+ * with runtime disaster handling in `ref/micropolis/src/sim/s_disast.c` and
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this keeps route `/` disaster controls host-agnostic by delegating
+ * to the structural host capability adapter instead of concrete host classes.
+ */
+export function triggerRouteDisasterControl(
+  host: CoreHost,
+  disasterId: PlayableDisasterChoiceId,
+  disasterLabel: string,
+): string {
+  if (triggerPlayableRuntimeDisaster(host, disasterId)) {
+    return `${disasterLabel}.`;
+  }
+
+  return 'Disaster trigger is unavailable on this host.';
+}
 
 /**
  * Primary Authoritative Runtime gameplay route rendered at `/`.
@@ -387,13 +409,7 @@ function RuntimePanel() {
                   key={choice.id}
                   disabled={controlsDisabled}
                   onClick={() => {
-                    const triggered = triggerPlayableRuntimeDisaster(host, choice.id);
-                    if (triggered) {
-                      setDisasterStatus(`${choice.label}.`);
-                      return;
-                    }
-
-                    setDisasterStatus('Disaster trigger is unavailable on this host.');
+                    setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                   }}
                   type="button"
                 >
