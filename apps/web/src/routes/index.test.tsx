@@ -41,7 +41,7 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('keeps manual disaster controls working on "/" with SimCoreEnvelopeHost (no DemoMapHost)', () => {
-    const host = new SimCoreEnvelopeHost({ enableAmbientTicks: false });
+    const host = new SimCoreEnvelopeHost();
     const hostEnvelopes: HostEnvelope[] = [];
     const connection = host.connect((envelope) => {
       hostEnvelopes.push(envelope);

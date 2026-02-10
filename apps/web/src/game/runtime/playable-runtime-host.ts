@@ -43,8 +43,8 @@ export interface CityExportPayload {
 /**
  * Build the default Authoritative Runtime playable route host.
  * Mirrors single command-surface ownership in `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: this now returns `SimCoreEnvelopeHost` as the authoritative host while
- * preserving the existing compatibility option surface during route cutover.
+ * Parity note: this returns `SimCoreEnvelopeHost` as the authoritative host;
+ * only scenario resource loading override wiring remains configurable.
  */
 export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = {}): CoreHost {
   return new SimCoreEnvelopeHost(options);

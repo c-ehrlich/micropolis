@@ -135,7 +135,7 @@ Acceptance checks:
 - [x] Migrate or delete tests that validate demo-only, non-parity behavior.
 - [x] Delete `apps/web/src/game/runtime/demo-map-host.ts`.
 - [x] Delete `apps/web/src/game/runtime/demo-map-host.test.ts` after equivalent/new parity coverage exists. (Completed on 2026-02-10.)
-- [ ] Remove dead helpers tied to synthetic map bootstrap and demo custom tool logic.
+- [x] Remove dead helpers tied to synthetic map bootstrap and demo custom tool logic.
 
 Acceptance checks:
 

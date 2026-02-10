@@ -231,12 +231,9 @@ describe('SimCoreEnvelopeHost', () => {
     expect(sourceText).not.toContain('./demo-map-host.ts');
   });
 
-  it('accepts createPlayableRuntimeHost compatibility options while call sites migrate', () => {
+  it('accepts scenario resource loader overrides for scenario command tests', () => {
     const scenarioResourceLoader = vi.fn((_fileName: string) => new Uint8Array([1, 2, 3]));
     const host = new SimCoreEnvelopeHost({
-      enableAmbientTicks: false,
-      patchIntervalMs: 10,
-      seedRealtimeDemoObject: false,
       scenarioResourceLoader,
     });
     const captured = connectAndCapture(host);
@@ -428,9 +425,7 @@ describe('SimCoreEnvelopeHost', () => {
   });
 
   it('ports realtime snapshot/delta/object payloads from sim-core sprite hooks without forced copter seeding', () => {
-    const host = new SimCoreEnvelopeHost({
-      seedRealtimeDemoObject: true,
-    });
+    const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
     const hostInternals = host as unknown as {
       authorityState: {

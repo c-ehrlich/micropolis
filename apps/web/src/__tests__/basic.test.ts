@@ -30,7 +30,7 @@ interface LocalHostSmokeSummary {
  */
 function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
+    host: createPlayableRuntimeHost(),
   });
   const savedCityExports: Uint8Array[] = [];
   const unsubscribe = runtime.subscribe((event) => {

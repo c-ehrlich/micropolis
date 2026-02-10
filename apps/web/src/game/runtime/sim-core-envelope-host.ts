@@ -179,8 +179,8 @@ type NodeFsPromisesModule = {
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_update.c`.
  * Parity note: this phase establishes the deterministic envelope lifecycle and
  * authoritative snapshot surface; full command semantics are migrated in
- * subsequent checklist tasks. It also accepts `createPlayableRuntimeHost(...)`
- * compatibility options so route call sites/tests can migrate without option-surface churn.
+ * subsequent checklist tasks. `PlayableRuntimeHostOptions` now only carries
+ * scenario resource byte loading overrides used for deterministic scenario tests.
  * Stage note: city lifecycle and city save/load commands now route through
  * sim-core reset flow plus `sim-io` load/save helpers from
  * `ref/micropolis/src/sim/s_gen.c` and `ref/micropolis/src/sim/s_fileio.c`.

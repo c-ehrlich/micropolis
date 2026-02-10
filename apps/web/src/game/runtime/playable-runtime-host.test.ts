@@ -157,10 +157,10 @@ const PLAYABLE_CERT_SCENARIO_START_CERTIFICATION = {
   startFunds: 5_000,
 } as const;
 // Magic-number source: Playable Certification manual release-gate checklist requirement in
-// `apps/web/MASTER_GAME_ALIGNMENT_PLAN.md` ("at least 15 minutes").
+// `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md` ("at least 15 minutes").
 const PLAYABLE_CERT_CONTINUOUS_PLAY_SESSION_DURATION_MS = 15 * 60 * 1000;
-// Magic-number source: shipped Authoritative Runtime host ambient cadence default
-// (`DEMO_PATCH_INTERVAL_MS = 180`) in `apps/web/src/game/runtime/demo-map-host.ts`.
+// Magic-number source: Playable Certification continuous-play observation cadence
+// used by this test harness to sample long-run runtime progression.
 const PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS = 180;
 const PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS = 3 * 60 * 1000;
 const PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_COUNT =
@@ -471,7 +471,7 @@ interface PlayableRuntimeSmokeSummary {
  * `ref/micropolis/src/sim/w_tool.c`.
  */
 async function certifyPlayableCertificationPlayableToolCostsOnHost(runId: string): Promise<void> {
-  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -617,7 +617,7 @@ async function certifyPlayableCertificationPlayableToolCostsOnRuntime(
   const newCityCommandId = `${runId}-cmd-new-city`;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost(),
     roomId,
     clientId,
   });
@@ -729,10 +729,7 @@ async function certifyPlayableCertificationPlayableToolCostsOnRuntime(
  */
 function certifyPlayableCertificationPlayableCadenceOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createPlayableRuntimeHost({
-    enableAmbientTicks: true,
-    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-  });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -867,10 +864,7 @@ function certifyPlayableCertificationPlayableCadenceOnHost(runId: string): void 
 function certifyPlayableCertificationPlayableCadenceOnRuntime(runId: string): void {
   vi.useFakeTimers();
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({
-      enableAmbientTicks: true,
-      patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-    }),
+    host: createPlayableRuntimeHost(),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
   });
@@ -966,10 +960,7 @@ function certifyPlayableCertificationPlayableCadenceOnRuntime(runId: string): vo
  */
 function certifyPlayableCertificationHeadsAndMessagesOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createPlayableRuntimeHost({
-    enableAmbientTicks: true,
-    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-  });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1068,10 +1059,7 @@ function certifyPlayableCertificationHeadsAndMessagesOnRuntime(runId: string): v
   vi.useFakeTimers();
   let sawHudPatch = false;
   let sawMessageDeltaPatch = false;
-  const host = createPlayableRuntimeHost({
-    enableAmbientTicks: true,
-    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-  });
+  const host = createPlayableRuntimeHost();
   const runtime = createWebHostRuntime({
     host,
     roomId: `${runId}-room`,
@@ -1133,10 +1121,7 @@ function certifyPlayableCertificationHeadsAndMessagesOnRuntime(runId: string): v
  */
 function certifyPlayableCertificationRealtimeVisualEventOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createPlayableRuntimeHost({
-    enableAmbientTicks: true,
-    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-  });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1240,10 +1225,7 @@ function certifyPlayableCertificationRealtimeVisualEventOnRuntime(runId: string)
   let sawRealtimeMovement = false;
   const realtimeSignaturesById = new Map<string, string>();
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({
-      enableAmbientTicks: true,
-      patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
-    }),
+    host: createPlayableRuntimeHost(),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
   });
@@ -1309,7 +1291,7 @@ function certifyPlayableCertificationRealtimeVisualEventOnRuntime(runId: string)
 async function certifyPlayableCertificationCityRoundTripRestorationOnHost(
   runId: string,
 ): Promise<void> {
-  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1550,7 +1532,7 @@ async function certifyPlayableCertificationCityRoundTripRestorationOnRuntime(
   } as const;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost(),
     roomId,
     clientId,
   });
@@ -1704,7 +1686,7 @@ async function certifyPlayableCertificationCityRoundTripRestorationOnRuntime(
  * `ref/micropolis/src/sim/s_fileio.c` (`CityTime` year + `TotalFunds`).
  */
 async function certifyPlayableCertificationScenarioStartOnHost(runId: string): Promise<void> {
-  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1773,7 +1755,7 @@ async function certifyPlayableCertificationScenarioStartOnRuntime(runId: string)
   const commandId = `${runId}-cmd-scenario-start`;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost(),
     roomId,
     clientId,
   });
@@ -1830,10 +1812,7 @@ async function certifyPlayableCertificationScenarioStartOnRuntime(runId: string)
  */
 function certifyPlayableCertificationContinuousPlaySessionOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createPlayableRuntimeHost({
-    enableAmbientTicks: true,
-    patchIntervalMs: PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
-  });
+  const host = createPlayableRuntimeHost();
   let latestSnapshot: HostSnapshotEnvelope | null = null;
   let patchCount = 0;
   let rejectCount = 0;
@@ -1929,10 +1908,7 @@ function certifyPlayableCertificationContinuousPlaySessionOnRuntime(runId: strin
   let lastEnvelopeServerSeq = 0;
   let lastEnvelopeTick = 0;
   const runtime = createWebHostRuntime({
-    host: createPlayableRuntimeHost({
-      enableAmbientTicks: true,
-      patchIntervalMs: PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
-    }),
+    host: createPlayableRuntimeHost(),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
   });
@@ -2014,7 +1990,7 @@ function certifyPlayableCertificationContinuousPlaySessionOnRuntime(runId: strin
  * Parity note: this is a test harness wrapper over bridge envelopes; runtime behavior is unchanged.
  */
 async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRuntimeSmokeSummary> {
-  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost();
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -2409,7 +2385,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
  */
 describe('createPlayableRuntimeHost', () => {
   test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
-    const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+    const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];
     const runId = 'playable-cert-new-city-map-hud';
     const roomId = `${runId}-room`;
@@ -2485,7 +2461,7 @@ describe('createPlayableRuntimeHost', () => {
     const commandId = `${runId}-cmd-new-city`;
     const runtimeEvents: WebRuntimeEvent[] = [];
     const runtime = createWebHostRuntime({
-      host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
+      host: createPlayableRuntimeHost(),
       roomId,
       clientId,
     });
@@ -2598,7 +2574,7 @@ describe('createPlayableRuntimeHost', () => {
   });
 
   test('surfaces full Micropolis Disasters menu choices through the playable host adapter', () => {
-    const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+    const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];
     const roomId = 'playable-cert-manual-disaster-room';
     const clientId = 'playable-cert-manual-disaster-client';
