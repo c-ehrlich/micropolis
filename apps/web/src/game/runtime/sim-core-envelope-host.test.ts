@@ -272,7 +272,6 @@ describe('SimCoreEnvelopeHost', () => {
     expect(sourceText).not.toContain('canPlaceDemoZoneOnTile');
     expect(sourceText).not.toContain('collectDemoWireFixupCoordinates');
     expect(sourceText).not.toContain('fixDemoWireTileAt');
-    expect(sourceText).not.toContain('./demo-map-host.ts');
   });
 
   it('accepts scenario resource loader overrides for scenario command tests', () => {

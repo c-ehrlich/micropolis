@@ -172,6 +172,6 @@ Required automated gates before handoff:
 ## Exit Criteria
 
 - [x] Route `/` uses only sim-core-authoritative envelope host logic.
-- [ ] `DemoMapHost` is fully removed from repository gameplay code.
+- [x] `DemoMapHost` is fully removed from repository gameplay code.
 - [ ] Tool/map/HUD/message/realtime behavior is covered by parity-oriented tests.
 - [ ] Required checks and route runtime tests pass.

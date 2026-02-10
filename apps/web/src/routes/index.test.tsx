@@ -15,14 +15,13 @@ import { SimCoreEnvelopeHost } from '../game/runtime/sim-core-envelope-host.ts';
 import { Route, triggerRouteDisasterControl } from './index.tsx';
 
 /**
- * Builds the legacy DemoMapHost synthetic snapshot baseline in bridge x-major order.
- * Mirrors deleted synthetic bootstrap behavior from `buildInitialDemoMapTiles` and
- * x-major copy behavior in `copyRuntimeRowMajorTilesToClassicXMajorMap` from
- * `apps/web/src/game/runtime/demo-map-host.ts` (removed during sim-core cutover).
+ * Builds the legacy synthetic snapshot baseline in bridge x-major order.
+ * Mirrors the deleted synthetic bootstrap + x-major copy behavior that previously
+ * existed before sim-core-authoritative route `/` cutover.
  * Parity note: this intentionally does not mirror Micropolis C map generation;
  * it exists only as a regression sentinel against reintroducing synthetic tiles on `/`.
  */
-function buildLegacySyntheticDemoSnapshotTileWords(width: number, height: number): Uint16Array {
+function buildLegacySyntheticSnapshotTileWords(width: number, height: number): Uint16Array {
   const tileWords = new Uint16Array(width * height);
   for (let x = 0; x < width; x += 1) {
     for (let y = 0; y < height; y += 1) {
@@ -97,7 +96,7 @@ describe('routes/index default gameplay path', () => {
     expect(markup).toContain('Micropolis');
   });
 
-  test('keeps manual disaster controls working on "/" with SimCoreEnvelopeHost (no DemoMapHost)', () => {
+  test('keeps manual disaster controls working on "/" with SimCoreEnvelopeHost', () => {
     const host = new SimCoreEnvelopeHost();
     const hostEnvelopes: HostEnvelope[] = [];
     const connection = host.connect((envelope) => {
@@ -185,7 +184,7 @@ describe('routes/index default gameplay path', () => {
       expect(map.tileWords).not.toBe(authoritativeMapLayer);
       expect(map.tileWords).toEqual(authoritativeMapLayer);
 
-      const legacySyntheticMap = buildLegacySyntheticDemoSnapshotTileWords(map.width, map.height);
+      const legacySyntheticMap = buildLegacySyntheticSnapshotTileWords(map.width, map.height);
       expect(map.tileWords).not.toEqual(legacySyntheticMap);
     } finally {
       connection.disconnect();
