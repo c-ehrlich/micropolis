@@ -42,6 +42,21 @@ function buildLegacySyntheticDemoSnapshotTileWords(width: number, height: number
  * `ref/micropolis/src/sim/w_sim.c`, where users enter one primary path.
  */
 describe('routes/index default gameplay path', () => {
+  test('routes "/" host creation through sim-core authoritative envelope host factory only', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toMatch(
+      /createPlayableRuntimeHost[\s\S]*from ['"]\.\.\/game\/runtime\/playable-runtime-host(?:\.ts)?['"]/,
+    );
+    expect(routeSource).toContain('const host = useMemo(() => createPlayableRuntimeHost(), []);');
+
+    const host = createPlayableRuntimeHost();
+    expect(host).toBeInstanceOf(SimCoreEnvelopeHost);
+  });
+
   test('keeps "/" gameplay host contract isolated to runtime envelope protocol modules', () => {
     const routeSource = readFileSync(
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
