@@ -25,6 +25,7 @@ import type {
   CoreHost,
   CoreHostConnection,
   HostEnvelope,
+  HostHudMessagePayload,
   HostHudOptionsPayload,
   HostMapPatchTileWordDelta,
   HostMapRedrawPlanPayload,
@@ -56,6 +57,7 @@ interface ReplayLogEntry {
 }
 interface EmitSequencedEnvelopeOptions {
   replayTailEligible?: boolean;
+  recordMessages?: boolean;
 }
 interface SessionCommandQueueState {
   pending: CommandClientEnvelope[];
@@ -95,6 +97,7 @@ interface HookHudState {
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
+const MESSAGE_LOG_LIMIT = 24;
 const NEW_CITY_STARTING_FUNDS = 20_000;
 const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
@@ -103,6 +106,46 @@ const NEW_CITY_CREATE_ISLAND = -1;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
+const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
+  1: 'Need more residential zones.',
+  2: 'Need more commercial zones.',
+  3: 'Need more industrial zones.',
+  4: 'Build more roads.',
+  5: 'Build more rail.',
+  6: 'Need power plants.',
+  13: 'Residents demand fire stations.',
+  14: 'Residents demand police stations.',
+  16: 'City taxes are too high.',
+  17: 'Road maintenance is low.',
+  18: 'Fire coverage is low.',
+  19: 'Police coverage is low.',
+  20: 'Fire reported.',
+  21: 'Monster sighted.',
+  22: 'Tornado sighted.',
+  23: 'Earthquake reported.',
+  24: 'Plane crash reported.',
+  25: 'Shipwreck reported.',
+  26: 'Train crash reported.',
+  27: 'Helicopter crash reported.',
+  30: 'Explosion reported.',
+  32: 'Explosion reported.',
+  41: 'Heavy traffic reported.',
+  42: 'Flooding reported.',
+  [-20]: 'Fire reported.',
+  [-21]: 'Monster sighted.',
+  [-22]: 'Tornado sighted.',
+  [-23]: 'Earthquake reported.',
+  [-24]: 'Plane crash reported.',
+  [-25]: 'Shipwreck reported.',
+  [-26]: 'Train crash reported.',
+  [-27]: 'Helicopter crash reported.',
+  [-30]: 'Explosion reported.',
+  [-41]: 'Heavy traffic reported.',
+  [-42]: 'Flooding reported.',
+  [-10]: 'Pollution has reached dangerous levels.',
+  [-11]: 'Crime is out of control.',
+  [-12]: 'Traffic is congested.',
+};
 type NodeFsPromisesModule = {
   readFile: typeof nodeReadFile;
 };
@@ -154,11 +197,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
+  private pendingHookMessages: HostHudMessagePayload[] = [];
+  private readonly messageLog: HostHudMessagePayload[] = [];
 
   public constructor(options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState({
       hooks: {
         uiSet: (key, value) => this.captureUiSet(key, value),
+        sendMes: (id) => this.captureMessage(id),
+        sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
       },
     });
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
@@ -528,6 +575,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const mapPayload = this.buildMapPatchPayload(mapPatch);
     if (mapPayload !== undefined) {
       payload.map = mapPayload;
+    }
+    const messageDeltas = this.drainPendingHookMessages();
+    if (messageDeltas.length > 0) {
+      payload.messageDeltas = messageDeltas;
     }
     return payload;
   }
@@ -956,13 +1007,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.refreshHookDrivenHud();
     this.pendingHudUiSetKeys.clear();
     this.consumeMapInvalidationCycleAfterSnapshot();
-    this.emitSnapshotFromPayload(
-      roomId,
-      clientId,
-      this.buildSnapshotPayload(),
-      tickOverride,
-      options,
-    );
+    const snapshotPayload = this.buildSnapshotPayload();
+    this.applyPendingHookMessagesToSnapshotPayload(snapshotPayload);
+    this.emitSnapshotFromPayload(roomId, clientId, snapshotPayload, tickOverride, options);
   }
 
   /**
@@ -989,10 +1036,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const replayTail = this.readSnapshotReplayTail(replayCursor);
     this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick, {
       replayTailEligible: false,
+      recordMessages: false,
     });
     for (const envelope of replayTail) {
       this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
         replayTailEligible: false,
+        recordMessages: false,
       });
     }
   }
@@ -1034,13 +1083,76 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    const sequencedEnvelope: SequencedHostEnvelope = {
-      ...envelope,
-      tick: this.nextEnvelopeTick(envelope.tick),
-      serverSeq: this.nextServerSeq(),
-    };
+    const sequencedEnvelope = this.applyReplayMetadataToEnvelopeMessages(
+      {
+        ...envelope,
+        tick: this.nextEnvelopeTick(envelope.tick),
+        serverSeq: this.nextServerSeq(),
+      },
+      options,
+    );
     this.onEnvelope(sequencedEnvelope);
     this.recordReplayEnvelope(sequencedEnvelope, options);
+  }
+
+  /**
+   * Stamps message payload entries with deterministic replay metadata.
+   * Mirrors ordered message delivery ownership in `doMessage` from
+   * `ref/micropolis/src/sim/s_msg.c` and bridge replay ordering invariants from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: C message payloads do not include tick/sequence fields; this host
+   * writes transport metadata so snapshot replay preserves original message order.
+   */
+  private applyReplayMetadataToEnvelopeMessages(
+    envelope: SequencedHostEnvelope,
+    options: EmitSequencedEnvelopeOptions,
+  ): SequencedHostEnvelope {
+    if (options.recordMessages === false) {
+      return envelope;
+    }
+
+    if (envelope.kind === 'patch') {
+      const normalized = normalizeMessageReplayMetadata(
+        envelope.payload.messageDeltas ?? envelope.payload.messages,
+        envelope.tick,
+        envelope.serverSeq,
+      );
+      if (normalized.length === 0) {
+        return envelope;
+      }
+
+      this.appendMessageLog(normalized);
+      return {
+        ...envelope,
+        payload: {
+          ...envelope.payload,
+          messageDeltas: normalized,
+        },
+      };
+    }
+
+    if (envelope.kind !== 'snapshot') {
+      return envelope;
+    }
+
+    const normalized = normalizeMessageReplayMetadata(
+      envelope.payload.messages ?? envelope.payload.messageDeltas,
+      envelope.tick,
+      envelope.serverSeq,
+    );
+    if (normalized.length === 0) {
+      this.replaceMessageLog([]);
+      return envelope;
+    }
+
+    this.replaceMessageLog(normalized);
+    return {
+      ...envelope,
+      payload: {
+        ...envelope.payload,
+        messages: normalized,
+      },
+    };
   }
 
   /**
@@ -1185,6 +1297,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
         tileWords,
       },
       hud: this.buildHudSnapshotPayload(),
+      ...(this.messageLog.length === 0 ? {} : { messages: [...this.messageLog] }),
     };
   }
 
@@ -1298,6 +1411,82 @@ export class SimCoreEnvelopeHost implements CoreHost {
         }
         return;
     }
+  }
+
+  /**
+   * Captures one authoritative `SendMes` hook delivery from sim-core.
+   * Mirrors `SendMes` dispatch ownership in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private captureMessage(id: number): void {
+    this.pendingHookMessages.push({
+      id,
+      text: messageTextForId(id),
+    });
+  }
+
+  /**
+   * Captures one authoritative `SendMesAt` hook delivery from sim-core.
+   * Mirrors `SendMesAt` dispatch ownership in `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private captureMessageAt(id: number, x: number, y: number): void {
+    this.pendingHookMessages.push({
+      id,
+      text: messageTextForId(id),
+      x: Math.trunc(x),
+      y: Math.trunc(y),
+    });
+  }
+
+  /**
+   * Drains pending hook-delivered messages for the next host payload.
+   * Mirrors one-heads-cycle message dispatch ownership in
+   * `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private drainPendingHookMessages(): HostHudMessagePayload[] {
+    if (this.pendingHookMessages.length === 0) {
+      return [];
+    }
+
+    const pendingMessages = this.pendingHookMessages;
+    this.pendingHookMessages = [];
+    return pendingMessages;
+  }
+
+  /**
+   * Adds pending hook-delivered messages into one snapshot payload baseline.
+   * Mirrors `doMessage` queue-consume intent from `ref/micropolis/src/sim/s_msg.c`,
+   * adapted to bridge snapshot full-feed payload semantics.
+   */
+  private applyPendingHookMessagesToSnapshotPayload(payload: HostSnapshotPayload): void {
+    const pendingMessages = this.drainPendingHookMessages();
+    if (pendingMessages.length === 0) {
+      return;
+    }
+
+    const snapshotMessages = payload.messages ?? [];
+    const mergedMessages = [...snapshotMessages, ...pendingMessages];
+    payload.messages = clampMessageFeed(mergedMessages);
+  }
+
+  /**
+   * Appends normalized message deltas into the bounded snapshot message feed.
+   * Mirrors `SetMessageField` visible-message progression from
+   * `ref/micropolis/src/sim/s_msg.c`, adapted to bounded bridge history.
+   */
+  private appendMessageLog(messages: readonly HostHudMessagePayload[]): void {
+    this.messageLog.push(...messages);
+    if (this.messageLog.length > MESSAGE_LOG_LIMIT) {
+      this.messageLog.splice(0, this.messageLog.length - MESSAGE_LOG_LIMIT);
+    }
+  }
+
+  /**
+   * Replaces the bounded snapshot message feed from one snapshot baseline.
+   * Mirrors snapshot full-feed replacement intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private replaceMessageLog(messages: readonly HostHudMessagePayload[]): void {
+    this.messageLog.splice(0, this.messageLog.length, ...clampMessageFeed(messages));
   }
 
   /**
@@ -1507,6 +1696,60 @@ function normalizeReplayCursor(candidate: number, highestKnown: number): number 
   }
 
   return truncatedCandidate;
+}
+
+/**
+ * Resolves message text for one message id.
+ * Mirrors `GetIndString` lookup intent from `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: this host currently keeps the same compact bridge-side subset
+ * used during migration and falls back to `Message <id>`.
+ */
+function messageTextForId(id: number): string {
+  const text = RUNTIME_MESSAGE_TEXT[id];
+  if (text !== undefined) {
+    return text;
+  }
+
+  return `Message ${id}`;
+}
+
+/**
+ * Stamps one message array with replay-stable tick/server-seq metadata.
+ * Mirrors ordered message progression intent from
+ * `ref/micropolis/src/sim/s_msg.c` plus bridge replay ordering in
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: C message payloads do not carry this metadata; this bridge host
+ * adds it deterministically for replay-stable snapshots.
+ */
+function normalizeMessageReplayMetadata(
+  messages: readonly HostHudMessagePayload[] | undefined,
+  fallbackTick: number,
+  fallbackServerSeq: number,
+): HostHudMessagePayload[] {
+  if (messages === undefined || messages.length === 0) {
+    return [];
+  }
+
+  return messages.map((message) => ({
+    ...message,
+    tick: message.tick ?? fallbackTick,
+    serverSeq: message.serverSeq ?? fallbackServerSeq,
+  }));
+}
+
+/**
+ * Clamps one message feed array to the runtime-visible maximum.
+ * Mirrors single-visible-message ownership in `SetMessageField` from
+ * `ref/micropolis/src/sim/s_msg.c`, adapted to bounded bridge feed history.
+ */
+function clampMessageFeed(
+  messages: readonly HostHudMessagePayload[],
+): readonly HostHudMessagePayload[] {
+  if (messages.length <= MESSAGE_LOG_LIMIT) {
+    return messages.map((message) => ({ ...message }));
+  }
+
+  return messages.slice(messages.length - MESSAGE_LOG_LIMIT).map((message) => ({ ...message }));
 }
 
 /**

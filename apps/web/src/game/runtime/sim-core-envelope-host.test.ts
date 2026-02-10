@@ -10,9 +10,11 @@ import {
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
+import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import {
   type HostEnvelope,
+  type HostHudMessagePayload,
   type HostHudPayload,
   type HostMapPatchPayload,
   PLAYABLE_TOOL_SPECS,
@@ -129,6 +131,26 @@ function readHudPayloadFromEnvelope(envelope: HostEnvelope): HostHudPayload | nu
   }
 
   return hudPayload as HostHudPayload;
+}
+
+/**
+ * Reads message-delta payload entries from patch envelopes.
+ * Mirrors `SendMes` / `SendMesAt` delta delivery ownership in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ */
+function readMessageDeltasFromEnvelope(
+  envelope: HostEnvelope,
+): readonly HostHudMessagePayload[] | null {
+  if (envelope.kind !== 'patch') {
+    return null;
+  }
+
+  const messageDeltas = (envelope.payload as { messageDeltas?: unknown }).messageDeltas;
+  if (!Array.isArray(messageDeltas)) {
+    return null;
+  }
+
+  return messageDeltas as readonly HostHudMessagePayload[];
 }
 
 describe('SimCoreEnvelopeHost', () => {
@@ -516,6 +538,123 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-a',
       tick: 6,
       serverSeq: 12,
+    });
+  });
+
+  it('captures sendMes/sendMesAt hooks into patch deltas and preserves replay metadata on snapshots', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-message-hooks',
+      clientId: 'client-message-hooks',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Message-id source: `SendMessages` warning ids in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMesAt(
+        hostInternals.authorityState.simState,
+        hostInternals.authorityState.simContext,
+        14,
+        7,
+        9,
+      ),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-hooks',
+      clientId: 'client-message-hooks',
+      commandId: 'cmd-pause-message-hooks',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, 16),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-hooks',
+      clientId: 'client-message-hooks',
+      commandId: 'cmd-play-message-hooks',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const pausePatch = captured.envelopes[3];
+    if (pausePatch === undefined) {
+      throw new Error('expected pause patch envelope');
+    }
+    const pauseMessageDeltas = readMessageDeltasFromEnvelope(pausePatch);
+    if (pauseMessageDeltas === null) {
+      throw new Error('expected pause patch message deltas');
+    }
+    expect(pauseMessageDeltas).toContainEqual({
+      id: 14,
+      text: 'Residents demand police stations.',
+      x: 7,
+      y: 9,
+      tick: 1,
+      serverSeq: 3,
+    });
+
+    const playPatch = captured.envelopes[5];
+    if (playPatch === undefined) {
+      throw new Error('expected play patch envelope');
+    }
+    const playMessageDeltas = readMessageDeltasFromEnvelope(playPatch);
+    if (playMessageDeltas === null) {
+      throw new Error('expected play patch message deltas');
+    }
+    expect(playMessageDeltas).toContainEqual({
+      id: 16,
+      text: 'City taxes are too high.',
+      tick: 2,
+      serverSeq: 5,
+    });
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-message-hooks',
+      clientId: 'client-message-hooks',
+      fromServerSeq: 5,
+      reason: 'manual',
+    });
+
+    const replaySnapshot = captured.envelopes[6];
+    if (replaySnapshot === undefined || replaySnapshot.kind !== 'snapshot') {
+      throw new Error('expected replay snapshot envelope');
+    }
+    const replayMessages = replaySnapshot.payload.messages;
+    if (replayMessages === undefined) {
+      throw new Error('expected replay snapshot messages payload');
+    }
+    const sendMesAtMessage = replayMessages.find(
+      (message) => message.id === 14 && message.x === 7 && message.y === 9,
+    );
+    const sendMesMessage = replayMessages.find(
+      (message) => message.id === 16 && message.x === undefined && message.y === undefined,
+    );
+    expect(sendMesAtMessage).toMatchObject({
+      tick: 1,
+      serverSeq: 3,
+    });
+    expect(sendMesMessage).toMatchObject({
+      tick: 2,
+      serverSeq: 5,
     });
   });
 
