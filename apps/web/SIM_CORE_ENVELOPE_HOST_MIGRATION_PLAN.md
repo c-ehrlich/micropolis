@@ -8,6 +8,10 @@ Remove `DemoMapHost` from gameplay entirely and replace it with a sim-core-autho
 
 Use sim-core functionality where possible, we should not reimplement anything as this leads to drift / bugs.
 
+## Migration Note
+
+`DemoMapHost` is migration-frozen and must not receive new gameplay logic. Route `/` gameplay changes must be implemented in the sim-core envelope host path.
+
 ## Decision Locks (from 2026-02-10 clarification)
 
 - Prioritize correctness over contract politics: eliminate demo-only behavior first.
@@ -30,7 +34,7 @@ Use sim-core functionality where possible, we should not reimplement anything as
 
 ### Phase 0: Freeze Migration Boundaries
 
-- [ ] Add a migration note in this file that `DemoMapHost` must not receive new gameplay logic.
+- [x] Add a migration note in this file that `DemoMapHost` must not receive new gameplay logic.
 - [ ] Confirm route `/` remains on envelope runtime contract (`apps/web/src/game/runtime/protocol.ts`) for this migration.
 - [ ] Record that event-contract host runtime (`apps/web/src/game/core-host.ts`) is not part of route `/` cutover scope.
 - [ ] Update stale path references from `apps/web/src/game/runtime/sim-core-runtime-state.ts` to `apps/web/src/game/sim-core-runtime-state.ts`.
