@@ -490,7 +490,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `packages/sim-core/src/core/map-invalidation.test.ts` passes.
+- [x] `packages/sim-core/src/core/map-invalidation.test.ts` passes.
 - [ ] Add web-level tests for redraw-plan consumption on patch vs full redraw paths.
 - [ ] Manual: 10+ minute session without runaway latency or redraw artifacts.
 
