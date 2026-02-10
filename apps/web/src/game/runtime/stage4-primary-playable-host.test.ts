@@ -140,6 +140,19 @@ const STAGE11_SCENARIO_START_CERTIFICATION = {
   startYear: 1900,
   startFunds: 5_000,
 } as const;
+// Magic-number source: Stage 11 manual release-gate checklist requirement in
+// `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md` ("at least 15 minutes").
+const STAGE11_CONTINUOUS_PLAY_SESSION_DURATION_MS = 15 * 60 * 1000;
+// Magic-number source: shipped Stage 4 host ambient cadence default
+// (`DEMO_PATCH_INTERVAL_MS = 180`) in `apps/web/src/game/runtime/demo-map-host.ts`.
+const STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS = 180;
+const STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS = 3 * 60 * 1000;
+const STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT =
+  STAGE11_CONTINUOUS_PLAY_SESSION_DURATION_MS / STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS;
+const STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK =
+  STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS / STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS;
+const STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS =
+  STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK * STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT;
 
 interface Stage11AmbientMessageAuthority {
   simState: {
@@ -1642,6 +1655,185 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
 }
 
 /**
+ * Certifies Stage 11 continuous 15-minute play-session responsiveness on host envelopes.
+ * Mirrors ambient timer cadence gating from `setSpeed` / `Pause` / `Resume` in
+ * `ref/micropolis/src/sim/w_util.c` and speed-3 `SimFrame` stepping in
+ * `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: fake timers accelerate wall-clock runtime only; authoritative
+ * host envelope sequencing/tick progression semantics are unchanged.
+ */
+function certifyStage11ContinuousPlaySessionOnHost(runId: string): void {
+  vi.useFakeTimers();
+  const host = createStage4PrimaryPlayableHost({
+    enableAmbientTicks: true,
+    patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
+  });
+  let latestSnapshot: HostSnapshotEnvelope | null = null;
+  let patchCount = 0;
+  let rejectCount = 0;
+  let lastServerSeq = 0;
+  let lastTick = 0;
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const connection = host.connect((envelope) => {
+    if ('serverSeq' in envelope) {
+      expect(envelope.serverSeq).toBeGreaterThan(lastServerSeq);
+      lastServerSeq = envelope.serverSeq;
+    }
+    if ('tick' in envelope) {
+      expect(envelope.tick).toBeGreaterThanOrEqual(lastTick);
+      lastTick = envelope.tick;
+    }
+    if (envelope.kind === 'snapshot') {
+      latestSnapshot = envelope;
+      return;
+    }
+    if (envelope.kind === 'patch') {
+      patchCount += 1;
+      return;
+    }
+    if (envelope.kind === 'reject') {
+      rejectCount += 1;
+    }
+  });
+
+  const requestSnapshot = (label: string): HostSnapshotEnvelope => {
+    const previousSnapshotServerSeq = latestSnapshot?.serverSeq ?? 0;
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      reason: 'manual',
+      fromServerSeq: lastServerSeq,
+    });
+    if (latestSnapshot === null || latestSnapshot.serverSeq <= previousSnapshotServerSeq) {
+      throw new Error(`Expected ${label} snapshot envelope`);
+    }
+    return latestSnapshot;
+  };
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+
+    let snapshot = requestSnapshot(`${runId} boot`);
+    const bootTick = snapshot.tick;
+    expect(snapshot.payload.hud?.speed).toBe(3);
+
+    for (let chunkIndex = 0; chunkIndex < STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT; chunkIndex += 1) {
+      const beforeChunkTick = snapshot.tick;
+      vi.advanceTimersByTime(STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
+      snapshot = requestSnapshot(`${runId} chunk-${chunkIndex + 1}`);
+      expect(snapshot.payload.hud?.speed).toBe(3);
+      expect(snapshot.tick - beforeChunkTick).toBeGreaterThanOrEqual(
+        STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
+      );
+    }
+
+    expect(snapshot.tick - bootTick).toBeGreaterThanOrEqual(
+      STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
+    );
+    expect(patchCount).toBeGreaterThanOrEqual(STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
+    expect(rejectCount).toBe(0);
+  } finally {
+    connection.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 continuous 15-minute play-session responsiveness on shipped runtime projection.
+ * Mirrors authoritative speed-3 ambient stepping from `ref/micropolis/src/sim/s_sim.c`
+ * projected through Stage 4 runtime sequencing/reducer ownership.
+ * Parity note: this validates shipped runtime envelope consumption under sustained load.
+ */
+function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
+  vi.useFakeTimers();
+  let patchCount = 0;
+  let rejectCount = 0;
+  let lastEnvelopeServerSeq = 0;
+  let lastEnvelopeTick = 0;
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({
+      enableAmbientTicks: true,
+      patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
+    }),
+    roomId: `${runId}-room`,
+    clientId: `${runId}-client`,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    const envelope = event.envelope;
+    if (envelope === undefined) {
+      return;
+    }
+    if ('serverSeq' in envelope) {
+      expect(envelope.serverSeq).toBeGreaterThan(lastEnvelopeServerSeq);
+      lastEnvelopeServerSeq = envelope.serverSeq;
+    }
+    if ('tick' in envelope) {
+      expect(envelope.tick).toBeGreaterThanOrEqual(lastEnvelopeTick);
+      lastEnvelopeTick = envelope.tick;
+    }
+    if (envelope.kind === 'patch') {
+      patchCount += 1;
+      return;
+    }
+    if (envelope.kind === 'reject') {
+      rejectCount += 1;
+    }
+  });
+
+  const requestSnapshotState = (label: string): WebRuntimeState => {
+    const previousServerSeq = runtime.getState().lastAppliedServerSeq;
+    runtime.requestSnapshot('manual');
+    const state = runtime.getState();
+    if (state.lastAppliedServerSeq <= previousServerSeq) {
+      throw new Error(`Expected ${label} runtime snapshot state update`);
+    }
+    return state;
+  };
+
+  try {
+    runtime.connect();
+
+    let state = requestSnapshotState(`${runId} boot`);
+    const bootTick = state.lastAppliedTick;
+    expect(state.phase).toBe('ready');
+    expect(state.hudState.speed).toBe(3);
+    expect(state.pendingTools).toHaveLength(0);
+    expect(state.lastRejectReason).toBeNull();
+
+    for (let chunkIndex = 0; chunkIndex < STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT; chunkIndex += 1) {
+      const beforeChunkTick = state.lastAppliedTick;
+      vi.advanceTimersByTime(STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
+      state = requestSnapshotState(`${runId} chunk-${chunkIndex + 1}`);
+      expect(state.phase).toBe('ready');
+      expect(state.hudState.speed).toBe(3);
+      expect(state.pendingTools).toHaveLength(0);
+      expect(state.lastRejectReason).toBeNull();
+      expect(state.lastAppliedTick - beforeChunkTick).toBeGreaterThanOrEqual(
+        STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
+      );
+    }
+
+    expect(state.lastAppliedTick - bootTick).toBeGreaterThanOrEqual(
+      STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
+    );
+    expect(patchCount).toBeGreaterThanOrEqual(STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
+    expect(rejectCount).toBe(0);
+  } finally {
+    unsubscribe();
+    runtime.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
  * Runs one Stage 4 default-host smoke flow and returns deterministic envelope summary data.
  * Mirrors `SimCmd`/`LoadScenario`/save-load command completion flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/s_fileio.c`.
@@ -2216,6 +2408,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime scenario start sets expected year/funds on Stage 4 route', async () => {
     await certifyStage11ScenarioStartOnRuntime('stage11-scenario-start-runtime');
+  });
+
+  test('certifies host continuous 15-minute play session responsiveness', () => {
+    certifyStage11ContinuousPlaySessionOnHost('stage11-continuous-play-host');
+  });
+
+  test('certifies runtime continuous 15-minute play session responsiveness on Stage 4 route', () => {
+    certifyStage11ContinuousPlaySessionOnRuntime('stage11-continuous-play-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
