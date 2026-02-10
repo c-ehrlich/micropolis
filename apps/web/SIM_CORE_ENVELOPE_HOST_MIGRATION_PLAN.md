@@ -40,9 +40,16 @@ Use sim-core functionality where possible, we should not reimplement anything as
 - [x] Record that event-contract host runtime (`apps/web/src/game/core-host.ts`) is not part of route `/` cutover scope.
 - [x] Update stale path references from `apps/web/src/game/runtime/sim-core-runtime-state.ts` to `apps/web/src/game/sim-core-runtime-state.ts`.
 
+Canonical `/` gameplay host path (migration lock):
+
+- Route entrypoint: `apps/web/src/routes/index.tsx` (`createFileRoute('/')`).
+- Host factory used by `/`: `createPlayableRuntimeHost(...)` from `apps/web/src/game/runtime/playable-runtime-host.ts`.
+- Current concrete host returned by that factory during migration: `DemoMapHost`.
+- Migration constraint: gameplay host changes for `/` must be implemented behind `createPlayableRuntimeHost(...)` and this plan's sim-core envelope-host cutover tasks, not through alternate route-specific host wiring.
+
 Acceptance checks:
 
-- [ ] One canonical gameplay host path for `/` is documented.
+- [x] One canonical gameplay host path for `/` is documented.
 - [ ] No new gameplay behavior is added to `DemoMapHost`.
 
 ### Phase 1: Introduce Sim-Core Envelope Host (New Class)
