@@ -8,6 +8,7 @@ export default defineConfig({
     tanstackRouter({
       target: 'react',
       routesDirectory: 'src/routes',
+      routeFileIgnorePattern: '\\.(test|spec)\\.(ts|tsx)$',
     }),
     react(),
   ],
