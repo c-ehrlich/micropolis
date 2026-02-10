@@ -196,6 +196,26 @@ describe('consumeMapRedrawPlan', () => {
     expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(0);
   });
 
+  it('clears C map invalidation slots even when no per-view metadata is provided', () => {
+    const extensionSlot = MAP_FLAG_COUNT;
+    const state = {
+      NewMap: 1,
+      // C `sim_update_maps` clears `NewMapFlags[0..NMAPS-1]` only.
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT + 1),
+    };
+    state.NewMapFlags[MAP_FLAGS.ALMAP] = 1;
+    state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
+    state.NewMapFlags[extensionSlot] = 6;
+
+    // C has no per-view consumed flag list; clear happens once after map-view loop.
+    consumeMapRedrawPlan(state);
+
+    expect(state.NewMap).toBe(0);
+    expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(0);
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
+    expect(state.NewMapFlags[extensionSlot]).toBe(6);
+  });
+
   it('only clears the C NMAPS flag range', () => {
     const extensionSlot = MAP_FLAG_COUNT;
     const state = {
