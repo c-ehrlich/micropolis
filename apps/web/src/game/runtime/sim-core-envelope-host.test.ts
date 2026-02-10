@@ -1728,6 +1728,118 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('keeps command settlement ordering deterministic across async scenario and later sync commands', async () => {
+    const scenario = getScenarioDefinition(2);
+    let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
+    const pendingScenarioBytes = new Promise<Uint8Array>((resolve) => {
+      resolveScenarioBytes = resolve;
+    });
+    const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      commandId: 'cmd-load-scenario',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      commandId: 'cmd-pause-after-scenario',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      commandId: 'cmd-oob-query',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: -1,
+        y: 8,
+      },
+    });
+
+    // Mirrors serial `SimCmd` settlement ordering in `ref/micropolis/src/sim/w_sim.c`:
+    // later commands do not settle before the earlier async scenario command completes.
+    expect(captured.envelopes).toHaveLength(2);
+
+    const resolve = resolveScenarioBytes;
+    if (resolve === undefined) {
+      throw new Error('expected scenario loader resolver');
+    }
+    resolve(
+      new Uint8Array(
+        readFileSync(
+          new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+        ),
+      ),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-load-scenario',
+    });
+    expect(captured.envelopes[3]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      tick: 1,
+      serverSeq: 3,
+    });
+    expect(captured.envelopes[4]).toEqual({
+      kind: 'ack',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      tick: 2,
+      serverSeq: 4,
+      commandId: 'cmd-pause-after-scenario',
+    });
+    expect(captured.envelopes[5]).toEqual({
+      kind: 'patch',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      tick: 2,
+      serverSeq: 5,
+      payload: {},
+    });
+    expect(captured.envelopes[6]).toEqual({
+      kind: 'reject',
+      roomId: 'room-command-ordering',
+      clientId: 'client-command-ordering',
+      tick: 3,
+      serverSeq: 6,
+      commandId: 'cmd-oob-query',
+      reason: 'out-of-bounds',
+    });
+  });
+
   it('keeps serverSeq strictly increasing across sync and async sequenced envelope emission', async () => {
     const scenario = getScenarioDefinition(2);
     let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
@@ -1901,7 +2013,7 @@ describe('SimCoreEnvelopeHost', () => {
       throw new Error('expected play and scenario acknowledgements');
     }
 
-    expect(scenarioAck.tick).toBeGreaterThanOrEqual(playAck.tick);
+    expect(playAck.tick).toBeGreaterThanOrEqual(scenarioAck.tick);
   });
 
   it('keeps serverSeq strictly increasing when the internal sequence cursor regresses', () => {

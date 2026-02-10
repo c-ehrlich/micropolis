@@ -31,6 +31,7 @@ type PlayableCityIoCommand = Extract<PlayableClientCommand, { kind: 'city-io' }>
 type PlayableScenarioCommand = Extract<PlayableClientCommand, { kind: 'scenario' }>;
 type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-city' }>;
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
+type CommandClientEnvelope = Extract<ClientEnvelope, { kind: 'command' }>;
 type SequencedHostEnvelope = Exclude<HostEnvelope, { kind: 'hello' }>;
 type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
   ? Omit<TValue, TKey>
@@ -46,6 +47,10 @@ interface ReplayLogEntry {
 }
 interface EmitSequencedEnvelopeOptions {
   replayTailEligible?: boolean;
+}
+interface SessionCommandQueueState {
+  pending: CommandClientEnvelope[];
+  draining: boolean;
 }
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
@@ -103,6 +108,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly sequencedReplayLog: ReplayLogEntry[] = [];
   private readonly snapshotReplayCheckpoints = new Map<number, SnapshotReplayCheckpoint>();
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
+  private readonly sessionCommandQueues = new Map<number, SessionCommandQueueState>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
 
   public constructor(options: PlayableRuntimeHostOptions = {}) {
@@ -155,7 +161,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    this.handleCommandEnvelope(sessionId, envelope);
+    this.enqueueCommandEnvelope(sessionId, envelope);
   }
 
   private beginSession(onEnvelope: (envelope: HostEnvelope) => void): number {
@@ -166,6 +172,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
       phase: 'awaiting-hello',
       sessionId,
     };
+    this.sessionCommandQueues.set(sessionId, {
+      pending: [],
+      draining: false,
+    });
     return sessionId;
   }
 
@@ -176,6 +186,87 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     this.onEnvelope = undefined;
     this.lifecycle = { phase: 'disconnected' };
+    this.sessionCommandQueues.delete(sessionId);
+  }
+
+  /**
+   * Enqueues one command envelope for deterministic per-session settlement order.
+   * Mirrors serial `SimCmd` processing order in `ref/micropolis/src/sim/w_sim.c`.
+   * Parity note: async scenario loads are serialized with sync command settlement
+   * so reducer-facing `ack`/`reject`/`patch`/`snapshot` ordering is deterministic.
+   */
+  private enqueueCommandEnvelope(sessionId: number, envelope: CommandClientEnvelope): void {
+    const sessionQueue = this.readOrCreateSessionCommandQueue(sessionId);
+    sessionQueue.pending.push(envelope);
+    this.drainSessionCommandQueue(sessionId, sessionQueue);
+  }
+
+  /**
+   * Reads or creates one per-session command queue container.
+   * Mirrors per-client command ownership in `ref/micropolis/src/sim/w_sim.c`.
+   * Parity note: bridge host tracks this queue explicitly to serialize async
+   * and sync command settlement without cross-session coupling.
+   */
+  private readOrCreateSessionCommandQueue(sessionId: number): SessionCommandQueueState {
+    const existingQueue = this.sessionCommandQueues.get(sessionId);
+    if (existingQueue !== undefined) {
+      return existingQueue;
+    }
+
+    const queue: SessionCommandQueueState = {
+      pending: [],
+      draining: false,
+    };
+    this.sessionCommandQueues.set(sessionId, queue);
+    return queue;
+  }
+
+  /**
+   * Starts draining one session command queue if it is currently idle.
+   * Mirrors forward-only command dispatch progression in
+   * `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private drainSessionCommandQueue(sessionId: number, queue: SessionCommandQueueState): void {
+    if (queue.draining) {
+      return;
+    }
+    queue.draining = true;
+    void this.processSessionCommandQueueAsync(sessionId, queue);
+  }
+
+  /**
+   * Drains queued commands sequentially for one active session.
+   * Mirrors serial command settlement expectations from
+   * `ref/micropolis/src/sim/w_sim.c`; difference: this bridge host awaits async
+   * scenario resource loads before settling later queued commands.
+   */
+  private async processSessionCommandQueueAsync(
+    sessionId: number,
+    queue: SessionCommandQueueState,
+  ): Promise<void> {
+    try {
+      while (queue.pending.length > 0) {
+        const envelope = queue.pending.shift();
+        if (envelope === undefined) {
+          continue;
+        }
+
+        const pendingAsyncSettlement = this.handleCommandEnvelope(sessionId, envelope);
+        if (pendingAsyncSettlement !== undefined) {
+          await pendingAsyncSettlement;
+        }
+      }
+    } finally {
+      queue.draining = false;
+      if (queue.pending.length > 0) {
+        this.drainSessionCommandQueue(sessionId, queue);
+      } else if (!this.isSessionActive(sessionId)) {
+        const activeQueue = this.sessionCommandQueues.get(sessionId);
+        if (activeQueue === queue) {
+          this.sessionCommandQueues.delete(sessionId);
+        }
+      }
+    }
   }
 
   private handleHelloEnvelope(
@@ -219,14 +310,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
   private handleCommandEnvelope(
     sessionId: number,
-    envelope: Extract<ClientEnvelope, { kind: 'command' }>,
-  ): void {
+    envelope: CommandClientEnvelope,
+  ): Promise<void> | undefined {
     if (!this.isReadySessionEnvelope(sessionId, envelope.roomId, envelope.clientId)) {
-      return;
+      return undefined;
     }
 
     if (this.onEnvelope === undefined) {
-      return;
+      return undefined;
     }
 
     this.advanceCommandTick();
@@ -234,26 +325,26 @@ export class SimCoreEnvelopeHost implements CoreHost {
       const rejectReason = this.applyToolCommand(envelope.command);
       if (rejectReason !== undefined) {
         this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, rejectReason);
-        return;
+        return undefined;
       }
 
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
-      return;
+      return undefined;
     }
 
     if (envelope.command.kind === 'sim-control') {
       this.applySimControlCommand(envelope.command);
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
-      return;
+      return undefined;
     }
 
     if (envelope.command.kind === 'city-lifecycle') {
       this.applyCityLifecycleCommand(envelope.command);
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       this.emitSnapshot(envelope.roomId, envelope.clientId);
-      return;
+      return undefined;
     }
 
     if (envelope.command.kind === 'city-io') {
@@ -265,22 +356,22 @@ export class SimCoreEnvelopeHost implements CoreHost {
           envelope.commandId,
           cityIoOutcome.reason,
         );
-        return;
+        return undefined;
       }
 
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       if (cityIoOutcome.kind === 'save') {
         this.emitPatch(envelope.roomId, envelope.clientId, cityIoOutcome.patchPayload);
-        return;
+        return undefined;
       }
 
       this.emitSnapshot(envelope.roomId, envelope.clientId);
-      return;
+      return undefined;
     }
 
     if (envelope.command.kind === 'scenario') {
       const commandTick = this.tick;
-      void this.applyScenarioCommandAsync(
+      return this.applyScenarioCommandAsync(
         sessionId,
         envelope.roomId,
         envelope.clientId,
@@ -288,10 +379,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
         envelope.command,
         commandTick,
       );
-      return;
     }
 
     this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, 'invalid-command');
+    return undefined;
   }
 
   /**
@@ -631,6 +722,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     let loadResult: ReturnType<typeof loadScenarioLikeC>;
+    if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+      return;
+    }
     try {
       loadResult = loadScenarioLikeC(
         this.authorityState.simState,

@@ -95,7 +95,7 @@ Acceptance checks:
 
 - [x] Tool placement/reject semantics align with C parity references (`w_tool.c`, `w_con.c`).
 - [x] Save/load/scenario command flows round-trip deterministically.
-- [ ] Command settlement ordering remains reducer-compatible and deterministic.
+- [x] Command settlement ordering remains reducer-compatible and deterministic.
 
 ### Phase 3: Payload Semantics Port (Map/HUD/Messages/Realtime)
 
