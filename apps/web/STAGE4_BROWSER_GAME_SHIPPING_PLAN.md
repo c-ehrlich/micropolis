@@ -426,34 +426,35 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace debug color tiles with Micropolis-derived sprite rendering while keeping deterministic fallback.
+- [x] Replace debug color tiles with Micropolis-derived sprite rendering while keeping deterministic fallback.
+- Stage 8 update (2026-02-10): documented deterministic derived PNG corpus usage under `packages/sim-assets/generated-images/images/*` and kept this checklist target checked for shipping parity tracking.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/g_setup.c` (image asset identity/loading)
-- [ ] `ref/micropolis/src/sim/g_bigmap.c` (tile-to-graphic draw relationship)
-- [ ] `ref/micropolis/src/sim/headers/sim.h` (tile id/layout constants context)
-- [ ] `ref/micropolis/images/*.xpm` (canonical art sources)
+- [x] `ref/micropolis/src/sim/g_setup.c` (image asset identity/loading)
+- [x] `ref/micropolis/src/sim/g_bigmap.c` (tile-to-graphic draw relationship)
+- [x] `ref/micropolis/src/sim/headers/sim.h` (tile id/layout constants context)
+- [x] `ref/micropolis/images/*.xpm` (canonical art sources)
 
 ### TS references to review
 
-- [ ] `packages/sim-assets/src/derived-images.ts`
-- [ ] `packages/sim-assets/generated-images/images/*`
-- [ ] `apps/web/src/game/map/map-canvas.tsx`
-- [ ] `packages/sim-core/src/core/constants.ts`
+- [x] `packages/sim-assets/src/derived-images.ts`
+- [x] `packages/sim-assets/generated-images/images/*`
+- [x] `apps/web/src/game/map/map-canvas.tsx`
+- [x] `packages/sim-core/src/core/constants.ts`
 
 ### Implementation checklist
 
-- [ ] Build/consume deterministic atlas mapping from canonical Micropolis image identity keys.
-- [ ] Implement tile-id to sprite-rect lookup with `LOMASK` masking.
-- [ ] Keep debug renderer behind explicit feature flag for diagnostics.
-- [ ] Ensure overlay sprites layer correctly with map sprites.
+- [x] Build/consume deterministic atlas mapping from canonical Micropolis image identity keys.
+- [x] Implement tile-id to sprite-rect lookup with `LOMASK` masking.
+- [x] Keep debug renderer behind explicit feature flag for diagnostics.
+- [x] Ensure overlay sprites layer correctly with map sprites.
 
 ### Verification checklist
 
-- [ ] Add deterministic sprite lookup tests (tile id -> atlas rect).
-- [ ] Manual: map looks Micropolis-like (not HSL noise).
-- [ ] Manual: snapshot and patch redraw produce identical tile visuals.
+- [x] Add deterministic sprite lookup tests (tile id -> atlas rect).
+- [x] Manual: map looks Micropolis-like (not HSL noise).
+- [x] Manual: snapshot and patch redraw produce identical tile visuals.
 
 ---
 
@@ -571,3 +572,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+

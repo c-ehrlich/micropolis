@@ -1,16 +1,30 @@
-import { type MouseEvent, useEffect, useMemo, useRef } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
-import { getStage4TileDebugColor } from './stage4-tile-renderer.ts';
+import {
+  getStage8TileAtlasSourceByCanonicalIdentityKey,
+  isStage4DebugTileRendererEnabled,
+  lookupStage8TileSprite,
+  resolveStage8MicropolisTileSheetCanonicalIdentityKey,
+  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+} from './stage8-tile-sprite-atlas.ts';
+
+const STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+    viewClass: 'editor',
+    color: true,
+  }) ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
 
 /**
  * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
  * `ref/micropolis/src/sim/g_bigmap.c`.
- * Difference: this remains a debug-color renderer instead of sprite atlas art.
+ * Parity note: Stage 8 now uses Micropolis-derived tile sprites from canonical
+ * `tiles.xpm` identity with a deterministic debug-color fallback flag.
  */
 export function MapCanvas({
   mapState,
@@ -26,7 +40,53 @@ export function MapCanvas({
   tileSize?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
+    ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
+  >(new Map());
   const lastRenderedEpochRef = useRef(0);
+  const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
+  const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
+
+  useEffect(() => {
+    if (debugTileRendererEnabled) {
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      return;
+    }
+
+    const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
+      STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    if (atlas === undefined) {
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      return;
+    }
+
+    const image = new Image();
+    let cancelled = false;
+
+    image.onload = () => {
+      if (cancelled) {
+        return;
+      }
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map([
+        [atlas.canonicalIdentityKey, image],
+      ]);
+      setTileAtlasRenderVersion((version) => version + 1);
+    };
+
+    image.onerror = () => {
+      if (cancelled) {
+        return;
+      }
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      setTileAtlasRenderVersion((version) => version + 1);
+    };
+
+    image.src = atlas.spriteSheetUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [debugTileRendererEnabled]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -39,6 +99,7 @@ export function MapCanvas({
     if (context === null) {
       return;
     }
+    context.imageSmoothingEnabled = false;
 
     const widthPx = mapState.width * tileSize;
     const heightPx = mapState.height * tileSize;
@@ -58,9 +119,13 @@ export function MapCanvas({
       lastRenderedEpoch: lastRenderedEpochRef.current,
       resized,
     });
-    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize);
+    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize, {
+      debugTileRendererEnabled,
+      baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+      tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
+    });
     lastRenderedEpochRef.current = mapState.renderEpoch;
-  }, [mapState, tileSize]);
+  }, [debugTileRendererEnabled, mapState, tileAtlasRenderVersion, tileSize]);
 
   const widthPx = mapState.width * tileSize;
   const heightPx = mapState.height * tileSize;
@@ -112,6 +177,10 @@ export function MapCanvas({
           cursor: onTileClick === undefined ? 'default' : 'crosshair',
           display: 'block',
           imageRendering: 'pixelated',
+          left: 0,
+          position: 'absolute',
+          top: 0,
+          zIndex: getMapCanvasLayerZIndex('map'),
         }}
       />
       {pendingTools.map((pending) => {
@@ -132,6 +201,7 @@ export function MapCanvas({
               position: 'absolute',
               top,
               width: side,
+              zIndex: getMapCanvasLayerZIndex('pending-tool'),
             }}
           />
         );
@@ -158,6 +228,7 @@ export function MapCanvas({
             position: 'absolute',
             top: sprite.top,
             width: sprite.width,
+            zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
           }}
           title={`${sprite.name} frame ${sprite.frame}`}
         >
@@ -172,7 +243,38 @@ type MapCanvasDrawProc = (
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ) => void;
+
+type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay';
+
+interface MapCanvasTileRenderer {
+  baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
+  debugTileRendererEnabled: boolean;
+  tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
+}
+
+type MapCanvasTileRenderMode = 'atlas' | 'diagnostic-debug' | 'missing-atlas';
+const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
+
+/**
+ * Returns deterministic DOM stacking order for Stage 4 map layers.
+ * Mirrors `DoUpdateEditor` draw order in `ref/micropolis/src/sim/w_editor.c`:
+ * `MemDrawBeegMapRect` base map, then `DrawPending`, then `DrawObjects`.
+ * Parity note: browser rendering uses CSS z-index instead of a single X11 pixmap.
+ */
+export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
+  switch (layer) {
+    case 'map':
+      return 0;
+    case 'pending-tool':
+      return 1;
+    case 'realtime-overlay':
+      return 2;
+    default:
+      return assertNever(layer);
+  }
+}
 
 /**
  * Selects canvas redraw mode from authoritative map draw metadata.
@@ -471,13 +573,13 @@ function drawAllTiles(
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ): void {
   const { width, height, tiles } = mapState;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      context.fillStyle = getStage4TileDebugColor(tiles[index] ?? 0);
-      context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      drawMapCanvasTile(context, tiles[index] ?? 0, x, y, tileSize, tileRenderer);
     }
   }
 }
@@ -486,39 +588,118 @@ function drawPatchTiles(
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
+): void {
+  forEachMapCanvasPatchTileIndex(mapState, (tileIndex) => {
+    const width = mapState.width;
+    const x = tileIndex % width;
+    const y = Math.floor(tileIndex / width);
+    drawMapCanvasTile(context, mapState.tiles[tileIndex] ?? 0, x, y, tileSize, tileRenderer);
+  });
+}
+
+/**
+ * Iterates tile indexes covered by one patch redraw pass.
+ * Mirrors dirty-region traversal ownership in `DoUpdateMap` from
+ * `ref/micropolis/src/sim/w_map.c`, where invalid rects are clipped to map
+ * bounds before tile redraw iteration proceeds.
+ * Parity note: this is a 1:1 extraction of the Stage 4 patch draw walk so
+ * snapshot-vs-patch visual parity can be asserted without canvas APIs.
+ */
+export function forEachMapCanvasPatchTileIndex(
+  mapState: Readonly<Pick<RuntimeMapState, 'width' | 'height' | 'dirtyRects' | 'dirtyTileIndexes'>>,
+  visit: (tileIndex: number) => void,
 ): void {
   if (mapState.dirtyRects.length > 0) {
-    drawPatchRects(context, mapState, tileSize);
+    for (const rect of mapState.dirtyRects) {
+      const startX = Math.max(0, rect.x);
+      const startY = Math.max(0, rect.y);
+      const endX = Math.min(mapState.width, rect.x + rect.width);
+      const endY = Math.min(mapState.height, rect.y + rect.height);
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = startX; x < endX; x += 1) {
+          const index = y * mapState.width + x;
+          visit(index);
+        }
+      }
+    }
     return;
   }
 
   for (const tileIndex of mapState.dirtyTileIndexes) {
-    const width = mapState.width;
-    const x = tileIndex % width;
-    const y = Math.floor(tileIndex / width);
-    context.fillStyle = getStage4TileDebugColor(mapState.tiles[tileIndex] ?? 0);
-    context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+    visit(tileIndex);
   }
 }
 
-function drawPatchRects(
+function drawMapCanvasTile(
   context: CanvasRenderingContext2D,
-  mapState: RuntimeMapState,
+  tileWord: number,
+  x: number,
+  y: number,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ): void {
-  for (const rect of mapState.dirtyRects) {
-    const startX = Math.max(0, rect.x);
-    const startY = Math.max(0, rect.y);
-    const endX = Math.min(mapState.width, rect.x + rect.width);
-    const endY = Math.min(mapState.height, rect.y + rect.height);
-    for (let y = startY; y < endY; y += 1) {
-      for (let x = startX; x < endX; x += 1) {
-        const index = y * mapState.width + x;
-        context.fillStyle = getStage4TileDebugColor(mapState.tiles[index] ?? 0);
-        context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-      }
+  const sprite = lookupStage8TileSprite(tileWord, {
+    atlasCanonicalIdentityKey: tileRenderer.baseTileAtlasCanonicalIdentityKey,
+  });
+  const targetX = x * tileSize;
+  const targetY = y * tileSize;
+  const atlasImage = tileRenderer.tileAtlasImagesByCanonicalIdentityKey.get(
+    sprite.atlasCanonicalIdentityKey,
+  );
+  const tileRenderMode = selectMapCanvasTileRenderMode({
+    debugTileRendererEnabled: tileRenderer.debugTileRendererEnabled,
+    hasAtlasImage: atlasImage !== undefined,
+  });
+
+  if (tileRenderMode === 'atlas') {
+    if (atlasImage === undefined) {
+      throw new Error('Expected Stage 8 tile atlas image for atlas render mode');
     }
+    context.drawImage(
+      atlasImage,
+      sprite.sourceX,
+      sprite.sourceY,
+      sprite.sourceWidth,
+      sprite.sourceHeight,
+      targetX,
+      targetY,
+      tileSize,
+      tileSize,
+    );
+    return;
   }
+
+  if (tileRenderMode === 'diagnostic-debug') {
+    context.fillStyle = sprite.debugFallbackColor;
+    context.fillRect(targetX, targetY, tileSize, tileSize);
+    return;
+  }
+
+  context.fillStyle = MAP_CANVAS_MISSING_TILE_ATLAS_COLOR;
+  context.fillRect(targetX, targetY, tileSize, tileSize);
+}
+
+/**
+ * Selects Stage 8 tile render mode for one map tile draw.
+ * Micropolis C draw flow assumes `GetViewTiles` art resources are available
+ * before `MemDrawBeegMapRect` draws tiles (`ref/micropolis/src/sim/g_setup.c`,
+ * `ref/micropolis/src/sim/g_bigmap.c`).
+ * Parity note: TypeScript adds an explicit diagnostics-only debug renderer flag
+ * and keeps missing-atlas fallback separate so debug colors are opt-in only.
+ */
+export function selectMapCanvasTileRenderMode({
+  debugTileRendererEnabled,
+  hasAtlasImage,
+}: {
+  debugTileRendererEnabled: boolean;
+  hasAtlasImage: boolean;
+}): MapCanvasTileRenderMode {
+  if (debugTileRendererEnabled) {
+    return 'diagnostic-debug';
+  }
+
+  return hasAtlasImage ? 'atlas' : 'missing-atlas';
 }
 
 /**
@@ -552,4 +733,8 @@ function getClickedTilePosition(
  */
 function isTileInBounds(x: number, y: number, mapState: RuntimeMapState): boolean {
   return x >= 0 && y >= 0 && x < mapState.width && y < mapState.height;
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected map canvas layer "${String(value)}"`);
 }
