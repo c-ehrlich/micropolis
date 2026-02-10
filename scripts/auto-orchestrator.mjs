@@ -25,8 +25,8 @@ const DEFAULT_PACKAGES = [
     stageLabel: 'Sim-Core Envelope Host Migration',
     packagePath: 'repo',
     planPath: SHIPPING_PLAN_PATH,
-    branch: 'codex/auto-sim-core-envelope',
-    worktreePath: '.worktrees/auto-sim-core-envelope',
+    branch: null,
+    worktreePath: '.',
   },
 ];
 
@@ -400,11 +400,40 @@ function getPackagePlanStatus(repoRoot, pkg) {
  * and drift views match autonomous branch state.
  */
 function resolveStatusRepoRoot(mainRepoRoot, pkg) {
+  if (pkg.worktreePath === '.' || pkg.worktreePath === '') {
+    return mainRepoRoot;
+  }
+
   const worktreeAbsolutePath = path.join(mainRepoRoot, pkg.worktreePath);
   if (existsSync(path.join(worktreeAbsolutePath, '.git'))) {
     return worktreeAbsolutePath;
   }
   return mainRepoRoot;
+}
+
+/**
+ * Resolves the git branch for one package stream.
+ *
+ * Not from Micropolis C; this lets orchestrator streams run either on a fixed
+ * configured branch or the current checked-out branch.
+ */
+async function resolvePackageBranch(repoRoot, pkg) {
+  if (typeof pkg.branch === 'string' && pkg.branch.trim().length > 0) {
+    return pkg.branch;
+  }
+
+  const branchResult = await runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    cwd: repoRoot,
+  });
+  if (branchResult.code !== 0) {
+    throw new Error(`Failed to resolve current git branch: ${branchResult.stderr}`);
+  }
+
+  const branchName = branchResult.stdout.trim();
+  if (!branchName || branchName === 'HEAD') {
+    throw new Error('Cannot resolve current git branch (detached HEAD).');
+  }
+  return branchName;
 }
 
 /**
@@ -463,6 +492,10 @@ async function runShell(command, cwd) {
  * Not a Micropolis runtime port; this isolates autonomous edits per stage stream.
  */
 async function ensureWorktree(mainRepoRoot, pkg, baseRef, dryRun) {
+  if (pkg.worktreePath === '.' || pkg.worktreePath === '') {
+    return mainRepoRoot;
+  }
+
   const worktreeAbsolutePath = path.join(mainRepoRoot, pkg.worktreePath);
   if (existsSync(path.join(worktreeAbsolutePath, '.git'))) {
     return worktreeAbsolutePath;
@@ -473,17 +506,18 @@ async function ensureWorktree(mainRepoRoot, pkg, baseRef, dryRun) {
   }
 
   mkdirSync(path.dirname(worktreeAbsolutePath), { recursive: true });
+  const targetBranch = await resolvePackageBranch(mainRepoRoot, pkg);
 
   const branchExists = await runCommand(
     'git',
-    ['show-ref', '--verify', '--quiet', `refs/heads/${pkg.branch}`],
+    ['show-ref', '--verify', '--quiet', `refs/heads/${targetBranch}`],
     { cwd: mainRepoRoot },
   );
 
   const addArgs =
     branchExists.code === 0
-      ? ['worktree', 'add', worktreeAbsolutePath, pkg.branch]
-      : ['worktree', 'add', '-b', pkg.branch, worktreeAbsolutePath, baseRef];
+      ? ['worktree', 'add', worktreeAbsolutePath, targetBranch]
+      : ['worktree', 'add', '-b', targetBranch, worktreeAbsolutePath, baseRef];
 
   const addResult = await runCommand('git', addArgs, { cwd: mainRepoRoot });
   if (addResult.code !== 0) {
@@ -776,15 +810,16 @@ async function ensurePullRequest(mainRepoRoot, pkg, task, checks, dryRun, baseRe
     return null;
   }
 
+  const branch = await resolvePackageBranch(mainRepoRoot, pkg);
   const taskLabel = task.id ? `${task.id} ${task.text}` : task.text;
   const listResult = await runCommand(
     'gh',
-    ['pr', 'list', '--head', pkg.branch, '--state', 'open', '--json', 'number,url', '--limit', '1'],
+    ['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url', '--limit', '1'],
     { cwd: mainRepoRoot },
   );
 
   if (listResult.code !== 0) {
-    throw new Error(`Failed to query PR list for ${pkg.branch}: ${listResult.stderr}`);
+    throw new Error(`Failed to query PR list for ${branch}: ${listResult.stderr}`);
   }
 
   /** @type {{ number: number; url: string }[]} */
@@ -825,12 +860,12 @@ async function ensurePullRequest(mainRepoRoot, pkg, task, checks, dryRun, baseRe
 
   const createResult = await runCommand(
     'gh',
-    ['pr', 'create', '--base', baseRef, '--head', pkg.branch, '--title', title, '--body', body],
+    ['pr', 'create', '--base', baseRef, '--head', branch, '--title', title, '--body', body],
     { cwd: mainRepoRoot },
   );
 
   if (createResult.code !== 0) {
-    throw new Error(`Failed to create PR for ${pkg.branch}: ${createResult.stderr}`);
+    throw new Error(`Failed to create PR for ${branch}: ${createResult.stderr}`);
   }
 
   const url =
@@ -1076,11 +1111,12 @@ async function pushBranch(repoRoot, pkg, dryRun) {
     return;
   }
 
-  const pushResult = await runCommand('git', ['push', '-u', 'origin', pkg.branch], {
+  const branch = await resolvePackageBranch(repoRoot, pkg);
+  const pushResult = await runCommand('git', ['push', '-u', 'origin', branch], {
     cwd: repoRoot,
   });
   if (pushResult.code !== 0) {
-    throw new Error(`Failed to push ${pkg.branch}: ${pushResult.stderr}`);
+    throw new Error(`Failed to push ${branch}: ${pushResult.stderr}`);
   }
 }
 
@@ -1375,10 +1411,12 @@ async function syncPendingRemote(mainRepoRoot, packages, args, state) {
       continue;
     }
 
+    // eslint-disable-next-line no-await-in-loop
+    const branch = await resolvePackageBranch(worktreeRoot, pkg);
     state.pendingRemote[pkg.id] = {
       ...pendingRecord,
       package: pkg.id,
-      branch: pkg.branch,
+      branch,
       taskId: task.id,
       taskText: task.text,
       updatedAt: new Date().toISOString(),
@@ -1441,7 +1479,6 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
     }
 
     const selected = packageStatuses[pick.index];
-    const key = taskKey(selected.pkg, selected.status.nextTask);
     process.stdout.write(
       `\n[queue] Selected ${selected.pkg.id} (${selected.pkg.stageLabel}): ${selected.status.nextTask.id ?? 'task'} :: ${selected.status.nextTask.text}\n`,
     );
@@ -1464,9 +1501,11 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       }
 
       if (result.remoteSyncErrors.length > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        const branch = await resolvePackageBranch(selected.worktreeRoot, selected.pkg);
         state.pendingRemote[selected.pkg.id] = {
           package: selected.pkg.id,
-          branch: selected.pkg.branch,
+          branch,
           taskId: selected.status.nextTask.id ?? null,
           taskText: selected.status.nextTask.text,
           updatedAt: new Date().toISOString(),
