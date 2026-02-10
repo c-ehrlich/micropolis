@@ -61,20 +61,49 @@ export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = 
 }
 
 /**
- * Triggers one manual disaster event on hosts that expose the demo disaster seam.
+ * Host capability adapter for manual disaster triggers in playable route UI flows.
+ * Mirrors Disasters menu entrypoint ownership in `ref/micropolis/res/whead.tcl`
+ * with host-level runtime handlers in `ref/micropolis/src/sim/s_disast.c`
+ * and `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this is a structural TypeScript adapter; it preserves C-level
+ * disaster ids while decoupling route helpers from concrete host classes.
+ */
+export interface PlayableRuntimeDisasterHostCapability {
+  triggerManualRealtimeEvent(disasterId: PlayableDisasterChoiceId): boolean;
+}
+
+/**
+ * Resolves manual-disaster host capability from a runtime host instance.
  * Mirrors Disasters menu entry intent in `ref/micropolis/res/whead.tcl`.
- * Difference: this helper is host-adapter based and returns `false` for hosts
+ * Difference: this is a structural adapter check, not class-instance coupling.
+ */
+export function asPlayableRuntimeDisasterHostCapability(
+  host: CoreHost,
+): PlayableRuntimeDisasterHostCapability | null {
+  const candidate = host as Partial<PlayableRuntimeDisasterHostCapability>;
+  if (typeof candidate.triggerManualRealtimeEvent !== 'function') {
+    return null;
+  }
+
+  return candidate as PlayableRuntimeDisasterHostCapability;
+}
+
+/**
+ * Triggers one manual disaster event on hosts that expose manual-disaster capability.
+ * Mirrors Disasters menu entry intent in `ref/micropolis/res/whead.tcl`.
+ * Difference: this helper is host-capability based and returns `false` for hosts
  * that do not expose manual-disaster entrypoints.
  */
 export function triggerPlayableRuntimeDisaster(
   host: CoreHost,
   disasterId: PlayableDisasterChoiceId,
 ): boolean {
-  if (!(host instanceof DemoMapHost)) {
+  const disasterHost = asPlayableRuntimeDisasterHostCapability(host);
+  if (disasterHost === null) {
     return false;
   }
 
-  return host.triggerManualRealtimeEvent(disasterId);
+  return disasterHost.triggerManualRealtimeEvent(disasterId);
 }
 
 /**

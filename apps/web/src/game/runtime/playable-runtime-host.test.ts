@@ -9,6 +9,7 @@ import {
 } from './playable-runtime-host.ts';
 import type {
   ClientEnvelope,
+  CoreHost,
   HostAckEnvelope,
   HostEnvelope,
   HostPatchEnvelope,
@@ -2569,6 +2570,31 @@ describe('createPlayableRuntimeHost', () => {
     certifyPlayableCertificationRealtimeVisualEventOnRuntime(
       'playable-cert-realtime-visual-runtime',
     );
+  });
+
+  test('returns false when manual disaster capability is absent on a host', () => {
+    const hostWithoutDisasterCapability = {
+      connect: () => ({
+        send: (_envelope: ClientEnvelope) => {},
+        disconnect: () => {},
+      }),
+    } as CoreHost;
+
+    expect(triggerPlayableRuntimeDisaster(hostWithoutDisasterCapability, 'earthquake')).toBe(false);
+  });
+
+  test('triggers manual disaster through structural host capability adapter', () => {
+    const triggerManualRealtimeEvent = vi.fn(() => true);
+    const hostWithDisasterCapability = {
+      connect: () => ({
+        send: (_envelope: ClientEnvelope) => {},
+        disconnect: () => {},
+      }),
+      triggerManualRealtimeEvent,
+    } as CoreHost;
+
+    expect(triggerPlayableRuntimeDisaster(hostWithDisasterCapability, 'earthquake')).toBe(true);
+    expect(triggerManualRealtimeEvent).toHaveBeenCalledWith('earthquake');
   });
 
   test('surfaces full Micropolis Disasters menu choices through the playable host adapter', () => {

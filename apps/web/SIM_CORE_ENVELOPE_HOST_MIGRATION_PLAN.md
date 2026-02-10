@@ -118,7 +118,7 @@ Acceptance checks:
 
 ### Phase 4: Host-Agnostic Manual Disaster Interface
 
-- [ ] Replace `triggerPlayableRuntimeDisaster` `instanceof DemoMapHost` coupling with a host capability interface/adapter.
+- [x] Replace `triggerPlayableRuntimeDisaster` `instanceof DemoMapHost` coupling with a host capability interface/adapter.
 - [ ] Implement manual disaster command path in new host using sim-core disaster/realtime systems.
 - [ ] Keep `PLAYABLE_DISASTER_CHOICES` UI contract stable unless parity requires changes.
 
