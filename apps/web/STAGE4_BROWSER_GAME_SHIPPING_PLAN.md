@@ -427,6 +427,7 @@ Deletion execution notes:
 ### Goal
 
 - [x] Replace debug color tiles with Micropolis-derived sprite rendering while keeping deterministic fallback.
+- Stage 8 update (2026-02-10): documented deterministic derived PNG corpus usage under `packages/sim-assets/generated-images/images/*` and kept this checklist target checked for shipping parity tracking.
 
 ### C references to review
 
@@ -571,4 +572,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
