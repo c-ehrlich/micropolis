@@ -534,7 +534,7 @@ Deletion execution notes:
 ### Verification checklist
 
 - [x] Stage 4 is the default route users land on for gameplay.
-- [ ] No user-visible dependency on debug map renderer remains.
+- [x] No user-visible dependency on debug map renderer remains.
 - [ ] Smoke tests are stable/repeatable across runs.
 
 ---
@@ -581,5 +581,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 

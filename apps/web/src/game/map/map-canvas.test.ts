@@ -612,34 +612,17 @@ describe('map canvas patch index iteration', () => {
 });
 
 describe('map canvas tile render mode selection', () => {
-  it('uses diagnostic debug renderer only when explicit debug flag is enabled', () => {
+  it('uses Micropolis sprite atlas when atlas image exists', () => {
     expect(
       selectMapCanvasTileRenderMode({
-        debugTileRendererEnabled: true,
-        hasAtlasImage: true,
-      }),
-    ).toBe('diagnostic-debug');
-    expect(
-      selectMapCanvasTileRenderMode({
-        debugTileRendererEnabled: true,
-        hasAtlasImage: false,
-      }),
-    ).toBe('diagnostic-debug');
-  });
-
-  it('uses Micropolis sprite atlas when debug flag is disabled and atlas image exists', () => {
-    expect(
-      selectMapCanvasTileRenderMode({
-        debugTileRendererEnabled: false,
         hasAtlasImage: true,
       }),
     ).toBe('atlas');
   });
 
-  it('uses missing-atlas fallback when debug flag is disabled and atlas image is unavailable', () => {
+  it('uses missing-atlas fallback when atlas image is unavailable', () => {
     expect(
       selectMapCanvasTileRenderMode({
-        debugTileRendererEnabled: false,
         hasAtlasImage: false,
       }),
     ).toBe('missing-atlas');
