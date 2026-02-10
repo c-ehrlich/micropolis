@@ -130,6 +130,34 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
 ] as const;
 
 const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
+const STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 8;
+
+interface Stage11AmbientMessageAuthority {
+  simState: {
+    CityTime: number;
+    MessagePort: number;
+    MesNum: number;
+    ResZPop: number;
+    ComZPop: number;
+    IndZPop: number;
+  };
+}
+
+/**
+ * Primes ambient simulation scalars so the next normal sim step emits a message.
+ * Mirrors `SendMessages` case-1 gating in `ref/micropolis/src/sim/s_msg.c`, where
+ * `z = CityTime & 63` and `z == 1` enqueues message id `1` when
+ * `(TotalZPop >> 2) >= ResZPop`.
+ */
+function primeStage11NormalSimulationMessageTrigger(host: unknown): void {
+  const authority = host as Stage11AmbientMessageAuthority;
+  authority.simState.CityTime = 0;
+  authority.simState.MessagePort = 0;
+  authority.simState.MesNum = 0;
+  authority.simState.ResZPop = 0;
+  authority.simState.ComZPop = 0;
+  authority.simState.IndZPop = 0;
+}
 
 function readFundsFromLabel(label: string): number {
   const digits = label.replaceAll(/[^0-9]/g, '');
@@ -617,6 +645,174 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     expect(resumedAfter.speed).toBe(3);
     expect(resumedAfter.tick - resumedBefore.tick).toBe(4);
   } finally {
+    runtime.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 heads/message-feed updates on host envelopes.
+ * Mirrors normal simulation progression from `Simulate` in
+ * `ref/micropolis/src/sim/s_sim.c`, heads updates from
+ * `ref/micropolis/src/sim/w_update.c`, and message dispatch in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ */
+function certifyStage11HeadsAndMessagesOnHost(runId: string): void {
+  vi.useFakeTimers();
+  const host = createStage4PrimaryPlayableHost({
+    enableAmbientTicks: true,
+    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+  });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  const requestSnapshot = (label: string): HostSnapshotEnvelope => {
+    const previousServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      reason: 'manual',
+      fromServerSeq: previousServerSeq,
+    });
+    for (let index = hostEnvelopes.length - 1; index >= 0; index -= 1) {
+      const envelope = hostEnvelopes[index];
+      if (
+        envelope !== undefined &&
+        envelope.kind === 'snapshot' &&
+        envelope.serverSeq > previousServerSeq
+      ) {
+        return envelope;
+      }
+    }
+    throw new Error(`Expected ${label} snapshot envelope`);
+  };
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+
+    const bootSnapshot = requestSnapshot(`${runId} boot`);
+    const bootDate = bootSnapshot.payload.hud?.date;
+    if (bootDate === undefined) {
+      throw new Error(`${runId} boot snapshot missing hud.date`);
+    }
+
+    const initialDateMonth = bootDate.month;
+    const initialDateYear = bootDate.year;
+    const initialMessageCount = bootSnapshot.payload.messages?.length ?? 0;
+    const initialTick = bootSnapshot.tick;
+    const initialServerSeq = bootSnapshot.serverSeq;
+    primeStage11NormalSimulationMessageTrigger(host);
+
+    // Magic-number source: `updateDate` in `w_update.c` derives month as
+    // `(CityTime % 48) >> 2`, so eight ambient sim steps guarantee a visible
+    // month/year head change under speed 3 cadence.
+    vi.advanceTimersByTime(STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS);
+
+    const ambientPatches = hostEnvelopes.filter(
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' && envelope.serverSeq > bootSnapshot.serverSeq,
+    );
+    expect(ambientPatches.length).toBeGreaterThan(0);
+    expect(readLatestTick(hostEnvelopes)).toBeGreaterThan(initialTick);
+    expect(
+      ambientPatches.some((patch) => {
+        const date = patch.payload.hud?.date;
+        return (
+          date !== undefined && (date.month !== initialDateMonth || date.year !== initialDateYear)
+        );
+      }),
+    ).toBe(true);
+    expect(ambientPatches.some((patch) => (patch.payload.messageDeltas?.length ?? 0) > 0)).toBe(
+      true,
+    );
+
+    const afterAmbientSnapshot = requestSnapshot(`${runId} post-ambient`);
+    expect(afterAmbientSnapshot.payload.messages?.length ?? 0).toBeGreaterThan(initialMessageCount);
+    expect(
+      afterAmbientSnapshot.payload.messages?.some(
+        (message) =>
+          (message.tick ?? 0) > initialTick && (message.serverSeq ?? 0) > initialServerSeq,
+      ) ?? false,
+    ).toBe(true);
+  } finally {
+    connection.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 heads/message-feed updates on the shipped runtime path.
+ * Mirrors host-driven `DoUpdateHeads`/`doMessage` output projection from
+ * `ref/micropolis/src/sim/w_update.c` and `ref/micropolis/src/sim/s_msg.c`
+ * through authoritative Stage 4 runtime envelopes.
+ */
+function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
+  vi.useFakeTimers();
+  let sawHudPatch = false;
+  let sawMessageDeltaPatch = false;
+  const host = createStage4PrimaryPlayableHost({
+    enableAmbientTicks: true,
+    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+  });
+  const runtime = createWebHostRuntime({
+    host,
+    roomId: `${runId}-room`,
+    clientId: `${runId}-client`,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    if (event.envelope?.kind !== 'patch') {
+      return;
+    }
+    if (event.envelope.payload.hud?.date !== undefined) {
+      sawHudPatch = true;
+    }
+    if ((event.envelope.payload.messageDeltas?.length ?? 0) > 0) {
+      sawMessageDeltaPatch = true;
+    }
+  });
+
+  try {
+    runtime.connect();
+
+    const initialState = runtime.getState();
+    const initialDateMonth = initialState.hudState.dateMonth;
+    const initialDateYear = initialState.hudState.dateYear;
+    const initialMessageCount = initialState.hudState.messages.length;
+    const initialTick = initialState.lastAppliedTick;
+    const initialServerSeq = initialState.lastAppliedServerSeq;
+    primeStage11NormalSimulationMessageTrigger(host);
+
+    // Magic-number source: ambient speed-3 simulation increments `CityTime` every
+    // cycle in `s_sim.c`; at least four ticks are required for `updateDate` month
+    // rollover math (`(CityTime % 48) >> 2`) in `w_update.c`.
+    vi.advanceTimersByTime(STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS);
+
+    const state = runtime.getState();
+    expect(state.lastAppliedTick).toBeGreaterThan(initialTick);
+    expect(
+      state.hudState.dateMonth !== initialDateMonth || state.hudState.dateYear !== initialDateYear,
+    ).toBe(true);
+    expect(state.hudState.messages.length).toBeGreaterThan(initialMessageCount);
+    expect(
+      state.hudState.messages.some(
+        (message) => message.tick > initialTick && message.serverSeq > initialServerSeq,
+      ),
+    ).toBe(true);
+    expect(sawHudPatch).toBe(true);
+    expect(sawMessageDeltaPatch).toBe(true);
+  } finally {
+    unsubscribe();
     runtime.disconnect();
     vi.useRealTimers();
   }
@@ -1165,6 +1361,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime speed 1/2/3 with pause/resume cadence changes on Stage 4 route', () => {
     certifyStage11PlayableCadenceOnRuntime('stage11-cadence-runtime');
+  });
+
+  test('certifies host heads + message feed updates during normal simulation', () => {
+    certifyStage11HeadsAndMessagesOnHost('stage11-heads-messages-host');
+  });
+
+  test('certifies runtime heads + message feed updates during normal simulation on Stage 4 route', () => {
+    certifyStage11HeadsAndMessagesOnRuntime('stage11-heads-messages-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
