@@ -438,7 +438,7 @@ Deletion execution notes:
 ### TS references to review
 
 - [x] `packages/sim-assets/src/derived-images.ts`
-- [ ] `packages/sim-assets/generated-images/images/*`
+- [x] `packages/sim-assets/generated-images/images/*`
 - [ ] `apps/web/src/game/map/map-canvas.tsx`
 - [ ] `packages/sim-core/src/core/constants.ts`
 
