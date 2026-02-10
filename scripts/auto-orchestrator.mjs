@@ -4,42 +4,31 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Stage automation metadata for the playable-game bridge/host rollout.
+ * Plan automation metadata for the sim-core envelope host migration rollout.
  *
  * This orchestrator is intentionally different from Micropolis C runtime code:
- * it automates Codex task execution over the staged markdown plans rather than
+ * it automates Codex task execution over markdown migration plans rather than
  * implementing simulation behavior directly.
  */
-const SHIPPING_PLAN_PATH = 'apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md';
+const SHIPPING_PLAN_PATH = 'apps/web/SIM_CORE_ENVELOPE_HOST_MIGRATION_PLAN.md';
 
 /**
- * Stage definitions for the single shipping plan document.
+ * Plan stream definitions for the single migration plan document.
  *
- * Not from Micropolis C sources; this maps `## Stage N:` sections in markdown
- * to isolated automation streams/worktrees.
+ * Not from Micropolis C sources; this maps one plan-level checklist stream
+ * to an isolated automation worktree/branch.
  */
 const DEFAULT_PACKAGES = [
-  'Stage 0 Contract and Surface Convergence',
-  'Stage 1 Real sim-core Authority Host Skeleton',
-  'Stage 2 Protocol + Runtime State Expansion',
-  'Stage 3 Real Tool Semantics + Funds Coupling',
-  'Stage 4 Map Rendering from Authoritative Tile Words',
-  'Stage 5 HUD, Messages, and Sim Controls',
-  'Stage 6 New City + Save/Load + Scenario',
-  'Stage 7 Realtime Objects + Overlay Layer',
-  'Stage 8 Sprite Art Pass',
-  'Stage 9 Invalidation, Camera, and UX Performance',
-  'Stage 10 Consolidation, Cleanup, and Default Path Flip',
-  'Stage 11 Playable Full-Game Certification',
-].map((stageLabel, stageNumber) => ({
-  id: `stage-${stageNumber}`,
-  stageNumber,
-  stageLabel,
-  packagePath: 'repo',
-  planPath: SHIPPING_PLAN_PATH,
-  branch: `codex/auto-shipping-stage-${stageNumber}`,
-  worktreePath: `.worktrees/auto-shipping-stage-${stageNumber}`,
-}));
+  {
+    id: 'sim-core-envelope',
+    stageNumber: null,
+    stageLabel: 'Sim-Core Envelope Host Migration',
+    packagePath: 'repo',
+    planPath: SHIPPING_PLAN_PATH,
+    branch: 'codex/auto-sim-core-envelope',
+    worktreePath: '.worktrees/auto-sim-core-envelope',
+  },
+];
 
 /**
  * Default quality gates for each completed automation task.
@@ -139,7 +128,7 @@ function parseArgs(argv) {
     once: false,
     dryRun: false,
     maxIterations: Number.POSITIVE_INFINITY,
-    maxRuntimeMinutes: 24 * 60,
+    maxRuntimeMinutes: Number.POSITIVE_INFINITY,
     maxRetriesPerTask: 3,
     baseRef: 'main',
     includeTests: true,
@@ -188,7 +177,12 @@ function parseArgs(argv) {
       continue;
     }
     if (token === '--max-runtime-minutes') {
-      args.maxRuntimeMinutes = Number(tokens[i + 1]);
+      const raw = (tokens[i + 1] ?? '').trim().toLowerCase();
+      if (raw === 'inf' || raw === 'infinity' || raw === 'none') {
+        args.maxRuntimeMinutes = Number.POSITIVE_INFINITY;
+      } else {
+        args.maxRuntimeMinutes = Number(tokens[i + 1]);
+      }
       i += 1;
       continue;
     }
@@ -232,8 +226,11 @@ function parseArgs(argv) {
   if (Number.isNaN(args.maxIterations) || args.maxIterations < 1) {
     throw new Error('--max-iterations must be a positive integer');
   }
-  if (!Number.isFinite(args.maxRuntimeMinutes) || args.maxRuntimeMinutes < 1) {
-    throw new Error('--max-runtime-minutes must be a positive number');
+  if (
+    args.maxRuntimeMinutes !== Number.POSITIVE_INFINITY &&
+    (!Number.isFinite(args.maxRuntimeMinutes) || args.maxRuntimeMinutes < 1)
+  ) {
+    throw new Error('--max-runtime-minutes must be a positive number, or inf/infinity/none');
   }
   if (!Number.isFinite(args.maxRetriesPerTask) || args.maxRetriesPerTask < 1) {
     throw new Error('--max-retries-per-task must be a positive integer');
@@ -272,56 +269,69 @@ function extractTaskId(text) {
 }
 
 /**
- * Parses one stage plan markdown document.
+ * Parses one plan markdown document for either one scoped stage/phase or the full checklist.
  *
- * Not from Micropolis C sources; this interprets staged checklist docs under
- * `STAGE_*_PLAN.md` for Codex automation.
+ * Not from Micropolis C sources; this interprets checklist docs under
+ * migration plan markdown files for Codex automation.
  */
 function parseStagePlan(markdown, stageNumber = null) {
   const lines = markdown.split('\n');
   /** @type {{ lineNumber: number; text: string; id: string | null }[]} */
   const uncheckedTasks = [];
 
-  let inTaskChecklist = false;
-  let inTargetStageSection = stageNumber === null;
-  let hasTaskChecklist = false;
+  let inTargetSection = stageNumber === null;
+  let hasTaskChecklist = stageNumber === null;
   let hasStageSection = stageNumber === null;
+  let targetHeadingLevel = null;
   let checkedTaskCount = 0;
   let totalTaskCount = 0;
   let stageTitle = null;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
-    const levelTwoHeading = /^##\s+(.+?)\s*$/.exec(line);
+    const heading = /^(#{2,6})\s+(.+?)\s*$/.exec(line);
 
-    if (levelTwoHeading) {
-      const title = levelTwoHeading[1].trim();
-      if (stageNumber === null) {
-        inTaskChecklist = /^Task Checklist$/i.test(title);
-        if (inTaskChecklist) {
-          hasTaskChecklist = true;
+    if (heading) {
+      const level = heading[1]?.length ?? 0;
+      const title = (heading[2] ?? '').trim();
+      if (stageNumber !== null) {
+        if (
+          inTargetSection &&
+          targetHeadingLevel !== null &&
+          level <= targetHeadingLevel &&
+          !/^Stage\s+/i.test(title) &&
+          !/^Phase\s+/i.test(title)
+        ) {
+          break;
         }
-        continue;
-      }
 
-      if (inTargetStageSection) {
-        break;
-      }
-
-      const stageMatch = /^Stage\s+([0-9]+)\b/i.exec(title);
-      if (stageMatch && Number(stageMatch[1]) === stageNumber) {
-        inTargetStageSection = true;
-        hasStageSection = true;
-        stageTitle = title;
+        const stageMatch = /^Stage\s+([0-9]+)\b/i.exec(title);
+        const phaseMatch = /^Phase\s+([0-9]+)\b/i.exec(title);
+        const headingStageNumber = stageMatch
+          ? Number(stageMatch[1])
+          : phaseMatch
+            ? Number(phaseMatch[1])
+            : null;
+        if (headingStageNumber === stageNumber) {
+          inTargetSection = true;
+          hasStageSection = true;
+          targetHeadingLevel = level;
+          stageTitle = title;
+          hasTaskChecklist = true;
+        } else if (inTargetSection && targetHeadingLevel !== null && level <= targetHeadingLevel) {
+          break;
+        }
+      } else {
+        hasTaskChecklist = true;
       }
       continue;
     }
 
-    if (stageNumber !== null && !inTargetStageSection) {
+    if (stageNumber !== null && !inTargetSection) {
       continue;
     }
 
-    if (stageNumber !== null || inTaskChecklist) {
+    if (stageNumber !== null || hasTaskChecklist) {
       const checkMatch = /^\s*- \[([ xX])\] (.+)$/.exec(line);
       if (!checkMatch) {
         continue;
@@ -341,6 +351,7 @@ function parseStagePlan(markdown, stageNumber = null) {
         text,
         id: extractTaskId(text),
       });
+      continue;
     }
   }
 
@@ -491,17 +502,49 @@ async function ensureWorktree(mainRepoRoot, pkg, baseRef, dryRun) {
  *
  * Not a Micropolis C port; this serializes instructions for codex-cli execution.
  */
+function formatPlanScope(pkg) {
+  if (Number.isInteger(pkg.stageNumber)) {
+    return `Stage ${pkg.stageNumber}`;
+  }
+  return 'the full plan checklist';
+}
+
+/**
+ * Returns a scope-specific instruction line for task selection.
+ *
+ * Not from Micropolis C; this keeps prompts aligned with stage-scoped or
+ * plan-wide checklist execution modes.
+ */
+function buildScopeInstruction(pkg) {
+  if (Number.isInteger(pkg.stageNumber)) {
+    return `- Do not start tasks from any stage section other than Stage ${pkg.stageNumber}.`;
+  }
+  return '- Do not start a second task; complete exactly one currently unchecked checklist item.';
+}
+
+/**
+ * Returns a scope-specific instruction line for check-off requirements.
+ *
+ * Not from Micropolis C; this keeps prompts explicit about markdown checklist updates.
+ */
+function buildScopeCheckoffInstruction(pkg) {
+  if (Number.isInteger(pkg.stageNumber)) {
+    return `- Mark this exact task as checked in ${pkg.planPath} under Stage ${pkg.stageNumber}.`;
+  }
+  return `- Mark this exact task as checked in ${pkg.planPath}.`;
+}
+
 function buildTaskPrompt(pkg, task) {
   const taskLabel = task.id ? `${task.id} - ${task.text}` : task.text;
   return [
     `Work only on ${pkg.stageLabel} (${pkg.id}).`,
-    `Complete exactly one unchecked plan task from ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
+    `Complete exactly one unchecked plan task from ${pkg.planPath} under ${formatPlanScope(pkg)}.`,
     `Target task: ${taskLabel}`,
     'Requirements:',
     '- Read the stage plan fully, including Required Context, Agent Rules, and checklist notes.',
     '- Implement only this task and required support changes.',
-    `- Do not start tasks from any stage section other than Stage ${pkg.stageNumber}.`,
-    `- Mark this exact task as checked in ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
+    buildScopeInstruction(pkg),
+    buildScopeCheckoffInstruction(pkg),
     '- Keep parity behavior aligned with ref/micropolis sources where relevant.',
     '- Add JSDoc for new exported functions/classes, citing source mapping and parity notes.',
     '- Keep tests next to implementation files when adding tests.',
@@ -525,7 +568,7 @@ function buildRepairPrompt(pkg, task, failedChecksSummary) {
     'Failed checks output:',
     failedChecksSummary,
     'Constraints:',
-    `- Keep the target task checked in ${pkg.planPath} under Stage ${pkg.stageNumber}.`,
+    buildScopeCheckoffInstruction(pkg),
     '- Do not uncheck completed items.',
     '- Preserve parity/JSDoc/testing requirements from AGENTS.md.',
     '- End with a short summary of what you changed to pass checks.',
@@ -772,7 +815,7 @@ async function ensurePullRequest(mainRepoRoot, pkg, task, checks, dryRun, baseRe
   const titlePrefix = task.id ? `${pkg.id}: ${task.id}` : `${pkg.id}: task`;
   const title = `[auto] ${titlePrefix}`;
   const body = [
-    `Automated stage stream for \`${pkg.stageLabel}\` (\`${pkg.id}\`).`,
+    `Automated plan stream for \`${pkg.stageLabel}\` (\`${pkg.id}\`).`,
     '',
     `Latest completed task: \`${taskLabel}\``,
     '',
@@ -808,12 +851,12 @@ function taskKey(pkg, task) {
 }
 
 /**
- * Picks the next stage/task candidate in plan order.
+ * Picks the next stream/task candidate in plan order.
  *
  * This is intentionally different from Micropolis C scheduling. The orchestrator
- * advances Stage 0 -> Stage 11 and halts if the earliest incomplete stage task is blocked.
+ * advances configured checklist streams in order.
  */
-function pickNextCandidate(packagesWithStatus, blockedKeys) {
+function pickNextCandidate(packagesWithStatus) {
   if (packagesWithStatus.length === 0) {
     return null;
   }
@@ -824,25 +867,11 @@ function pickNextCandidate(packagesWithStatus, blockedKeys) {
       continue;
     }
 
-    const key = taskKey(candidate.pkg, candidate.status.nextTask);
-    if (blockedKeys.has(key)) {
-      return {
-        index,
-        pkg: candidate.pkg,
-        status: candidate.status,
-        task: candidate.status.nextTask,
-        blocked: true,
-        key,
-      };
-    }
-
     return {
       index,
       pkg: candidate.pkg,
       status: candidate.status,
       task: candidate.status.nextTask,
-      blocked: false,
-      key,
     };
   }
 
@@ -859,7 +888,6 @@ function readState(statePath) {
     return {
       cursor: 0,
       failures: {},
-      blocked: {},
       prUrls: {},
       pendingRemote: {},
     };
@@ -869,12 +897,10 @@ function readState(statePath) {
   return {
     cursor: 0,
     failures: {},
-    blocked: {},
     prUrls: {},
     pendingRemote: {},
     ...parsed,
     failures: parsed.failures ?? {},
-    blocked: parsed.blocked ?? {},
     prUrls: parsed.prUrls ?? {},
     pendingRemote: parsed.pendingRemote ?? {},
   };
@@ -891,10 +917,10 @@ function writeState(statePath, state) {
 }
 
 /**
- * Produces a drift audit summary for stage plan consistency.
+ * Produces a drift audit summary for plan consistency.
  *
- * Not from Micropolis C; this detects checklist structure drift in stage sections
- * inside `STAGE4_BROWSER_GAME_SHIPPING_PLAN.md`.
+ * Not from Micropolis C; this detects checklist structure drift in the target
+ * migration plan document.
  */
 function buildDriftReport(repoRoot, packages) {
   /** @type {{ stageId: string; stageLabel: string; uncheckedCount: number; checkedCount: number; totalTasks: number; issues: string[] }[]} */
@@ -907,11 +933,14 @@ function buildDriftReport(repoRoot, packages) {
 
     /** @type {string[]} */
     const issues = [];
-    if (!checklist.hasStageSection) {
-      issues.push(`Missing "## Stage ${pkg.stageNumber}: ..." section`);
+    if (Number.isInteger(pkg.stageNumber) && !checklist.hasStageSection) {
+      issues.push(`Missing section for Stage/Phase ${pkg.stageNumber}`);
     }
     if (checklist.totalTaskCount === 0) {
-      issues.push(`No checklist tasks found in Stage ${pkg.stageNumber}`);
+      const scopeLabel = Number.isInteger(pkg.stageNumber)
+        ? `Stage/Phase ${pkg.stageNumber}`
+        : 'plan checklist';
+      issues.push(`No checklist tasks found in ${scopeLabel}`);
     }
 
     rows.push({
@@ -928,12 +957,12 @@ function buildDriftReport(repoRoot, packages) {
 }
 
 /**
- * Prints queue status for each stage.
+ * Prints queue status for each configured plan stream.
  *
- * Not from Micropolis C; this is operator visibility for staged checklist work.
+ * Not from Micropolis C; this is operator visibility for checklist work.
  */
 function printQueue(repoRoot, packages) {
-  process.stdout.write(`Stage queue status (${SHIPPING_PLAN_PATH}):\n`);
+  process.stdout.write(`Plan queue status (${SHIPPING_PLAN_PATH}):\n`);
   for (const pkg of packages) {
     const statusRoot = resolveStatusRepoRoot(repoRoot, pkg);
     const status = getPackagePlanStatus(statusRoot, pkg);
@@ -969,9 +998,9 @@ function printDriftReport(rows) {
 }
 
 /**
- * Resolves selected stage streams from `--streams`.
+ * Resolves selected plan streams from `--streams`.
  *
- * Not from Micropolis C; this is CLI filtering for stage-plan automation.
+ * Not from Micropolis C; this is CLI filtering for plan automation.
  */
 function selectPackages(allPackages, streamIds) {
   if (!Array.isArray(streamIds) || streamIds.length === 0) {
@@ -1229,7 +1258,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       prompt = buildRepairPrompt(
         pkg,
         task,
-        `Target task is still unchecked in ${pkg.planPath} under Stage ${pkg.stageNumber}; mark it checked and keep plan in sync.`,
+        `Target task is still unchecked in ${pkg.planPath} (${formatPlanScope(pkg)}); mark it checked and keep plan in sync.`,
       );
       continue;
     }
@@ -1240,7 +1269,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       prompt = buildRepairPrompt(
         pkg,
         task,
-        `This task started unchecked, but ${pkg.planPath} was not updated in this attempt. Ensure the task check-off is updated in Stage ${pkg.stageNumber}.`,
+        `This task started unchecked, but ${pkg.planPath} was not updated in this attempt. Ensure the task check-off is updated in ${formatPlanScope(pkg)}.`,
       );
       continue;
     }
@@ -1404,18 +1433,10 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       packageStatuses.push({ pkg, status, worktreeRoot });
     }
 
-    const blockedKeys = new Set(Object.keys(state.blocked));
-    const pick = pickNextCandidate(packageStatuses, blockedKeys);
+    const pick = pickNextCandidate(packageStatuses);
 
     if (!pick) {
-      process.stdout.write('\nNo actionable stage tasks remaining.\n');
-      break;
-    }
-
-    if (pick.blocked) {
-      process.stdout.write(
-        `\nBlocked at earliest incomplete stage task (${pick.key}). Resolve/unblock before continuing.\n`,
-      );
+      process.stdout.write('\nNo actionable plan tasks remaining.\n');
       break;
     }
 
@@ -1436,6 +1457,7 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
     );
 
     if (result.success) {
+      const key = taskKey(selected.pkg, selected.status.nextTask);
       delete state.failures[key];
       if (result.prUrl) {
         state.prUrls[selected.pkg.id] = result.prUrl;
@@ -1467,20 +1489,12 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
         break;
       }
     } else {
+      const key = taskKey(selected.pkg, selected.status.nextTask);
       const failureCount = Number(state.failures[key] ?? 0) + 1;
       state.failures[key] = failureCount;
       process.stdout.write(
         `[fail] ${selected.pkg.id} ${selected.status.nextTask.id ?? 'task'} failed after ${args.maxRetriesPerTask} attempt(s). failureCount=${failureCount}\n`,
       );
-
-      if (failureCount >= args.maxRetriesPerTask) {
-        state.blocked[key] = {
-          package: selected.pkg.id,
-          task: selected.status.nextTask.text,
-          blockedAt: new Date().toISOString(),
-        };
-        process.stdout.write(`[blocked] ${key}\n`);
-      }
     }
 
     writeState(statePath, state);
