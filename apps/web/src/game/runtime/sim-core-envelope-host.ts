@@ -31,6 +31,11 @@ type PlayableCityIoCommand = Extract<PlayableClientCommand, { kind: 'city-io' }>
 type PlayableScenarioCommand = Extract<PlayableClientCommand, { kind: 'scenario' }>;
 type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-city' }>;
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
+type SequencedHostEnvelope = Exclude<HostEnvelope, { kind: 'hello' }>;
+type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
+  ? Omit<TValue, TKey>
+  : never;
+type SequencedHostEnvelopeWithoutServerSeq = DistributiveOmit<SequencedHostEnvelope, 'serverSeq'>;
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
@@ -278,17 +283,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
     commandId: string,
     tickOverride = this.tick,
   ): void {
-    if (this.onEnvelope === undefined) {
-      return;
-    }
-
-    this.serverSeq += 1;
-    this.onEnvelope({
+    this.emitSequencedEnvelope({
       kind: 'ack',
       roomId,
       clientId,
       tick: tickOverride,
-      serverSeq: this.serverSeq,
       commandId,
     });
   }
@@ -305,17 +304,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
     reason: string,
     tickOverride = this.tick,
   ): void {
-    if (this.onEnvelope === undefined) {
-      return;
-    }
-
-    this.serverSeq += 1;
-    this.onEnvelope({
+    this.emitSequencedEnvelope({
       kind: 'reject',
       roomId,
       clientId,
       tick: tickOverride,
-      serverSeq: this.serverSeq,
       commandId,
       reason,
     });
@@ -327,17 +320,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/w_update.c`.
    */
   private emitPatch(roomId: string, clientId: string, payload: HostPatchPayload): void {
-    if (this.onEnvelope === undefined) {
-      return;
-    }
-
-    this.serverSeq += 1;
-    this.onEnvelope({
+    this.emitSequencedEnvelope({
       kind: 'patch',
       roomId,
       clientId,
       tick: this.tick,
-      serverSeq: this.serverSeq,
       payload,
     });
   }
@@ -717,19 +704,40 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors full update refresh behavior in `ref/micropolis/src/sim/w_update.c`.
    */
   private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
-    if (this.onEnvelope === undefined) {
-      return;
-    }
-
-    this.serverSeq += 1;
-    this.onEnvelope({
+    this.emitSequencedEnvelope({
       kind: 'snapshot',
       roomId,
       clientId,
       tick: tickOverride,
-      serverSeq: this.serverSeq,
       payload: this.buildSnapshotPayload(),
     });
+  }
+
+  /**
+   * Emits one sequenced host envelope with a strictly increasing server sequence.
+   * Mirrors ordered host update sequencing intent from `w_sim.c`/`w_update.c`
+   * while adapting to typed bridge envelopes.
+   */
+  private emitSequencedEnvelope(envelope: SequencedHostEnvelopeWithoutServerSeq): void {
+    if (this.onEnvelope === undefined) {
+      return;
+    }
+
+    const sequencedEnvelope: SequencedHostEnvelope = {
+      ...envelope,
+      serverSeq: this.nextServerSeq(),
+    };
+    this.onEnvelope(sequencedEnvelope);
+  }
+
+  /**
+   * Advances the authoritative envelope sequence counter by exactly one.
+   * Mirrors monotonic update ordering expected by Playable Runtime reducers,
+   * aligned with host-side update sequencing flow in `ref/micropolis/src/sim/w_update.c`.
+   */
+  private nextServerSeq(): number {
+    this.serverSeq += 1;
+    return this.serverSeq;
   }
 
   /**

@@ -83,7 +83,7 @@ Scenario command settlement decision:
 
 Sequence/tick decision:
 
-- [ ] Keep strictly monotonic `serverSeq` for every sequenced envelope.
+- [x] Keep strictly monotonic `serverSeq` for every sequenced envelope.
 - [ ] Keep non-regressing `tick` progression.
 - [ ] On `request_snapshot`, clamp replay cursor to valid range and emit deterministic baseline + tail replay behavior expected by current runtime reducers.
 

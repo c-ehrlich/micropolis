@@ -1229,4 +1229,77 @@ describe('SimCoreEnvelopeHost', () => {
     });
     expect(secondSessionEnvelopes).toHaveLength(5);
   });
+
+  it('keeps serverSeq strictly increasing across sync and async sequenced envelope emission', async () => {
+    const scenario = getScenarioDefinition(2);
+    let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
+    const pendingScenarioBytes = new Promise<Uint8Array>((resolve) => {
+      resolveScenarioBytes = resolve;
+    });
+    const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-seq-monotonic',
+      clientId: 'client-seq-monotonic',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-seq-monotonic',
+      clientId: 'client-seq-monotonic',
+      commandId: 'cmd-scenario-pending',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-seq-monotonic',
+      clientId: 'client-seq-monotonic',
+      commandId: 'cmd-pause-while-scenario-pending',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-seq-monotonic',
+      clientId: 'client-seq-monotonic',
+      fromServerSeq: 0,
+      reason: 'manual',
+    });
+
+    const resolve = resolveScenarioBytes;
+    if (resolve === undefined) {
+      throw new Error('expected scenario loader resolver');
+    }
+    resolve(
+      new Uint8Array(
+        readFileSync(
+          new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+        ),
+      ),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const sequencedEnvelopes = captured.envelopes.filter(
+      (envelope): envelope is Exclude<HostEnvelope, { kind: 'hello' }> => envelope.kind !== 'hello',
+    );
+    expect(sequencedEnvelopes.length).toBeGreaterThan(0);
+
+    let previousServerSeq = 0;
+    for (const envelope of sequencedEnvelopes) {
+      expect(envelope.serverSeq).toBeGreaterThan(previousServerSeq);
+      previousServerSeq = envelope.serverSeq;
+    }
+  });
 });
