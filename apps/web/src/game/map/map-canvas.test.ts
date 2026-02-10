@@ -2,15 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
+  computeMapCanvasZoomFromWheel,
   continueMapCanvasPanDrag,
   forEachMapCanvasPatchTileIndex,
+  getMapCanvasCameraMetrics,
   getMapCanvasLayerZIndex,
+  isMapCanvasZoomWheelGesture,
+  normalizeMapCanvasWheelDeltaToPixels,
   projectRealtimeOverlaySprites,
   scaleMapPanDeltaToWorldPixels,
   scaleWorldPanDeltaToCanvasPixels,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
   startMapCanvasPanDrag,
+  zoomMapCanvasCameraOffsetAtAnchor,
 } from './map-canvas.tsx';
 import {
   lookupStage8TileSprite,
@@ -348,6 +353,152 @@ describe('map canvas pan parity', () => {
 
     expect(dragStep.deltaCanvasX).toBe(0);
     expect(dragStep.deltaCanvasY).toBe(0);
+  });
+});
+
+describe('map canvas camera metrics', () => {
+  it('applies zoom scaling before viewport clipping and pan-bounds resolution', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 120,
+      mapHeight: 100,
+      tileSize: 6,
+      zoom: 2,
+    });
+
+    expect(metrics.mapWidthPx).toBe(720);
+    expect(metrics.mapHeightPx).toBe(600);
+    expect(metrics.scaledMapWidthPx).toBe(1440);
+    expect(metrics.scaledMapHeightPx).toBe(1200);
+    expect(metrics.viewportWidthPx).toBe(640);
+    expect(metrics.viewportHeightPx).toBe(480);
+    expect(metrics.maxCameraOffsetX).toBe(800);
+    expect(metrics.maxCameraOffsetY).toBe(720);
+  });
+
+  it('keeps pan bounds at zero when scaled map already fits viewport', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 40,
+      mapHeight: 30,
+      tileSize: 4,
+      zoom: 0.5,
+    });
+
+    expect(metrics.maxCameraOffsetX).toBe(0);
+    expect(metrics.maxCameraOffsetY).toBe(0);
+  });
+});
+
+describe('map canvas wheel and zoom controls', () => {
+  it('normalizes wheel deltas from line/page modes into pixel units', () => {
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 2,
+        deltaY: -3,
+        deltaMode: 0,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 2,
+      deltaY: -3,
+    });
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 2,
+        deltaY: -3,
+        deltaMode: 1,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 32,
+      deltaY: -48,
+    });
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 1,
+        deltaY: -1,
+        deltaMode: 2,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 640,
+      deltaY: -480,
+    });
+  });
+
+  it('uses ctrl/meta wheel gestures as zoom input', () => {
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: true,
+        metaKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: false,
+        metaKey: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: false,
+        metaKey: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('grows and shrinks zoom from wheel delta while clamping supported bounds', () => {
+    const zoomedIn = computeMapCanvasZoomFromWheel({
+      currentZoom: 1,
+      wheelDeltaYPx: -120,
+    });
+    const zoomedOut = computeMapCanvasZoomFromWheel({
+      currentZoom: 1,
+      wheelDeltaYPx: 120,
+    });
+    expect(zoomedIn).toBeGreaterThan(1);
+    expect(zoomedOut).toBeLessThan(1);
+
+    expect(
+      computeMapCanvasZoomFromWheel({
+        currentZoom: 3.9,
+        wheelDeltaYPx: -1000,
+      }),
+    ).toBe(4);
+    expect(
+      computeMapCanvasZoomFromWheel({
+        currentZoom: 0.6,
+        wheelDeltaYPx: 1000,
+      }),
+    ).toBe(0.5);
+  });
+
+  it('keeps the same map point under the zoom anchor during zoom transitions', () => {
+    // Browser-only zoom divergence: C map controls in `w_map.c` are pan-only.
+    expect(
+      zoomMapCanvasCameraOffsetAtAnchor({
+        currentOffset: { x: 100, y: 50 },
+        anchor: { x: 200, y: 100 },
+        currentZoom: 1,
+        nextZoom: 2,
+      }),
+    ).toEqual({
+      x: 400,
+      y: 200,
+    });
+    expect(
+      zoomMapCanvasCameraOffsetAtAnchor({
+        currentOffset: { x: 123, y: 456 },
+        anchor: { x: 320, y: 240 },
+        currentZoom: 1.5,
+        nextZoom: 1.5,
+      }),
+    ).toEqual({
+      x: 123,
+      y: 456,
+    });
   });
 });
 

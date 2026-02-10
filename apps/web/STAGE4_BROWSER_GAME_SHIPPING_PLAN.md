@@ -484,7 +484,7 @@ Deletion execution notes:
 ### Implementation checklist
 
 - [x] Use `planMapRedraw` + `consumeMapRedrawPlan` end-to-end from authority output to renderer.
-- [ ] Add pan/zoom controls suitable for desktop and laptop touchpads.
+- [x] Add pan/zoom controls suitable for desktop and laptop touchpads.
 - [ ] Ensure base tiles + overlays + HUD remain responsive under continuous ticks.
 - [ ] Prevent full-canvas flashing when patch/dirty redraw is sufficient.
 
@@ -574,6 +574,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
