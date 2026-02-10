@@ -185,30 +185,50 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
     const runtime = createWebHostRuntime({ host });
+    let sawAnimatedMapDelta = false;
 
     try {
-      runtime.connect();
-
       const authority = host as unknown as {
         simState: { doAnimation: boolean };
-        simContext: { store: ReturnType<typeof createClassicMapStore> };
+        mapTiles: Uint16Array;
       };
-
       const tileX = 10;
       const tileY = 10;
-      const tileIndex = tileX * World.WORLD_Y + tileY;
-      authority.simContext.store.beginTick();
-      try {
-        authority.simContext.store.write('map', tileIndex, Tile.FIRE | TileFlag.ANIMBIT);
-      } finally {
-        authority.simContext.store.commitTick();
+      const tileIndex = tileY * World.WORLD_X + tileX;
+      authority.mapTiles[tileIndex] = Tile.FIRE | TileFlag.ANIMBIT;
+
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const mapPayload = event.envelope.payload.map;
+        if (
+          mapPayload === undefined ||
+          !('tileWordDeltas' in mapPayload) ||
+          !Array.isArray(mapPayload.tileWordDeltas)
+        ) {
+          return;
+        }
+        if (
+          mapPayload.tileWordDeltas.some(
+            (delta: { x: number; y: number }) => delta.x === tileX && delta.y === tileY,
+          )
+        ) {
+          sawAnimatedMapDelta = true;
+        }
+      });
+
+      runtime.connect();
+      const initialTileWord = runtime.getState().mapState.tiles[tileIndex];
+      if (initialTileWord === undefined) {
+        throw new Error('expected initial animation tile to exist');
       }
+      expect(initialTileWord & TileMask.LOMASK).toBe(Tile.FIRE);
 
       authority.simState.doAnimation = false;
       vi.advanceTimersByTime(20);
 
-      const mapAfterDisabled = authority.simContext.store.snapshot('map') as Uint16Array;
-      const disabledTileWord = mapAfterDisabled[tileIndex];
+      const disabledTileWord = runtime.getState().mapState.tiles[tileIndex];
       if (disabledTileWord === undefined) {
         throw new Error('expected disabled animation tile to exist');
       }
@@ -219,13 +239,13 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       authority.simState.doAnimation = true;
       vi.advanceTimersByTime(10);
 
-      const mapAfterEnabled = authority.simContext.store.snapshot('map') as Uint16Array;
-      const enabledTileWord = mapAfterEnabled[tileIndex];
+      const enabledTileWord = runtime.getState().mapState.tiles[tileIndex];
       if (enabledTileWord === undefined) {
         throw new Error('expected enabled animation tile to exist');
       }
       // `g_ani.c` rewrites animated tiles via `aniTile[id]`, preserving high bits.
       expect(enabledTileWord & TileMask.LOMASK).toBe(ANI_TILE[Tile.FIRE]);
+      expect(sawAnimatedMapDelta).toBe(true);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();
@@ -646,6 +666,42 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       runtime.disconnect();
       vi.useRealTimers();
     }
+  });
+
+  it('rejects zone placement on deep water tiles', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    const authority = host as unknown as {
+      mapTiles: Uint16Array;
+    };
+    const x = 20;
+    const y = 20;
+    const width = World.WORLD_X;
+    const centerIndex = x + y * width;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        authority.mapTiles[x + dx + (y + dy) * width] = Tile.RIVER;
+      }
+    }
+    const beforeCenterTileWord = authority.mapTiles[centerIndex];
+    if (beforeCenterTileWord === undefined) {
+      throw new Error('expected center water tile before placement');
+    }
+
+    runtime.sendCommand('zone-on-water-1', {
+      kind: 'tool',
+      tool: 'res',
+      x,
+      y,
+    });
+
+    // Magic-number source: `tally()` in `ref/micropolis/src/sim/w_tool.c` only
+    // allows auto-bulldoze for tile ids >= `FIRSTRIVEDGE` (5), so `RIVER` (2)
+    // tiles reject zoning in `check3x3`.
+    expect(runtime.getState().lastRejectReason).toBe('invalid-placement');
+    expect(authority.mapTiles[centerIndex]).toBe(beforeCenterTileWord);
   });
 
   it('round-trips save/export bytes through load/import in the web runtime', () => {

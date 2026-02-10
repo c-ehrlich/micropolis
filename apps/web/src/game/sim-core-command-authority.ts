@@ -1,11 +1,38 @@
 import {
   applyToolAction,
+  cityEvaluation,
+  clearCensus,
+  collectTax,
+  createBridgeHandler,
+  createFireHandler,
+  createFloodHandler,
+  createRadHandler,
+  createRailHandler,
+  createRoadHandler,
+  createZoneHandler,
+  crimeScan,
+  decROGMem,
+  decTrafficMem,
+  doDisasters,
+  fireAnalysis,
+  MAP_FLAGS,
+  type MapScanHandlers,
+  popDenScan,
+  ptlScan,
+  runMapScanPhase,
   runSimLoop,
+  sendMessages,
+  setValves,
   type SimContext,
+  type SimMapFlag,
+  type SimPhaseSystems,
   type SimState,
+  take2Census,
+  takeCensus,
   type ToolContext,
 } from '../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
+import { doPowerScan } from '../../../../packages/sim-core/src/systems/power.ts';
 import type {
   CoreHostAckEvent,
   CoreHostCommand,
@@ -130,6 +157,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private readonly simState: SimState;
   private readonly simContext: SimContext;
   private readonly toolContext: ToolContext;
+  private readonly simPhaseSystems: SimPhaseSystems;
   private readonly tickIntervalMs: number | undefined;
   private readonly tickScheduler: SimCoreAuthorityTickScheduler;
   private tickHandle: unknown;
@@ -145,6 +173,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
     this.toolContext = authorityState.toolContext;
+    this.simPhaseSystems = createAuthoritySimPhaseSystems(this.simState, this.simContext);
     this.tickIntervalMs = normalizeTickIntervalMs(this.options.tickIntervalMs);
     this.tickScheduler = this.options.tickScheduler ?? DEFAULT_TICK_SCHEDULER;
     this.simPausedSpeed = this.simState.SimMetaSpeed;
@@ -181,7 +210,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     this.tickHandle = this.tickScheduler.setInterval(() => {
       this.simContext.store.beginTick();
       try {
-        runSimLoop(this.simState, this.simContext);
+        runSimLoop(this.simState, this.simContext, this.simPhaseSystems);
         this.syncToolContextFromState();
       } finally {
         this.simContext.store.commitTick();
@@ -535,6 +564,63 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     this.serverSeq += 1;
     return this.serverSeq;
   }
+}
+
+/**
+ * Update map invalidation flags produced by simulation phases.
+ * Mirrors `NewMapFlags[...] = 1` writes in `Simulate` from
+ * `ref/micropolis/src/sim/s_sim.c`.
+ */
+function markMapFlagsForAuthority(state: SimState, flags: ReadonlyArray<SimMapFlag>): void {
+  for (const flag of flags) {
+    state.NewMapFlags[MAP_FLAGS[flag]] = 1;
+  }
+}
+
+/**
+ * Build the full simulation phase wiring used by the Stage 4 authority loop.
+ * Mirrors `Simulate` + `MapScan` dispatch in `ref/micropolis/src/sim/s_sim.c`
+ * and map-scan handlers in `ref/micropolis/src/sim/s_zone.c`, `s_disast.c`,
+ * `s_sim.c`, and `s_scan.c`.
+ */
+function createAuthoritySimPhaseSystems(_state: SimState, _context: SimContext): SimPhaseSystems {
+  let mapScanHandlers: MapScanHandlers | undefined;
+
+  return {
+    mapScan: (phase, scanState, scanContext) => {
+      if (!mapScanHandlers) {
+        mapScanHandlers = {
+          onFire: createFireHandler(scanContext),
+          onFlood: createFloodHandler(scanState, scanContext),
+          onRadTile: createRadHandler(),
+          onRoad: createRoadHandler(scanState, scanContext, {
+            doBridge: createBridgeHandler(scanState, scanContext),
+          }),
+          onZone: createZoneHandler(scanState, scanContext),
+          onRail: createRailHandler(scanState, scanContext),
+        };
+      }
+      runMapScanPhase(scanState, scanContext, phase, mapScanHandlers);
+    },
+    setValves,
+    clearCensus,
+    takeCensus,
+    take2Census,
+    collectTax,
+    cityEvaluation,
+    decROGMem,
+    decTrafficMem,
+    markMapDirty: (flags, dirtyState) => {
+      markMapFlagsForAuthority(dirtyState, flags);
+    },
+    sendMessages,
+    doPowerScan,
+    ptlScan,
+    crimeScan,
+    popDenScan,
+    fireAnalysis,
+    doDisasters,
+  };
 }
 
 /**

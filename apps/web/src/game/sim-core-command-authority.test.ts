@@ -97,6 +97,39 @@ describe('SimCoreCommandAuthority', () => {
     authority.disconnect();
   });
 
+  test('runs map-scan zone handlers during authority ticks so zones are processed', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+      seed: 1234,
+    });
+    const internals = authority as unknown as {
+      simState: SimState;
+      simContext: SimContext;
+      toolContext: ToolContext;
+    };
+
+    authority.connect();
+    const placement = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-zone-growth-scan',
+      tool: 'res',
+      // Magic-number source: `MapScan` phase 1 in `ref/micropolis/src/sim/s_sim.c`
+      // scans x in [0, WORLD_X/8); x=10 guarantees this zone is scanned on first tick.
+      x: 10,
+      y: 10,
+    });
+    expect(placement.map((event) => event.type)).toEqual(['ack', 'patch']);
+    expect(internals.simState.ResZPop).toBe(0);
+
+    scheduler.tick(1);
+    expect(internals.simState.ResZPop).toBeGreaterThan(0);
+
+    authority.disconnect();
+  });
+
   test('stops and restarts periodic sim ticks across disconnect/connect lifecycle', () => {
     const scheduler = new ManualTickScheduler();
     const authority = new SimCoreCommandAuthority({

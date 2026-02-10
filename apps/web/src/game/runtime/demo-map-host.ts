@@ -2,6 +2,7 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  ANI_TILE,
   consumeMapRedrawPlan,
   createRealtimeContext,
   destroyAllSprites as destroyRealtimeSprites,
@@ -28,6 +29,7 @@ import {
   type SimState,
   Tile,
   TileFlag,
+  TileMask,
   WIRE_TABLE,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -921,10 +923,10 @@ export class DemoMapHost implements CoreHost {
    * Runs one ambient simulation slice and emits HUD/message deltas.
    * Mirrors speed-gated frame stepping in `ref/micropolis/src/sim/s_sim.c`
    * plus head updates in `ref/micropolis/src/sim/w_update.c`.
-   * Parity note: unlike earlier Stage 2 scaffolding, this no longer emits
-   * synthetic random map tile churn; map deltas are reserved for authoritative
-   * map mutations (tools/new city/load/scenario), matching `DoUpdateMap`
-   * invalidation ownership in `ref/micropolis/src/sim/w_map.c`.
+   * Parity note: map payloads are only emitted when authoritative map words
+   * changed during the tick (tool/lifecycle updates or C-style ANIMBIT tile
+   * animation), matching `DoUpdateMap` invalidation ownership in
+   * `ref/micropolis/src/sim/w_map.c`.
    */
   private emitAmbientPatch(roomId: string, clientId: string): void {
     if (this.getVisibleSpeed() === 0) {
@@ -951,12 +953,20 @@ export class DemoMapHost implements CoreHost {
       this.simContext.store.commitTick();
     }
 
+    const mapTileWordDeltas = animateRuntimeMapTilesLikeC(
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+      this.simState.doAnimation,
+    );
+
     this.tick += 1;
     this.emitPatch(
       roomId,
       clientId,
       this.buildHookDrivenPatchPayload({
         includeHud: true,
+        mapTileWordDeltas,
       }),
     );
   }
@@ -1938,6 +1948,16 @@ function applyDemoToolCommand(
   }
 
   if (ZONE_TOOLS.has(command.tool)) {
+    for (let yy = startY; yy < endY; yy += 1) {
+      for (let xx = startX; xx < endX; xx += 1) {
+        const index = yy * width + xx;
+        const tileWord = tiles[index] ?? 0;
+        if (!canPlaceDemoZoneOnTile(tileWord)) {
+          return { accepted: false, reason: 'invalid-placement' };
+        }
+      }
+    }
+
     const base = TOOL_TILE_VALUES[command.tool];
     let offset = 0;
     for (let yy = startY; yy < endY; yy += 1) {
@@ -1951,6 +1971,18 @@ function applyDemoToolCommand(
 
   writeDemoTile(tiles, width, command.x, command.y, TOOL_TILE_VALUES[command.tool], deltas);
   return { accepted: true, deltas };
+}
+
+/**
+ * Zone placement terrain gate used by the demo host tool path.
+ * Mirrors the `check3x3` + `tally` interaction in `ref/micropolis/src/sim/w_tool.c`:
+ * deep water tiles (`RIVER`, `REDGE`, `CHANNEL`) are never auto-bulldozable and
+ * therefore reject zone placement.
+ * Difference: demo host intentionally keeps other occupancy checks permissive.
+ */
+function canPlaceDemoZoneOnTile(tileWord: number): boolean {
+  const tileId = tileWord & TileMask.LOMASK;
+  return tileId !== Tile.RIVER && tileId !== Tile.REDGE && tileId !== Tile.CHANNEL;
 }
 
 /**
@@ -2177,6 +2209,56 @@ function writeDemoTile(
 
   tiles[index] = tile;
   deltas.push({ x, y, tileWord: tile });
+}
+
+/**
+ * Applies one `animateTiles` pass to the runtime row-major map tile buffer.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c` using
+ * `aniTile[]` from `ref/micropolis/src/sim/animtab.h`: if `ANIMBIT` is set,
+ * preserve high bits (`ALLBITS`) and rewrite low tile-id bits (`LOMASK`) via
+ * the animation lookup table.
+ * Difference: this mutates the Stage 2 host row-major runtime buffer, while C
+ * mutates classic `Map[x][y]` x-major storage.
+ */
+function animateRuntimeMapTilesLikeC(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  doAnimation: boolean,
+): DemoMapTileWordDelta[] | undefined {
+  if (!doAnimation) {
+    return undefined;
+  }
+
+  const deltas: DemoMapTileWordDelta[] = [];
+  for (let index = 0; index < tiles.length; index += 1) {
+    const tileWord = tiles[index] ?? 0;
+    if ((tileWord & TileFlag.ANIMBIT) === 0) {
+      continue;
+    }
+
+    const flags = tileWord & TileMask.ALLBITS;
+    const tileId = tileWord & TileMask.LOMASK;
+    const nextTileId = ANI_TILE[tileId] ?? tileId;
+    const nextTileWord = nextTileId | flags;
+    if (nextTileWord === tileWord) {
+      continue;
+    }
+
+    tiles[index] = nextTileWord;
+    const y = Math.trunc(index / width);
+    const x = index - y * width;
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      continue;
+    }
+    deltas.push({
+      x,
+      y,
+      tileWord: nextTileWord,
+    });
+  }
+
+  return deltas.length > 0 ? deltas : undefined;
 }
 
 /**
