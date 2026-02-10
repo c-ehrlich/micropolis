@@ -12,6 +12,12 @@ const QWY = WORLD_Y >> 2;
 const SmX = WORLD_X >> 3;
 const SmY = (WORLD_Y + 7) >> 3;
 
+/**
+ * Authoritative Micropolis world-grid dimensions and derived resolutions.
+ * Mirrors `SimWidth`/`SimHeight` and derived `WORLD_X`, `WORLD_Y`, `HWLDX`,
+ * `HWLDY`, `QWX`, `QWY`, `SmX`, and `SmY` macros in
+ * `ref/micropolis/src/sim/headers/sim.h` (1:1 numeric parity).
+ */
 export const World = {
   WORLD_X,
   WORLD_Y,
@@ -30,6 +36,11 @@ const PWRMAPSIZE = POWERMAPROW * WORLD_Y;
 const POWERMAPLEN = 1700;
 const PWRSTKSIZE = (WORLD_X * WORLD_Y) >> 2;
 
+/**
+ * Power-grid bitset layout constants.
+ * Mirrors `POWERMAPROW`, `PWRMAPSIZE`, `POWERMAPLEN`, and `PWRSTKSIZE` in
+ * `ref/micropolis/src/sim/headers/sim.h` for the non-`MEGA` configuration.
+ */
 export const PowerMap = {
   POWERMAPROW,
   PWRMAPSIZE,
@@ -42,6 +53,11 @@ const CHAR_MASK = 0x03ff;
 const LOMASK = CHAR_MASK;
 const ALLBITS = 0xfc00;
 
+/**
+ * Tile-word mask constants for id/flag extraction.
+ * Mirrors `LOMASK` and `ALLBITS` in `ref/micropolis/src/sim/headers/sim.h`
+ * (with `CHAR_MASK` as the explicit low-10-bit alias used by TypeScript code).
+ */
 export const TileMask = {
   CHAR_MASK,
   LOMASK,
@@ -59,6 +75,12 @@ const BLBNBIT = BULLBIT + BURNBIT;
 const BLBNCNBIT = BULLBIT + BURNBIT + CONDBIT;
 const BNCNBIT = BURNBIT + CONDBIT;
 
+/**
+ * Tile status-bit constants stored in high tile-word bits.
+ * Mirrors `PWRBIT`, `CONDBIT`, `BURNBIT`, `BULLBIT`, `ANIMBIT`, `ZONEBIT`,
+ * `BLBNBIT`, `BLBNCNBIT`, and `BNCNBIT` macros in
+ * `ref/micropolis/src/sim/headers/sim.h`.
+ */
 export const TileFlag = {
   PWRBIT,
   CONDBIT,
@@ -206,6 +228,11 @@ const VBRDG2 = 950;
 const VBRDG3 = 951;
 
 const TILE_COUNT = 960;
+/**
+ * Low-10-bit tile id constants used by map rendering and simulation lookups.
+ * Mirrors the "Character Mapping" `#define` block and `TILE_COUNT` in
+ * `ref/micropolis/src/sim/headers/sim.h` (1:1 numeric parity for exported ids).
+ */
 export const Tile = {
   DIRT,
   RIVER,
