@@ -144,7 +144,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(map.tileWords).toEqual(authoritativeMapLayer);
   });
 
-  it('rejects command envelopes and keeps sequencing monotonic', () => {
+  it('serves protocol-valid ack/patch for query and reject for unsupported commands', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
 
@@ -160,7 +160,19 @@ describe('SimCoreEnvelopeHost', () => {
       kind: 'command',
       roomId: 'room-a',
       clientId: 'client-a',
-      commandId: 'cmd-1',
+      commandId: 'cmd-query',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: 8,
+        y: 8,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      commandId: 'cmd-road',
       command: {
         kind: 'tool',
         tool: 'road',
@@ -169,14 +181,33 @@ describe('SimCoreEnvelopeHost', () => {
       },
     });
 
-    const reject = captured.envelopes[2];
-    expect(reject).toEqual({
-      kind: 'reject',
+    // Mirrors C command/update envelope ordering intent from `w_sim.c` + `w_update.c`:
+    // command settlement is sequenced before same-tick update projection.
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
       roomId: 'room-a',
       clientId: 'client-a',
       tick: 1,
       serverSeq: 2,
-      commandId: 'cmd-1',
+      commandId: 'cmd-query',
+    });
+    expect(captured.envelopes[3]).toEqual({
+      kind: 'patch',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 1,
+      serverSeq: 3,
+      payload: {},
+    });
+
+    const reject = captured.envelopes[4];
+    expect(reject).toEqual({
+      kind: 'reject',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 2,
+      serverSeq: 4,
+      commandId: 'cmd-road',
       reason: 'invalid-command',
     });
   });

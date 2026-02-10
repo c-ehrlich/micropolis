@@ -5,7 +5,9 @@ import type {
   CoreHost,
   CoreHostConnection,
   HostEnvelope,
+  HostPatchPayload,
   HostSnapshotPayload,
+  PlayableClientCommand,
 } from './protocol.ts';
 
 /**
@@ -152,6 +154,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.tick += 1;
+    if (this.isNoOpAckPatchCommand(envelope.command)) {
+      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
+      return;
+    }
+
     this.serverSeq += 1;
     this.onEnvelope({
       kind: 'reject',
@@ -178,6 +186,68 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     return this.lifecycle.roomId === roomId && this.lifecycle.clientId === clientId;
+  }
+
+  /**
+   * Identifies command shapes that are accepted during lifecycle-envelope
+   * migration before full command semantics porting lands.
+   * Mirrors `query_tool` success path in `ref/micropolis/src/sim/w_tool.c`,
+   * where query is non-mutating and can settle without map edits.
+   */
+  private isNoOpAckPatchCommand(command: PlayableClientCommand): boolean {
+    return command.kind === 'tool' && command.tool === 'query';
+  }
+
+  /**
+   * Emits one command acknowledgement envelope.
+   * Mirrors command-settlement acknowledgement ordering from `SimCmd` handling in
+   * `ref/micropolis/src/sim/w_sim.c`, adapted to typed bridge envelopes.
+   */
+  private emitAck(roomId: string, clientId: string, commandId: string): void {
+    if (this.onEnvelope === undefined) {
+      return;
+    }
+
+    this.serverSeq += 1;
+    this.onEnvelope({
+      kind: 'ack',
+      roomId,
+      clientId,
+      tick: this.tick,
+      serverSeq: this.serverSeq,
+      commandId,
+    });
+  }
+
+  /**
+   * Emits one incremental patch envelope.
+   * Mirrors per-tick update propagation intent from
+   * `ref/micropolis/src/sim/w_update.c`.
+   */
+  private emitPatch(roomId: string, clientId: string, payload: HostPatchPayload): void {
+    if (this.onEnvelope === undefined) {
+      return;
+    }
+
+    this.serverSeq += 1;
+    this.onEnvelope({
+      kind: 'patch',
+      roomId,
+      clientId,
+      tick: this.tick,
+      serverSeq: this.serverSeq,
+      payload,
+    });
+  }
+
+  /**
+   * Builds a patch payload for non-mutating acknowledged commands.
+   * Mirrors `query_tool` in `ref/micropolis/src/sim/w_tool.c`, which reports
+   * status without mutating map state; envelope migration keeps this as a valid
+   * empty patch payload.
+   */
+  private buildNoOpPatchPayload(): HostPatchPayload {
+    return {};
   }
 
   /**
