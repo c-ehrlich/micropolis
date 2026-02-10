@@ -5,6 +5,7 @@ import {
   getPlayableToolSpec,
   getStage0PlayableBridgeCommandType,
   isStage0PlayableBridgeCommandType,
+  isStage2ScenarioCommand,
   PLAYABLE_TOOL_SPECS,
   STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
   type Stage2ToolName,
@@ -131,5 +132,24 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     }
 
     expect(isStage0PlayableBridgeCommandType('unknown_command_type' as never)).toBe(false);
+  });
+
+  it('accepts only integral scenario ids at the command gate', () => {
+    // `LoadScenario(short s)` consumes integer ids in `s_fileio.c`; C then clamps
+    // out-of-range integers with `if ((s < 1) || (s > 8)) s = 1;`.
+    expect(
+      isStage2ScenarioCommand({
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 9,
+      }),
+    ).toBe(true);
+    expect(
+      isStage2ScenarioCommand({
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 1.5,
+      }),
+    ).toBe(false);
   });
 });

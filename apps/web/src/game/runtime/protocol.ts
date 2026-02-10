@@ -1013,6 +1013,8 @@ export function isStage2CityIoCommand(command: unknown): command is Stage2CityIo
 /**
  * Returns true when a client payload is a Stage 2 scenario command.
  * Mirrors `LoadScenario` command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: this requires an integral id because `LoadScenario(short s)` consumes
+ * integer scenario ids in C; fractional values are rejected before host routing.
  */
 export function isStage2ScenarioCommand(command: unknown): command is Stage2ScenarioCommand {
   if (command === null || typeof command !== 'object') {
@@ -1024,7 +1026,8 @@ export function isStage2ScenarioCommand(command: unknown): command is Stage2Scen
     candidate.kind === 'scenario' &&
     candidate.action === 'load-scenario' &&
     typeof candidate.scenarioId === 'number' &&
-    Number.isFinite(candidate.scenarioId)
+    Number.isFinite(candidate.scenarioId) &&
+    Number.isInteger(candidate.scenarioId)
   );
 }
 
