@@ -114,6 +114,52 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('seeds a moving realtime copter while ambient simulation runs', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const copterSnapshots: Array<{ x: number; y: number; frame: number }> = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const objects = event.envelope.payload.realtime?.objects;
+        if (objects === undefined) {
+          return;
+        }
+        const copter = objects.find((object) => object.type === 2);
+        if (copter !== undefined) {
+          copterSnapshots.push({ x: copter.x, y: copter.y, frame: copter.frame ?? 0 });
+        }
+      });
+
+      runtime.connect();
+
+      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`.
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
+        false,
+      );
+
+      vi.advanceTimersByTime(140);
+
+      expect(copterSnapshots.length).toBeGreaterThan(1);
+      // `DoCopterSprite` mutates x/y/frame in `w_sprite.c`; payload snapshots must
+      // reflect multiple distinct movement frames while the sim runs.
+      expect(
+        new Set(copterSnapshots.map((snapshot) => `${snapshot.x}:${snapshot.y}:${snapshot.frame}`))
+          .size,
+      ).toBeGreaterThan(1);
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
+        true,
+      );
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   it('emits realtime object payload updates on ambient ticks', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });

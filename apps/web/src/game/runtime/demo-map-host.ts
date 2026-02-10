@@ -226,6 +226,14 @@ export interface DemoMapHostOptions {
   enableAmbientTicks?: boolean;
   patchIntervalMs?: number;
   /**
+   * Seed one realtime copter sprite when no active sprites exist during ambient
+   * simulation ticks.
+   * Mirrors `GenerateCopter` sprite behavior from `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: C only spawns copters from simulation triggers; this host-level
+   * seam ensures Stage 7 manual overlay movement is always observable in browser runs.
+   */
+  seedRealtimeDemoObject?: boolean;
+  /**
    * Optional scenario byte loader for `snro.*` resources.
    * Mirrors `_load_file(fname, ResourceDir)` in `LoadScenario` from
    * `ref/micropolis/src/sim/s_fileio.c`.
@@ -247,6 +255,7 @@ export interface DemoMapHostOptions {
 export class DemoMapHost implements CoreHost {
   private readonly enableAmbientTicks: boolean;
   private readonly patchIntervalMs: number;
+  private readonly seedRealtimeDemoObject: boolean;
   private readonly simState: SimState;
   private readonly simContext: SimContext;
   private readonly realtimeContext: RealtimeContext;
@@ -285,6 +294,7 @@ export class DemoMapHost implements CoreHost {
   constructor(options: DemoMapHostOptions = {}) {
     this.enableAmbientTicks = options.enableAmbientTicks ?? true;
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
+    this.seedRealtimeDemoObject = options.seedRealtimeDemoObject ?? true;
     const scenarioResourceLoader = options.scenarioResourceLoader;
     this.scenarioResourceLoader =
       scenarioResourceLoader === undefined
@@ -829,6 +839,7 @@ export class DemoMapHost implements CoreHost {
       this.simState.CityTime += 1;
       setValves(this.simState, this.simContext);
       sendMessages(this.simState, this.simContext);
+      this.ensureRealtimeDemoObject();
       this.advanceRealtimeStep();
       runUiUpdate(this.simState, this.simContext);
     } finally {
@@ -975,6 +986,26 @@ export class DemoMapHost implements CoreHost {
   private advanceRealtimeStep(): void {
     this.syncRealtimeContextFromSimState();
     runRealtimeTick(this.realtimeContext);
+  }
+
+  /**
+   * Ensures Stage 7 overlay payloads always have at least one moving object
+   * while ambient simulation is running.
+   * Mirrors realtime copter movement from `GenerateCopter`/`DoCopterSprite` in
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: this host-only bootstrap seam is intentionally additive so
+   * manual browser verification does not depend on rare city/disaster triggers.
+   */
+  private ensureRealtimeDemoObject(): void {
+    if (!this.seedRealtimeDemoObject) {
+      return;
+    }
+
+    if (this.realtimeContext.sprites.some((sprite) => sprite.frame > 0)) {
+      return;
+    }
+
+    generateRealtimeCopter(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
   }
 
   /**
