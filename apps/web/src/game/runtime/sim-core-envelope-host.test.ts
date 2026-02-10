@@ -169,4 +169,130 @@ describe('SimCoreEnvelopeHost', () => {
 
     expect(captured.envelopes).toHaveLength(3);
   });
+
+  it('routes hello, command, request_snapshot, and disconnect through one active session lifecycle', () => {
+    const host = new SimCoreEnvelopeHost();
+    const firstSessionEnvelopes: HostEnvelope[] = [];
+    const firstSession = host.connect((envelope) => {
+      firstSessionEnvelopes.push(envelope);
+    });
+    firstSession.send({
+      kind: 'hello',
+      roomId: 'room-first',
+      clientId: 'client-first',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    expect(firstSessionEnvelopes).toHaveLength(2);
+
+    const secondSessionEnvelopes: HostEnvelope[] = [];
+    const secondSession = host.connect((envelope) => {
+      secondSessionEnvelopes.push(envelope);
+    });
+
+    firstSession.send({
+      kind: 'request_snapshot',
+      roomId: 'room-first',
+      clientId: 'client-first',
+      fromServerSeq: 1,
+      reason: 'manual',
+    });
+    firstSession.send({
+      kind: 'command',
+      roomId: 'room-first',
+      clientId: 'client-first',
+      commandId: 'cmd-stale',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 12,
+        y: 12,
+      },
+    });
+    firstSession.disconnect();
+
+    secondSession.send({
+      kind: 'command',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      commandId: 'cmd-before-hello',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 4,
+        y: 4,
+      },
+    });
+    secondSession.send({
+      kind: 'request_snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      fromServerSeq: 1,
+      reason: 'manual',
+    });
+    expect(secondSessionEnvelopes).toHaveLength(0);
+
+    secondSession.send({
+      kind: 'hello',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    expect(secondSessionEnvelopes).toHaveLength(2);
+    expect(secondSessionEnvelopes[1]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      tick: 0,
+      serverSeq: 2,
+    });
+
+    secondSession.send({
+      kind: 'command',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      commandId: 'cmd-active',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 4,
+        y: 4,
+      },
+    });
+    secondSession.send({
+      kind: 'request_snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      fromServerSeq: 3,
+      reason: 'manual',
+    });
+    expect(secondSessionEnvelopes).toHaveLength(4);
+    expect(secondSessionEnvelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      tick: 1,
+      serverSeq: 3,
+      commandId: 'cmd-active',
+      reason: 'invalid-command',
+    });
+    expect(secondSessionEnvelopes[3]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      tick: 1,
+      serverSeq: 4,
+    });
+
+    secondSession.disconnect();
+    secondSession.send({
+      kind: 'request_snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      fromServerSeq: 4,
+      reason: 'manual',
+    });
+    expect(secondSessionEnvelopes).toHaveLength(4);
+  });
 });

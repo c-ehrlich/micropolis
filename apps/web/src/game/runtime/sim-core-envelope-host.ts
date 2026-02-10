@@ -17,8 +17,21 @@ import type {
  */
 export class SimCoreEnvelopeHost implements CoreHost {
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
-  private activeRoomId: string | undefined;
-  private activeClientId: string | undefined;
+  private lifecycle:
+    | {
+        phase: 'disconnected';
+      }
+    | {
+        phase: 'awaiting-hello';
+        sessionId: number;
+      }
+    | {
+        phase: 'ready';
+        sessionId: number;
+        roomId: string;
+        clientId: string;
+      } = { phase: 'disconnected' };
+  private nextSessionId = 0;
   private readonly authorityState: SimCoreRuntimeState;
   private readonly mapWidth: number;
   private readonly mapHeight: number;
@@ -33,16 +46,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
-    this.onEnvelope = onEnvelope;
+    const sessionId = this.beginSession(onEnvelope);
 
     return {
       send: (envelope) => {
-        this.handleClientEnvelope(envelope);
+        this.routeClientEnvelope(sessionId, envelope);
       },
       disconnect: () => {
-        this.onEnvelope = undefined;
-        this.activeRoomId = undefined;
-        this.activeClientId = undefined;
+        this.routeDisconnect(sessionId);
       },
     };
   }
@@ -52,37 +63,89 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors top-level command/update dispatch structure in
    * `ref/micropolis/src/sim/w_sim.c`.
    */
-  private handleClientEnvelope(envelope: ClientEnvelope): void {
-    if (this.onEnvelope === undefined) {
+  private routeClientEnvelope(sessionId: number, envelope: ClientEnvelope): void {
+    if (!this.isSessionActive(sessionId)) {
       return;
     }
 
     if (envelope.kind === 'hello') {
-      this.activeRoomId = envelope.roomId;
-      this.activeClientId = envelope.clientId;
-      this.onEnvelope({
-        kind: 'hello',
-        roomId: envelope.roomId,
-        clientId: envelope.clientId,
-        protocolVersion: envelope.protocolVersion,
-        coreVersion: envelope.coreVersion,
-        accepted: true,
-      });
-      this.emitSnapshot(envelope.roomId, envelope.clientId);
-      return;
-    }
-
-    if (
-      this.activeRoomId === undefined ||
-      this.activeClientId === undefined ||
-      envelope.roomId !== this.activeRoomId ||
-      envelope.clientId !== this.activeClientId
-    ) {
+      this.handleHelloEnvelope(sessionId, envelope);
       return;
     }
 
     if (envelope.kind === 'request_snapshot') {
-      this.emitSnapshot(envelope.roomId, envelope.clientId);
+      this.handleSnapshotRequestEnvelope(sessionId, envelope);
+      return;
+    }
+
+    this.handleCommandEnvelope(sessionId, envelope);
+  }
+
+  private beginSession(onEnvelope: (envelope: HostEnvelope) => void): number {
+    this.nextSessionId += 1;
+    const sessionId = this.nextSessionId;
+    this.onEnvelope = onEnvelope;
+    this.lifecycle = {
+      phase: 'awaiting-hello',
+      sessionId,
+    };
+    return sessionId;
+  }
+
+  private routeDisconnect(sessionId: number): void {
+    if (!this.isSessionActive(sessionId)) {
+      return;
+    }
+
+    this.onEnvelope = undefined;
+    this.lifecycle = { phase: 'disconnected' };
+  }
+
+  private handleHelloEnvelope(
+    sessionId: number,
+    envelope: Extract<ClientEnvelope, { kind: 'hello' }>,
+  ): void {
+    if (!this.isSessionActive(sessionId) || this.onEnvelope === undefined) {
+      return;
+    }
+
+    this.lifecycle = {
+      phase: 'ready',
+      sessionId,
+      roomId: envelope.roomId,
+      clientId: envelope.clientId,
+    };
+    this.onEnvelope({
+      kind: 'hello',
+      roomId: envelope.roomId,
+      clientId: envelope.clientId,
+      protocolVersion: envelope.protocolVersion,
+      coreVersion: envelope.coreVersion,
+      accepted: true,
+    });
+    this.emitSnapshot(envelope.roomId, envelope.clientId);
+  }
+
+  private handleSnapshotRequestEnvelope(
+    sessionId: number,
+    envelope: Extract<ClientEnvelope, { kind: 'request_snapshot' }>,
+  ): void {
+    if (!this.isReadySessionEnvelope(sessionId, envelope.roomId, envelope.clientId)) {
+      return;
+    }
+
+    this.emitSnapshot(envelope.roomId, envelope.clientId);
+  }
+
+  private handleCommandEnvelope(
+    sessionId: number,
+    envelope: Extract<ClientEnvelope, { kind: 'command' }>,
+  ): void {
+    if (!this.isReadySessionEnvelope(sessionId, envelope.roomId, envelope.clientId)) {
+      return;
+    }
+
+    if (this.onEnvelope === undefined) {
       return;
     }
 
@@ -97,6 +160,22 @@ export class SimCoreEnvelopeHost implements CoreHost {
       commandId: envelope.commandId,
       reason: 'invalid-command',
     });
+  }
+
+  private isSessionActive(sessionId: number): boolean {
+    if (this.onEnvelope === undefined || this.lifecycle.phase === 'disconnected') {
+      return false;
+    }
+
+    return this.lifecycle.sessionId === sessionId;
+  }
+
+  private isReadySessionEnvelope(sessionId: number, roomId: string, clientId: string): boolean {
+    if (!this.isSessionActive(sessionId) || this.lifecycle.phase !== 'ready') {
+      return false;
+    }
+
+    return this.lifecycle.roomId === roomId && this.lifecycle.clientId === clientId;
   }
 
   /**
