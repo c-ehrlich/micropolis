@@ -118,10 +118,59 @@ const STAGE2_MESSAGE_TEXT: Record<number, string> = {
   17: 'Road maintenance is low.',
   18: 'Fire coverage is low.',
   19: 'Police coverage is low.',
+  20: 'Fire reported.',
+  21: 'Monster sighted.',
+  22: 'Tornado sighted.',
+  23: 'Earthquake reported.',
+  24: 'Plane crash reported.',
+  25: 'Shipwreck reported.',
+  26: 'Train crash reported.',
+  27: 'Helicopter crash reported.',
+  30: 'Explosion reported.',
+  32: 'Explosion reported.',
+  41: 'Heavy traffic reported.',
+  42: 'Flooding reported.',
+  [-20]: 'Fire reported.',
+  [-21]: 'Monster sighted.',
+  [-22]: 'Tornado sighted.',
+  [-23]: 'Earthquake reported.',
+  [-24]: 'Plane crash reported.',
+  [-25]: 'Shipwreck reported.',
+  [-26]: 'Train crash reported.',
+  [-27]: 'Helicopter crash reported.',
+  [-30]: 'Explosion reported.',
+  [-41]: 'Heavy traffic reported.',
+  [-42]: 'Flooding reported.',
   [-10]: 'Pollution has reached dangerous levels.',
   [-11]: 'Crime is out of control.',
   [-12]: 'Traffic is congested.',
 };
+
+/**
+ * Manual Stage 7 realtime event choices exposed in the browser QA panel.
+ * Mirrors tornado/monster disaster sprite entrypoints (`MakeTornado`,
+ * `MakeMonster`) in `ref/micropolis/src/sim/w_sprite.c`.
+ * Difference: this explicit chooser is a browser-only manual verification aid.
+ */
+export const STAGE7_MANUAL_REALTIME_EVENT_CHOICES = [
+  {
+    id: 'tornado',
+    label: 'Trigger Tornado',
+  },
+  {
+    id: 'monster',
+    label: 'Trigger Monster',
+  },
+] as const;
+
+/**
+ * Union of manual Stage 7 QA event ids.
+ * Mirrors the `MakeTornado`/`MakeMonster` disaster entrypoint set in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Difference: this browser-only union narrows explicit manual trigger inputs.
+ */
+export type Stage7ManualRealtimeEventId =
+  (typeof STAGE7_MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
 
 /**
  * Scenario choice metadata shown in the Stage 2 browser selector.
@@ -346,6 +395,44 @@ export class DemoMapHost implements CoreHost {
         this.onEnvelope = undefined;
       },
     };
+  }
+
+  /**
+   * Triggers one manual Stage 7 disaster overlay/message event patch.
+   * Mirrors `MakeTornado`/`MakeMonster` entrypoints in
+   * `ref/micropolis/src/sim/w_sprite.c` and message delivery through
+   * `doMessage` in `ref/micropolis/src/sim/s_msg.c`.
+   * Difference: this is a browser QA seam so manual Stage 7 verification can
+   * deterministically produce coherent overlay + message behavior on demand.
+   */
+  public triggerManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): boolean {
+    if (
+      this.onEnvelope === undefined ||
+      this.activeRoomId === undefined ||
+      this.activeClientId === undefined
+    ) {
+      return false;
+    }
+
+    this.tick += 1;
+    this.simContext.store.beginTick();
+    try {
+      this.syncRealtimeContextFromSimState();
+      this.applyManualRealtimeEvent(eventId);
+      runUiUpdate(this.simState, this.simContext);
+    } finally {
+      this.simContext.store.commitTick();
+    }
+
+    this.emitPatch(
+      this.activeRoomId,
+      this.activeClientId,
+      this.buildHookDrivenPatchPayload({
+        includeHud: true,
+      }),
+    );
+
+    return true;
   }
 
   /**
@@ -1263,6 +1350,21 @@ export class DemoMapHost implements CoreHost {
       x,
       y,
     });
+  }
+
+  /**
+   * Applies one manual Stage 7 realtime event into authoritative sprite state.
+   * Mirrors disaster sprite creation paths in `MakeTornado`/`MakeMonster` from
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: host operators explicitly pick the event kind for manual QA.
+   */
+  private applyManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): void {
+    if (eventId === 'tornado') {
+      makeRealtimeTornado(this.realtimeContext);
+      return;
+    }
+
+    makeRealtimeMonster(this.realtimeContext);
   }
 
   /**

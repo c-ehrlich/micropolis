@@ -261,6 +261,55 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('emits coherent tornado overlay and message payloads for manual Stage 7 triggers', () => {
+    const host = new DemoMapHost({
+      enableAmbientTicks: false,
+      seedRealtimeDemoObject: false,
+    });
+    const runtime = createWebHostRuntime({ host });
+    let sawPatchWithTornadoMessageAndRealtime = false;
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind === 'patch') {
+        const messageDeltas = event.envelope.payload.messageDeltas;
+        const realtimeDeltas = event.envelope.payload.realtime?.deltas;
+        if (messageDeltas !== undefined && realtimeDeltas !== undefined) {
+          const hasTornadoMessage = messageDeltas.some((message) => message.id === -22);
+          const hasTornadoDelta = realtimeDeltas.some(
+            (delta) => delta.kind === 'upsert' && delta.object.type === 6,
+          );
+          if (hasTornadoMessage && hasTornadoDelta) {
+            sawPatchWithTornadoMessageAndRealtime = true;
+          }
+        }
+      }
+    });
+
+    runtime.connect();
+    expect(host.triggerManualRealtimeEvent('tornado')).toBe(true);
+    expect(sawPatchWithTornadoMessageAndRealtime).toBe(true);
+
+    const runtimeTornado = runtime
+      .getState()
+      .realtimeState.objects.find((object) => object.type === 6);
+    const runtimeTornadoMessage = runtime
+      .getState()
+      .hudState.messages.find((message) => message.id === -22 && message.dispatch === 'sendMesAt');
+    if (
+      runtimeTornado === undefined ||
+      runtimeTornadoMessage === undefined ||
+      runtimeTornadoMessage.x === null ||
+      runtimeTornadoMessage.y === null
+    ) {
+      throw new Error('expected tornado overlay object and coordinate message in runtime state');
+    }
+
+    // `MakeTornado` in `ref/micropolis/src/sim/w_sprite.c` dispatches:
+    // `SendMesAt(-22, (x >> 4) + 3, (y >> 4) + 2)`.
+    expect(runtimeTornadoMessage.x).toBe((runtimeTornado.x >> 4) + 3);
+    expect(runtimeTornadoMessage.y).toBe((runtimeTornado.y >> 4) + 2);
+  });
+
   it('routes repeated realtime tornado picture events into message feed deltas', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
