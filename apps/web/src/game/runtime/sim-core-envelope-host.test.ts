@@ -20,6 +20,7 @@ import {
   type HostRealtimePayload,
   PLAYABLE_TOOL_SPECS,
 } from './protocol.ts';
+import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
@@ -2359,6 +2360,164 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 8,
       payload: {},
     });
+  });
+
+  it('reconstructs map/HUD/messages/realtime deterministically from snapshot baseline plus replay tail', () => {
+    const roomId = 'room-replay-reconstruct';
+    const clientId = 'client-replay-reconstruct';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+    const roadX = 24;
+    const roadY = 24;
+    const roadIndex = roadX * World.WORLD_Y + roadY;
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[roadIndex] = Tile.DIRT | TileFlag.BULLBIT | TileFlag.BURNBIT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-road-replay-reconstruct',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: roadX,
+        y: roadY,
+      },
+    });
+
+    // Message-id source: `SendMessages` warning ids in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMesAt(
+        hostInternals.authorityState.simState,
+        hostInternals.authorityState.simContext,
+        14,
+        9,
+        11,
+      ),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-pause-replay-reconstruct',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    hostInternals.authorityState.simContext.hooks.generateCopter();
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-play-replay-reconstruct',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const liveEnvelopes = captured.envelopes.slice();
+    let liveState = createInitialWebRuntimeState({ roomId, clientId });
+    for (const envelope of liveEnvelopes) {
+      const reduction = reduceHostEnvelope(liveState, envelope);
+      expect(reduction.outcome).toBe('applied');
+      liveState = reduction.state;
+    }
+
+    const requestReplayFrom = (fromServerSeq: number): HostEnvelope[] => {
+      const replayStart = captured.envelopes.length;
+      captured.send({
+        kind: 'request_snapshot',
+        roomId,
+        clientId,
+        fromServerSeq,
+        reason: 'manual',
+      });
+      return captured.envelopes.slice(replayStart);
+    };
+    const replayOne = requestReplayFrom(0);
+    const replayTwo = requestReplayFrom(0);
+
+    const reduceReplay = (replayEnvelopes: readonly HostEnvelope[]) => {
+      let state = createInitialWebRuntimeState({ roomId, clientId });
+      const helloEnvelope = liveEnvelopes[0];
+      if (helloEnvelope === undefined || helloEnvelope.kind !== 'hello') {
+        throw new Error('expected initial hello envelope for replay reconstruction');
+      }
+      const helloReduction = reduceHostEnvelope(state, helloEnvelope);
+      expect(helloReduction.outcome).toBe('applied');
+      state = helloReduction.state;
+      for (const envelope of replayEnvelopes) {
+        const reduction = reduceHostEnvelope(state, envelope);
+        expect(reduction.outcome).toBe('applied');
+        state = reduction.state;
+      }
+      return state;
+    };
+    const replayStateOne = reduceReplay(replayOne);
+    const replayStateTwo = reduceReplay(replayTwo);
+
+    const readComparableProjection = (state: ReturnType<typeof createInitialWebRuntimeState>) => ({
+      map: {
+        width: state.mapState.width,
+        height: state.mapState.height,
+        tiles: state.mapState.tiles,
+      },
+      hud: {
+        fundsLabel: state.hudState.fundsLabel,
+        dateLabel: state.hudState.dateLabel,
+        demandLabel: state.hudState.demandLabel,
+        speedLabel: state.hudState.speedLabel,
+        options: state.hudState.options,
+        messages: state.hudState.messages,
+      },
+      realtimeObjects: state.realtimeState.objects,
+    });
+
+    expect(readComparableProjection(replayStateOne)).toEqual(readComparableProjection(liveState));
+    expect(readComparableProjection(replayStateTwo)).toEqual(readComparableProjection(liveState));
+
+    // `ROADBASE` tile ids from `w_con.c` drive the placed-road map word, so
+    // replay must reconstruct a non-dirt road tile at the command coordinate.
+    const roadRowMajorIndex = roadY * liveState.mapState.width + roadX;
+    expect(liveState.mapState.tiles[roadRowMajorIndex]).not.toBe(Tile.DIRT);
+    expect(replayStateOne.mapState.tiles[roadRowMajorIndex]).toBe(
+      liveState.mapState.tiles[roadRowMajorIndex],
+    );
+    expect(
+      replayStateOne.hudState.messages.some((message) => message.id === 14 && message.x === 9),
+    ).toBe(true);
+    expect(replayStateOne.realtimeState.objects.some((object) => object.type === 2)).toBe(true);
   });
 
   it('keeps command settlement ordering deterministic across async scenario and later sync commands', async () => {
