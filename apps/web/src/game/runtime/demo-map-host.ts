@@ -363,6 +363,8 @@ export interface DemoMapHostOptions {
  * Difference: map mutation remains deterministic/demo-scripted, but HUD/message/speed
  * projection is sourced from real sim-core hook outputs (`uiSet`, `sendMes`,
  * `sendMesAt`, `tickCount`).
+ * Migration note: this host is migration-frozen for gameplay behavior. Route `/`
+ * gameplay changes must be implemented in the sim-core envelope host path.
  */
 export class DemoMapHost implements CoreHost {
   private readonly enableAmbientTicks: boolean;
