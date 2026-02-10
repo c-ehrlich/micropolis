@@ -2628,13 +2628,13 @@ describe('createPlayableRuntimeHost', () => {
       // dispatches earthquake message id `-23` via `SendMesAt`.
       expect(latestPatch.payload.messageDeltas?.some((message) => message.id === -23)).toBe(true);
 
-      expect(PLAYABLE_DISASTER_CHOICES.map((choice) => choice.id)).toEqual([
-        'tornado',
-        'monster',
-        'fire',
-        'flood',
-        'meltdown',
-        'earthquake',
+      expect(PLAYABLE_DISASTER_CHOICES).toEqual([
+        { id: 'tornado', label: 'Trigger Tornado' },
+        { id: 'monster', label: 'Trigger Monster' },
+        { id: 'fire', label: 'Trigger Fire' },
+        { id: 'flood', label: 'Trigger Flood' },
+        { id: 'meltdown', label: 'Trigger Meltdown' },
+        { id: 'earthquake', label: 'Trigger Earthquake' },
       ]);
     } finally {
       connection.disconnect();
