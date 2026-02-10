@@ -46,6 +46,26 @@ describe('stage8 tile sprite atlas', () => {
     expect(flagged.sourceY).toBe(plain.sourceY);
   });
 
+  it('applies g_bigmap blink-time LIGHTNINGBOLT substitution for unpowered zone centers', () => {
+    // Sources:
+    // - `if (blink && (tile & ZONEBIT) && !(tile & PWRBIT)) tile = LIGHTNINGBOLT;`
+    //   in `ref/micropolis/src/sim/g_bigmap.c`
+    // - `#define LIGHTNINGBOLT 827` in `ref/micropolis/src/sim/headers/sim.h`
+    const unpoweredZoneWord = Tile.RESBASE | TileFlag.ZONEBIT;
+
+    const nonBlink = lookupStage8TileSprite(unpoweredZoneWord);
+    const blink = lookupStage8TileSprite(unpoweredZoneWord, {
+      blinkUnpoweredZoneCenter: true,
+    });
+    const powered = lookupStage8TileSprite(unpoweredZoneWord | TileFlag.PWRBIT, {
+      blinkUnpoweredZoneCenter: true,
+    });
+
+    expect(nonBlink.tileId).toBe(Tile.RESBASE);
+    expect(blink.tileId).toBe(Tile.LIGHTNINGBOLT);
+    expect(powered.tileId).toBe(Tile.RESBASE);
+  });
+
   it('parses explicit debug-renderer feature flag values only', () => {
     expect(isStage4DebugTileRendererEnabled({})).toBe(false);
     expect(isStage4DebugTileRendererEnabled({ VITE_STAGE4_DEBUG_TILE_RENDERER: '0' })).toBe(false);

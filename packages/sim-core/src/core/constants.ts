@@ -169,6 +169,7 @@ const FULLSTADIUM = 800;
 const NUCLEARBASE = 811;
 const NUCLEAR = 816;
 const LASTZONE = 826;
+const LIGHTNINGBOLT = 827;
 
 const HBRDG0 = 828;
 const HBRDG1 = 829;
@@ -299,6 +300,7 @@ export const Tile = {
   NUCLEARBASE,
   NUCLEAR,
   LASTZONE,
+  LIGHTNINGBOLT,
   HBRDG0,
   HBRDG1,
   HBRDG2,

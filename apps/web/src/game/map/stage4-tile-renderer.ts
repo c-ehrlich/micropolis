@@ -1,8 +1,38 @@
-import { Tile, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
+import { Tile, TileFlag, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 
 const STAGE4_TILE_DEBUG_FALLBACK = '#475569';
 
 const TILE_ID_DEBUG_COLOR_LOOKUP = buildStage4TileDebugColorLookup();
+
+/**
+ * Resolves one authoritative tile word to the draw-time tile id.
+ * Mirrors tile-to-graphic selection in `MemDrawBeegMapRect` and
+ * `WireDrawBeegMapRect` from `ref/micropolis/src/sim/g_bigmap.c`:
+ * `(tile & LOMASK)`, wrap `[TILE_COUNT, 1023]` by subtracting `TILE_COUNT`,
+ * then optional blink-phase override to `LIGHTNINGBOLT` for unpowered zones.
+ * Parity note: this is a 1:1 port of C draw-id selection, parameterizing
+ * `flagBlink <= 0` as an explicit option for deterministic tests.
+ */
+export function toStage4DrawTileId(
+  tileWord: number,
+  options: Readonly<{ blinkUnpoweredZoneCenter?: boolean }> = {},
+): number {
+  const blinkUnpoweredZoneCenter = options.blinkUnpoweredZoneCenter ?? false;
+  let tile = tileWord & 0xffff;
+  if ((tile & TileMask.LOMASK) >= Tile.TILE_COUNT) {
+    tile -= Tile.TILE_COUNT;
+  }
+
+  if (
+    blinkUnpoweredZoneCenter &&
+    (tile & TileFlag.ZONEBIT) !== 0 &&
+    (tile & TileFlag.PWRBIT) === 0
+  ) {
+    return Tile.LIGHTNINGBOLT;
+  }
+
+  return tile & TileMask.LOMASK;
+}
 
 /**
  * Normalizes one authoritative map tile word into a drawable tile id.
@@ -10,16 +40,11 @@ const TILE_ID_DEBUG_COLOR_LOOKUP = buildStage4TileDebugColorLookup();
  * with `LOMASK` before draw-time lookup) and `MemDrawBeegMapRect` /
  * `WireDrawBeegMapRect` in `ref/micropolis/src/sim/g_bigmap.c` (wrap ids in
  * `[TILE_COUNT, 1023]` back into the base tile page).
- * Parity note: this is a 1:1 port of the C tile-id normalization path used by
- * Stage 4 debug lookup.
+ * Parity note: this helper intentionally excludes `flagBlink` draw-time
+ * substitution; use `toStage4DrawTileId` when blink-phase parity is required.
  */
 export function toStage4RenderableTileId(tileWord: number): number {
-  const tileValue = tileWord & 0xffff;
-  let tileId = tileValue & TileMask.LOMASK;
-  if (tileId >= Tile.TILE_COUNT) {
-    tileId -= Tile.TILE_COUNT;
-  }
-  return tileId;
+  return toStage4DrawTileId(tileWord);
 }
 
 /**
@@ -30,7 +55,7 @@ export function toStage4RenderableTileId(tileWord: number): number {
  * classes to debug colors (Stage 4 scope before sprite-atlas work).
  */
 export function getStage4TileDebugColor(tileWord: number): string {
-  const tileId = toStage4RenderableTileId(tileWord);
+  const tileId = toStage4DrawTileId(tileWord);
   return TILE_ID_DEBUG_COLOR_LOOKUP[tileId] ?? STAGE4_TILE_DEBUG_FALLBACK;
 }
 

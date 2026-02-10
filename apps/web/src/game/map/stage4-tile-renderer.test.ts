@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
-import { getStage4TileDebugColor, toStage4RenderableTileId } from './stage4-tile-renderer.ts';
+import {
+  getStage4TileDebugColor,
+  toStage4DrawTileId,
+  toStage4RenderableTileId,
+} from './stage4-tile-renderer.ts';
 
 describe('stage4 tile renderer', () => {
   it('masks tile words with LOMASK and wraps ids above TILE_COUNT for lookup parity', () => {
@@ -23,6 +27,25 @@ describe('stage4 tile renderer', () => {
     const animatedFireWord = (Tile.FIRE + 1) | TileFlag.ANIMBIT | TileFlag.BULLBIT;
     expect(toStage4RenderableTileId(animatedFireWord)).toBe(Tile.FIRE + 1);
     expect(getStage4TileDebugColor(animatedFireWord)).toBe(getStage4TileDebugColor(Tile.FIRE + 1));
+  });
+
+  it('mirrors g_bigmap blink override to LIGHTNINGBOLT for unpowered zone centers', () => {
+    // Sources:
+    // - `if (blink && (tile & ZONEBIT) && !(tile & PWRBIT)) tile = LIGHTNINGBOLT;`
+    //   in `ref/micropolis/src/sim/g_bigmap.c`
+    // - `#define LIGHTNINGBOLT 827` in `ref/micropolis/src/sim/headers/sim.h`
+    const unpoweredZoneWord = Tile.RESBASE | TileFlag.ZONEBIT;
+    expect(toStage4DrawTileId(unpoweredZoneWord)).toBe(Tile.RESBASE);
+    expect(
+      toStage4DrawTileId(unpoweredZoneWord, {
+        blinkUnpoweredZoneCenter: true,
+      }),
+    ).toBe(Tile.LIGHTNINGBOLT);
+    expect(
+      toStage4DrawTileId(unpoweredZoneWord | TileFlag.PWRBIT, {
+        blinkUnpoweredZoneCenter: true,
+      }),
+    ).toBe(Tile.RESBASE);
   });
 
   it('keeps core terrain classes visually distinct in debug rendering', () => {

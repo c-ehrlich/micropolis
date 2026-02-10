@@ -8,7 +8,7 @@ import {
   TILE_SHEET_HEADERS,
 } from '../../../../../packages/sim-assets/src/tiles.ts';
 import { Tile } from '../../../../../packages/sim-core/src/core/constants.ts';
-import { getStage4TileDebugColor, toStage4RenderableTileId } from './stage4-tile-renderer.ts';
+import { getStage4TileDebugColor, toStage4DrawTileId } from './stage4-tile-renderer.ts';
 
 const STAGE8_TILE_ATLAS_DERIVED_PNG_PATH = 'packages/sim-assets/generated-images/images/tiles.png';
 const STAGE8_TILE_ATLAS_IMPORT_PATH =
@@ -103,6 +103,15 @@ export interface Stage8TileSpriteLookup {
 }
 
 /**
+ * Draw-time options for Stage 8 tile-to-sprite lookup.
+ * Mirrors `flagBlink <= 0` handling in `MemDrawBeegMapRect` from
+ * `ref/micropolis/src/sim/g_bigmap.c` for lightning-bolt substitution.
+ */
+export interface Stage8TileSpriteLookupOptions {
+  readonly blinkUnpoweredZoneCenter?: boolean;
+}
+
+/**
  * Explicit env flag helper for retaining debug tile diagnostics in Stage 8.
  * This has no direct C equivalent in Micropolis; it is a TypeScript-only
  * diagnostics switch layered over the Stage 8 sprite renderer.
@@ -124,11 +133,16 @@ export function isStage4DebugTileRendererEnabled(
  * `ref/micropolis/src/sim/g_bigmap.c` and animation flag masking flow from
  * `ref/micropolis/src/sim/g_ani.c`.
  * Parity note: rectangle lookup is deterministic and keyed by canonical
- * `tiles.xpm` identity; this is a 1:1 tile-id normalization port with
+ * `tiles.xpm` identity; this is a 1:1 tile-id draw relationship port with
  * browser-specific atlas coordinates.
  */
-export function lookupStage8TileSprite(tileWord: number): Stage8TileSpriteLookup {
-  const tileId = toStage4RenderableTileId(tileWord);
+export function lookupStage8TileSprite(
+  tileWord: number,
+  options: Stage8TileSpriteLookupOptions = {},
+): Stage8TileSpriteLookup {
+  const tileId = toStage4DrawTileId(tileWord, {
+    blinkUnpoweredZoneCenter: options.blinkUnpoweredZoneCenter,
+  });
   const cached = STAGE8_TILE_SPRITE_LOOKUP_BY_TILE_ID[tileId];
   assertDefined(cached, `Missing Stage 8 tile sprite lookup row for tile id ${tileId}`);
   return cached;
