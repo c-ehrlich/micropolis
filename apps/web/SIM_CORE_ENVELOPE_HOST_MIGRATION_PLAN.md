@@ -112,7 +112,7 @@ Acceptance checks:
 
 Acceptance checks:
 
-- [ ] Runtime reducers in `apps/web/src/game/runtime` consume new host payloads without schema regressions.
+- [x] Runtime reducers in `apps/web/src/game/runtime` consume new host payloads without schema regressions.
 - [ ] Snapshot + replay reconstruct map/HUD/messages/realtime deterministically.
 - [ ] Realtime overlays remain functional with snapshot + delta transport.
 
