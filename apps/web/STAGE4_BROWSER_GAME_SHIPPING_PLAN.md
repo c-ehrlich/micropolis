@@ -413,7 +413,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] `packages/sim-core/src/sim/realtime.test.ts` remains green.
+- [x] `packages/sim-core/src/sim/realtime.test.ts` remains green.
 - [x] Add/extend web runtime tests for overlay payload projection.
 - [ ] Manual: realtime entities appear and move while sim runs.
 - [ ] Manual: disasters/events produce coherent overlay + message behavior.
