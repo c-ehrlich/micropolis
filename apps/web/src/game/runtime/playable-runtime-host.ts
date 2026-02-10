@@ -1,9 +1,9 @@
-import {
-  PLAYABLE_SCENARIO_CHOICES as DEMO_PLAYABLE_SCENARIO_CHOICES,
-  type PlayableScenarioChoice as DemoPlayableScenarioChoice,
-} from './demo-map-host.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
+import {
+  PLAYABLE_SCENARIO_CHOICES as RUNTIME_PLAYABLE_SCENARIO_CHOICES,
+  type PlayableScenarioChoice as RuntimePlayableScenarioChoice,
+} from './playable-scenario-choices.ts';
 import type { CoreHost } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
@@ -16,9 +16,9 @@ export type { PlayableRuntimeHostOptions } from './playable-runtime-host-options
 /**
  * Authoritative Runtime scenario choice metadata used by the default playable route.
  * Mirrors `LoadScenario` table rows in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this is a naming/ownership wrapper over existing scenario metadata.
+ * Parity note: this is a naming/ownership alias over canonical runtime scenario metadata.
  */
-export type PlayableScenarioChoice = DemoPlayableScenarioChoice;
+export type PlayableScenarioChoice = RuntimePlayableScenarioChoice;
 
 /**
  * Scenario choices for the primary Authoritative Runtime gameplay route.
@@ -26,7 +26,7 @@ export type PlayableScenarioChoice = DemoPlayableScenarioChoice;
  * Parity note: this keeps route imports off legacy Playable Runtime naming without changing behavior.
  */
 export const PLAYABLE_SCENARIO_CHOICES: readonly PlayableScenarioChoice[] =
-  DEMO_PLAYABLE_SCENARIO_CHOICES;
+  RUNTIME_PLAYABLE_SCENARIO_CHOICES;
 
 /**
  * Browser `.cty` export payload emitted by Authoritative Runtime save-city patch updates.
