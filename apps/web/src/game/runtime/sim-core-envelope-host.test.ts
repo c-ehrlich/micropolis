@@ -17,6 +17,7 @@ import {
   type HostHudMessagePayload,
   type HostHudPayload,
   type HostMapPatchPayload,
+  type HostRealtimePayload,
   PLAYABLE_TOOL_SPECS,
 } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
@@ -151,6 +152,23 @@ function readMessageDeltasFromEnvelope(
   }
 
   return messageDeltas as readonly HostHudMessagePayload[];
+}
+
+/**
+ * Reads realtime payloads from snapshot/patch envelopes.
+ * Mirrors sprite payload projection ownership from `ref/micropolis/src/sim/w_sprite.c`.
+ */
+function readRealtimePayloadFromEnvelope(envelope: HostEnvelope): HostRealtimePayload | null {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return null;
+  }
+
+  const realtimePayload = (envelope.payload as { realtime?: unknown }).realtime;
+  if (realtimePayload === null || typeof realtimePayload !== 'object') {
+    return null;
+  }
+
+  return realtimePayload as HostRealtimePayload;
 }
 
 describe('SimCoreEnvelopeHost', () => {
@@ -360,6 +378,133 @@ describe('SimCoreEnvelopeHost', () => {
       const bridgeIndex = getCoreBridgeV1SnapshotTileIndex(probe.x, probe.y, height);
       expect(map.tileWords[bridgeIndex]).toBe(probe.bridgeTileWord);
     }
+  });
+
+  it('ports realtime snapshot/delta/object payloads from sim-core sprite hooks without forced copter seeding', () => {
+    const host = new SimCoreEnvelopeHost({
+      seedRealtimeDemoObject: true,
+    });
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simContext: {
+          hooks: {
+            generateCopter(): void;
+            destroyAllSprites(): void;
+          };
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-realtime-hooks',
+      clientId: 'client-realtime-hooks',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const initialSnapshot = captured.envelopes[1];
+    if (initialSnapshot === undefined || initialSnapshot.kind !== 'snapshot') {
+      throw new Error('expected initial snapshot envelope');
+    }
+    const initialRealtime = readRealtimePayloadFromEnvelope(initialSnapshot);
+    if (initialRealtime === null) {
+      throw new Error('expected initial realtime snapshot payload');
+    }
+    // C sprite type ids from `ref/micropolis/src/sim/headers/sim.h` only appear
+    // when simulation triggers create them (`w_sprite.c`); no host-side forced seed.
+    expect(initialRealtime.snapshot).toEqual([]);
+    expect(initialRealtime.objects).toEqual([]);
+
+    hostInternals.authorityState.simContext.hooks.generateCopter();
+    captured.send({
+      kind: 'command',
+      roomId: 'room-realtime-hooks',
+      clientId: 'client-realtime-hooks',
+      commandId: 'cmd-realtime-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const patchWithCopter = captured.envelopes.at(-1);
+    if (patchWithCopter === undefined || patchWithCopter.kind !== 'patch') {
+      throw new Error('expected patch envelope after realtime copter hook');
+    }
+    const realtimeAfterCopter = readRealtimePayloadFromEnvelope(patchWithCopter);
+    if (realtimeAfterCopter === null) {
+      throw new Error('expected realtime patch payload after realtime copter hook');
+    }
+    const copterObject = realtimeAfterCopter.objects?.[0];
+    if (copterObject === undefined || typeof copterObject.id !== 'string') {
+      throw new Error('expected realtime copter object with bridge id');
+    }
+    // Sprite type `2` is copter (`COP`) in `sim.h` / `w_sprite.c`.
+    expect(copterObject.type).toBe(2);
+    expect(realtimeAfterCopter.deltas).toEqual([
+      {
+        kind: 'upsert',
+        object: expect.objectContaining({
+          id: copterObject.id,
+          type: 2,
+          x: copterObject.x,
+          y: copterObject.y,
+        }),
+      },
+    ]);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-realtime-hooks',
+      clientId: 'client-realtime-hooks',
+      commandId: 'cmd-realtime-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const patchWithoutSpriteChange = captured.envelopes.at(-1);
+    if (patchWithoutSpriteChange === undefined || patchWithoutSpriteChange.kind !== 'patch') {
+      throw new Error('expected patch envelope after realtime play command');
+    }
+    const realtimeWithoutSpriteChange = readRealtimePayloadFromEnvelope(patchWithoutSpriteChange);
+    if (realtimeWithoutSpriteChange === null) {
+      throw new Error('expected realtime patch payload after realtime play command');
+    }
+    expect(realtimeWithoutSpriteChange.objects).toEqual(realtimeAfterCopter.objects);
+    expect(realtimeWithoutSpriteChange.deltas).toEqual([]);
+
+    hostInternals.authorityState.simContext.hooks.destroyAllSprites();
+    captured.send({
+      kind: 'command',
+      roomId: 'room-realtime-hooks',
+      clientId: 'client-realtime-hooks',
+      commandId: 'cmd-realtime-speed',
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 3,
+      },
+    });
+
+    const patchAfterDestroy = captured.envelopes.at(-1);
+    if (patchAfterDestroy === undefined || patchAfterDestroy.kind !== 'patch') {
+      throw new Error('expected patch envelope after realtime sprite destroy');
+    }
+    const realtimeAfterDestroy = readRealtimePayloadFromEnvelope(patchAfterDestroy);
+    if (realtimeAfterDestroy === null) {
+      throw new Error('expected realtime patch payload after realtime sprite destroy');
+    }
+    expect(realtimeAfterDestroy.objects).toEqual([]);
+    expect(realtimeAfterDestroy.deltas).toEqual([
+      {
+        kind: 'remove',
+        id: copterObject.id,
+      },
+    ]);
   });
 
   it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {
