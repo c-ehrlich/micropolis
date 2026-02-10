@@ -454,7 +454,7 @@ Deletion execution notes:
 
 - [x] Add deterministic sprite lookup tests (tile id -> atlas rect).
 - [x] Manual: map looks Micropolis-like (not HSL noise).
-- [ ] Manual: snapshot and patch redraw produce identical tile visuals.
+- [x] Manual: snapshot and patch redraw produce identical tile visuals.
 
 ---
 

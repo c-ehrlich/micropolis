@@ -1,11 +1,60 @@
 import { describe, expect, it } from 'vitest';
 
+import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
+  forEachMapCanvasPatchTileIndex,
   getMapCanvasLayerZIndex,
   projectRealtimeOverlaySprites,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
 } from './map-canvas.tsx';
+import {
+  lookupStage8TileSprite,
+  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+} from './stage8-tile-sprite-atlas.ts';
+
+function toRuntimeTileIndex(x: number, y: number, width: number): number {
+  return y * width + x;
+}
+
+function toStage8TileVisualToken(tileWord: number): string {
+  // `MemDrawBeegMapRect` in `g_bigmap.c` resolves one sprite row from
+  // `(tile & LOMASK)` (+ `TILE_COUNT` wrapping), which is ported by lookupStage8TileSprite.
+  const sprite = lookupStage8TileSprite(tileWord, {
+    atlasCanonicalIdentityKey: STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  });
+  return `${sprite.atlasCanonicalIdentityKey}:${sprite.tileId}:${sprite.sourceX}:${sprite.sourceY}:${sprite.sourceWidth}:${sprite.sourceHeight}`;
+}
+
+function applyPatchTileVisualTokens({
+  beforeTiles,
+  afterTiles,
+  width,
+  height,
+  dirtyRects,
+  dirtyTileIndexes,
+}: {
+  beforeTiles: Uint16Array;
+  afterTiles: Uint16Array;
+  width: number;
+  height: number;
+  dirtyRects: readonly Readonly<{ x: number; y: number; width: number; height: number }>[];
+  dirtyTileIndexes: Uint32Array;
+}): string[] {
+  const patchVisuals = Array.from(beforeTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+  forEachMapCanvasPatchTileIndex(
+    {
+      width,
+      height,
+      dirtyRects,
+      dirtyTileIndexes,
+    },
+    (tileIndex) => {
+      patchVisuals[tileIndex] = toStage8TileVisualToken(afterTiles[tileIndex] ?? 0);
+    },
+  );
+  return patchVisuals;
+}
 
 describe('map canvas draw-mode selection', () => {
   it('keeps full redraw ownership for authoritative snapshot frames', () => {
@@ -247,6 +296,75 @@ describe('map canvas draw-mode selection', () => {
     expect(baseline[0]?.key).toBe('id:rt-7');
     expect(moved[0]?.key).toBe('id:rt-7');
     expect(baseline[0]?.left).not.toBe(moved[0]?.left);
+  });
+});
+
+describe('map canvas snapshot/patch visual parity', () => {
+  it('keeps final tile visuals identical between snapshot redraw and dirty-rect patch redraw', () => {
+    const width = 4;
+    const height = 3;
+    const beforeTiles = Uint16Array.from([
+      Tile.DIRT,
+      Tile.RIVER,
+      Tile.ROADBASE,
+      Tile.POWERBASE,
+      Tile.RAILBASE,
+      Tile.RESBASE,
+      Tile.COMBASE,
+      Tile.INDBASE,
+      Tile.TREEBASE,
+      Tile.FIREBASE,
+      Tile.HBRDG0,
+      Tile.VBRDG3,
+    ]);
+    const afterTiles = beforeTiles.slice();
+    afterTiles[toRuntimeTileIndex(0, 0, width)] = Tile.ROADBASE + 1;
+    afterTiles[toRuntimeTileIndex(2, 1, width)] = Tile.FIREBASE + 2 + TileFlag.ANIMBIT;
+    afterTiles[toRuntimeTileIndex(3, 2, width)] = Tile.LIGHTNINGBOLT + TileFlag.ZONEBIT;
+
+    const dirtyRects = [
+      { x: -1, y: -1, width: 2, height: 2 },
+      { x: 2, y: 1, width: 2, height: 2 },
+    ] as const;
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const patchVisuals = applyPatchTileVisualTokens({
+      beforeTiles,
+      afterTiles,
+      width,
+      height,
+      dirtyRects,
+      dirtyTileIndexes: new Uint32Array(0),
+    });
+
+    expect(patchVisuals).toEqual(snapshotVisuals);
+  });
+
+  it('keeps final tile visuals identical between snapshot redraw and dirty-index patch redraw', () => {
+    const width = 3;
+    const height = 2;
+    const beforeTiles = Uint16Array.from([
+      Tile.DIRT,
+      Tile.ROADBASE,
+      Tile.POWERBASE,
+      Tile.RAILBASE,
+      Tile.RESBASE,
+      Tile.COMBASE,
+    ]);
+    const afterTiles = beforeTiles.slice();
+    afterTiles[1] = Tile.ROADBASE + 7 + TileFlag.BULLBIT;
+    afterTiles[4] = Tile.RESBASE + 3;
+
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const patchVisuals = applyPatchTileVisualTokens({
+      beforeTiles,
+      afterTiles,
+      width,
+      height,
+      dirtyRects: [],
+      dirtyTileIndexes: Uint32Array.from([1, 4]),
+    });
+
+    expect(patchVisuals).toEqual(snapshotVisuals);
   });
 });
 

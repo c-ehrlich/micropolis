@@ -590,36 +590,44 @@ function drawPatchTiles(
   tileSize: number,
   tileRenderer: MapCanvasTileRenderer,
 ): void {
-  if (mapState.dirtyRects.length > 0) {
-    drawPatchRects(context, mapState, tileSize, tileRenderer);
-    return;
-  }
-
-  for (const tileIndex of mapState.dirtyTileIndexes) {
+  forEachMapCanvasPatchTileIndex(mapState, (tileIndex) => {
     const width = mapState.width;
     const x = tileIndex % width;
     const y = Math.floor(tileIndex / width);
     drawMapCanvasTile(context, mapState.tiles[tileIndex] ?? 0, x, y, tileSize, tileRenderer);
-  }
+  });
 }
 
-function drawPatchRects(
-  context: CanvasRenderingContext2D,
-  mapState: RuntimeMapState,
-  tileSize: number,
-  tileRenderer: MapCanvasTileRenderer,
+/**
+ * Iterates tile indexes covered by one patch redraw pass.
+ * Mirrors dirty-region traversal ownership in `DoUpdateMap` from
+ * `ref/micropolis/src/sim/w_map.c`, where invalid rects are clipped to map
+ * bounds before tile redraw iteration proceeds.
+ * Parity note: this is a 1:1 extraction of the Stage 4 patch draw walk so
+ * snapshot-vs-patch visual parity can be asserted without canvas APIs.
+ */
+export function forEachMapCanvasPatchTileIndex(
+  mapState: Readonly<Pick<RuntimeMapState, 'width' | 'height' | 'dirtyRects' | 'dirtyTileIndexes'>>,
+  visit: (tileIndex: number) => void,
 ): void {
-  for (const rect of mapState.dirtyRects) {
-    const startX = Math.max(0, rect.x);
-    const startY = Math.max(0, rect.y);
-    const endX = Math.min(mapState.width, rect.x + rect.width);
-    const endY = Math.min(mapState.height, rect.y + rect.height);
-    for (let y = startY; y < endY; y += 1) {
-      for (let x = startX; x < endX; x += 1) {
-        const index = y * mapState.width + x;
-        drawMapCanvasTile(context, mapState.tiles[index] ?? 0, x, y, tileSize, tileRenderer);
+  if (mapState.dirtyRects.length > 0) {
+    for (const rect of mapState.dirtyRects) {
+      const startX = Math.max(0, rect.x);
+      const startY = Math.max(0, rect.y);
+      const endX = Math.min(mapState.width, rect.x + rect.width);
+      const endY = Math.min(mapState.height, rect.y + rect.height);
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = startX; x < endX; x += 1) {
+          const index = y * mapState.width + x;
+          visit(index);
+        }
       }
     }
+    return;
+  }
+
+  for (const tileIndex of mapState.dirtyTileIndexes) {
+    visit(tileIndex);
   }
 }
 
