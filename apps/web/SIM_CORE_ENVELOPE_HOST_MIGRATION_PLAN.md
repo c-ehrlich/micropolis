@@ -77,7 +77,7 @@ Acceptance checks:
 Scenario command settlement decision:
 
 - [x] Emit `ack` only after scenario bytes are loaded and applied successfully.
-- [ ] Emit `reject` with `invalid-scenario-file` on load/decode failure.
+- [x] Emit `reject` with `invalid-scenario-file` on load/decode failure.
 - [ ] Emit fresh authoritative `snapshot` immediately after scenario `ack`.
 
 Sequence/tick decision:

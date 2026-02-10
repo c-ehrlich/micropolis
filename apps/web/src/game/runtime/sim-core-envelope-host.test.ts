@@ -685,6 +685,53 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('rejects scenario load when scenario resource loading fails', async () => {
+    const host = new SimCoreEnvelopeHost({
+      scenarioResourceLoader: async (_fileName: string) => {
+        throw new Error('failed to read scenario bytes');
+      },
+    });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-scenario-load-failure',
+      clientId: 'client-scenario-load-failure',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-scenario-load-failure',
+      clientId: 'client-scenario-load-failure',
+      commandId: 'cmd-scenario-load-failure',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 2,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      captured.envelopes.some(
+        (envelope) =>
+          envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-load-failure',
+      ),
+    ).toBe(false);
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-scenario-load-failure',
+      clientId: 'client-scenario-load-failure',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-scenario-load-failure',
+      reason: 'invalid-scenario-file',
+    });
+  });
+
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
