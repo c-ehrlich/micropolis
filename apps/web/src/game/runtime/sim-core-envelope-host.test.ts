@@ -1303,6 +1303,109 @@ describe('SimCoreEnvelopeHost', () => {
     }
   });
 
+  it('keeps tick non-regressing across async settlement and internal tick cursor regression', async () => {
+    const scenario = getScenarioDefinition(2);
+    let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
+    const pendingScenarioBytes = new Promise<Uint8Array>((resolve) => {
+      resolveScenarioBytes = resolve;
+    });
+    const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-tick-monotonic',
+      clientId: 'client-tick-monotonic',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tick-monotonic',
+      clientId: 'client-tick-monotonic',
+      commandId: 'cmd-scenario-pending',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tick-monotonic',
+      clientId: 'client-tick-monotonic',
+      commandId: 'cmd-pause-before-regression',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const internalHost = host as unknown as {
+      tick: number;
+    };
+    internalHost.tick = 0;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tick-monotonic',
+      clientId: 'client-tick-monotonic',
+      commandId: 'cmd-play-after-regression',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-tick-monotonic',
+      clientId: 'client-tick-monotonic',
+      fromServerSeq: 0,
+      reason: 'manual',
+    });
+
+    const resolve = resolveScenarioBytes;
+    if (resolve === undefined) {
+      throw new Error('expected scenario loader resolver');
+    }
+    resolve(
+      new Uint8Array(
+        readFileSync(
+          new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+        ),
+      ),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const sequencedEnvelopes = captured.envelopes.filter(
+      (envelope): envelope is Exclude<HostEnvelope, { kind: 'hello' }> => envelope.kind !== 'hello',
+    );
+    expect(sequencedEnvelopes.length).toBeGreaterThan(0);
+
+    let previousTick = 0;
+    for (const envelope of sequencedEnvelopes) {
+      expect(envelope.tick).toBeGreaterThanOrEqual(previousTick);
+      previousTick = envelope.tick;
+    }
+
+    const playAck = captured.envelopes.find(
+      (envelope): envelope is Extract<HostEnvelope, { kind: 'ack' }> =>
+        envelope.kind === 'ack' && envelope.commandId === 'cmd-play-after-regression',
+    );
+    const scenarioAck = captured.envelopes.find(
+      (envelope): envelope is Extract<HostEnvelope, { kind: 'ack' }> =>
+        envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-pending',
+    );
+    if (playAck === undefined || scenarioAck === undefined) {
+      throw new Error('expected play and scenario acknowledgements');
+    }
+
+    expect(scenarioAck.tick).toBeGreaterThanOrEqual(playAck.tick);
+  });
+
   it('keeps serverSeq strictly increasing when the internal sequence cursor regresses', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);

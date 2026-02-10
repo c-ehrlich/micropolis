@@ -84,6 +84,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private serverSeq = 0;
   private lastEmittedServerSeq = 0;
   private tick = 0;
+  private lastEmittedTick = 0;
   private simPaused = false;
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
@@ -208,7 +209,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    this.tick += 1;
+    this.advanceCommandTick();
     if (envelope.command.kind === 'tool') {
       const rejectReason = this.applyToolCommand(envelope.command);
       if (rejectReason !== undefined) {
@@ -726,6 +727,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     const sequencedEnvelope: SequencedHostEnvelope = {
       ...envelope,
+      tick: this.nextEnvelopeTick(envelope.tick),
       serverSeq: this.nextServerSeq(),
     };
     this.onEnvelope(sequencedEnvelope);
@@ -745,6 +747,42 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.serverSeq = nextSequence;
     this.lastEmittedServerSeq = nextSequence;
     return nextSequence;
+  }
+
+  /**
+   * Advances the authoritative command tick by exactly one without regression.
+   * Mirrors forward-only simulation time progression in
+   * `ref/micropolis/src/sim/s_sim.c` (`CityTime`) and frame-loop ownership in
+   * `ref/micropolis/src/sim/sim.c`.
+   * Parity note: unlike C's synchronous single-process command loop, this host
+   * defends against accidental cursor rollback by deriving the next command tick
+   * from both local tick cursors, then incrementing once.
+   */
+  private advanceCommandTick(): number {
+    const tickBase = Math.max(this.tick, this.lastEmittedTick);
+    const nextTick = tickBase + 1;
+    this.tick = nextTick;
+    return nextTick;
+  }
+
+  /**
+   * Clamps one emitted envelope tick to the non-regressing authority cursor.
+   * Mirrors monotonic simulation time assumptions in
+   * `ref/micropolis/src/sim/s_sim.c` (`CityTime` never decrements).
+   * Parity note: async command settlement can complete after newer commands;
+   * this host normalizes captured older command ticks so bridge envelopes never
+   * regress tick order.
+   */
+  private nextEnvelopeTick(candidateTick: number): number {
+    const normalizedCandidate = Number.isFinite(candidateTick)
+      ? Math.trunc(candidateTick)
+      : this.lastEmittedTick;
+    const nextTick = Math.max(normalizedCandidate, this.lastEmittedTick);
+    this.lastEmittedTick = nextTick;
+    if (nextTick > this.tick) {
+      this.tick = nextTick;
+    }
+    return nextTick;
   }
 
   /**
