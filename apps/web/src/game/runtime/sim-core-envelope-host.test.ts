@@ -3117,6 +3117,123 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('keeps scenario/save/load settlement ordering deterministic when scenario loading is async', async () => {
+    const scenario = getScenarioDefinition(2);
+    let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
+    const pendingScenarioBytes = new Promise<Uint8Array>((resolve) => {
+      resolveScenarioBytes = resolve;
+    });
+    const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      commandId: 'cmd-scenario-async',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      commandId: 'cmd-save-after-scenario',
+      command: {
+        kind: 'city-io',
+        action: 'save-city',
+        fileName: 'queued-save',
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      commandId: 'cmd-load-invalid-after-save',
+      command: {
+        kind: 'city-io',
+        action: 'load-city',
+        fileName: 'broken.cty',
+        cityBytes: new Uint8Array([1, 2, 3]),
+      },
+    });
+
+    // Mirrors serial `SimCmd` settlement in `w_sim.c`: while `LoadScenario`
+    // awaits bytes (`s_fileio.c`), later save/load commands remain queued.
+    expect(captured.envelopes).toHaveLength(2);
+
+    const resolve = resolveScenarioBytes;
+    if (resolve === undefined) {
+      throw new Error('expected scenario loader resolver');
+    }
+    resolve(
+      new Uint8Array(
+        readFileSync(
+          new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+        ),
+      ),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-scenario-async',
+    });
+    expect(captured.envelopes[3]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      tick: 1,
+      serverSeq: 3,
+    });
+    expect(captured.envelopes[4]).toEqual({
+      kind: 'ack',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      tick: 2,
+      serverSeq: 4,
+      commandId: 'cmd-save-after-scenario',
+    });
+    expect(captured.envelopes[5]).toMatchObject({
+      kind: 'patch',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      tick: 2,
+      serverSeq: 5,
+    });
+    const savePatch = captured.envelopes[5];
+    if (savePatch === undefined || savePatch.kind !== 'patch') {
+      throw new Error('expected save-city patch settlement');
+    }
+    expect(readSaveCityPayload(savePatch.payload)).not.toBeNull();
+    expect(captured.envelopes[6]).toEqual({
+      kind: 'reject',
+      roomId: 'room-async-io-ordering',
+      clientId: 'client-async-io-ordering',
+      tick: 3,
+      serverSeq: 6,
+      commandId: 'cmd-load-invalid-after-save',
+      reason: 'invalid-city-file',
+    });
+  });
+
   it('keeps serverSeq strictly increasing across sync and async sequenced envelope emission', async () => {
     const scenario = getScenarioDefinition(2);
     let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;

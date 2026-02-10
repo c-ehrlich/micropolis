@@ -166,7 +166,7 @@ Required automated gates before handoff:
   Mitigation: keep route `/` migration isolated to envelope host path; avoid mixing event-contract logic into route host behavior.
 - [x] Risk: payload drift breaks runtime reducers.
   Mitigation: keep payload schema compatibility fields during migration and validate via existing reducer/runtime tests.
-- [ ] Risk: scenario/save/load async ordering regressions.
+- [x] Risk: scenario/save/load async ordering regressions.
   Mitigation: lock command settlement ordering in tests (ack/reject/snapshot sequence).
 
 ## Exit Criteria
