@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
@@ -17,6 +17,94 @@ const STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
     viewClass: 'editor',
     color: true,
   }) ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+
+const DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX = 640;
+const DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX = 480;
+const MICROPOLIS_EDITOR_WORLD_PIXELS_PER_TILE = 16;
+const MICROPOLIS_MAP_PAN_SCALE_NUMERATOR = 16;
+const MICROPOLIS_MAP_PAN_SCALE_DENOMINATOR = 3;
+
+/**
+ * Pointer-anchor state for one active drag-pan gesture.
+ * Mirrors `MapCmdPanStart` in `ref/micropolis/src/sim/w_map.c`, where map drag
+ * tracking stores the previous map-space pointer sample (`last_x`, `last_y`).
+ */
+export interface MapCanvasPanDragState {
+  readonly lastX: number;
+  readonly lastY: number;
+}
+
+/**
+ * Start one map-drag pan interaction.
+ * Mirrors `MapCmdPanStart` pointer tracking setup in
+ * `ref/micropolis/src/sim/w_map.c`.
+ */
+export function startMapCanvasPanDrag(x: number, y: number): MapCanvasPanDragState {
+  return {
+    lastX: x,
+    lastY: y,
+  };
+}
+
+/**
+ * Convert map-view drag delta into Micropolis editor-world pan pixels.
+ * Mirrors `MapCmdPanTo` in `ref/micropolis/src/sim/w_map.c` (`dx = dx * 16 / 3`)
+ * using truncation-toward-zero integer semantics from C.
+ */
+export function scaleMapPanDeltaToWorldPixels(deltaMapPixels: number): number {
+  return truncateTowardZero(
+    (deltaMapPixels * MICROPOLIS_MAP_PAN_SCALE_NUMERATOR) / MICROPOLIS_MAP_PAN_SCALE_DENOMINATOR,
+  );
+}
+
+/**
+ * Convert Micropolis editor-world pan pixels into rendered canvas pixels.
+ * Mirrors world-pixel panning in `DoPanBy`/`DoPanTo` from
+ * `ref/micropolis/src/sim/w_x.c`, adapted to Stage 4 tile-size scaling.
+ */
+export function scaleWorldPanDeltaToCanvasPixels(
+  worldPixelDelta: number,
+  tileSize: number,
+): number {
+  return truncateTowardZero((worldPixelDelta * tileSize) / MICROPOLIS_EDITOR_WORLD_PIXELS_PER_TILE);
+}
+
+/**
+ * Resolve one drag-pan step into canvas-space camera deltas.
+ * Mirrors `MapCmdPanTo` in `ref/micropolis/src/sim/w_map.c`: compute `dx/dy`
+ * from the previous pointer sample, scale by `16/3`, then apply `DoPanBy`.
+ * Parity note: Stage 4 converts the resulting world-pixel deltas to canvas
+ * pixels so browser camera movement tracks Micropolis pan ratios.
+ */
+export function continueMapCanvasPanDrag({
+  dragState,
+  x,
+  y,
+  tileSize,
+}: {
+  dragState: MapCanvasPanDragState;
+  x: number;
+  y: number;
+  tileSize: number;
+}): {
+  nextDragState: MapCanvasPanDragState;
+  deltaCanvasX: number;
+  deltaCanvasY: number;
+} {
+  const deltaMapX = x - dragState.lastX;
+  const deltaMapY = y - dragState.lastY;
+  const deltaWorldX = scaleMapPanDeltaToWorldPixels(deltaMapX);
+  const deltaWorldY = scaleMapPanDeltaToWorldPixels(deltaMapY);
+
+  return {
+    nextDragState: {
+      lastX: x,
+      lastY: y,
+    },
+    deltaCanvasX: scaleWorldPanDeltaToCanvasPixels(deltaWorldX, tileSize),
+    deltaCanvasY: scaleWorldPanDeltaToCanvasPixels(deltaWorldY, tileSize),
+  };
+}
 
 /**
  * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
@@ -45,8 +133,16 @@ export function MapCanvas({
   >(new Map());
   const queuedMapFrameRef = useRef<MapCanvasRenderFrame | null>(null);
   const pendingAnimationFrameRef = useRef<number | null>(null);
+  const panDragStateRef = useRef<MapCanvasPanDragState | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
+  const [cameraOffsetPx, setCameraOffsetPx] = useState<{
+    x: number;
+    y: number;
+  }>({
+    x: 0,
+    y: 0,
+  });
   const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
 
   useEffect(() => {
@@ -140,6 +236,15 @@ export function MapCanvas({
 
   const widthPx = mapState.width * tileSize;
   const heightPx = mapState.height * tileSize;
+  const viewportWidthPx = Math.min(widthPx, DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX);
+  const viewportHeightPx = Math.min(heightPx, DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX);
+  const maxCameraOffsetX = Math.max(0, widthPx - viewportWidthPx);
+  const maxCameraOffsetY = Math.max(0, heightPx - viewportHeightPx);
+  const clampedCameraOffsetPx = clampMapCanvasCameraOffset(
+    cameraOffsetPx,
+    maxCameraOffsetX,
+    maxCameraOffsetY,
+  );
   const realtimeOverlaySprites = useMemo(
     () =>
       projectRealtimeOverlaySprites({
@@ -151,101 +256,186 @@ export function MapCanvas({
     [mapState.height, mapState.width, realtimeObjects, tileSize],
   );
 
+  const applyCameraPanBy = (deltaX: number, deltaY: number): void => {
+    if (deltaX === 0 && deltaY === 0) {
+      return;
+    }
+
+    setCameraOffsetPx((currentOffset) => {
+      const clampedCurrentOffset = clampMapCanvasCameraOffset(
+        currentOffset,
+        maxCameraOffsetX,
+        maxCameraOffsetY,
+      );
+
+      return clampMapCanvasCameraOffset(
+        {
+          x: clampedCurrentOffset.x + deltaX,
+          y: clampedCurrentOffset.y + deltaY,
+        },
+        maxCameraOffsetX,
+        maxCameraOffsetY,
+      );
+    });
+  };
+
   if (!mapState.hasSnapshot) {
     return <div>No map snapshot received yet.</div>;
   }
 
   return (
     <div
+      onPointerCancel={(event) => {
+        panDragStateRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerDown={(event) => {
+        const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
+        if (!hasPannableBounds || event.button !== 1) {
+          return;
+        }
+
+        const point = getElementRelativePointerPosition(event);
+        panDragStateRef.current = startMapCanvasPanDrag(point.x, point.y);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }}
+      onPointerMove={(event) => {
+        const dragState = panDragStateRef.current;
+        if (dragState === null) {
+          return;
+        }
+
+        const point = getElementRelativePointerPosition(event);
+        const dragStep = continueMapCanvasPanDrag({
+          dragState,
+          x: point.x,
+          y: point.y,
+          tileSize,
+        });
+        panDragStateRef.current = dragStep.nextDragState;
+        applyCameraPanBy(dragStep.deltaCanvasX, dragStep.deltaCanvasY);
+      }}
+      onPointerUp={(event) => {
+        panDragStateRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onWheel={(event) => {
+        const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
+        if (!hasPannableBounds) {
+          return;
+        }
+
+        if (event.deltaX === 0 && event.deltaY === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        applyCameraPanBy(event.deltaX, event.deltaY);
+      }}
       style={{
         border: '1px solid #333',
-        height: heightPx,
+        height: viewportHeightPx,
         overflow: 'hidden',
         position: 'relative',
-        width: widthPx,
+        width: viewportWidthPx,
       }}
     >
-      <canvas
-        ref={canvasRef}
-        onClick={(event) => {
-          if (onTileClick === undefined) {
-            return;
-          }
-
-          const canvas = canvasRef.current;
-          if (canvas === null) {
-            return;
-          }
-
-          const tile = getClickedTilePosition(event, canvas, tileSize);
-          if (tile === null || !isTileInBounds(tile.x, tile.y, mapState)) {
-            return;
-          }
-
-          onTileClick(tile.x, tile.y);
-        }}
+      <div
         style={{
-          cursor: onTileClick === undefined ? 'default' : 'crosshair',
-          display: 'block',
-          imageRendering: 'pixelated',
-          left: 0,
+          height: heightPx,
+          left: -clampedCameraOffsetPx.x,
           position: 'absolute',
-          top: 0,
-          zIndex: getMapCanvasLayerZIndex('map'),
+          top: -clampedCameraOffsetPx.y,
+          width: widthPx,
         }}
-      />
-      {pendingTools.map((pending) => {
-        const spec = getPlayableToolSpec(pending.command.tool);
-        const left = (pending.command.x - spec.offset) * tileSize;
-        const top = (pending.command.y - spec.offset) * tileSize;
-        const side = spec.size * tileSize;
+      >
+        <canvas
+          ref={canvasRef}
+          onClick={(event) => {
+            if (onTileClick === undefined) {
+              return;
+            }
 
-        return (
+            const canvas = canvasRef.current;
+            if (canvas === null) {
+              return;
+            }
+
+            const tile = getClickedTilePosition(event, canvas, tileSize);
+            if (tile === null || !isTileInBounds(tile.x, tile.y, mapState)) {
+              return;
+            }
+
+            onTileClick(tile.x, tile.y);
+          }}
+          style={{
+            cursor: onTileClick === undefined ? 'default' : 'crosshair',
+            display: 'block',
+            imageRendering: 'pixelated',
+            left: 0,
+            position: 'absolute',
+            top: 0,
+            zIndex: getMapCanvasLayerZIndex('map'),
+          }}
+        />
+        {pendingTools.map((pending) => {
+          const spec = getPlayableToolSpec(pending.command.tool);
+          const left = (pending.command.x - spec.offset) * tileSize;
+          const top = (pending.command.y - spec.offset) * tileSize;
+          const side = spec.size * tileSize;
+
+          return (
+            <div
+              key={pending.commandId}
+              style={{
+                background: `${spec.pendingColor}4d`,
+                border: `1px dashed ${spec.pendingColor}`,
+                height: side,
+                left,
+                pointerEvents: 'none',
+                position: 'absolute',
+                top,
+                width: side,
+                zIndex: getMapCanvasLayerZIndex('pending-tool'),
+              }}
+            />
+          );
+        })}
+        {realtimeOverlaySprites.map((sprite) => (
           <div
-            key={pending.commandId}
+            key={sprite.key}
             style={{
-              background: `${spec.pendingColor}4d`,
-              border: `1px dashed ${spec.pendingColor}`,
-              height: side,
-              left,
+              alignItems: 'center',
+              background: `${sprite.color}59`,
+              border: `1px solid ${sprite.color}`,
+              borderRadius: 3,
+              boxSizing: 'border-box',
+              color: '#0f172a',
+              display: 'flex',
+              fontFamily: 'monospace',
+              fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
+              fontWeight: 700,
+              height: sprite.height,
+              justifyContent: 'center',
+              left: sprite.left,
+              lineHeight: 1,
               pointerEvents: 'none',
               position: 'absolute',
-              top,
-              width: side,
-              zIndex: getMapCanvasLayerZIndex('pending-tool'),
+              top: sprite.top,
+              width: sprite.width,
+              zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
             }}
-          />
-        );
-      })}
-      {realtimeOverlaySprites.map((sprite) => (
-        <div
-          key={sprite.key}
-          style={{
-            alignItems: 'center',
-            background: `${sprite.color}59`,
-            border: `1px solid ${sprite.color}`,
-            borderRadius: 3,
-            boxSizing: 'border-box',
-            color: '#0f172a',
-            display: 'flex',
-            fontFamily: 'monospace',
-            fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
-            fontWeight: 700,
-            height: sprite.height,
-            justifyContent: 'center',
-            left: sprite.left,
-            lineHeight: 1,
-            pointerEvents: 'none',
-            position: 'absolute',
-            top: sprite.top,
-            width: sprite.width,
-            zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
-          }}
-          title={`${sprite.name} frame ${sprite.frame}`}
-        >
-          {sprite.label}
-        </div>
-      ))}
+            title={`${sprite.name} frame ${sprite.frame}`}
+          >
+            {sprite.label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -776,6 +966,43 @@ export function selectMapCanvasTileRenderMode({
 }
 
 /**
+ * Clamp camera offsets to the current map bounds.
+ * Mirrors `DoAdjustPan` bounds-clamping in `ref/micropolis/src/sim/w_x.c`,
+ * adapted from world pixels to browser canvas pixels.
+ */
+function clampMapCanvasCameraOffset(
+  offset: Readonly<{ x: number; y: number }>,
+  maxX: number,
+  maxY: number,
+): { x: number; y: number } {
+  return {
+    x: clampMapCanvasCoordinate(offset.x, maxX),
+    y: clampMapCanvasCoordinate(offset.y, maxY),
+  };
+}
+
+function clampMapCanvasCoordinate(value: number, maxValue: number): number {
+  if (value <= 0) {
+    return 0;
+  }
+  if (value >= maxValue) {
+    return maxValue;
+  }
+  return value;
+}
+
+function getElementRelativePointerPosition(event: PointerEvent<HTMLDivElement>): {
+  x: number;
+  y: number;
+} {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return {
+    x: event.clientX - bounds.left,
+    y: event.clientY - bounds.top,
+  };
+}
+
+/**
  * Converts a canvas click position into map tile coordinates.
  * Mirrors Micropolis tool targeting by map tile in `do_tool` from
  * `ref/micropolis/src/sim/w_tool.c`, adapted for HTML canvas coordinates.
@@ -806,6 +1033,10 @@ function getClickedTilePosition(
  */
 function isTileInBounds(x: number, y: number, mapState: RuntimeMapState): boolean {
   return x >= 0 && y >= 0 && x < mapState.width && y < mapState.height;
+}
+
+function truncateTowardZero(value: number): number {
+  return Math.trunc(value);
 }
 
 function assertNever(value: never): never {

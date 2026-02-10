@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
+  continueMapCanvasPanDrag,
   forEachMapCanvasPatchTileIndex,
   getMapCanvasLayerZIndex,
   projectRealtimeOverlaySprites,
+  scaleMapPanDeltaToWorldPixels,
+  scaleWorldPanDeltaToCanvasPixels,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
+  startMapCanvasPanDrag,
 } from './map-canvas.tsx';
 import {
   lookupStage8TileSprite,
@@ -296,6 +300,54 @@ describe('map canvas draw-mode selection', () => {
     expect(baseline[0]?.key).toBe('id:rt-7');
     expect(moved[0]?.key).toBe('id:rt-7');
     expect(baseline[0]?.left).not.toBe(moved[0]?.left);
+  });
+});
+
+describe('map canvas pan parity', () => {
+  it('matches MapCmdPanTo 16/3 map-to-world pan scaling with truncation toward zero', () => {
+    // `MapCmdPanTo` in `w_map.c` applies `dx = dx * 16 / 3` using C integer math.
+    expect(scaleMapPanDeltaToWorldPixels(3)).toBe(16);
+    expect(scaleMapPanDeltaToWorldPixels(2)).toBe(10);
+    expect(scaleMapPanDeltaToWorldPixels(-3)).toBe(-16);
+    expect(scaleMapPanDeltaToWorldPixels(-2)).toBe(-10);
+  });
+
+  it('converts Micropolis world-pixel pan deltas into Stage 4 canvas pixels', () => {
+    // Micropolis editor panning uses 16 world pixels per tile (`w_x.c`); with
+    // Stage 4 `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
+    expect(scaleWorldPanDeltaToCanvasPixels(16, 6)).toBe(6);
+    expect(scaleWorldPanDeltaToCanvasPixels(10, 6)).toBe(3);
+    expect(scaleWorldPanDeltaToCanvasPixels(-16, 6)).toBe(-6);
+  });
+
+  it('keeps drag pan deltas aligned with MapCmdPanStart and MapCmdPanTo sampling', () => {
+    const dragStart = startMapCanvasPanDrag(40, 50);
+    const dragStep = continueMapCanvasPanDrag({
+      dragState: dragStart,
+      x: 43,
+      y: 47,
+      tileSize: 6,
+    });
+
+    // C path: `dx=3 -> 3*16/3=16`, `dy=-3 -> -3*16/3=-16` in `w_map.c`.
+    expect(dragStep.deltaCanvasX).toBe(6);
+    expect(dragStep.deltaCanvasY).toBe(-6);
+    expect(dragStep.nextDragState).toEqual({
+      lastX: 43,
+      lastY: 47,
+    });
+  });
+
+  it('returns zero deltas when pointer sample does not move', () => {
+    const dragStep = continueMapCanvasPanDrag({
+      dragState: startMapCanvasPanDrag(12, 20),
+      x: 12,
+      y: 20,
+      tileSize: 6,
+    });
+
+    expect(dragStep.deltaCanvasX).toBe(0);
+    expect(dragStep.deltaCanvasY).toBe(0);
   });
 });
 
