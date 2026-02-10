@@ -37,6 +37,7 @@ import {
   SCENARIO_TABLE,
 } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
+import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
   ClientEnvelope,
@@ -63,7 +64,7 @@ type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-ci
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
 type CommandClientEnvelope = Extract<ClientEnvelope, { kind: 'command' }>;
 type SequencedHostEnvelope = Exclude<HostEnvelope, { kind: 'hello' }>;
-type ManualRealtimeEventId = 'tornado' | 'monster' | 'fire' | 'flood' | 'meltdown' | 'earthquake';
+type ManualRealtimeEventId = PlayableDisasterChoiceId;
 type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
   ? Omit<TValue, TKey>
   : never;

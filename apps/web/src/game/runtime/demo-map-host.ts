@@ -46,6 +46,10 @@ import {
 } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import {
+  PLAYABLE_DISASTER_CHOICES,
+  type PlayableDisasterChoiceId,
+} from './playable-disaster-choices.ts';
+import {
   type ClientEnvelope,
   type CoreHost,
   type CoreHostConnection,
@@ -198,40 +202,17 @@ const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
  * Manual disaster choices exposed in the browser QA panel.
  * Mirrors the Disasters menu entries in `ref/micropolis/res/whead.tcl`
  * (`Monster`, `Fire`, `Flood`, `Meltdown`, `Tornado`, `Earthquake`).
+ * Parity note: this aliases `PLAYABLE_DISASTER_CHOICES` so demo/sim-core
+ * hosts share one stable UI id/label/order contract.
  */
-export const MANUAL_REALTIME_EVENT_CHOICES = [
-  {
-    id: 'tornado',
-    label: 'Trigger Tornado',
-  },
-  {
-    id: 'monster',
-    label: 'Trigger Monster',
-  },
-  {
-    id: 'fire',
-    label: 'Trigger Fire',
-  },
-  {
-    id: 'flood',
-    label: 'Trigger Flood',
-  },
-  {
-    id: 'meltdown',
-    label: 'Trigger Meltdown',
-  },
-  {
-    id: 'earthquake',
-    label: 'Trigger Earthquake',
-  },
-] as const;
+export const MANUAL_REALTIME_EVENT_CHOICES = PLAYABLE_DISASTER_CHOICES;
 
 /**
  * Union of manual disaster ids.
  * Mirrors disaster entrypoint families in `ref/micropolis/src/sim/s_disast.c`
  * and sprite disaster entrypoints in `ref/micropolis/src/sim/w_sprite.c`.
  */
-export type ManualRealtimeEventId = (typeof MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
+export type ManualRealtimeEventId = PlayableDisasterChoiceId;
 
 /**
  * Scenario choice metadata shown in the Playable Runtime browser selector.

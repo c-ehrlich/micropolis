@@ -121,6 +121,7 @@ Acceptance checks:
 - [x] Replace `triggerPlayableRuntimeDisaster` `instanceof DemoMapHost` coupling with a host capability interface/adapter.
 - [x] Implement manual disaster command path in new host using sim-core disaster/realtime systems.
 - [x] Keep `PLAYABLE_DISASTER_CHOICES` UI contract stable unless parity requires changes.
+  Implemented with shared `apps/web/src/game/runtime/playable-disaster-choices.ts` wiring across playable host adapters.
 
 Acceptance checks:
 

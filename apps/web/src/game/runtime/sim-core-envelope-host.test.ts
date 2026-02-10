@@ -13,6 +13,7 @@ import {
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { projectRealtimeOverlaySprites } from '../map/map-canvas.tsx';
+import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {
   type HostEnvelope,
   type HostHudMessagePayload,
@@ -721,6 +722,28 @@ describe('SimCoreEnvelopeHost', () => {
         .slice(envelopeCountAfterHello)
         .every((envelope) => envelope.kind === 'patch'),
     ).toBe(true);
+  });
+
+  it('accepts every playable disaster choice id and emits one patch per trigger', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-manual-disaster-all-choices',
+      clientId: 'client-manual-disaster-all-choices',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const envelopeCountBeforeDisasters = captured.envelopes.length;
+    for (const choice of PLAYABLE_DISASTER_CHOICES) {
+      expect(host.triggerManualRealtimeEvent(choice.id)).toBe(true);
+    }
+
+    const disasterEnvelopes = captured.envelopes.slice(envelopeCountBeforeDisasters);
+    expect(disasterEnvelopes).toHaveLength(PLAYABLE_DISASTER_CHOICES.length);
+    expect(disasterEnvelopes.every((envelope) => envelope.kind === 'patch')).toBe(true);
   });
 
   it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {
