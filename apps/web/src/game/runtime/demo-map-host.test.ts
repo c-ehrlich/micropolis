@@ -11,6 +11,8 @@ import {
   resetForNewCityFromSeed,
   Tile,
   TileFlag,
+  type SimContext,
+  type SimState,
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
@@ -27,6 +29,14 @@ const SCENARIO_222_FIXTURE_URL = new URL(
   '../../../../../ref/micropolis/res/snro.222',
   import.meta.url,
 );
+
+type DemoMapHostAuthority = {
+  simState: SimState;
+  simContext: SimContext;
+};
+
+type DemoMapHostSimStateAccess = Pick<DemoMapHostAuthority, 'simState'>;
+type DemoMapHostSimContextAccess = Pick<DemoMapHostAuthority, 'simContext'>;
 
 describe('DemoMapHost city lifecycle and persistence flows', () => {
   it('keeps ambient patches out of map payload ownership', () => {
@@ -403,10 +413,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       runtime.connect();
 
-      const authority = host as unknown as {
-        simState: Parameters<typeof sendMesAt>[0];
-        simContext: Parameters<typeof sendMesAt>[1];
-      };
+      const authority = host as unknown as DemoMapHostAuthority;
       // Message id 14 is one of the classic demand-warning ids from the
       // `doMessage`/resource table flow in `ref/micropolis/src/sim/s_msg.c`.
       expect(sendMesAt(authority.simState, authority.simContext, 14, 7, 9)).toBe(true);
@@ -451,10 +458,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       runtime.connect();
 
-      const authority = host as unknown as {
-        simState: Parameters<typeof sendMes>[0];
-        simContext: Parameters<typeof sendMes>[1];
-      };
+      const authority = host as unknown as DemoMapHostAuthority;
       // s_msg.c doMessage: picture ids dispatch first, then enqueue positive id
       // through `MessagePort = pictId` for next heads tick text delivery.
       expect(sendMes(authority.simState, authority.simContext, -10)).toBe(true);
@@ -493,10 +497,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       });
       runtime.connect();
 
-      const authority = host as unknown as {
-        simState: Parameters<typeof sendMes>[0];
-        simContext: Parameters<typeof sendMes>[1];
-      };
+      const authority = host as unknown as DemoMapHostAuthority;
       // Keep ambient SendMessages() thresholds quiet so MesNum lifetime is driven by
       // the explicit test message only (s_msg.c SendMessages case gates).
       authority.simState.ResZPop = 1;
@@ -558,19 +559,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     });
 
     runtime.connect();
-    const authority = host as unknown as {
-      simState: {
-        CityTime: number;
-        TotalFunds: number;
-        SimSpeed: number;
-        SimMetaSpeed: number;
-        CityTax: number;
-        autoBulldoze: boolean;
-        autoBudget: boolean;
-        autoGo: boolean;
-        userSoundOn: boolean;
-      };
-    };
+    const authority = host as unknown as DemoMapHostSimStateAccess;
     authority.simState.CityTime = 4321;
     authority.simState.CityTax = 11;
     authority.simState.autoBulldoze = false;
@@ -680,12 +669,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     runtime.connect();
 
-    const authority = host as unknown as {
-      simState: {
-        ResHis: Int16Array;
-        MoneyHis: Int16Array;
-      };
-    };
+    const authority = host as unknown as DemoMapHostSimStateAccess;
     authority.simState.ResHis[5] = -1234;
     authority.simState.MoneyHis[11] = 2345;
 
@@ -723,16 +707,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     runtime.connect();
 
-    const authority = host as unknown as {
-      simState: {
-        ResHis: Int16Array;
-        ScenarioID: number;
-        Fcycle: number;
-        Scycle: number;
-        InitSimLoad: number;
-        DoInitialEval: number;
-      };
-    };
+    const authority = host as unknown as DemoMapHostSimStateAccess;
 
     authority.simState.ResHis[9] = -2222;
     runtime.sendCommand('save-load-orchestration-1', {
@@ -778,19 +753,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     const runtime = createWebHostRuntime({ host });
     runtime.connect();
 
-    const authority = host as unknown as {
-      simState: {
-        ScenarioID: number;
-        CityTime: number;
-        CityScore: number;
-        RoadEffect: number;
-        Fcycle: number;
-        Scycle: number;
-        InitSimLoad: number;
-        DoInitialEval: number;
-        TotalPop: number;
-      };
-    };
+    const authority = host as unknown as DemoMapHostSimStateAccess;
     authority.simState.ScenarioID = 4;
     authority.simState.CityTime = 777;
     authority.simState.CityScore = 1;
@@ -826,9 +789,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     const runtime = createWebHostRuntime({ host });
     runtime.connect();
 
-    const authority = host as unknown as {
-      simContext: { rng: { seed: (value: number) => void; next16: () => number } };
-    };
+    const authority = host as unknown as DemoMapHostSimContextAccess;
 
     // `GenerateNewCity` in `s_gen.c` calls `GenerateSomeCity(Rand16())`.
     const sourceSeed = 0x2468;
@@ -1056,8 +1017,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     expect(runtime.getState().hudState.options.autoBudget).toBe(true);
     expect(runtime.getState().hudState.options.autoGo).toBe(true);
 
-    const simState = (host as unknown as { simState: { autoBudget: boolean; autoGo: boolean } })
-      .simState;
+    const simState = (host as unknown as DemoMapHostSimStateAccess).simState;
     simState.autoBudget = false;
     simState.autoGo = false;
     runtime.requestSnapshot('manual');
