@@ -11,8 +11,11 @@ import {
   createRealtimeContext,
   getSprite,
   makeExplosionAt,
+  makeSprite,
   makeTornado,
   runRealtimeTicks,
+  SPRITE_LAYOUT_BY_TYPE,
+  SPRITE_SLOT_COUNT,
   SPRITE_TYPE,
 } from './realtime.ts';
 
@@ -70,6 +73,81 @@ const runExplosion = (seed: number, ticks: number) => {
 };
 
 describe('Realtime systems', () => {
+  it('keeps C-parity sprite type ids and slot count constants', () => {
+    // Mirrors `TRA`..`BUS` and `OBJN` constants in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(SPRITE_TYPE).toEqual({
+      TRA: 1,
+      COP: 2,
+      AIR: 3,
+      SHI: 4,
+      GOD: 5,
+      TOR: 6,
+      EXP: 7,
+      BUS: 8,
+    });
+    expect(SPRITE_SLOT_COUNT).toBe(9);
+  });
+
+  it('applies InitSprite layout fields for each sprite type', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+    const rng = new MicropolisRng(9);
+    const toolContext = createToolContext({ store, rng, funds: 0 });
+    const context = createRealtimeContext({ store, rng, toolContext });
+
+    // Expected geometry/hotspot values are copied from each `InitSprite` case in
+    // `ref/micropolis/src/sim/w_sprite.c`.
+    const expectedLayouts = [
+      {
+        type: SPRITE_TYPE.TRA,
+        layout: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+      },
+      {
+        type: SPRITE_TYPE.COP,
+        layout: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+      },
+      {
+        type: SPRITE_TYPE.AIR,
+        layout: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 48, y_hot: 16 },
+      },
+      {
+        type: SPRITE_TYPE.SHI,
+        layout: { width: 48, height: 48, x_offset: 32, y_offset: -16, x_hot: 48, y_hot: 0 },
+      },
+      {
+        type: SPRITE_TYPE.GOD,
+        layout: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+      },
+      {
+        type: SPRITE_TYPE.TOR,
+        layout: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 36 },
+      },
+      {
+        type: SPRITE_TYPE.EXP,
+        layout: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+      },
+      {
+        type: SPRITE_TYPE.BUS,
+        layout: { width: 32, height: 32, x_offset: 30, y_offset: -18, x_hot: 40, y_hot: -8 },
+      },
+    ] as const;
+
+    for (const expected of expectedLayouts) {
+      const sprite = makeSprite(context, expected.type, 160, 160);
+      expect({
+        width: sprite.width,
+        height: sprite.height,
+        x_offset: sprite.x_offset,
+        y_offset: sprite.y_offset,
+        x_hot: sprite.x_hot,
+        y_hot: sprite.y_hot,
+      }).toEqual(expected.layout);
+      expect(SPRITE_LAYOUT_BY_TYPE[expected.type]).toEqual(expected.layout);
+    }
+
+    store.commitTick();
+  });
+
   it('moves objects deterministically with fixed RNG', () => {
     const first = runTornado(12345, 12);
     const second = runTornado(12345, 12);

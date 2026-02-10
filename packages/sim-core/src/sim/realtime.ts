@@ -34,6 +34,11 @@ const {
   VRAILROAD,
 } = Tile;
 
+/**
+ * Sprite kind identifiers used by Micropolis realtime object logic.
+ * Mirrors `TRA`..`BUS` constants in `ref/micropolis/src/sim/headers/sim.h`
+ * and type routing in `ref/micropolis/src/sim/w_sprite.c`.
+ */
 export const SPRITE_TYPE = {
   TRA: 1,
   COP: 2,
@@ -47,10 +52,51 @@ export const SPRITE_TYPE = {
 
 export type SpriteType = (typeof SPRITE_TYPE)[keyof typeof SPRITE_TYPE];
 
-const OBJN = 9;
+/**
+ * Total sprite slot count, including slot `0` (unused sentinel).
+ * Mirrors `OBJN` in `ref/micropolis/src/sim/headers/sim.h`.
+ */
+export const SPRITE_SLOT_COUNT = 9;
 
 export const POWER_BLINK_TICKS = 30;
 
+/**
+ * Layout-related fields initialized per sprite type in `InitSprite`.
+ * Mirrors width/offset/hotspot assignments in `ref/micropolis/src/sim/w_sprite.c`.
+ */
+export interface SimSpriteLayout {
+  width: number;
+  height: number;
+  x_offset: number;
+  y_offset: number;
+  x_hot: number;
+  y_hot: number;
+}
+
+/**
+ * Per-type sprite layout table copied from `InitSprite` in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this models only shape/offset/hotspot fields; runtime fields
+ * like `frame`, `dir`, and `count` are still assigned in sprite-type logic.
+ */
+export const SPRITE_LAYOUT_BY_TYPE: Readonly<Record<SpriteType, SimSpriteLayout>> = {
+  [SPRITE_TYPE.TRA]: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+  [SPRITE_TYPE.COP]: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+  [SPRITE_TYPE.AIR]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 48, y_hot: 16 },
+  [SPRITE_TYPE.SHI]: { width: 48, height: 48, x_offset: 32, y_offset: -16, x_hot: 48, y_hot: 0 },
+  [SPRITE_TYPE.GOD]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+  [SPRITE_TYPE.TOR]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 36 },
+  [SPRITE_TYPE.EXP]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+  [SPRITE_TYPE.BUS]: { width: 32, height: 32, x_offset: 30, y_offset: -18, x_hot: 40, y_hot: -8 },
+};
+
+/**
+ * Active sprite state for realtime systems.
+ * Mirrors `SimSprite` fields from `ref/micropolis/src/sim/headers/view.h`
+ * and command/property access in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: C list-link field `next` is intentionally omitted because
+ * TypeScript uses array ownership in `RealtimeContext.sprites`.
+ */
 export interface SimSprite {
   name: string;
   type: SpriteType;
@@ -140,7 +186,7 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
     crashX: 0,
     crashY: 0,
     sprites: [],
-    globalSprites: Array.from({ length: OBJN }, () => null),
+    globalSprites: Array.from({ length: SPRITE_SLOT_COUNT }, () => null),
     toolContext: options.toolContext,
     onMessage: options.onMessage,
     onSound: options.onSound,
@@ -373,6 +419,16 @@ function clearMessages(context: RealtimeContext) {
   context.onClearMessages?.();
 }
 
+function assignSpriteLayoutFields(sprite: SimSprite) {
+  const layout = SPRITE_LAYOUT_BY_TYPE[sprite.type];
+  sprite.width = layout.width;
+  sprite.height = layout.height;
+  sprite.x_offset = layout.x_offset;
+  sprite.y_offset = layout.y_offset;
+  sprite.x_hot = layout.x_hot;
+  sprite.y_hot = layout.y_hot;
+}
+
 function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: number) {
   sprite.x = x;
   sprite.y = y;
@@ -395,25 +451,14 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
   if (context.globalSprites[sprite.type] === null) {
     context.globalSprites[sprite.type] = sprite;
   }
+  assignSpriteLayoutFields(sprite);
 
   switch (sprite.type) {
     case SPRITE_TYPE.TRA:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 1;
       sprite.dir = 4;
       break;
     case SPRITE_TYPE.SHI:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 48;
-      sprite.y_hot = 0;
       if (x < 4 << 4) {
         sprite.frame = 3;
       } else if (x >= (WORLD_X - 4) << 4) {
@@ -430,12 +475,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.count = 1;
       break;
     case SPRITE_TYPE.GOD:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 16;
       if (x > (WORLD_X << 4) / 2) {
         sprite.frame = y > (WORLD_Y << 4) / 2 ? 10 : 7;
       } else {
@@ -448,12 +487,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.orig_y = sprite.y;
       break;
     case SPRITE_TYPE.COP:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 5;
       sprite.count = 1500;
       sprite.dest_x = rand(context, (WORLD_X << 4) - 1);
@@ -462,12 +495,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.orig_y = y;
       break;
     case SPRITE_TYPE.AIR:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 48;
-      sprite.y_hot = 16;
       if (x > (WORLD_X - 20) << 4) {
         sprite.x -= 148;
         sprite.dest_x = sprite.x - 200;
@@ -479,31 +506,13 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.dest_y = sprite.y;
       break;
     case SPRITE_TYPE.TOR:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 36;
       sprite.frame = 1;
       sprite.count = 200;
       break;
     case SPRITE_TYPE.EXP:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 16;
       sprite.frame = 1;
       break;
     case SPRITE_TYPE.BUS:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 30;
-      sprite.y_offset = -18;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 1;
       sprite.dir = 1;
       break;

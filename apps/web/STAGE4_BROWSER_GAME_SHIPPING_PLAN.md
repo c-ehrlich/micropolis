@@ -390,7 +390,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sprite.c` (sprite model/fields/types)
+- [x] `ref/micropolis/src/sim/w_sprite.c` (sprite model/fields/types)
 - [ ] `ref/micropolis/src/sim/s_disast.c` (disaster/event triggers)
 - [ ] `ref/micropolis/src/sim/s_msg.c` (`SendMesAt` event coupling)
 - [ ] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
