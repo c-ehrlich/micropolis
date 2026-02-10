@@ -1978,103 +1978,123 @@ describe('SimCoreEnvelopeHost', () => {
     }
   });
 
-  it('acks wire placement on straight road tiles and applies the C crossing tile', () => {
-    const host = new SimCoreEnvelopeHost();
-    const captured = connectAndCapture(host);
-    const x = 22;
-    const y = 22;
-    const tileIndex = x * World.WORLD_Y + y;
-    const hostInternals = host as unknown as {
-      authorityState: {
-        store: {
-          beginTick(): void;
-          commitTick(): void;
-          getLayer(layer: 'map'): Uint16Array | unknown;
-          snapshot(layer: 'map'): Uint16Array | unknown;
+  it.each([
+    {
+      caseId: 'road-66',
+      roadTile: Tile.ROADS,
+      expectedWireRoadTile: Tile.HROADPOWER,
+    },
+    {
+      caseId: 'road-67',
+      // `_LayWire` in `ref/micropolis/src/sim/w_con.c` has a second straight-road
+      // case for tile id 67 (`Road #2`) even though it is not exported as a named
+      // tile constant in `sim.h`.
+      roadTile: 67,
+      expectedWireRoadTile: Tile.VROADPOWER,
+    },
+  ])(
+    'acks wire placement on straight road tiles and applies the C crossing tile ($caseId)',
+    ({ caseId, roadTile, expectedWireRoadTile }) => {
+      const host = new SimCoreEnvelopeHost();
+      const captured = connectAndCapture(host);
+      const x = 22;
+      const y = 22;
+      const tileIndex = x * World.WORLD_Y + y;
+      const roomId = `room-wire-on-road-${caseId}`;
+      const clientId = `client-wire-on-road-${caseId}`;
+      const commandId = `cmd-wire-on-road-${caseId}`;
+      const hostInternals = host as unknown as {
+        authorityState: {
+          store: {
+            beginTick(): void;
+            commitTick(): void;
+            getLayer(layer: 'map'): Uint16Array | unknown;
+            snapshot(layer: 'map'): Uint16Array | unknown;
+          };
         };
       };
-    };
 
-    hostInternals.authorityState.store.beginTick();
-    try {
-      const mapLayer = hostInternals.authorityState.store.getLayer('map');
-      if (!(mapLayer instanceof Uint16Array)) {
-        throw new Error('expected map layer Uint16Array');
+      hostInternals.authorityState.store.beginTick();
+      try {
+        const mapLayer = hostInternals.authorityState.store.getLayer('map');
+        if (!(mapLayer instanceof Uint16Array)) {
+          throw new Error('expected map layer Uint16Array');
+        }
+        mapLayer[tileIndex] = roadTile | TileFlag.BULLBIT | TileFlag.BURNBIT;
+      } finally {
+        hostInternals.authorityState.store.commitTick();
       }
-      mapLayer[tileIndex] = Tile.ROADS | TileFlag.BULLBIT | TileFlag.BURNBIT;
-    } finally {
-      hostInternals.authorityState.store.commitTick();
-    }
 
-    captured.send({
-      kind: 'hello',
-      roomId: 'room-wire-on-road',
-      clientId: 'client-wire-on-road',
-      protocolVersion: 'core-bridge/v1',
-      coreVersion: 'test-core',
-    });
-    captured.send({
-      kind: 'command',
-      roomId: 'room-wire-on-road',
-      clientId: 'client-wire-on-road',
-      commandId: 'cmd-wire-on-road',
-      command: {
-        kind: 'tool',
-        tool: 'wire',
-        x,
-        y,
-      },
-    });
+      captured.send({
+        kind: 'hello',
+        roomId,
+        clientId,
+        protocolVersion: 'core-bridge/v1',
+        coreVersion: 'test-core',
+      });
+      captured.send({
+        kind: 'command',
+        roomId,
+        clientId,
+        commandId,
+        command: {
+          kind: 'tool',
+          tool: 'wire',
+          x,
+          y,
+        },
+      });
 
-    expect(captured.envelopes[2]).toEqual({
-      kind: 'ack',
-      roomId: 'room-wire-on-road',
-      clientId: 'client-wire-on-road',
-      tick: 1,
-      serverSeq: 2,
-      commandId: 'cmd-wire-on-road',
-    });
-    expect(captured.envelopes[3]).toMatchObject({
-      kind: 'patch',
-      roomId: 'room-wire-on-road',
-      clientId: 'client-wire-on-road',
-      tick: 1,
-      serverSeq: 3,
-    });
-    const wirePatchEnvelope = captured.envelopes[3];
-    if (wirePatchEnvelope === undefined) {
-      throw new Error('expected wire patch envelope');
-    }
-    const wirePatchPayload = readMapPatchPayloadFromEnvelope(wirePatchEnvelope);
-    if (wirePatchPayload === null) {
-      throw new Error('expected wire map patch payload');
-    }
-    expect(wirePatchPayload.redrawPlan).toMatchObject({
-      reason: 'patch-rects',
-      fullRedraw: false,
-    });
-    const wireDelta = wirePatchPayload.tileWordDeltas.find(
-      (delta) => delta.x === x && delta.y === y,
-    );
-    if (wireDelta === undefined) {
-      throw new Error('expected wire tile delta at command coordinates');
-    }
-    // `_LayWire` in `ref/micropolis/src/sim/w_con.c` maps road tile 66 (`ROADS`)
-    // to 77 (`HROADPOWER`) for wire-on-road placement.
-    expect(wireDelta.tileWord & TileMask.LOMASK).toBe(Tile.HROADPOWER);
-    expect(wireDelta.tileWord & TileFlag.CONDBIT).not.toBe(0);
-    const tileAfter = wireDelta.tileWord;
+      expect(captured.envelopes[2]).toEqual({
+        kind: 'ack',
+        roomId,
+        clientId,
+        tick: 1,
+        serverSeq: 2,
+        commandId,
+      });
+      expect(captured.envelopes[3]).toMatchObject({
+        kind: 'patch',
+        roomId,
+        clientId,
+        tick: 1,
+        serverSeq: 3,
+      });
+      const wirePatchEnvelope = captured.envelopes[3];
+      if (wirePatchEnvelope === undefined) {
+        throw new Error('expected wire patch envelope');
+      }
+      const wirePatchPayload = readMapPatchPayloadFromEnvelope(wirePatchEnvelope);
+      if (wirePatchPayload === null) {
+        throw new Error('expected wire map patch payload');
+      }
+      expect(wirePatchPayload.redrawPlan).toMatchObject({
+        reason: 'patch-rects',
+        fullRedraw: false,
+      });
+      const wireDelta = wirePatchPayload.tileWordDeltas.find(
+        (delta) => delta.x === x && delta.y === y,
+      );
+      if (wireDelta === undefined) {
+        throw new Error('expected wire tile delta at command coordinates');
+      }
+      // `_LayWire` in `ref/micropolis/src/sim/w_con.c` maps road tile 66 to 77
+      // and road tile 67 to 78 for wire-on-road placement.
+      expect(wireDelta.tileWord & TileMask.LOMASK).toBe(expectedWireRoadTile);
+      expect(wireDelta.tileWord & TileFlag.CONDBIT).not.toBe(0);
+      const tileAfter = wireDelta.tileWord;
 
-    const mapAfter = hostInternals.authorityState.store.snapshot('map');
-    if (!(mapAfter instanceof Uint16Array)) {
-      throw new Error('expected authoritative map layer snapshot to be Uint16Array');
-    }
-    const authoritativeTileAfter = mapAfter[tileIndex];
-    if (authoritativeTileAfter === undefined) {
-      throw new Error(`expected map tile at index ${tileIndex}`);
-    }
-    expect(authoritativeTileAfter).toBe(tileAfter);
-  });
+      const mapAfter = hostInternals.authorityState.store.snapshot('map');
+      if (!(mapAfter instanceof Uint16Array)) {
+        throw new Error('expected authoritative map layer snapshot to be Uint16Array');
+      }
+      const authoritativeTileAfter = mapAfter[tileIndex];
+      if (authoritativeTileAfter === undefined) {
+        throw new Error(`expected map tile at index ${tileIndex}`);
+      }
+      expect(authoritativeTileAfter).toBe(tileAfter);
+    },
+  );
 
   it('rejects wire placement on unsupported road shapes while preserving funds', () => {
     const host = new SimCoreEnvelopeHost();
