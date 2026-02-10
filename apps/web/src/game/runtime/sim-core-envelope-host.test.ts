@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   decodeCityFileForMap,
   Tile,
@@ -197,6 +198,70 @@ describe('SimCoreEnvelopeHost', () => {
 
     expect(map.tileWords).not.toBe(authoritativeMapLayer);
     expect(map.tileWords).toEqual(authoritativeMapLayer);
+  });
+
+  it('serializes snapshot map words using bridge x-major index math from sim-core storage', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    const width = World.WORLD_X;
+    const height = World.WORLD_Y;
+    // Index formula source: classic contiguous `Map[x][y]` storage in
+    // `ref/micropolis/src/sim/s_alloc.c` / `ref/micropolis/src/sim/s_fileio.c`
+    // where bridge snapshots use `index = x * height + y`.
+    const probes = [
+      { x: 1, y: 2, bridgeTileWord: 0x1111, rowMajorTileWord: 0x2111 },
+      { x: 3, y: 4, bridgeTileWord: 0x1222, rowMajorTileWord: 0x2222 },
+      { x: 7, y: 5, bridgeTileWord: 0x1333, rowMajorTileWord: 0x2333 },
+    ] as const;
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('Expected map layer Uint16Array');
+      }
+
+      for (const probe of probes) {
+        const bridgeIndex = getCoreBridgeV1SnapshotTileIndex(probe.x, probe.y, height);
+        const rowMajorIndex = probe.y * width + probe.x;
+        mapLayer[bridgeIndex] = probe.bridgeTileWord;
+        mapLayer[rowMajorIndex] = probe.rowMajorTileWord;
+      }
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'x-major-room',
+      clientId: 'x-major-client',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const snapshot = captured.envelopes[1];
+    if (snapshot === undefined || snapshot.kind !== 'snapshot') {
+      throw new Error('Expected snapshot envelope');
+    }
+    const map = snapshot.payload.map;
+    if (map === undefined || !('tileWords' in map)) {
+      throw new Error('Expected snapshot map payload');
+    }
+
+    for (const probe of probes) {
+      const bridgeIndex = getCoreBridgeV1SnapshotTileIndex(probe.x, probe.y, height);
+      expect(map.tileWords[bridgeIndex]).toBe(probe.bridgeTileWord);
+    }
   });
 
   it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {

@@ -99,7 +99,7 @@ Acceptance checks:
 
 ### Phase 3: Payload Semantics Port (Map/HUD/Messages/Realtime)
 
-- [ ] Port authoritative snapshot map payload generation from sim-core map storage (x-major ordering using bridge index math).
+- [x] Port authoritative snapshot map payload generation from sim-core map storage (x-major ordering using bridge index math).
 - [ ] Port map patch deltas + redraw plan emission using sim-core invalidation planning (`planMapRedraw` / `consumeMapRedrawPlan`).
 - [ ] Port HUD heads emission using sim-core hooks (`uiSet`) and `runUiUpdate`.
 - [ ] Port message flow using hook-driven `sendMes`/`sendMesAt` capture with deterministic replay metadata.

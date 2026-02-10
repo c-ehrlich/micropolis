@@ -1,5 +1,6 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
+import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   applyToolAction,
   resetForNewCityFromSeed,
@@ -1034,7 +1035,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       throw new Error(`expected Uint16Array map layer; got ${mapLayer.constructor.name}`);
     }
 
-    const tileWords = Uint16Array.from(mapLayer);
+    const tileWords = buildSnapshotTileWordsFromSimCoreMap(mapLayer, this.mapWidth, this.mapHeight);
     return {
       map: {
         width: this.mapWidth,
@@ -1168,4 +1169,32 @@ async function readBinaryResourceFromUrl(resourceUrl: URL): Promise<Uint8Array> 
     throw new Error(`failed to fetch scenario resource ${resourceUrl}: ${response.status}`);
   }
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * Builds authoritative snapshot map words from sim-core map storage using
+ * canonical bridge v1 index math.
+ * Mirrors contiguous `Map[x][y]` ownership in `ref/micropolis/src/sim/s_alloc.c`
+ * and snapshot/load ordering in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: reads each tile through `getCoreBridgeV1SnapshotTileIndex`
+ * (`index = x * height + y`) to keep bridge payload ordering explicit.
+ */
+function buildSnapshotTileWordsFromSimCoreMap(
+  mapLayer: Uint16Array,
+  mapWidth: number,
+  mapHeight: number,
+): Uint16Array {
+  const tileCount = mapWidth * mapHeight;
+  if (mapLayer.length < tileCount) {
+    throw new Error(`expected map layer length >= ${tileCount}; got ${mapLayer.length}`);
+  }
+
+  const tileWords = new Uint16Array(tileCount);
+  for (let x = 0; x < mapWidth; x += 1) {
+    for (let y = 0; y < mapHeight; y += 1) {
+      const snapshotIndex = getCoreBridgeV1SnapshotTileIndex(x, y, mapHeight);
+      tileWords[snapshotIndex] = mapLayer[snapshotIndex] ?? 0;
+    }
+  }
+  return tileWords;
 }
