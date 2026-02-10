@@ -54,7 +54,7 @@ Acceptance checks:
 
 ### Phase 1: Introduce Sim-Core Envelope Host (New Class)
 
-- [ ] Create `apps/web/src/game/runtime/sim-core-envelope-host.ts` implementing `CoreHost` from `apps/web/src/game/runtime/protocol.ts`.
+- [x] Create `apps/web/src/game/runtime/sim-core-envelope-host.ts` implementing `CoreHost` from `apps/web/src/game/runtime/protocol.ts`.
 - [ ] Back it with authoritative state from `SimCoreRuntimeState`.
 - [ ] Route `hello`, `command`, `request_snapshot`, and `disconnect` through one deterministic host lifecycle.
 - [ ] Keep compatibility options currently exposed by `createPlayableRuntimeHost(...)` while migrating call sites/tests.
