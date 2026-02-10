@@ -8,6 +8,7 @@ import {
   createRng,
   createSimContext,
   createSimState,
+  MAP_FLAGS,
   resetForNewCityFromSeed,
   type SimContext,
   type SimState,
@@ -73,7 +74,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
-  it('uses authority redraw plans end-to-end from patch payloads to renderer draw mode', () => {
+  it('consumes redraw plans on both patch and full-redraw authority paths', () => {
     const host = new DemoMapHost({ enableAmbientTicks: false });
     const runtime = createWebHostRuntime({ host });
     const mapRedrawReasons: string[] = [];
@@ -96,20 +97,27 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     runtime.connect();
 
-    runtime.sendCommand('stage9-redraw-base', {
-      kind: 'tool',
-      tool: 'road',
-      x: 10,
-      y: 10,
-    });
-    expect(runtime.getState().mapState.drawMode).toBe('patch');
-
     const authority = host as unknown as {
       simState: {
         NewMap: number;
         NewMapFlags: Uint8Array;
       };
     };
+    // `DoUpdateMap` in `w_map.c` keys full redraw from the active draw mode only
+    // (`ALMAP` for Stage 4), while `sim_update_maps` in `sim.c` clears all C
+    // `NewMapFlags[0..NMAPS-1]` slots each cycle.
+    authority.simState.NewMapFlags[MAP_FLAGS.PDMAP] = 1;
+
+    runtime.sendCommand('stage9-redraw-base', {
+      kind: 'tool',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(mapRedrawReasons.at(-1)).toBe('patch-rects');
+    expect(runtime.getState().mapState.drawMode).toBe('patch');
+    expect(authority.simState.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(0);
+
     authority.simState.NewMap = 1;
 
     runtime.sendCommand('stage9-redraw-new-map', {
