@@ -467,6 +467,76 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
 describe('createStage4PrimaryPlayableHost', () => {
+  test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
+    const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+    const hostEnvelopes: HostEnvelope[] = [];
+    const runId = 'stage11-new-city-map-hud';
+    const roomId = `${runId}-room`;
+    const clientId = `${runId}-client`;
+    const commandId = `${runId}-cmd-new-city`;
+    const connection = host.connect((envelope) => {
+      hostEnvelopes.push(envelope);
+    });
+
+    try {
+      connection.send({
+        kind: 'hello',
+        roomId,
+        clientId,
+        protocolVersion: 'bridge-v1',
+        coreVersion: 'sim-core',
+      });
+
+      await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+        `${runId} boot snapshot`,
+      );
+
+      connection.send({
+        kind: 'command',
+        roomId,
+        clientId,
+        commandId,
+        command: {
+          kind: 'city-lifecycle',
+          action: 'new-city',
+        },
+      });
+      const newCityAck = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === commandId,
+        `${runId} new-city ack`,
+      );
+      const newCitySnapshot = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope =>
+          envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
+        `${runId} new-city snapshot`,
+      );
+
+      // Magic numbers source: classic world dimensions (`WORLD_X=120`, `WORLD_Y=100`)
+      // and `DoNewCity` startup baseline from `ref/micropolis/src/sim/s_init.c`.
+      expect(newCitySnapshot.payload.map?.width).toBe(120);
+      expect(newCitySnapshot.payload.map?.height).toBe(100);
+      const snapshotMap = newCitySnapshot.payload.map;
+      expect(snapshotMap).toBeDefined();
+      if (snapshotMap === undefined) {
+        throw new Error(`${runId} new-city snapshot missing map payload`);
+      }
+      const mapTileWordCount =
+        'tileWords' in snapshotMap ? snapshotMap.tileWords.length : snapshotMap.tiles.length;
+      expect(mapTileWordCount).toBe(120 * 100);
+      expect(newCitySnapshot.payload.hud?.funds).toBe(20_000);
+      expect(newCitySnapshot.payload.hud?.speed).toBe(3);
+      expect(newCitySnapshot.payload.hud?.date?.year).toBe(1900);
+      expect(newCitySnapshot.payload.hud?.date?.month).toBe(0);
+    } finally {
+      connection.disconnect();
+    }
+  });
+
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
     const summary = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-main');
     expect(summary.rejectReasons).toEqual(['invalid-command']);

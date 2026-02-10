@@ -547,7 +547,7 @@ Deletion execution notes:
 
 ### Certification checklist (manual)
 
-- [ ] Start a new city and confirm map + HUD load correctly.
+- [x] Start a new city and confirm map + HUD load correctly.
 - [ ] Place road/rail/wire/bulldoze/R/C/I and confirm costs/rejects/funds behavior.
 - [ ] Run sim at speed 1/2/3, pause/resume, and confirm cadence changes.
 - [ ] Observe heads + message feed update during normal simulation.
