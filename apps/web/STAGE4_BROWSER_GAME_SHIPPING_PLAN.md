@@ -386,7 +386,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Render moving realtime objects/events on top of authoritative base map.
+- [x] Render moving realtime objects/events on top of authoritative base map.
 
 ### C references to review
 

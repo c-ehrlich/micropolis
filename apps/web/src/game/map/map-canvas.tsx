@@ -2,6 +2,7 @@ import { type MouseEvent, useEffect, useRef } from 'react';
 
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
+import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
 import { getStage4TileDebugColor } from './stage4-tile-renderer.ts';
 
 /**
@@ -14,11 +15,13 @@ import { getStage4TileDebugColor } from './stage4-tile-renderer.ts';
 export function MapCanvas({
   mapState,
   pendingTools = [],
+  realtimeObjects = [],
   onTileClick,
   tileSize = 4,
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
+  realtimeObjects?: readonly RuntimeRealtimeObject[];
   onTileClick?: (x: number, y: number) => void;
   tileSize?: number;
 }) {
@@ -65,6 +68,12 @@ export function MapCanvas({
 
   const widthPx = mapState.width * tileSize;
   const heightPx = mapState.height * tileSize;
+  const realtimeOverlaySprites = projectRealtimeOverlaySprites({
+    objects: realtimeObjects,
+    tileSize,
+    mapWidth: mapState.width,
+    mapHeight: mapState.height,
+  });
 
   return (
     <div
@@ -123,6 +132,34 @@ export function MapCanvas({
           />
         );
       })}
+      {realtimeOverlaySprites.map((sprite) => (
+        <div
+          key={sprite.key}
+          style={{
+            alignItems: 'center',
+            background: `${sprite.color}59`,
+            border: `1px solid ${sprite.color}`,
+            borderRadius: 3,
+            boxSizing: 'border-box',
+            color: '#0f172a',
+            display: 'flex',
+            fontFamily: 'monospace',
+            fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
+            fontWeight: 700,
+            height: sprite.height,
+            justifyContent: 'center',
+            left: sprite.left,
+            lineHeight: 1,
+            pointerEvents: 'none',
+            position: 'absolute',
+            top: sprite.top,
+            width: sprite.width,
+          }}
+          title={`${sprite.name} frame ${sprite.frame}`}
+        >
+          {sprite.label}
+        </div>
+      ))}
     </div>
   );
 }
@@ -174,6 +211,113 @@ const MAP_CANVAS_DRAW_PROCS: Record<RuntimeMapState['drawMode'], MapCanvasDrawPr
   snapshot: drawAllTiles,
   patch: drawPatchTiles,
 };
+
+interface MapCanvasRealtimeSpriteSpec {
+  width: number;
+  height: number;
+  xOffset: number;
+  yOffset: number;
+  label: string;
+  color: string;
+}
+
+/**
+ * One projected realtime overlay sprite for browser map rendering.
+ * Mirrors `DrawSprite` positioning in `ref/micropolis/src/sim/w_sprite.c`
+ * (`x + x_offset`, `y + y_offset`, `width`, `height`) using Stage 7 payloads.
+ * Parity note: this keeps debug-label rectangles instead of Micropolis sprite art.
+ */
+export interface MapCanvasRealtimeOverlaySprite {
+  key: string;
+  name: string;
+  frame: number;
+  label: string;
+  color: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+const MAP_CANVAS_REALTIME_SPRITE_SPECS: Record<number, MapCanvasRealtimeSpriteSpec> = {
+  // 1:1 with `InitSprite` dimensions and offsets in `ref/micropolis/src/sim/w_sprite.c`.
+  1: { width: 32, height: 32, xOffset: 32, yOffset: -16, label: 'TRN', color: '#22c55e' },
+  2: { width: 32, height: 32, xOffset: 32, yOffset: -16, label: 'COP', color: '#0ea5e9' },
+  3: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'AIR', color: '#3b82f6' },
+  4: { width: 48, height: 48, xOffset: 32, yOffset: -16, label: 'SHIP', color: '#06b6d4' },
+  5: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'MON', color: '#f97316' },
+  6: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'TOR', color: '#0f766e' },
+  7: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'EXP', color: '#ef4444' },
+  8: { width: 32, height: 32, xOffset: 30, yOffset: -18, label: 'BUS', color: '#f59e0b' },
+};
+
+const MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC: MapCanvasRealtimeSpriteSpec = {
+  width: 32,
+  height: 32,
+  xOffset: 0,
+  yOffset: 0,
+  label: 'OBJ',
+  color: '#64748b',
+};
+
+/**
+ * Projects authoritative realtime objects into drawable overlay quads.
+ * Mirrors `DrawSprite` placement in `ref/micropolis/src/sim/w_sprite.c`, where
+ * object coordinates are 1/16-tile world pixels with sprite-type offsets.
+ * Parity note: browser projection clips off-screen sprites and skips `frame=0`
+ * objects the same way C draw code treats inactive sprites.
+ */
+export function projectRealtimeOverlaySprites({
+  objects,
+  tileSize,
+  mapWidth,
+  mapHeight,
+}: {
+  objects: readonly RuntimeRealtimeObject[];
+  tileSize: number;
+  mapWidth: number;
+  mapHeight: number;
+}): MapCanvasRealtimeOverlaySprite[] {
+  const pixelsPerWorldUnit = tileSize / 16;
+  const viewportWidth = mapWidth * tileSize;
+  const viewportHeight = mapHeight * tileSize;
+  const overlays: MapCanvasRealtimeOverlaySprite[] = [];
+
+  for (let index = 0; index < objects.length; index += 1) {
+    const object = objects[index];
+    if (object === undefined || object.frame <= 0) {
+      continue;
+    }
+
+    const spec = getRealtimeSpriteSpec(object.type);
+    const left = (object.x + spec.xOffset) * pixelsPerWorldUnit;
+    const top = (object.y + spec.yOffset) * pixelsPerWorldUnit;
+    const width = spec.width * pixelsPerWorldUnit;
+    const height = spec.height * pixelsPerWorldUnit;
+
+    if (left + width <= 0 || top + height <= 0 || left >= viewportWidth || top >= viewportHeight) {
+      continue;
+    }
+
+    overlays.push({
+      key: `${object.type}:${object.name}:${index}`,
+      name: object.name,
+      frame: object.frame,
+      label: spec.label,
+      color: spec.color,
+      left,
+      top,
+      width,
+      height,
+    });
+  }
+
+  return overlays;
+}
+
+function getRealtimeSpriteSpec(type: number): MapCanvasRealtimeSpriteSpec {
+  return MAP_CANVAS_REALTIME_SPRITE_SPECS[type] ?? MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC;
+}
 
 function drawAllTiles(
   context: CanvasRenderingContext2D,
