@@ -535,6 +535,7 @@ export interface HostMapSnapshotPayload {
   width: number;
   height: number;
   tileWords: readonly number[] | Uint16Array;
+  redrawPlan?: HostMapRedrawPlanPayload;
 }
 
 /**
@@ -550,12 +551,48 @@ export interface HostMapPatchTileWordDelta {
 }
 
 /**
+ * One tile-space dirty rect carried by authoritative redraw-plan payloads.
+ * Mirrors dirty-region ownership consumed by `DoUpdateMap` in
+ * `ref/micropolis/src/sim/w_map.c`.
+ * Parity note: this reuses tile-space `x/y/width/height` rect semantics from
+ * `planMapRedraw` in `packages/sim-core/src/core/map-invalidation.ts`.
+ */
+export interface HostMapRedrawDirtyRectPayload {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Deterministic redraw-plan metadata emitted by authority map payloads.
+ * Mirrors `NewMap`/`NewMapFlags` invalidation gating in
+ * `ref/micropolis/src/sim/w_map.c` and cycle clear behavior from
+ * `ref/micropolis/src/sim/sim.c`.
+ * Parity note: this is the transport projection of `MapRedrawPlan` from
+ * `packages/sim-core/src/core/map-invalidation.ts`.
+ */
+export interface HostMapRedrawPlanPayload {
+  reason:
+    | 'none'
+    | 'new-map'
+    | 'map-flag'
+    | 'shake'
+    | 'patch-tile-threshold'
+    | 'patch-rect-threshold'
+    | 'patch-rects';
+  fullRedraw: boolean;
+  dirtyRects: readonly HostMapRedrawDirtyRectPayload[];
+}
+
+/**
  * Authoritative incremental map payload carried by Stage 2 patch envelopes.
  * Mirrors map mutation deltas consumed by `DoUpdateMap` in
  * `ref/micropolis/src/sim/w_map.c`.
  */
 export interface HostMapPatchPayload {
   tileWordDeltas: readonly HostMapPatchTileWordDelta[];
+  redrawPlan?: HostMapRedrawPlanPayload;
 }
 
 /**

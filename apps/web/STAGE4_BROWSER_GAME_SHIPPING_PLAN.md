@@ -483,7 +483,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Use `planMapRedraw` + `consumeMapRedrawPlan` end-to-end from authority output to renderer.
+- [x] Use `planMapRedraw` + `consumeMapRedrawPlan` end-to-end from authority output to renderer.
 - [ ] Add pan/zoom controls suitable for desktop and laptop touchpads.
 - [ ] Ensure base tiles + overlays + HUD remain responsive under continuous ticks.
 - [ ] Prevent full-canvas flashing when patch/dirty redraw is sufficient.

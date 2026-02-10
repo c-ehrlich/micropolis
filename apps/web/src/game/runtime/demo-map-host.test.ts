@@ -73,6 +73,60 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('uses authority redraw plans end-to-end from patch payloads to renderer draw mode', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    const mapRedrawReasons: string[] = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind !== 'patch') {
+        return;
+      }
+
+      const mapPayload = event.envelope.payload.map;
+      if (mapPayload === undefined || !('redrawPlan' in mapPayload)) {
+        return;
+      }
+
+      const redrawPlan = mapPayload.redrawPlan;
+      if (redrawPlan !== undefined) {
+        mapRedrawReasons.push(redrawPlan.reason);
+      }
+    });
+
+    runtime.connect();
+
+    runtime.sendCommand('stage9-redraw-base', {
+      kind: 'tool',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(runtime.getState().mapState.drawMode).toBe('patch');
+
+    const authority = host as unknown as {
+      simState: {
+        NewMap: number;
+        NewMapFlags: Uint8Array;
+      };
+    };
+    authority.simState.NewMap = 1;
+
+    runtime.sendCommand('stage9-redraw-new-map', {
+      kind: 'tool',
+      tool: 'road',
+      x: 11,
+      y: 10,
+    });
+
+    expect(mapRedrawReasons.at(-1)).toBe('new-map');
+    expect(runtime.getState().mapState.drawMode).toBe('snapshot');
+    expect(authority.simState.NewMap).toBe(0);
+    expect(Array.from(authority.simState.NewMapFlags).every((flag) => flag === 0)).toBe(true);
+
+    runtime.disconnect();
+  });
+
   it('advances ANIMBIT tiles only when DoAnimation is enabled', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });

@@ -2,6 +2,7 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  consumeMapRedrawPlan,
   createRealtimeContext,
   destroyAllSprites as destroyRealtimeSprites,
   generateCopter as generateRealtimeCopter,
@@ -13,6 +14,9 @@ import {
   makeExplosionAt as makeRealtimeExplosionAt,
   makeMonster as makeRealtimeMonster,
   makeTornado as makeRealtimeTornado,
+  type MapRedrawPlan,
+  type Patch,
+  planMapRedraw,
   type RealtimeContext,
   resetForNewCityFromSeed,
   runRealtimeTick,
@@ -40,6 +44,8 @@ import {
   type HostEnvelope,
   type HostHudMessagePayload,
   type HostHudOptionsPayload,
+  type HostMapPatchTileWordDelta,
+  type HostMapRedrawPlanPayload,
   type HostPatchPayload,
   type HostRealtimeObjectDeltaPayload,
   type HostRealtimeObjectPayload,
@@ -59,6 +65,8 @@ import {
 
 const DEMO_WORLD_WIDTH = 120;
 const DEMO_WORLD_HEIGHT = 100;
+// `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
+const DEMO_ACTIVE_MAP_STATE = 0;
 const DEMO_PATCH_INTERVAL_MS = 180;
 const DEMO_INITIAL_FUNDS = 20_000;
 const DEMO_MESSAGE_LOG_LIMIT = 24;
@@ -217,6 +225,8 @@ interface DemoPatchPayload extends HostPatchPayload {
     save?: DemoCityExportPayload;
   };
 }
+
+type DemoMapTileWordDelta = HostMapPatchTileWordDelta;
 
 interface HostRealtimeObjectWithIdPayload extends HostRealtimeObjectPayload {
   id: string;
@@ -791,6 +801,7 @@ export class DemoMapHost implements CoreHost {
     if (pendingMessages.length > 0) {
       this.recordMessages(pendingMessages, snapshotTick, snapshotServerSeq);
     }
+    const mapRedrawPlan = this.planAndConsumeMapRedraw();
     const realtimePayload = this.buildRealtimeSnapshotPayload();
     this.ensureMessageLogReplayMetadata(snapshotTick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
@@ -809,6 +820,7 @@ export class DemoMapHost implements CoreHost {
             DEMO_WORLD_WIDTH,
             DEMO_WORLD_HEIGHT,
           ),
+          redrawPlan: mapRedrawPlan,
         },
         hud: {
           ...this.getHudHeadsPayload(),
@@ -972,13 +984,10 @@ export class DemoMapHost implements CoreHost {
    */
   private buildHookDrivenPatchPayload(options: {
     includeHud: boolean;
-    mapTileWordDeltas?: ReadonlyArray<{
-      x: number;
-      y: number;
-      tileWord: number;
-    }>;
+    mapTileWordDeltas?: ReadonlyArray<DemoMapTileWordDelta>;
   }): DemoPatchPayload {
     const payload: DemoPatchPayload = {};
+    const mapRedrawPlan = this.planAndConsumeMapRedraw(options.mapTileWordDeltas);
 
     this.syncRealtimeContextFromSimState();
     this.ensureRealtimeDemoObject();
@@ -986,9 +995,12 @@ export class DemoMapHost implements CoreHost {
       payload.hud = this.getHudHeadsPayload();
     }
 
-    if (options.mapTileWordDeltas !== undefined && options.mapTileWordDeltas.length > 0) {
+    const mapTileWordDeltas = options.mapTileWordDeltas ?? [];
+    const hasMapTileWordDeltas = mapTileWordDeltas.length > 0;
+    if (hasMapTileWordDeltas || mapRedrawPlan.fullRedraw || mapRedrawPlan.dirtyRects.length > 0) {
       payload.map = {
-        tileWordDeltas: [...options.mapTileWordDeltas],
+        tileWordDeltas: [...mapTileWordDeltas],
+        redrawPlan: mapRedrawPlan,
       };
     }
 
@@ -1000,6 +1012,26 @@ export class DemoMapHost implements CoreHost {
     payload.realtime = this.buildRealtimeDeltaPayload();
 
     return payload;
+  }
+
+  /**
+   * Plans one map redraw outcome from authoritative invalidation markers and
+   * consumes the cycle markers after planning.
+   * Mirrors `DoUpdateMap` invalidation gating in `ref/micropolis/src/sim/w_map.c`
+   * and `sim_update_maps` clear behavior in `ref/micropolis/src/sim/sim.c`.
+   * Parity note: Stage 4 currently uses one `map_state` view (`ALMAP` index 0).
+   */
+  private planAndConsumeMapRedraw(
+    mapTileWordDeltas?: ReadonlyArray<DemoMapTileWordDelta>,
+  ): HostMapRedrawPlanPayload {
+    const redrawPlan = planMapRedraw({
+      activeMapState: DEMO_ACTIVE_MAP_STATE,
+      newMap: this.simState.NewMap,
+      newMapFlags: this.simState.NewMapFlags,
+      mapPatch: buildMapPatchForRedrawPlan(mapTileWordDeltas, DEMO_WORLD_HEIGHT),
+    });
+    consumeMapRedrawPlan(this.simState, redrawPlan);
+    return toHostMapRedrawPlanPayload(redrawPlan);
   }
 
   /**
@@ -1710,6 +1742,58 @@ export class DemoMapHost implements CoreHost {
     this.scenarioResourceBytesCache.set(fileName, pendingLoad);
     return pendingLoad;
   }
+}
+
+/**
+ * Builds one map-store patch shape from coordinate-addressed tile deltas.
+ * Mirrors classic `Map[x][y]` index math in `ref/micropolis/src/sim/s_alloc.c`
+ * (`index = x * WORLD_Y + y`) used by redraw invalidation planning helpers.
+ * Parity note: only the patch `index` vector is consumed by `planMapRedraw`.
+ */
+function buildMapPatchForRedrawPlan(
+  mapTileWordDeltas: ReadonlyArray<DemoMapTileWordDelta> | undefined,
+  mapHeight: number,
+): Patch | null {
+  if (mapTileWordDeltas === undefined || mapTileWordDeltas.length === 0) {
+    return null;
+  }
+
+  const patchLength = mapTileWordDeltas.length;
+  const index = new Uint32Array(patchLength);
+  for (let cursor = 0; cursor < patchLength; cursor += 1) {
+    const delta = mapTileWordDeltas[cursor];
+    if (delta === undefined) {
+      continue;
+    }
+    index[cursor] = delta.x * mapHeight + delta.y;
+  }
+
+  return {
+    layer: 'map',
+    index,
+    prev: new Uint16Array(patchLength),
+    next: new Uint16Array(patchLength),
+  };
+}
+
+/**
+ * Converts one sim-core redraw plan to the Stage 2 host payload contract.
+ * Mirrors invalidation plan metadata generated by `planMapRedraw` in
+ * `packages/sim-core/src/core/map-invalidation.ts`.
+ * Parity note: this is a shape conversion only; redraw policy decisions stay
+ * in sim-core.
+ */
+function toHostMapRedrawPlanPayload(plan: MapRedrawPlan): HostMapRedrawPlanPayload {
+  return {
+    reason: plan.reason,
+    fullRedraw: plan.fullRedraw,
+    dirtyRects: plan.dirtyRects.map((rect) => ({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    })),
+  };
 }
 
 function sanitizeCityFileName(fileName: string): string {

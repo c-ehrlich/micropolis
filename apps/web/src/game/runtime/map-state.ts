@@ -1,5 +1,5 @@
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
-import type { SequencedHostEnvelope } from './protocol.ts';
+import type { HostMapRedrawPlanPayload, SequencedHostEnvelope } from './protocol.ts';
 
 const EMPTY_DIRTY_TILE_INDEXES = new Uint32Array(0);
 const EMPTY_DIRTY_RECTS: readonly RuntimeMapDirtyRect[] = Object.freeze([]);
@@ -98,6 +98,16 @@ interface PatchTileDelta {
   tileWord: number;
 }
 
+interface ParsedMapRedrawPlan {
+  fullRedraw: boolean;
+  dirtyRects: readonly RuntimeMapDirtyRect[];
+}
+
+interface ParsedPatchPayload {
+  deltas: PatchTileDelta[];
+  redrawPlan: ParsedMapRedrawPlan | null;
+}
+
 function applySnapshotPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
   const parsed = parseSnapshotPayload(payload);
   if (parsed === null) {
@@ -121,11 +131,13 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
     return state;
   }
 
-  const deltas = parsePatchPayload(payload, state.width, state.height);
-  if (deltas === null || deltas.length === 0) {
+  const parsed = parsePatchPayload(payload, state.width, state.height);
+  if (parsed === null) {
     return state;
   }
 
+  const deltas = parsed.deltas;
+  const redrawPlan = parsed.redrawPlan;
   let nextTiles: Uint16Array | null = null;
   const dirty: number[] = [];
   for (const delta of deltas) {
@@ -146,17 +158,29 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
     dirty.push(delta.index);
   }
 
-  if (nextTiles === null || dirty.length === 0) {
+  const hasTileChanges = nextTiles !== null && dirty.length > 0;
+  const hasPlanDrivenRedraw =
+    redrawPlan?.fullRedraw === true || (redrawPlan?.dirtyRects.length ?? 0) > 0;
+  if (!hasTileChanges && !hasPlanDrivenRedraw) {
     return state;
   }
 
-  const dirtyTileIndexes = normalizeDirtyTileIndexes(dirty, state.tiles.length);
+  const dirtyTileIndexes = hasTileChanges
+    ? normalizeDirtyTileIndexes(dirty, state.tiles.length)
+    : EMPTY_DIRTY_TILE_INDEXES;
+  const dirtyRects =
+    redrawPlan?.fullRedraw === true
+      ? EMPTY_DIRTY_RECTS
+      : redrawPlan?.dirtyRects.length
+        ? redrawPlan.dirtyRects
+        : buildDirtyRectsFromDirtyTileIndexes(dirtyTileIndexes, state.width);
+
   return {
     ...state,
-    tiles: nextTiles,
+    tiles: hasTileChanges && nextTiles !== null ? nextTiles : state.tiles,
     dirtyTileIndexes,
-    dirtyRects: buildDirtyRectsFromDirtyTileIndexes(dirtyTileIndexes, state.width),
-    drawMode: 'patch',
+    dirtyRects,
+    drawMode: redrawPlan?.fullRedraw === true ? 'snapshot' : 'patch',
     renderEpoch: state.renderEpoch + 1,
   };
 }
@@ -198,21 +222,101 @@ function parsePatchPayload(
   payload: unknown,
   width: number,
   height: number,
-): PatchTileDelta[] | null {
+): ParsedPatchPayload | null {
   const map = readMapObject(payload);
   if (map === null) {
     return null;
   }
 
+  const redrawPlan = parseMapRedrawPlan(map.redrawPlan);
   if (Array.isArray(map.tileWordDeltas)) {
-    return parseTileWordCoordinateDeltas(map.tileWordDeltas, width, height);
+    return {
+      deltas: parseTileWordCoordinateDeltas(map.tileWordDeltas, width, height),
+      redrawPlan,
+    };
   }
 
   if (Array.isArray(map.tiles)) {
-    return parseLegacyIndexDeltas(map.tiles);
+    return {
+      deltas: parseLegacyIndexDeltas(map.tiles),
+      redrawPlan,
+    };
   }
 
-  return null;
+  if (redrawPlan === null) {
+    return null;
+  }
+
+  return {
+    deltas: [],
+    redrawPlan,
+  };
+}
+
+/**
+ * Parses authority redraw-plan metadata emitted from sim-core invalidation
+ * planning.
+ * Mirrors redraw policy produced by `planMapRedraw` in
+ * `packages/sim-core/src/core/map-invalidation.ts`.
+ */
+function parseMapRedrawPlan(value: unknown): ParsedMapRedrawPlan | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (typeof value.fullRedraw !== 'boolean') {
+    return null;
+  }
+
+  const reason = value.reason;
+  if (
+    reason !== 'none' &&
+    reason !== 'new-map' &&
+    reason !== 'map-flag' &&
+    reason !== 'shake' &&
+    reason !== 'patch-tile-threshold' &&
+    reason !== 'patch-rect-threshold' &&
+    reason !== 'patch-rects'
+  ) {
+    return null;
+  }
+
+  const dirtyRects = normalizeMapRedrawDirtyRects(value.dirtyRects);
+  if (dirtyRects === null) {
+    return null;
+  }
+
+  return {
+    fullRedraw: value.fullRedraw,
+    dirtyRects,
+  };
+}
+
+function normalizeMapRedrawDirtyRects(
+  value: unknown,
+): HostMapRedrawPlanPayload['dirtyRects'] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const dirtyRects: RuntimeMapDirtyRect[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) {
+      return null;
+    }
+
+    const x = readNonNegativeInteger(entry.x);
+    const y = readNonNegativeInteger(entry.y);
+    const width = readPositiveInteger(entry.width);
+    const height = readPositiveInteger(entry.height);
+    if (x === null || y === null || width === null || height === null) {
+      return null;
+    }
+
+    dirtyRects.push({ x, y, width, height });
+  }
+
+  return dirtyRects;
 }
 
 /**
@@ -462,6 +566,15 @@ function readNonNegativeInteger(value: unknown): number | null {
 
   const next = Math.trunc(value);
   if (next < 0) {
+    return null;
+  }
+
+  return next;
+}
+
+function readPositiveInteger(value: unknown): number | null {
+  const next = readNonNegativeInteger(value);
+  if (next === null || next <= 0) {
     return null;
   }
 
