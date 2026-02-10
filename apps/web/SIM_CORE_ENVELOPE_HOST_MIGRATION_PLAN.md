@@ -140,7 +140,7 @@ Acceptance checks:
 Acceptance checks:
 
 - [x] No gameplay route imports `DemoMapHost`. (Verified 2026-02-10 via repo search for route/runtime gameplay imports.)
-- [ ] Codebase no longer contains synthetic gameplay map bootstrap logic.
+- [x] Codebase no longer contains synthetic gameplay map bootstrap logic. (Verified 2026-02-10 via repo search: no remaining gameplay implementation references to demo synthetic bootstrap helpers; only migration-history assertions remain in tests/docs.)
 - [ ] Coverage remains for all gameplay-critical parity behaviors.
 
 ### Phase 6: Test and Verification Hardening
