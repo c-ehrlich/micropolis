@@ -103,6 +103,7 @@ Acceptance checks:
 - [x] Port map patch deltas + redraw plan emission using sim-core invalidation planning (`planMapRedraw` / `consumeMapRedrawPlan`).
 - [x] Port HUD heads emission using sim-core hooks (`uiSet`) and `runUiUpdate`.
 - [x] Port message flow using hook-driven `sendMes`/`sendMesAt` capture with deterministic replay metadata.
+  - Implemented in `apps/web/src/game/runtime/sim-core-envelope-host.ts` via hook capture (`captureMessage`/`captureMessageAt`) plus replay metadata stamping and immutable replay checkpoint/tail cloning for deterministic `request_snapshot` replays.
 - [ ] Port realtime payloads using sim-core realtime sprite hooks and include:
 - [ ] `realtime.snapshot` (baseline stream).
 - [ ] `realtime.deltas` (incremental stream).

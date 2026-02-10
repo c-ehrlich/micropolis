@@ -1163,7 +1163,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readSnapshotReplayBaseline(replayCursor: number): SnapshotReplayCheckpoint {
     const checkpoint = this.snapshotReplayCheckpoints.get(replayCursor);
     if (checkpoint !== undefined) {
-      return checkpoint;
+      return {
+        tick: checkpoint.tick,
+        payload: cloneHostSnapshotPayload(checkpoint.payload),
+      };
     }
 
     return {
@@ -1182,8 +1185,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readSnapshotReplayTail(replayCursor: number): SequencedHostEnvelope[] {
     return this.sequencedReplayLog
       .filter((entry) => entry.replayTailEligible && entry.envelope.serverSeq > replayCursor)
-      .map((entry) => entry.envelope)
-      .sort((left, right) => left.serverSeq - right.serverSeq);
+      .sort((left, right) => left.envelope.serverSeq - right.envelope.serverSeq)
+      .map((entry) => cloneReplaySequencedEnvelope(entry.envelope));
   }
 
   /**
@@ -1213,12 +1216,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
     options: EmitSequencedEnvelopeOptions,
   ): void {
     this.sequencedReplayLog.push({
-      envelope,
+      envelope: cloneReplaySequencedEnvelope(envelope),
       replayTailEligible: options.replayTailEligible ?? true,
     });
     this.snapshotReplayCheckpoints.set(envelope.serverSeq, {
       tick: envelope.tick,
-      payload: this.buildSnapshotPayload(),
+      payload: cloneHostSnapshotPayload(this.buildSnapshotPayload()),
     });
   }
 
@@ -1297,7 +1300,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
         tileWords,
       },
       hud: this.buildHudSnapshotPayload(),
-      ...(this.messageLog.length === 0 ? {} : { messages: [...this.messageLog] }),
+      ...(this.messageLog.length === 0
+        ? {}
+        : { messages: cloneHostHudMessagePayloadList(this.messageLog) }),
     };
   }
 
@@ -1474,7 +1479,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/s_msg.c`, adapted to bounded bridge history.
    */
   private appendMessageLog(messages: readonly HostHudMessagePayload[]): void {
-    this.messageLog.push(...messages);
+    this.messageLog.push(...cloneHostHudMessagePayloadList(messages));
     if (this.messageLog.length > MESSAGE_LOG_LIMIT) {
       this.messageLog.splice(0, this.messageLog.length - MESSAGE_LOG_LIMIT);
     }
@@ -1735,6 +1740,58 @@ function normalizeMessageReplayMetadata(
     tick: message.tick ?? fallbackTick,
     serverSeq: message.serverSeq ?? fallbackServerSeq,
   }));
+}
+
+/**
+ * Clones one HUD message list before envelope emission/replay storage.
+ * Mirrors copy-by-value transport boundaries around `SendMes`/`SendMesAt`
+ * payload projection in `ref/micropolis/src/sim/s_msg.c`.
+ */
+function cloneHostHudMessagePayloadList(
+  messages: readonly HostHudMessagePayload[],
+): HostHudMessagePayload[] {
+  return messages.map((message) => ({ ...message }));
+}
+
+/**
+ * Clones one snapshot payload for replay-checkpoint immutability.
+ * Mirrors deterministic snapshot replay baseline intent from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function cloneHostSnapshotPayload(payload: HostSnapshotPayload): HostSnapshotPayload {
+  return structuredClone(payload);
+}
+
+/**
+ * Clones one patch payload for replay-log immutability.
+ * Mirrors ordered patch replay-tail intent from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function cloneHostPatchPayload(payload: HostPatchPayload): HostPatchPayload {
+  return structuredClone(payload);
+}
+
+/**
+ * Clones one sequenced host envelope before replay-log persistence.
+ * Mirrors deterministic bridge replay history ownership from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function cloneReplaySequencedEnvelope(envelope: SequencedHostEnvelope): SequencedHostEnvelope {
+  if (envelope.kind === 'patch') {
+    return {
+      ...envelope,
+      payload: cloneHostPatchPayload(envelope.payload),
+    };
+  }
+
+  if (envelope.kind === 'snapshot') {
+    return {
+      ...envelope,
+      payload: cloneHostSnapshotPayload(envelope.payload),
+    };
+  }
+
+  return { ...envelope };
 }
 
 /**

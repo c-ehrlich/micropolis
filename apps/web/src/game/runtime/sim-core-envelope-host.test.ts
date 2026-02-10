@@ -658,6 +658,92 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('keeps replay snapshot message metadata deterministic even if a prior replay payload is mutated', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-replay-metadata',
+      clientId: 'client-replay-metadata',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Message-id source: `SendMessages` warning ids in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMesAt(
+        hostInternals.authorityState.simState,
+        hostInternals.authorityState.simContext,
+        14,
+        7,
+        9,
+      ),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-replay-metadata',
+      clientId: 'client-replay-metadata',
+      commandId: 'cmd-pause-replay-metadata',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-replay-metadata',
+      clientId: 'client-replay-metadata',
+      fromServerSeq: 3,
+      reason: 'manual',
+    });
+
+    const firstReplay = captured.envelopes[4];
+    if (firstReplay === undefined || firstReplay.kind !== 'snapshot') {
+      throw new Error('expected first replay snapshot envelope');
+    }
+    const firstReplayMessages = firstReplay.payload.messages;
+    if (firstReplayMessages === undefined || firstReplayMessages.length === 0) {
+      throw new Error('expected first replay snapshot messages payload');
+    }
+
+    const firstReplayMessage = firstReplayMessages[0];
+    if (firstReplayMessage === undefined) {
+      throw new Error('expected first replay message');
+    }
+    firstReplayMessage.text = 'mutated-replay-text';
+    firstReplayMessage.tick = 777;
+    firstReplayMessage.serverSeq = 777;
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-replay-metadata',
+      clientId: 'client-replay-metadata',
+      fromServerSeq: 3,
+      reason: 'manual',
+    });
+
+    const secondReplay = captured.envelopes[5];
+    if (secondReplay === undefined || secondReplay.kind !== 'snapshot') {
+      throw new Error('expected second replay snapshot envelope');
+    }
+    const secondReplayMessage = secondReplay.payload.messages?.find(
+      (message) => message.id === 14 && message.x === 7 && message.y === 9,
+    );
+    expect(secondReplayMessage).toMatchObject({
+      text: 'Residents demand police stations.',
+      tick: 1,
+      serverSeq: 3,
+    });
+  });
+
   it('routes save-city/load-city through sim-io helpers and restores saved state on load', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
