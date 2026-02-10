@@ -716,8 +716,7 @@ describe('SimCoreEnvelopeHost', () => {
 
     expect(
       captured.envelopes.some(
-        (envelope) =>
-          envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-load-failure',
+        (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-load-failure',
       ),
     ).toBe(false);
 
