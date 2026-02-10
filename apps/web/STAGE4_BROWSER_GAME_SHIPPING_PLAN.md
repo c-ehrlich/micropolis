@@ -426,7 +426,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Replace debug color tiles with Micropolis-derived sprite rendering while keeping deterministic fallback.
+- [x] Replace debug color tiles with Micropolis-derived sprite rendering while keeping deterministic fallback.
 
 ### C references to review
 

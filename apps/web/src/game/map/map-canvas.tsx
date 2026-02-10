@@ -1,16 +1,22 @@
-import { type MouseEvent, useEffect, useMemo, useRef } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
-import { getStage4TileDebugColor } from './stage4-tile-renderer.ts';
+import {
+  getStage8TileAtlasSourceByCanonicalIdentityKey,
+  isStage4DebugTileRendererEnabled,
+  lookupStage8TileSprite,
+  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+} from './stage8-tile-sprite-atlas.ts';
 
 /**
  * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
  * `ref/micropolis/src/sim/g_bigmap.c`.
- * Difference: this remains a debug-color renderer instead of sprite atlas art.
+ * Parity note: Stage 8 now uses Micropolis-derived tile sprites from canonical
+ * `tiles.xpm` identity with a deterministic debug-color fallback flag.
  */
 export function MapCanvas({
   mapState,
@@ -26,7 +32,49 @@ export function MapCanvas({
   tileSize?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tileAtlasImageRef = useRef<HTMLImageElement | null>(null);
   const lastRenderedEpochRef = useRef(0);
+  const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
+  const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
+
+  useEffect(() => {
+    if (debugTileRendererEnabled) {
+      tileAtlasImageRef.current = null;
+      return;
+    }
+
+    const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
+      STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    if (atlas === undefined) {
+      tileAtlasImageRef.current = null;
+      return;
+    }
+
+    const image = new Image();
+    let cancelled = false;
+
+    image.onload = () => {
+      if (cancelled) {
+        return;
+      }
+      tileAtlasImageRef.current = image;
+      setTileAtlasRenderVersion((version) => version + 1);
+    };
+
+    image.onerror = () => {
+      if (cancelled) {
+        return;
+      }
+      tileAtlasImageRef.current = null;
+      setTileAtlasRenderVersion((version) => version + 1);
+    };
+
+    image.src = atlas.spriteSheetUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [debugTileRendererEnabled]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -39,6 +87,7 @@ export function MapCanvas({
     if (context === null) {
       return;
     }
+    context.imageSmoothingEnabled = false;
 
     const widthPx = mapState.width * tileSize;
     const heightPx = mapState.height * tileSize;
@@ -58,9 +107,12 @@ export function MapCanvas({
       lastRenderedEpoch: lastRenderedEpochRef.current,
       resized,
     });
-    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize);
+    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize, {
+      debugTileRendererEnabled,
+      tileAtlasImage: tileAtlasImageRef.current,
+    });
     lastRenderedEpochRef.current = mapState.renderEpoch;
-  }, [mapState, tileSize]);
+  }, [debugTileRendererEnabled, mapState, tileAtlasRenderVersion, tileSize]);
 
   const widthPx = mapState.width * tileSize;
   const heightPx = mapState.height * tileSize;
@@ -172,7 +224,13 @@ type MapCanvasDrawProc = (
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ) => void;
+
+interface MapCanvasTileRenderer {
+  debugTileRendererEnabled: boolean;
+  tileAtlasImage: HTMLImageElement | null;
+}
 
 /**
  * Selects canvas redraw mode from authoritative map draw metadata.
@@ -471,13 +529,13 @@ function drawAllTiles(
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ): void {
   const { width, height, tiles } = mapState;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      context.fillStyle = getStage4TileDebugColor(tiles[index] ?? 0);
-      context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      drawMapCanvasTile(context, tiles[index] ?? 0, x, y, tileSize, tileRenderer);
     }
   }
 }
@@ -486,9 +544,10 @@ function drawPatchTiles(
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ): void {
   if (mapState.dirtyRects.length > 0) {
-    drawPatchRects(context, mapState, tileSize);
+    drawPatchRects(context, mapState, tileSize, tileRenderer);
     return;
   }
 
@@ -496,8 +555,7 @@ function drawPatchTiles(
     const width = mapState.width;
     const x = tileIndex % width;
     const y = Math.floor(tileIndex / width);
-    context.fillStyle = getStage4TileDebugColor(mapState.tiles[tileIndex] ?? 0);
-    context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+    drawMapCanvasTile(context, mapState.tiles[tileIndex] ?? 0, x, y, tileSize, tileRenderer);
   }
 }
 
@@ -505,6 +563,7 @@ function drawPatchRects(
   context: CanvasRenderingContext2D,
   mapState: RuntimeMapState,
   tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
 ): void {
   for (const rect of mapState.dirtyRects) {
     const startX = Math.max(0, rect.x);
@@ -514,11 +573,41 @@ function drawPatchRects(
     for (let y = startY; y < endY; y += 1) {
       for (let x = startX; x < endX; x += 1) {
         const index = y * mapState.width + x;
-        context.fillStyle = getStage4TileDebugColor(mapState.tiles[index] ?? 0);
-        context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+        drawMapCanvasTile(context, mapState.tiles[index] ?? 0, x, y, tileSize, tileRenderer);
       }
     }
   }
+}
+
+function drawMapCanvasTile(
+  context: CanvasRenderingContext2D,
+  tileWord: number,
+  x: number,
+  y: number,
+  tileSize: number,
+  tileRenderer: MapCanvasTileRenderer,
+): void {
+  const sprite = lookupStage8TileSprite(tileWord);
+  const targetX = x * tileSize;
+  const targetY = y * tileSize;
+  const atlasImage = tileRenderer.tileAtlasImage;
+  if (!tileRenderer.debugTileRendererEnabled && atlasImage !== null) {
+    context.drawImage(
+      atlasImage,
+      sprite.sourceX,
+      sprite.sourceY,
+      sprite.sourceWidth,
+      sprite.sourceHeight,
+      targetX,
+      targetY,
+      tileSize,
+      tileSize,
+    );
+    return;
+  }
+
+  context.fillStyle = sprite.debugFallbackColor;
+  context.fillRect(targetX, targetY, tileSize, tileSize);
 }
 
 /**
