@@ -441,7 +441,7 @@ Deletion execution notes:
 - [x] `packages/sim-assets/src/derived-images.ts`
 - [x] `packages/sim-assets/generated-images/images/*`
 - [x] `apps/web/src/game/map/map-canvas.tsx`
-- [ ] `packages/sim-core/src/core/constants.ts`
+- [x] `packages/sim-core/src/core/constants.ts`
 
 ### Implementation checklist
 
@@ -572,4 +572,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
