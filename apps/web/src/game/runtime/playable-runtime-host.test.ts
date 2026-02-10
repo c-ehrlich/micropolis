@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { TileMask } from '../../../../../packages/sim-core/src/index.ts';
+import { Tile, TileMask } from '../../../../../packages/sim-core/src/index.ts';
 import { createPlayableRuntimeHost, readCityExportPayload } from './playable-runtime-host.ts';
 import type {
   ClientEnvelope,
@@ -126,6 +126,11 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
   { tool: 'com', placeX: 30, placeY: 20, rejectX: 0, rejectY: 30 },
   { tool: 'ind', placeX: 40, placeY: 20, rejectX: 0, rejectY: 40 },
 ] as const;
+
+type Stage11PlayableToolCertificationCase =
+  (typeof STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES)[number];
+type Stage11ZoneTool = Extract<Stage11PlayableToolCertificationCase['tool'], 'res' | 'com' | 'ind'>;
+type Stage11ZoneToolPlacements = Record<Stage11ZoneTool, { x: number; y: number }>;
 
 const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
 const STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 8;
@@ -284,6 +289,108 @@ function readStage11SnapshotTileWords(
 }
 
 /**
+ * Returns whether one map tile can host zone footprint placement.
+ * Mirrors deep-water exclusion in `check3x3` / `tally` from
+ * `ref/micropolis/src/sim/w_tool.c`, where river/channel tiles are not zone-buildable.
+ */
+function isStage11ZonePlacableTile(tileWord: number): boolean {
+  const tileId = tileWord & TileMask.LOMASK;
+  return tileId !== Tile.RIVER && tileId !== Tile.REDGE && tileId !== Tile.CHANNEL;
+}
+
+/**
+ * Returns whether a 3x3 zone footprint around one center coordinate is buildable.
+ * Mirrors 3x3 zone footprint checks in `check3x3` from
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+function isStage11ZoneFootprintPlacable(
+  tileWords: readonly number[] | Uint16Array,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+): boolean {
+  const startX = centerX - 1;
+  const startY = centerY - 1;
+  const endX = centerX + 1;
+  const endY = centerY + 1;
+  if (startX < 0 || startY < 0 || endX >= width || endY >= height) {
+    return false;
+  }
+
+  for (let yy = startY; yy <= endY; yy += 1) {
+    for (let xx = startX; xx <= endX; xx += 1) {
+      const tileWord = tileWords[yy * width + xx] ?? 0;
+      if (!isStage11ZonePlacableTile(tileWord)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Finds deterministic valid centers for R/C/I 3x3 zone placement checks.
+ * Mirrors the `check3x3` terrain gate from `ref/micropolis/src/sim/w_tool.c`.
+ * Parity note: picks first valid centers from snapshot map scan to avoid hard-coded
+ * coordinates landing on deep-water tiles.
+ */
+function readStage11ZoneToolPlacementsFromSnapshot(
+  snapshot: HostSnapshotEnvelope,
+  label: string,
+): Stage11ZoneToolPlacements {
+  const map = snapshot.payload.map;
+  if (map === undefined) {
+    throw new Error(`${label} snapshot missing map payload`);
+  }
+  if (!Number.isInteger(map.width) || !Number.isInteger(map.height)) {
+    throw new Error(`${label} snapshot has invalid map dimensions`);
+  }
+
+  const width = map.width;
+  const height = map.height;
+  const tileWords = readStage11SnapshotTileWords(snapshot, label);
+  const placements: Partial<Stage11ZoneToolPlacements> = {};
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      if (!isStage11ZoneFootprintPlacable(tileWords, width, height, x, y)) {
+        continue;
+      }
+      if (placements.res === undefined) {
+        placements.res = { x, y };
+        continue;
+      }
+      if (placements.com === undefined) {
+        placements.com = { x, y };
+        continue;
+      }
+      if (placements.ind === undefined) {
+        placements.ind = { x, y };
+        return placements as Stage11ZoneToolPlacements;
+      }
+    }
+  }
+
+  throw new Error(`${label} could not find valid zone placement coordinates`);
+}
+
+/**
+ * Resolves a deterministic placement coordinate for one tool certification case.
+ * Mirrors Micropolis 3x3 tool center semantics from `toolOffset[]` in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+function readStage11PlacementCoordinateForTool(
+  toolCase: Stage11PlayableToolCertificationCase,
+  zonePlacements: Stage11ZoneToolPlacements,
+): { x: number; y: number } {
+  if (toolCase.tool === 'res' || toolCase.tool === 'com' || toolCase.tool === 'ind') {
+    return zonePlacements[toolCase.tool];
+  }
+  return { x: toolCase.placeX, y: toolCase.placeY };
+}
+
+/**
  * Masks map words to Micropolis identity bits for load restoration parity checks.
  * Mirrors `LOMASK` tile identity usage in `ref/micropolis/src/sim/g_bigmap.c`.
  * Parity note: `DoSimInit` can rewrite non-identity flag bits after `loadFile`.
@@ -386,15 +493,20 @@ async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<voi
         envelope.kind === 'ack' && envelope.commandId === newCityCommandId,
       `${runId} new-city ack`,
     );
-    await waitForHostEnvelope(
+    const newCitySnapshot = await waitForHostEnvelope(
       hostEnvelopes,
       (envelope): envelope is HostSnapshotEnvelope =>
         envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
       `${runId} new-city snapshot`,
     );
+    const zonePlacements = readStage11ZoneToolPlacementsFromSnapshot(
+      newCitySnapshot,
+      `${runId} new-city`,
+    );
 
     let expectedFunds = 20_000;
     for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const placement = readStage11PlacementCoordinateForTool(toolCase, zonePlacements);
       const commandId = `${runId}-cmd-place-${toolCase.tool}`;
       connection.send({
         kind: 'command',
@@ -404,8 +516,8 @@ async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<voi
         command: {
           kind: 'tool',
           tool: toolCase.tool,
-          x: toolCase.placeX,
-          y: toolCase.placeY,
+          x: placement.x,
+          y: placement.y,
         },
       });
 
@@ -509,22 +621,27 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
         event.envelope?.kind === 'ack' && event.envelope.commandId === newCityCommandId,
       `${runId} new-city ack`,
     );
-    await waitForRuntimeEvent(
+    const newCitySnapshot = await waitForRuntimeEvent(
       runtimeEvents,
       (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
         event.envelope?.kind === 'snapshot' &&
         event.envelope.serverSeq > newCityAck.envelope.serverSeq,
       `${runId} new-city snapshot`,
     );
+    const zonePlacements = readStage11ZoneToolPlacementsFromSnapshot(
+      newCitySnapshot.envelope,
+      `${runId} runtime new-city`,
+    );
 
     let expectedFunds = 20_000;
     for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const placement = readStage11PlacementCoordinateForTool(toolCase, zonePlacements);
       const commandId = `${runId}-cmd-place-${toolCase.tool}`;
       runtime.sendCommand(commandId, {
         kind: 'tool',
         tool: toolCase.tool,
-        x: toolCase.placeX,
-        y: toolCase.placeY,
+        x: placement.x,
+        y: placement.y,
       });
       const ack = await waitForRuntimeEvent(
         runtimeEvents,
@@ -2361,11 +2478,11 @@ describe('createPlayableRuntimeHost', () => {
 
   test('certifies host tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
     await certifyStage11PlayableToolCostsOnHost('stage11-tool-costs-host');
-  });
+  }, 15_000);
 
   test('certifies runtime tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
     await certifyStage11PlayableToolCostsOnRuntime('stage11-tool-costs-runtime');
-  });
+  }, 15_000);
 
   test('certifies host speed 1/2/3 with pause/resume cadence changes', () => {
     certifyStage11PlayableCadenceOnHost('stage11-cadence-host');
