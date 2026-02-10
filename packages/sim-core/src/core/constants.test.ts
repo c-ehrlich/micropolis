@@ -34,7 +34,7 @@ describe('sim.h constant parity', () => {
     expect(TileFlag.ZONEBIT).toBe(1024);
   });
 
-  it('matches representative tile-id layout boundaries used by Stage 8', () => {
+  it('matches representative tile-id layout boundaries used by Sprite Atlas', () => {
     // Source: `ref/micropolis/src/sim/headers/sim.h`
     // - `#define ROADBASE 64`
     // - `#define POWERBASE 208`

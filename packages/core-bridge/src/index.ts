@@ -1,5 +1,5 @@
 /**
- * Placeholder bridge metadata used to freeze the package surface in Stage 0.
+ * Placeholder bridge metadata used to freeze the package surface in Bridge V1.
  * Mirrors the protocol ownership direction in `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: intentionally different from Micropolis C integration code because this is
  * a scaffold export only and does not implement Sugar/TTY/NET runtime behavior yet.
@@ -23,10 +23,10 @@ export function getCoreBridgeScaffold(): CoreBridgeScaffold {
 
 export * from './command-outcome.ts';
 export type {
-  CoreHost as Stage1CoreHost,
-  CoreHostEventListener as Stage1CoreHostEventListener,
-  CoreHostResult as Stage1CoreHostResult,
-  CoreHostUnsubscribe as Stage1CoreHostUnsubscribe,
+  CoreHost as CoreBridgeCoreHost,
+  CoreHostEventListener as CoreBridgeCoreHostEventListener,
+  CoreHostResult as CoreBridgeCoreHostResult,
+  CoreHostUnsubscribe as CoreBridgeCoreHostUnsubscribe,
 } from './core-host.ts';
 export * from './fixtures.ts';
 export * from './host.ts';

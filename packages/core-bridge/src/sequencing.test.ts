@@ -34,7 +34,7 @@ describe('evaluateCoreBridgeV1SequenceDecision', () => {
   /**
    * Tick values model monotonic CityTime progression from
    * `ref/micropolis/src/sim/s_sim.c` (`CityTime++` in `Simulate` case `mod16 == 0`).
-   * Sequence values are synthetic Stage 0 wire-order counters; small consecutive
+   * Sequence values are synthetic Bridge V1 wire-order counters; small consecutive
    * integers are used here as the minimal deterministic examples.
    */
   const cases: ReadonlyArray<{

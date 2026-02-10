@@ -92,7 +92,7 @@ export interface MockAuthoritySnapshotRequestResult {
 }
 
 /**
- * In-memory deterministic authority simulator for Stage 1 host workflows.
+ * In-memory deterministic authority simulator for Sim-Core Authority host workflows.
  * Mirrors command outcome semantics from `ref/micropolis/src/sim/w_tool.c`
  * and authoritative tick sequencing mindset from `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: this is intentionally not a 1:1 Tcl command interpreter; it

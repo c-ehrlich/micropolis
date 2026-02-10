@@ -29,7 +29,7 @@ import type {
 type UnknownRecord = Record<string, unknown>;
 
 /**
- * Fixture scenario categories used by the Stage 0 canonical contract corpus.
+ * Fixture scenario categories used by the Bridge V1 canonical contract corpus.
  * Mirrors integration contract coverage intent in
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: intentionally different from Micropolis C test setup by tagging
@@ -112,9 +112,9 @@ export interface CoreBridgeV1FixtureRecord extends CoreBridgeV1FixtureManifestEn
 }
 
 /**
- * Full canonical Stage 0 fixture corpus.
+ * Full canonical Bridge V1 fixture corpus.
  * Mirrors the frozen bridge contract inventory in
- * `/Users/cje/dev/city/STAGE_0_CONTRACT_FREEZE_PLAN.md` task 0.5.
+ * `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`.
  * Parity note: intentionally different from Micropolis C, which has no JSON
  * corpus for bridge envelopes and edge-case transport semantics.
  */
@@ -141,7 +141,7 @@ const FIXTURE_FILE_MAP: Readonly<Record<string, unknown>> = {
 };
 
 /**
- * Load and minimally validate the canonical Stage 0 fixture corpus.
+ * Load and minimally validate the canonical Bridge V1 fixture corpus.
  * Mirrors strict ingress validation intent from `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: intentionally different from C by validating manifest-linked JSON
  * fixture structure before tests consume bridge examples.
