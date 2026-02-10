@@ -84,6 +84,7 @@ Scenario command settlement decision:
 Sequence/tick decision:
 
 - [x] Keep strictly monotonic `serverSeq` for every sequenced envelope.
+- Implemented by guarded sequence allocation in `SimCoreEnvelopeHost.nextServerSeq()` to preserve monotonicity even if a stale internal cursor regresses.
 - [ ] Keep non-regressing `tick` progression.
 - [ ] On `request_snapshot`, clamp replay cursor to valid range and emit deterministic baseline + tail replay behavior expected by current runtime reducers.
 

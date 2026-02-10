@@ -82,6 +82,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly mapWidth: number;
   private readonly mapHeight: number;
   private serverSeq = 0;
+  private lastEmittedServerSeq = 0;
   private tick = 0;
   private simPaused = false;
   private simPausedSpeed = 3;
@@ -734,10 +735,16 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Advances the authoritative envelope sequence counter by exactly one.
    * Mirrors monotonic update ordering expected by Playable Runtime reducers,
    * aligned with host-side update sequencing flow in `ref/micropolis/src/sim/w_update.c`.
+   * Parity note: unlike C's single in-process update loop assumptions, this host
+   * defends against accidental cursor regression by deriving the next sequence from
+   * both persisted cursors, then incrementing once.
    */
   private nextServerSeq(): number {
-    this.serverSeq += 1;
-    return this.serverSeq;
+    const sequenceBase = Math.max(this.serverSeq, this.lastEmittedServerSeq);
+    const nextSequence = sequenceBase + 1;
+    this.serverSeq = nextSequence;
+    this.lastEmittedServerSeq = nextSequence;
+    return nextSequence;
   }
 
   /**

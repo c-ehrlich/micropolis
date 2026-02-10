@@ -1302,4 +1302,56 @@ describe('SimCoreEnvelopeHost', () => {
       previousServerSeq = envelope.serverSeq;
     }
   });
+
+  it('keeps serverSeq strictly increasing when the internal sequence cursor regresses', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-seq-regression-guard',
+      clientId: 'client-seq-regression-guard',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-seq-regression-guard',
+      clientId: 'client-seq-regression-guard',
+      fromServerSeq: 0,
+      reason: 'manual',
+    });
+
+    const internalHost = host as unknown as {
+      serverSeq: number;
+    };
+    internalHost.serverSeq = 0;
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-seq-regression-guard',
+      clientId: 'client-seq-regression-guard',
+      fromServerSeq: 0,
+      reason: 'manual',
+    });
+
+    const sequencedEnvelopes = captured.envelopes.filter(
+      (envelope): envelope is Exclude<HostEnvelope, { kind: 'hello' }> => envelope.kind !== 'hello',
+    );
+    expect(sequencedEnvelopes).toHaveLength(3);
+    const [firstSnapshot, secondSnapshot, thirdSnapshot] = sequencedEnvelopes;
+    if (
+      firstSnapshot === undefined ||
+      secondSnapshot === undefined ||
+      thirdSnapshot === undefined
+    ) {
+      throw new Error('expected sequenced snapshots');
+    }
+
+    expect(firstSnapshot.kind).toBe('snapshot');
+    expect(secondSnapshot.kind).toBe('snapshot');
+    expect(thirdSnapshot.kind).toBe('snapshot');
+    expect(secondSnapshot.serverSeq).toBe(firstSnapshot.serverSeq + 1);
+    expect(thirdSnapshot.serverSeq).toBe(secondSnapshot.serverSeq + 1);
+  });
 });
