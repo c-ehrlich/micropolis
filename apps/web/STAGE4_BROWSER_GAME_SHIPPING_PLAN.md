@@ -507,7 +507,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sim.c` (single command surface concept)
+- [x] `ref/micropolis/src/sim/w_sim.c` (single command surface concept)
 - [ ] `ref/micropolis/spec/integration/SPEC.md` (ordering/recovery contracts)
 
 ### TS references to review
