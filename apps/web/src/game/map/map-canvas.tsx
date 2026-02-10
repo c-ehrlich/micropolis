@@ -213,6 +213,7 @@ const MAP_CANVAS_DRAW_PROCS: Record<RuntimeMapState['drawMode'], MapCanvasDrawPr
 };
 
 interface MapCanvasRealtimeSpriteSpec {
+  displayName: string;
   width: number;
   height: number;
   xOffset: number;
@@ -241,17 +242,82 @@ export interface MapCanvasRealtimeOverlaySprite {
 
 const MAP_CANVAS_REALTIME_SPRITE_SPECS: Record<number, MapCanvasRealtimeSpriteSpec> = {
   // 1:1 with `InitSprite` dimensions and offsets in `ref/micropolis/src/sim/w_sprite.c`.
-  1: { width: 32, height: 32, xOffset: 32, yOffset: -16, label: 'TRN', color: '#22c55e' },
-  2: { width: 32, height: 32, xOffset: 32, yOffset: -16, label: 'COP', color: '#0ea5e9' },
-  3: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'AIR', color: '#3b82f6' },
-  4: { width: 48, height: 48, xOffset: 32, yOffset: -16, label: 'SHIP', color: '#06b6d4' },
-  5: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'MON', color: '#f97316' },
-  6: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'TOR', color: '#0f766e' },
-  7: { width: 48, height: 48, xOffset: 24, yOffset: 0, label: 'EXP', color: '#ef4444' },
-  8: { width: 32, height: 32, xOffset: 30, yOffset: -18, label: 'BUS', color: '#f59e0b' },
+  1: {
+    displayName: 'train',
+    width: 32,
+    height: 32,
+    xOffset: 32,
+    yOffset: -16,
+    label: 'TRN',
+    color: '#22c55e',
+  },
+  2: {
+    displayName: 'copter',
+    width: 32,
+    height: 32,
+    xOffset: 32,
+    yOffset: -16,
+    label: 'COP',
+    color: '#0ea5e9',
+  },
+  3: {
+    displayName: 'plane',
+    width: 48,
+    height: 48,
+    xOffset: 24,
+    yOffset: 0,
+    label: 'AIR',
+    color: '#3b82f6',
+  },
+  4: {
+    displayName: 'ship',
+    width: 48,
+    height: 48,
+    xOffset: 32,
+    yOffset: -16,
+    label: 'SHP',
+    color: '#06b6d4',
+  },
+  5: {
+    displayName: 'monster',
+    width: 48,
+    height: 48,
+    xOffset: 24,
+    yOffset: 0,
+    label: 'MON',
+    color: '#f97316',
+  },
+  6: {
+    displayName: 'tornado',
+    width: 48,
+    height: 48,
+    xOffset: 24,
+    yOffset: 0,
+    label: 'TOR',
+    color: '#0f766e',
+  },
+  7: {
+    displayName: 'explosion',
+    width: 48,
+    height: 48,
+    xOffset: 24,
+    yOffset: 0,
+    label: 'EXP',
+    color: '#ef4444',
+  },
+  8: {
+    displayName: 'bus',
+    width: 32,
+    height: 32,
+    xOffset: 30,
+    yOffset: -18,
+    label: 'BUS',
+    color: '#f59e0b',
+  },
 };
 
 const MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC: MapCanvasRealtimeSpriteSpec = {
+  displayName: 'object',
   width: 32,
   height: 32,
   xOffset: 0,
@@ -301,7 +367,7 @@ export function projectRealtimeOverlaySprites({
 
     overlays.push({
       key: `${object.type}:${object.name}:${index}`,
-      name: object.name,
+      name: spec.displayName,
       frame: object.frame,
       label: spec.label,
       color: spec.color,

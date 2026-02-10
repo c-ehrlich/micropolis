@@ -406,7 +406,7 @@ Deletion execution notes:
 ### Implementation checklist
 
 - [x] Extend authority payloads with realtime object snapshots/deltas per tick.
-- [ ] Add overlay renderer for trains/ships/planes/copter/monster/tornado/explosion.
+- [x] Add overlay renderer for trains/ships/planes/copter/monster/tornado/explosion.
 - [ ] Ensure overlay updates are deterministic and compatible with map patch redraw cadence.
 - [ ] Hook realtime event messages to message feed when applicable.
 
@@ -568,6 +568,5 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 

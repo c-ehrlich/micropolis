@@ -96,4 +96,47 @@ describe('map canvas draw-mode selection', () => {
 
     expect(overlays).toEqual([]);
   });
+
+  it('projects train/ship/plane/copter/monster/tornado/explosion overlays', () => {
+    const overlays = projectRealtimeOverlaySprites({
+      objects: [
+        { name: 'TRA', type: 1, x: 128, y: 128, frame: 1 },
+        { name: 'SHI', type: 4, x: 128, y: 128, frame: 1 },
+        { name: 'AIR', type: 3, x: 128, y: 128, frame: 1 },
+        { name: 'COP', type: 2, x: 128, y: 128, frame: 1 },
+        { name: 'GOD', type: 5, x: 128, y: 128, frame: 1 },
+        { name: 'TOR', type: 6, x: 128, y: 128, frame: 1 },
+        { name: 'EXP', type: 7, x: 128, y: 128, frame: 1 },
+      ],
+      tileSize: 16,
+      mapWidth: 120,
+      mapHeight: 100,
+    });
+
+    expect(
+      overlays.map((overlay) => ({
+        name: overlay.name,
+        label: overlay.label,
+        left: overlay.left,
+        top: overlay.top,
+        width: overlay.width,
+        height: overlay.height,
+      })),
+    ).toEqual([
+      // `InitSprite` in `w_sprite.c` sets TRA to width/height=32 and x/y offsets 32/-16.
+      { name: 'train', label: 'TRN', left: 160, top: 112, width: 32, height: 32 },
+      // `InitSprite` in `w_sprite.c` sets SHI to width/height=48 and x/y offsets 32/-16.
+      { name: 'ship', label: 'SHP', left: 160, top: 112, width: 48, height: 48 },
+      // `InitSprite` in `w_sprite.c` sets AIR to width/height=48 and x/y offsets 24/0.
+      { name: 'plane', label: 'AIR', left: 152, top: 128, width: 48, height: 48 },
+      // `InitSprite` in `w_sprite.c` sets COP to width/height=32 and x/y offsets 32/-16.
+      { name: 'copter', label: 'COP', left: 160, top: 112, width: 32, height: 32 },
+      // `InitSprite` in `w_sprite.c` sets GOD to width/height=48 and x/y offsets 24/0.
+      { name: 'monster', label: 'MON', left: 152, top: 128, width: 48, height: 48 },
+      // `InitSprite` in `w_sprite.c` sets TOR to width/height=48 and x/y offsets 24/0.
+      { name: 'tornado', label: 'TOR', left: 152, top: 128, width: 48, height: 48 },
+      // `InitSprite` in `w_sprite.c` sets EXP to width/height=48 and x/y offsets 24/0.
+      { name: 'explosion', label: 'EXP', left: 152, top: 128, width: 48, height: 48 },
+    ]);
+  });
 });
