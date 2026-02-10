@@ -2,7 +2,20 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  createRealtimeContext,
+  destroyAllSprites as destroyRealtimeSprites,
+  generateCopter as generateRealtimeCopter,
+  generatePlane as generateRealtimePlane,
+  generateShip as generateRealtimeShip,
+  generateTrain as generateRealtimeTrain,
+  getSprite as getRealtimeSprite,
+  makeExplosion as makeRealtimeExplosion,
+  makeExplosionAt as makeRealtimeExplosionAt,
+  makeMonster as makeRealtimeMonster,
+  makeTornado as makeRealtimeTornado,
+  type RealtimeContext,
   resetForNewCityFromSeed,
+  runRealtimeTick,
   runUiUpdate,
   sendMessages,
   setValves,
@@ -229,6 +242,7 @@ export class DemoMapHost implements CoreHost {
   private readonly patchIntervalMs: number;
   private readonly simState: SimState;
   private readonly simContext: SimContext;
+  private readonly realtimeContext: RealtimeContext;
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private activeRoomId: string | undefined;
@@ -276,6 +290,23 @@ export class DemoMapHost implements CoreHost {
     });
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
+    this.realtimeContext = createRealtimeContext({
+      store: this.simContext.store,
+      rng: this.simContext.rng,
+      toolContext: authorityState.toolContext,
+      simSpeed: this.simState.SimSpeed,
+      doAnimation: this.simState.doAnimation,
+      noDisasters: this.simState.NoDisasters,
+      scenarioId: this.simState.ScenarioID,
+      totalPop: this.simState.TotalPop,
+      polMaxX: this.simState.PolMaxX,
+      polMaxY: this.simState.PolMaxY,
+      messageCoupling: {
+        state: this.simState,
+        context: this.simContext,
+      },
+    });
+    this.installRealtimeHooks();
     this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
     this.refreshHookDrivenHud();
     this.pendingHookMessages = [];
@@ -645,6 +676,7 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
+    this.syncRealtimeContextFromSimState();
     const snapshotServerSeq = this.serverSeq + 1;
     const snapshotTick = tickOverride;
     const pendingMessages = this.drainPendingHookMessages();
@@ -672,9 +704,7 @@ export class DemoMapHost implements CoreHost {
         hud: {
           ...this.getHudHeadsPayload(),
         },
-        realtime: {
-          objects: [],
-        },
+        realtime: this.buildRealtimePayload(),
         messages: this.messageLog,
       },
     });
@@ -788,6 +818,7 @@ export class DemoMapHost implements CoreHost {
       this.simState.CityTime += 1;
       setValves(this.simState, this.simContext);
       sendMessages(this.simState, this.simContext);
+      this.advanceRealtimeStep();
       runUiUpdate(this.simState, this.simContext);
     } finally {
       this.simContext.store.commitTick();
@@ -839,6 +870,7 @@ export class DemoMapHost implements CoreHost {
   }): DemoPatchPayload {
     const payload: DemoPatchPayload = {};
 
+    this.syncRealtimeContextFromSimState();
     if (options.includeHud) {
       payload.hud = this.getHudHeadsPayload();
     }
@@ -854,7 +886,105 @@ export class DemoMapHost implements CoreHost {
       payload.messageDeltas = hookMessages;
     }
 
+    payload.realtime = this.buildRealtimePayload();
+
     return payload;
+  }
+
+  /**
+   * Installs sprite/realtime hooks onto sim-core context callbacks.
+   * Mirrors `sim->hooks` ownership from `ref/micropolis/src/sim/sim.c`,
+   * routing `MoveObjects` (`w_sprite.c`) and sprite factory calls through the
+   * Stage 7 TypeScript realtime port in `packages/sim-core/src/sim/realtime.ts`.
+   */
+  private installRealtimeHooks(): void {
+    this.simContext.hooks.destroyAllSprites = () => {
+      destroyRealtimeSprites(this.realtimeContext);
+    };
+    this.simContext.hooks.generateTrain = (x, y) => {
+      generateRealtimeTrain(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.generateShip = () => {
+      generateRealtimeShip(this.realtimeContext);
+    };
+    // Hook parity note: current sim-core `generatePlane`/`generateCopter` hooks do
+    // not carry tile coordinates (unlike C `GeneratePlane(x,y)`/`GenerateCopter(x,y)`),
+    // so Stage 7 host integration uses world-center launch coordinates.
+    this.simContext.hooks.generatePlane = () => {
+      generateRealtimePlane(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
+    };
+    this.simContext.hooks.generateCopter = () => {
+      generateRealtimeCopter(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
+    };
+    this.simContext.hooks.getSprite = (type) => {
+      if (type < 1 || type > 8) {
+        return null;
+      }
+      return getRealtimeSprite(this.realtimeContext, type as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8);
+    };
+    this.simContext.hooks.moveObjects = () => {
+      this.advanceRealtimeStep();
+    };
+    this.simContext.hooks.makeExplosion = (x, y) => {
+      makeRealtimeExplosion(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.makeExplosionAt = (x, y) => {
+      makeRealtimeExplosionAt(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.makeMonster = () => {
+      makeRealtimeMonster(this.realtimeContext);
+    };
+    this.simContext.hooks.makeTornado = () => {
+      makeRealtimeTornado(this.realtimeContext);
+    };
+  }
+
+  /**
+   * Syncs mutable realtime timing/scalar inputs from authoritative sim state.
+   * Mirrors `DoAnimation`/`SimSpeed` gate context from `ref/micropolis/src/sim/g_ani.c`
+   * + `ref/micropolis/src/sim/w_editor.c` and sprite/disaster scalar ownership
+   * in `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  private syncRealtimeContextFromSimState(): void {
+    this.realtimeContext.simSpeed = this.simState.SimSpeed;
+    this.realtimeContext.doAnimation = this.simState.doAnimation;
+    this.realtimeContext.noDisasters = this.simState.NoDisasters;
+    this.realtimeContext.scenarioId = this.simState.ScenarioID;
+    this.realtimeContext.totalPop = this.simState.TotalPop;
+    this.realtimeContext.polMaxX = this.simState.PolMaxX;
+    this.realtimeContext.polMaxY = this.simState.PolMaxY;
+  }
+
+  /**
+   * Runs one realtime movement/animation pass inside the current store tick.
+   * Mirrors `sim_loop` -> `MoveObjects` -> `animateTiles` timing from
+   * `ref/micropolis/src/sim/sim.c`, `ref/micropolis/src/sim/w_sprite.c`, and
+   * `ref/micropolis/src/sim/g_ani.c`.
+   */
+  private advanceRealtimeStep(): void {
+    this.syncRealtimeContextFromSimState();
+    runRealtimeTick(this.realtimeContext);
+  }
+
+  /**
+   * Builds Stage 7 realtime overlay payload objects from active sprite state.
+   * Mirrors drawable sprite selection (`frame != 0`) in `DrawObjects` /
+   * `DrawSprite` from `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: payload uses a compact projection subset (`name/type/x/y/frame`)
+   * consumed by the browser overlay layer.
+   */
+  private buildRealtimePayload(): NonNullable<DemoPatchPayload['realtime']> {
+    return {
+      objects: this.realtimeContext.sprites
+        .filter((sprite) => sprite.frame > 0)
+        .map((sprite) => ({
+          name: sprite.name,
+          type: sprite.type,
+          x: sprite.x,
+          y: sprite.y,
+          frame: sprite.frame,
+        })),
+    };
   }
 
   /**

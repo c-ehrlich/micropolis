@@ -3,12 +3,16 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ANI_TILE,
   createClassicMapStore,
   createRng,
   createSimContext,
   createSimState,
   resetForNewCityFromSeed,
+  Tile,
+  TileFlag,
   TileMask,
+  World,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
@@ -53,6 +57,107 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       expect(ambientPatchCount).toBeGreaterThan(0);
       expect(ambientPatchWithMapCount).toBe(0);
       expect(runtime.getState().mapState).toBe(initialMapState);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('advances ANIMBIT tiles only when DoAnimation is enabled', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+
+    try {
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simState: { doAnimation: boolean };
+        simContext: { store: ReturnType<typeof createClassicMapStore> };
+      };
+
+      const tileX = 10;
+      const tileY = 10;
+      const tileIndex = tileX * World.WORLD_Y + tileY;
+      authority.simContext.store.beginTick();
+      try {
+        authority.simContext.store.write('map', tileIndex, Tile.FIRE | TileFlag.ANIMBIT);
+      } finally {
+        authority.simContext.store.commitTick();
+      }
+
+      authority.simState.doAnimation = false;
+      vi.advanceTimersByTime(20);
+
+      const mapAfterDisabled = authority.simContext.store.snapshot('map') as Uint16Array;
+      const disabledTileWord = mapAfterDisabled[tileIndex];
+      if (disabledTileWord === undefined) {
+        throw new Error('expected disabled animation tile to exist');
+      }
+      // `DoUpdateEditor` only calls `animateTiles()` when `DoAnimation && SimSpeed`
+      // (`ref/micropolis/src/sim/w_editor.c`), so this must stay at FIRE.
+      expect(disabledTileWord & TileMask.LOMASK).toBe(Tile.FIRE);
+
+      authority.simState.doAnimation = true;
+      vi.advanceTimersByTime(10);
+
+      const mapAfterEnabled = authority.simContext.store.snapshot('map') as Uint16Array;
+      const enabledTileWord = mapAfterEnabled[tileIndex];
+      if (enabledTileWord === undefined) {
+        throw new Error('expected enabled animation tile to exist');
+      }
+      // `g_ani.c` rewrites animated tiles via `aniTile[id]`, preserving high bits.
+      expect(enabledTileWord & TileMask.LOMASK).toBe(ANI_TILE[Tile.FIRE]);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('emits realtime object payload updates on ambient ticks', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const tornadoSnapshots: Array<{ x: number; y: number; frame: number }> = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const objects = event.envelope.payload.realtime?.objects;
+        if (objects === undefined) {
+          return;
+        }
+        const tornado = objects.find((object) => object.type === 6);
+        if (tornado !== undefined) {
+          tornadoSnapshots.push({ x: tornado.x, y: tornado.y, frame: tornado.frame ?? 0 });
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simContext: {
+          rng: { seed: (value: number) => void };
+          hooks: { makeTornado: () => void };
+        };
+      };
+
+      authority.simContext.rng.seed(0x1234);
+      // Sprite type 6 is `TOR` in `sim.h`; creation path matches `makeTornado` in `w_sprite.c`.
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(120);
+
+      expect(tornadoSnapshots.length).toBeGreaterThan(1);
+      // `MoveObjects` updates active tornado position/frame each cycle in `w_sprite.c`.
+      expect(
+        new Set(tornadoSnapshots.map((snapshot) => `${snapshot.x}:${snapshot.y}:${snapshot.frame}`))
+          .size,
+      ).toBeGreaterThan(1);
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 6)).toBe(
+        true,
+      );
     } finally {
       runtime.disconnect();
       vi.useRealTimers();

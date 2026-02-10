@@ -394,6 +394,7 @@ Deletion execution notes:
 - [x] `ref/micropolis/src/sim/s_disast.c` (disaster/event triggers)
 - [x] `ref/micropolis/src/sim/s_msg.c` (`SendMesAt` event coupling)
 - [x] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
+- Stage 7 update: authoritative host tick now mirrors `DoAnimation && SimSpeed` realtime timing gate and `ANIMBIT` remap behavior for overlay payload cadence.
 
 ### TS references to review
 
