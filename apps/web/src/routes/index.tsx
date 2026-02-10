@@ -30,6 +30,7 @@ export const Route = createFileRoute('/')({
 
 const MAP_TILE_SIZE = 6;
 const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
+const ENVELOPE_RUNTIME_CONTRACT_PATH = 'apps/web/src/game/runtime/protocol.ts';
 const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
   'apps/web/src/game/core-host.ts',
   'apps/web/src/game/runtime/protocol.ts',
@@ -54,7 +55,8 @@ function HomePage() {
       <h1 style={{ fontSize: 20, margin: 0 }}>City Runtime</h1>
       <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>
         Bridge V1 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`.
-        Delete duplicate protocol surfaces after bridge-contract port:{' '}
+        Envelope runtime contract for `/`: `{ENVELOPE_RUNTIME_CONTRACT_PATH}`. Delete duplicate
+        protocol surfaces after bridge-contract port:{' '}
         {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
       </div>
       <RuntimePanel />
