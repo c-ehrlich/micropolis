@@ -452,7 +452,7 @@ Deletion execution notes:
 
 ### Verification checklist
 
-- [ ] Add deterministic sprite lookup tests (tile id -> atlas rect).
+- [x] Add deterministic sprite lookup tests (tile id -> atlas rect).
 - [ ] Manual: map looks Micropolis-like (not HSL noise).
 - [ ] Manual: snapshot and patch redraw produce identical tile visuals.
 
@@ -572,5 +572,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 

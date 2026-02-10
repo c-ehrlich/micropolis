@@ -167,9 +167,7 @@ export function lookupStage8TileSpriteRectByTileId(
 ): Stage8TileSpriteLookup {
   const atlasCanonicalIdentityKey =
     options.atlasCanonicalIdentityKey ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
-  const maskedTileId = tileId & TileMask.LOMASK;
-  const normalizedTileId =
-    maskedTileId >= Tile.TILE_COUNT ? maskedTileId - Tile.TILE_COUNT : maskedTileId;
+  const normalizedTileId = normalizeStage8TileIdForLookup(tileId);
   const lookupForAtlas = getStage8TileSpriteLookupForAtlas(atlasCanonicalIdentityKey);
   const cached = lookupForAtlas[normalizedTileId];
   assertDefined(
@@ -309,6 +307,19 @@ function getStage8TileSpriteLookupForAtlas(
     `Missing Stage 8 tile sprite lookup table for atlas "${atlasCanonicalIdentityKey}"`,
   );
   return lookupForAtlas;
+}
+
+/**
+ * Normalizes one tile id candidate into the Stage 8 atlas lookup page.
+ * Mirrors draw-time id selection in `MemDrawBeegMapRect` / `WireDrawBeegMapRect`
+ * from `ref/micropolis/src/sim/g_bigmap.c`: interpret tile words as 16-bit,
+ * mask with `LOMASK`, then wrap `[TILE_COUNT, 1023]` by subtracting `TILE_COUNT`.
+ * Parity note: this is a 1:1 C lookup-id normalization port used by the
+ * TypeScript tile-id to sprite-rect path.
+ */
+function normalizeStage8TileIdForLookup(tileId: number): number {
+  const maskedTileId = tileId & 0xffff & TileMask.LOMASK;
+  return maskedTileId >= Tile.TILE_COUNT ? maskedTileId - Tile.TILE_COUNT : maskedTileId;
 }
 
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {

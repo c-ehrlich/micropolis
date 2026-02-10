@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
+import { Tile, TileFlag, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   isStage4DebugTileRendererEnabled,
@@ -88,6 +88,22 @@ describe('stage8 tile sprite atlas', () => {
     expect(flagged.sourceY).toBe(base.sourceY);
     expect(wrapped.tileId).toBe(13);
     expect(wrapped.sourceY).toBe(13 * 16);
+  });
+
+  it('wraps masked top-of-page ids exactly like g_bigmap lookup normalization', () => {
+    // Sources:
+    // - `#define LOMASK 0x3ff` and `#define TILE_COUNT 960` in
+    //   `ref/micropolis/src/sim/headers/sim.h`
+    // - draw-time `(tile & LOMASK)` + `if (tile >= TILE_COUNT) tile -= TILE_COUNT;`
+    //   in `ref/micropolis/src/sim/g_bigmap.c`
+    const wrappedTop = lookupStage8TileSpriteRectByTileId(TileMask.LOMASK);
+    const wrappedFromFullWord = lookupStage8TileSpriteRectByTileId(0xffff);
+    const expectedWrappedTileId = TileMask.LOMASK - Tile.TILE_COUNT;
+
+    expect(wrappedTop.tileId).toBe(expectedWrappedTileId);
+    expect(wrappedTop.sourceY).toBe(expectedWrappedTileId * 16);
+    expect(wrappedFromFullWord.tileId).toBe(expectedWrappedTileId);
+    expect(wrappedFromFullWord.sourceY).toBe(expectedWrappedTileId * 16);
   });
 
   it('uses canonical atlas identity key to select sprite dimensions deterministically', () => {
