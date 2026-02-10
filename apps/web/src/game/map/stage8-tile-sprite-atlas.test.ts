@@ -4,6 +4,7 @@ import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/consta
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   isStage4DebugTileRendererEnabled,
+  lookupStage8TileSpriteRectByTileId,
   lookupStage8TileSprite,
   resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
@@ -72,6 +73,21 @@ describe('stage8 tile sprite atlas', () => {
     expect(wrapped.sourceY).toBe(7 * 16);
     expect(wrapped.sourceWidth).toBe(16);
     expect(wrapped.sourceHeight).toBe(16);
+  });
+
+  it('maps tile ids to deterministic atlas rects with LOMASK masking parity', () => {
+    // `g_bigmap.c` draw path masks tile words with `LOMASK`, then wraps
+    // `[TILE_COUNT, 1023]` into the base page before graphics lookup.
+    const base = lookupStage8TileSpriteRectByTileId(Tile.ROADBASE + 5);
+    const flagged = lookupStage8TileSpriteRectByTileId(
+      Tile.ROADBASE + 5 + TileFlag.BULLBIT + TileFlag.ANIMBIT,
+    );
+    const wrapped = lookupStage8TileSpriteRectByTileId(Tile.TILE_COUNT + 13);
+
+    expect(flagged.tileId).toBe(base.tileId);
+    expect(flagged.sourceY).toBe(base.sourceY);
+    expect(wrapped.tileId).toBe(13);
+    expect(wrapped.sourceY).toBe(13 * 16);
   });
 
   it('uses canonical atlas identity key to select sprite dimensions deterministically', () => {

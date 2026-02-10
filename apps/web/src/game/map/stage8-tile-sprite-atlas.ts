@@ -9,7 +9,7 @@ import {
   TILE_SHEET_HEADERS,
   type TileSheetHeader,
 } from '../../../../../packages/sim-assets/src/tiles.ts';
-import { Tile } from '../../../../../packages/sim-core/src/core/constants.ts';
+import { Tile, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 import { getStage4TileDebugColor, toStage4DrawTileId } from './stage4-tile-renderer.ts';
 
 const STAGE8_EDITOR_COLOR_TILE_ATLAS_IMPORT_PATH =
@@ -154,6 +154,32 @@ export interface Stage8TileSpriteLookupOptions {
 }
 
 /**
+ * Lookup one Stage 8 tile sprite rectangle from a tile id value.
+ * Mirrors `MemDrawBeegMapRect`/`WireDrawBeegMapRect` draw-time id normalization
+ * in `ref/micropolis/src/sim/g_bigmap.c`:
+ * `(tile & LOMASK)`, then wrap `[TILE_COUNT, 1023]` by subtracting `TILE_COUNT`.
+ * Parity note: unlike `lookupStage8TileSprite`, this helper does not apply the
+ * blink-phase unpowered-zone `LIGHTNINGBOLT` substitution.
+ */
+export function lookupStage8TileSpriteRectByTileId(
+  tileId: number,
+  options: Readonly<{ atlasCanonicalIdentityKey?: CanonicalImageIdentityKey }> = {},
+): Stage8TileSpriteLookup {
+  const atlasCanonicalIdentityKey =
+    options.atlasCanonicalIdentityKey ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+  const maskedTileId = tileId & TileMask.LOMASK;
+  const normalizedTileId =
+    maskedTileId >= Tile.TILE_COUNT ? maskedTileId - Tile.TILE_COUNT : maskedTileId;
+  const lookupForAtlas = getStage8TileSpriteLookupForAtlas(atlasCanonicalIdentityKey);
+  const cached = lookupForAtlas[normalizedTileId];
+  assertDefined(
+    cached,
+    `Missing Stage 8 tile sprite lookup row for normalized tile id ${normalizedTileId}`,
+  );
+  return cached;
+}
+
+/**
  * Explicit env flag helper for retaining debug tile diagnostics in Stage 8.
  * This has no direct C equivalent in Micropolis; it is a TypeScript-only
  * diagnostics switch layered over the Stage 8 sprite renderer.
@@ -182,23 +208,12 @@ export function lookupStage8TileSprite(
   tileWord: number,
   options: Stage8TileSpriteLookupOptions = {},
 ): Stage8TileSpriteLookup {
-  const atlasCanonicalIdentityKey =
-    options.atlasCanonicalIdentityKey ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
   const tileId = toStage4DrawTileId(tileWord, {
     blinkUnpoweredZoneCenter: options.blinkUnpoweredZoneCenter,
   });
-  const lookupForAtlas =
-    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(atlasCanonicalIdentityKey) ??
-    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(
-      STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-    );
-  assertDefined(
-    lookupForAtlas,
-    `Missing Stage 8 tile sprite lookup table for atlas "${atlasCanonicalIdentityKey}"`,
-  );
-  const cached = lookupForAtlas[tileId];
-  assertDefined(cached, `Missing Stage 8 tile sprite lookup row for tile id ${tileId}`);
-  return cached;
+  return lookupStage8TileSpriteRectByTileId(tileId, {
+    atlasCanonicalIdentityKey: options.atlasCanonicalIdentityKey,
+  });
 }
 
 /**
@@ -279,6 +294,21 @@ function createStage8TileSpriteLookupByCanonicalIdentityKey(): ReadonlyMap<
   }
 
   return lookupsByCanonicalIdentityKey;
+}
+
+function getStage8TileSpriteLookupForAtlas(
+  atlasCanonicalIdentityKey: CanonicalImageIdentityKey,
+): readonly Stage8TileSpriteLookup[] {
+  const lookupForAtlas =
+    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(atlasCanonicalIdentityKey) ??
+    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(
+      STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  assertDefined(
+    lookupForAtlas,
+    `Missing Stage 8 tile sprite lookup table for atlas "${atlasCanonicalIdentityKey}"`,
+  );
+  return lookupForAtlas;
 }
 
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
