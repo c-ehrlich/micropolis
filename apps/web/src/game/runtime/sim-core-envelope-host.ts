@@ -8,6 +8,7 @@ import {
   type Patch,
   planMapRedraw,
   resetForNewCityFromSeed,
+  runUiUpdate,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -24,6 +25,7 @@ import type {
   CoreHost,
   CoreHostConnection,
   HostEnvelope,
+  HostHudOptionsPayload,
   HostMapPatchTileWordDelta,
   HostMapRedrawPlanPayload,
   HostPatchPayload,
@@ -62,6 +64,33 @@ interface SessionCommandQueueState {
 interface ToolCommandOutcome {
   rejectReason: string | undefined;
   mapPatch: Patch | null;
+}
+type HudUiSetKey =
+  | 'funds'
+  | 'date'
+  | 'dateMonth'
+  | 'dateYear'
+  | 'demandR'
+  | 'demandC'
+  | 'demandI'
+  | 'optionAutoBudget'
+  | 'optionAutoGo'
+  | 'optionAutoBulldoze'
+  | 'optionDisasters'
+  | 'optionUserSoundOn'
+  | 'optionDoAnimation'
+  | 'optionDoMessages'
+  | 'optionDoNotices';
+
+interface HookHudState {
+  fundsLabel: string;
+  dateLabel: string;
+  dateMonth: number;
+  dateYear: number;
+  demandR: number;
+  demandC: number;
+  demandI: number;
+  options: HostHudOptionsPayload;
 }
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
@@ -123,9 +152,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly sessionCommandQueues = new Map<number, SessionCommandQueueState>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
+  private readonly hookHudState: HookHudState = createInitialHookHudState();
+  private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
 
   public constructor(options: PlayableRuntimeHostOptions = {}) {
-    this.authorityState = new SimCoreRuntimeState();
+    this.authorityState = new SimCoreRuntimeState({
+      hooks: {
+        uiSet: (key, value) => this.captureUiSet(key, value),
+      },
+    });
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
     this.mapWidth = mapLayerInfo.width;
     this.mapHeight = mapLayerInfo.height;
@@ -135,6 +170,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       scenarioResourceLoader === undefined
         ? (fileName) => this.loadScenarioResourceBytes(fileName)
         : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
+    this.refreshHookDrivenHud();
+    this.pendingHudUiSetKeys.clear();
     this.snapshotReplayCheckpoints.set(0, {
       tick: 0,
       payload: this.buildSnapshotPayload(),
@@ -481,7 +518,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
     mapPatch: Patch | null,
     basePayload: HostPatchPayload = {},
   ): HostPatchPayload {
+    this.refreshHookDrivenHud();
+
     const payload: HostPatchPayload = { ...basePayload };
+    const hudPayload = this.consumePendingHudPatchPayload();
+    if (hudPayload !== undefined) {
+      payload.hud = hudPayload;
+    }
     const mapPayload = this.buildMapPatchPayload(mapPatch);
     if (mapPayload !== undefined) {
       payload.map = mapPayload;
@@ -910,6 +953,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     tickOverride = this.tick,
     options?: EmitSequencedEnvelopeOptions,
   ): void {
+    this.refreshHookDrivenHud();
+    this.pendingHudUiSetKeys.clear();
     this.consumeMapInvalidationCycleAfterSnapshot();
     this.emitSnapshotFromPayload(
       roomId,
@@ -1139,6 +1184,199 @@ export class SimCoreEnvelopeHost implements CoreHost {
         height: this.mapHeight,
         tileWords,
       },
+      hud: this.buildHudSnapshotPayload(),
+    };
+  }
+
+  /**
+   * Runs one `DoUpdateHeads` pass through sim-core hooks before host payload emission.
+   * Mirrors heads refresh ownership in `ref/micropolis/src/sim/w_update.c`.
+   */
+  private refreshHookDrivenHud(): void {
+    this.authorityState.store.beginTick();
+    try {
+      runUiUpdate(this.authorityState.simState, this.authorityState.simContext);
+    } finally {
+      this.authorityState.store.commitTick();
+    }
+  }
+
+  /**
+   * Captures one authoritative `UISet*` hook update from sim-core.
+   * Mirrors head dispatch in `ref/micropolis/src/sim/w_update.c`.
+   */
+  private captureUiSet(key: string, value: number | boolean | string): void {
+    switch (key) {
+      case 'funds':
+        if (typeof value === 'string') {
+          this.hookHudState.fundsLabel = value;
+          this.pendingHudUiSetKeys.add('funds');
+        }
+        return;
+      case 'date':
+        if (typeof value === 'string') {
+          this.hookHudState.dateLabel = value;
+          this.pendingHudUiSetKeys.add('date');
+        }
+        return;
+      case 'dateMonth':
+        if (typeof value === 'number') {
+          this.hookHudState.dateMonth = Math.trunc(value);
+          this.pendingHudUiSetKeys.add('dateMonth');
+        }
+        return;
+      case 'dateYear':
+        if (typeof value === 'number') {
+          this.hookHudState.dateYear = Math.trunc(value);
+          this.pendingHudUiSetKeys.add('dateYear');
+        }
+        return;
+      case 'demandR':
+        if (typeof value === 'number') {
+          this.hookHudState.demandR = Math.trunc(value);
+          this.pendingHudUiSetKeys.add('demandR');
+        }
+        return;
+      case 'demandC':
+        if (typeof value === 'number') {
+          this.hookHudState.demandC = Math.trunc(value);
+          this.pendingHudUiSetKeys.add('demandC');
+        }
+        return;
+      case 'demandI':
+        if (typeof value === 'number') {
+          this.hookHudState.demandI = Math.trunc(value);
+          this.pendingHudUiSetKeys.add('demandI');
+        }
+        return;
+      case 'optionAutoBudget':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoBudget = value;
+          this.pendingHudUiSetKeys.add('optionAutoBudget');
+        }
+        return;
+      case 'optionAutoGo':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoGo = value;
+          this.pendingHudUiSetKeys.add('optionAutoGo');
+        }
+        return;
+      case 'optionAutoBulldoze':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.autoBulldoze = value;
+          this.pendingHudUiSetKeys.add('optionAutoBulldoze');
+        }
+        return;
+      case 'optionDisasters':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.disasters = value;
+          this.pendingHudUiSetKeys.add('optionDisasters');
+        }
+        return;
+      case 'optionUserSoundOn':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.userSoundOn = value;
+          this.pendingHudUiSetKeys.add('optionUserSoundOn');
+        }
+        return;
+      case 'optionDoAnimation':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doAnimation = value;
+          this.pendingHudUiSetKeys.add('optionDoAnimation');
+        }
+        return;
+      case 'optionDoMessages':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doMessages = value;
+          this.pendingHudUiSetKeys.add('optionDoMessages');
+        }
+        return;
+      case 'optionDoNotices':
+        if (typeof value === 'boolean') {
+          this.hookHudState.options.doNotices = value;
+          this.pendingHudUiSetKeys.add('optionDoNotices');
+        }
+        return;
+    }
+  }
+
+  /**
+   * Builds one patch-scoped HUD delta from pending `uiSet` updates.
+   * Mirrors `DoUpdateHeads` incremental head emission in `ref/micropolis/src/sim/w_update.c`.
+   */
+  private consumePendingHudPatchPayload(): HostPatchPayload['hud'] | undefined {
+    const hasFunds = this.pendingHudUiSetKeys.has('funds');
+    const hasDate =
+      this.pendingHudUiSetKeys.has('date') ||
+      this.pendingHudUiSetKeys.has('dateMonth') ||
+      this.pendingHudUiSetKeys.has('dateYear');
+    const hasDemand =
+      this.pendingHudUiSetKeys.has('demandR') ||
+      this.pendingHudUiSetKeys.has('demandC') ||
+      this.pendingHudUiSetKeys.has('demandI');
+    const hasOptions =
+      this.pendingHudUiSetKeys.has('optionAutoBudget') ||
+      this.pendingHudUiSetKeys.has('optionAutoGo') ||
+      this.pendingHudUiSetKeys.has('optionAutoBulldoze') ||
+      this.pendingHudUiSetKeys.has('optionDisasters') ||
+      this.pendingHudUiSetKeys.has('optionUserSoundOn') ||
+      this.pendingHudUiSetKeys.has('optionDoAnimation') ||
+      this.pendingHudUiSetKeys.has('optionDoMessages') ||
+      this.pendingHudUiSetKeys.has('optionDoNotices');
+
+    if (!hasFunds && !hasDate && !hasDemand && !hasOptions) {
+      return undefined;
+    }
+
+    const hudPayload: NonNullable<HostPatchPayload['hud']> = {};
+    if (hasFunds) {
+      hudPayload.funds = this.authorityState.simState.TotalFunds;
+      hudPayload.fundsLabel = this.hookHudState.fundsLabel;
+    }
+    if (hasDate) {
+      hudPayload.date = {
+        label: this.hookHudState.dateLabel,
+        month: this.hookHudState.dateMonth,
+        year: this.hookHudState.dateYear,
+      };
+    }
+    if (hasDemand) {
+      hudPayload.demand = {
+        r: this.hookHudState.demandR,
+        c: this.hookHudState.demandC,
+        i: this.hookHudState.demandI,
+      };
+    }
+    if (hasOptions) {
+      hudPayload.options = { ...this.hookHudState.options };
+    }
+
+    this.pendingHudUiSetKeys.clear();
+    return hudPayload;
+  }
+
+  /**
+   * Builds one snapshot HUD payload from cached hook heads plus current speed.
+   * Mirrors full-head baseline intent from `DoUpdateHeads` in
+   * `ref/micropolis/src/sim/w_update.c` and visible speed behavior in
+   * `ref/micropolis/src/sim/w_util.c`.
+   */
+  private buildHudSnapshotPayload(): NonNullable<HostSnapshotPayload['hud']> {
+    return {
+      funds: this.authorityState.simState.TotalFunds,
+      fundsLabel: this.hookHudState.fundsLabel,
+      date: {
+        label: this.hookHudState.dateLabel,
+        month: this.hookHudState.dateMonth,
+        year: this.hookHudState.dateYear,
+      },
+      demand: {
+        r: this.hookHudState.demandR,
+        c: this.hookHudState.demandC,
+        i: this.hookHudState.demandI,
+      },
+      speed: this.simPaused ? 0 : this.authorityState.simState.SimMetaSpeed,
+      options: { ...this.hookHudState.options },
     };
   }
 }
@@ -1358,4 +1596,31 @@ function buildSnapshotTileWordsFromSimCoreMap(
     }
   }
   return tileWords;
+}
+
+/**
+ * Initial HUD scalar cache before the first sim-core `runUiUpdate` pass.
+ * Mirrors pre-`DoUpdateHeads` UI baseline intent in
+ * `ref/micropolis/src/sim/w_update.c`.
+ */
+function createInitialHookHudState(): HookHudState {
+  return {
+    fundsLabel: 'Funds: $0',
+    dateLabel: 'Jan 1900',
+    dateMonth: 0,
+    dateYear: 1900,
+    demandR: 0,
+    demandC: 0,
+    demandI: 0,
+    options: {
+      autoBudget: true,
+      autoGo: true,
+      autoBulldoze: true,
+      disasters: true,
+      userSoundOn: true,
+      doAnimation: true,
+      doMessages: true,
+      doNotices: true,
+    },
+  };
 }

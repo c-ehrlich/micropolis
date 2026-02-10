@@ -101,7 +101,7 @@ Acceptance checks:
 
 - [x] Port authoritative snapshot map payload generation from sim-core map storage (x-major ordering using bridge index math).
 - [x] Port map patch deltas + redraw plan emission using sim-core invalidation planning (`planMapRedraw` / `consumeMapRedrawPlan`).
-- [ ] Port HUD heads emission using sim-core hooks (`uiSet`) and `runUiUpdate`.
+- [x] Port HUD heads emission using sim-core hooks (`uiSet`) and `runUiUpdate`.
 - [ ] Port message flow using hook-driven `sendMes`/`sendMesAt` capture with deterministic replay metadata.
 - [ ] Port realtime payloads using sim-core realtime sprite hooks and include:
 - [ ] `realtime.snapshot` (baseline stream).

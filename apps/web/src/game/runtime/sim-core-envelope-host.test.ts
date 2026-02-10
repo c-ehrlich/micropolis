@@ -11,7 +11,12 @@ import {
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
-import { type HostEnvelope, type HostMapPatchPayload, PLAYABLE_TOOL_SPECS } from './protocol.ts';
+import {
+  type HostEnvelope,
+  type HostHudPayload,
+  type HostMapPatchPayload,
+  PLAYABLE_TOOL_SPECS,
+} from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
@@ -109,6 +114,23 @@ function readMapPatchPayloadFromEnvelope(envelope: HostEnvelope): HostMapPatchPa
   return mapPayload as HostMapPatchPayload;
 }
 
+/**
+ * Reads HUD payloads from snapshot/patch envelopes.
+ * Mirrors `DoUpdateHeads` projection ownership from `ref/micropolis/src/sim/w_update.c`.
+ */
+function readHudPayloadFromEnvelope(envelope: HostEnvelope): HostHudPayload | null {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return null;
+  }
+
+  const hudPayload = (envelope.payload as { hud?: unknown }).hud;
+  if (hudPayload === null || typeof hudPayload !== 'object') {
+    return null;
+  }
+
+  return hudPayload as HostHudPayload;
+}
+
 describe('SimCoreEnvelopeHost', () => {
   it('does not include demo synthetic tile bootstrap or demo placement dependencies', () => {
     const sourceText = readFileSync(SIM_CORE_ENVELOPE_HOST_SOURCE_URL, 'utf8');
@@ -198,6 +220,10 @@ describe('SimCoreEnvelopeHost', () => {
     if (map === undefined || !('tileWords' in map)) {
       throw new Error('Expected snapshot map payload');
     }
+    const hud = readHudPayloadFromEnvelope(snapshot);
+    if (hud === null) {
+      throw new Error('Expected snapshot HUD payload');
+    }
 
     expect(map.width).toBe(World.WORLD_X);
     expect(map.height).toBe(World.WORLD_Y);
@@ -206,6 +232,9 @@ describe('SimCoreEnvelopeHost', () => {
     const authorityState = (
       host as unknown as {
         authorityState: {
+          simState: {
+            TotalFunds: number;
+          };
           store: {
             snapshot(layer: 'map'): Uint16Array | unknown;
           };
@@ -219,6 +248,29 @@ describe('SimCoreEnvelopeHost', () => {
     if (!(map.tileWords instanceof Uint16Array)) {
       throw new Error('Expected snapshot map tileWords to be Uint16Array');
     }
+
+    expect(hud.funds).toBe(authorityState.simState.TotalFunds);
+    expect(hud.fundsLabel).toBeTypeOf('string');
+    expect(hud.date).toMatchObject({
+      label: expect.any(String),
+      month: expect.any(Number),
+      year: expect.any(Number),
+    });
+    expect(hud.demand).toEqual({
+      r: expect.any(Number),
+      c: expect.any(Number),
+      i: expect.any(Number),
+    });
+    expect(hud.options).toMatchObject({
+      autoBudget: expect.any(Boolean),
+      autoGo: expect.any(Boolean),
+      autoBulldoze: expect.any(Boolean),
+      disasters: expect.any(Boolean),
+      userSoundOn: expect.any(Boolean),
+      doAnimation: expect.any(Boolean),
+      doMessages: expect.any(Boolean),
+      doNotices: expect.any(Boolean),
+    });
 
     expect(map.tileWords).not.toBe(authoritativeMapLayer);
     expect(map.tileWords).toEqual(authoritativeMapLayer);
@@ -376,13 +428,20 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-query',
     });
-    expect(captured.envelopes[3]).toEqual({
+    // Default city funds are 20,000 in Micropolis init/new-city flows
+    // (`ref/micropolis/src/sim/s_init.c` via startup state wiring).
+    expect(captured.envelopes[3]).toMatchObject({
       kind: 'patch',
       roomId: 'room-a',
       clientId: 'client-a',
       tick: 1,
       serverSeq: 3,
-      payload: {},
+      payload: {
+        hud: {
+          funds: 20_000,
+          fundsLabel: 'Funds: $20,000',
+        },
+      },
     });
 
     expect(captured.envelopes[4]).toEqual({
@@ -1549,6 +1608,14 @@ describe('SimCoreEnvelopeHost', () => {
       reason: 'patch-rects',
       fullRedraw: false,
     });
+    const spendHudPayload = readHudPayloadFromEnvelope(spendPatchEnvelope);
+    if (spendHudPayload === null) {
+      throw new Error('expected spend HUD patch payload');
+    }
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`, so
+    // `TotalFunds` and emitted heads should both drop from 100 to 90.
+    expect(spendHudPayload.funds).toBe(90);
+    expect(spendHudPayload.fundsLabel).toBe('Funds: $90');
     expect(authorityState.simState.TotalFunds).toBe(90);
     expect(authorityState.toolContext.funds).toBe(90);
   });
