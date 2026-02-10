@@ -543,7 +543,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Prove the shipped Stage 4 route is actually playable end-to-end.
+- [x] Prove the shipped Stage 4 route is actually playable end-to-end.
 
 ### Certification checklist (manual)
 

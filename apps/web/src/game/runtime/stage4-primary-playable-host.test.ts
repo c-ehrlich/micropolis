@@ -80,8 +80,12 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
   const commandIds = {
     newCity: `${runId}-cmd-new-city`,
     road: `${runId}-cmd-road`,
-    speed: `${runId}-cmd-speed`,
+    speedOne: `${runId}-cmd-speed-one`,
+    pause: `${runId}-cmd-pause`,
+    play: `${runId}-cmd-play`,
+    speedThree: `${runId}-cmd-speed-three`,
     save: `${runId}-cmd-save`,
+    bulldoze: `${runId}-cmd-bulldoze`,
     load: `${runId}-cmd-load`,
     scenario: `${runId}-cmd-scenario`,
     invalid: `${runId}-cmd-invalid`,
@@ -113,6 +117,10 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     // Magic number source: initial city funds baseline in `setAnyCityName` /
     // `DoSimInit` bootstrap flow in `ref/micropolis/src/sim/s_init.c`.
     expect(bootSnapshot.payload.hud?.funds).toBe(20_000);
+    expect(bootSnapshot.payload.map?.width).toBeGreaterThan(0);
+    expect(bootSnapshot.payload.map?.height).toBeGreaterThan(0);
+    expect(bootSnapshot.payload.hud?.speed).toBeGreaterThan(0);
+    expect(bootSnapshot.payload.realtime?.objects?.length ?? 0).toBeGreaterThan(0);
 
     connection.send({
       kind: 'command',
@@ -124,6 +132,19 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
         action: 'new-city',
       },
     });
+    const newCityAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.newCity,
+      `${runId} new-city ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
+      `${runId} new-city snapshot`,
+    );
+
     connection.send({
       kind: 'command',
       roomId,
@@ -154,18 +175,111 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     // Magic number source: road cost `10` from `CostOf[]` in
     // `ref/micropolis/src/sim/w_tool.c`.
     expect(roadFundsPatch.payload.hud?.funds).toBe(19_990);
+    expect(roadFundsPatch.payload.hud?.date).toBeDefined();
 
     connection.send({
       kind: 'command',
       roomId,
       clientId,
-      commandId: commandIds.speed,
+      commandId: commandIds.speedOne,
       command: {
         kind: 'sim-control',
         control: 'set-speed',
-        speed: 2,
+        speed: 1,
       },
     });
+    const speedOneAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.speedOne,
+      `${runId} speed 1 ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > speedOneAck.serverSeq &&
+        envelope.payload.hud?.speed === 1,
+      `${runId} speed 1 patch`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.pause,
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    const pauseAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.pause,
+      `${runId} pause ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > pauseAck.serverSeq &&
+        envelope.payload.hud?.speed === 0,
+      `${runId} pause patch`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.play,
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+    const playAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.play,
+      `${runId} play ack`,
+    );
+    const playPatch = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > playAck.serverSeq &&
+        envelope.payload.hud?.speed === 1,
+      `${runId} play patch`,
+    );
+    expect(playPatch.payload.realtime?.objects?.length ?? 0).toBeGreaterThan(0);
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.speedThree,
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 3,
+      },
+    });
+    const speedThreeAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.speedThree,
+      `${runId} speed 3 ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > speedThreeAck.serverSeq &&
+        envelope.payload.hud?.speed === 3,
+      `${runId} speed 3 patch`,
+    );
+
     connection.send({
       kind: 'command',
       roomId,
@@ -190,9 +304,46 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     if (savePayload === null) {
       throw new Error('Expected Stage 4 save payload');
     }
+    expect(savePatch.payload.messageDeltas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 30,
+        }),
+      ]),
+    );
 
     // Magic number source: `.cty` city payload byte count in `s_fileio.c`.
     expect(savePayload.cityBytes.byteLength).toBe(27120);
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.bulldoze,
+      command: {
+        kind: 'tool',
+        tool: 'bulldoze',
+        x: 10,
+        y: 10,
+      },
+    });
+    const bulldozeAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.bulldoze,
+      `${runId} bulldoze ack`,
+    );
+    const bulldozeFundsPatch = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > bulldozeAck.serverSeq &&
+        envelope.payload.hud?.funds !== undefined,
+      `${runId} bulldoze funds patch`,
+    );
+    // Magic number source: bulldozer cost `1` from `CostOf[]` in
+    // `ref/micropolis/src/sim/w_tool.c`.
+    expect(bulldozeFundsPatch.payload.hud?.funds).toBe(19_989);
 
     connection.send({
       kind: 'command',
@@ -212,12 +363,16 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
         envelope.kind === 'ack' && envelope.commandId === commandIds.load,
       `${runId} load-city ack`,
     );
-    await waitForHostEnvelope(
+    const loadSnapshot = await waitForHostEnvelope(
       hostEnvelopes,
       (envelope): envelope is HostSnapshotEnvelope =>
         envelope.kind === 'snapshot' && envelope.serverSeq > loadAck.serverSeq,
       `${runId} load-city snapshot`,
     );
+    // Magic number source: restore returns to the saved post-road funds value
+    // (`20000 - 10`) using `SaveCityAs`/`loadFile` parity in `s_fileio.c`.
+    expect(loadSnapshot.payload.hud?.funds).toBe(19_990);
+    expect(loadSnapshot.payload.messages?.[0]?.text).toContain('Loaded');
 
     connection.send({
       kind: 'command',
@@ -246,6 +401,10 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     // `LoadScenario` (`ref/micropolis/src/sim/s_fileio.c`): funds=5000, year=1900.
     expect(scenarioSnapshot.payload.hud?.funds).toBe(5_000);
     expect(scenarioSnapshot.payload.hud?.date?.year).toBe(1900);
+    // Magic number source: `LoadScenario` applies visible speed `3` after init
+    // in `ref/micropolis/src/sim/s_fileio.c`.
+    expect(scenarioSnapshot.payload.hud?.speed).toBe(3);
+    expect(scenarioSnapshot.payload.realtime?.objects?.length ?? 0).toBeGreaterThan(0);
 
     const lastServerSeq = readLatestServerSeq(hostEnvelopes);
     connection.send({
@@ -308,7 +467,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
 describe('createStage4PrimaryPlayableHost', () => {
-  test('covers Stage 4 smoke flow for boot, tools+funds, save/load, scenario, and resync', async () => {
+  test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
     const summary = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-main');
     expect(summary.rejectReasons).toEqual(['invalid-command']);
   });
