@@ -12,7 +12,10 @@ import {
 } from '../../../../../packages/sim-core/src/index.ts';
 import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
-import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
+import {
+  getScenarioDefinition,
+  SCENARIO_TABLE,
+} from '../../../../../packages/sim-io/src/scenarios.ts';
 import { DemoMapHost, readDemoCityExportPayload } from './demo-map-host.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -635,6 +638,46 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     );
   });
 
+  it('starts every scenario with expected C year/funds/speed baselines', async () => {
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: false }),
+    });
+    runtime.connect();
+
+    runtime.sendCommand('scenario-baseline-pause', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+    expect(runtime.getState().hudState.speed).toBe(0);
+
+    for (const scenario of SCENARIO_TABLE) {
+      runtime.sendCommand(`scenario-baseline-${scenario.id}`, {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      });
+
+      const expectedFundsLabel = formatScenarioFundsLabel(scenario.startFunds);
+      await waitForRuntimeState(
+        () =>
+          runtime.getState().hudState.fundsLabel === expectedFundsLabel &&
+          runtime.getState().hudState.dateYear === scenario.startYear &&
+          runtime.getState().hudState.dateMonth === 0 &&
+          runtime.getState().hudState.speed === 3,
+        `scenario ${scenario.id} year/funds/speed baseline`,
+      );
+
+      // `LoadScenario` switch cases assign each start year/funds pair, then call
+      // `setSpeed(3)`. `updateDate` derives January from
+      // `CityTime = ((startYear - 1900) * 48) + 2` -> `(CityTime % 48) >> 2 == 0`.
+      // Source: `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/w_update.c`.
+      expect(runtime.getState().hudState.fundsLabel).toBe(expectedFundsLabel);
+      expect(runtime.getState().hudState.dateYear).toBe(scenario.startYear);
+      expect(runtime.getState().hudState.dateMonth).toBe(0);
+      expect(runtime.getState().hudState.speed).toBe(3);
+    }
+  });
+
   it('clamps scenario ids before snro resource lookup', async () => {
     const requestedScenarioFiles: string[] = [];
     const runtime = createWebHostRuntime({
@@ -908,6 +951,10 @@ function convertClassicXMajorToRuntimeRowMajor(
     }
   }
   return rowMajor;
+}
+
+function formatScenarioFundsLabel(funds: number): string {
+  return `Funds: $${new Intl.NumberFormat('en-US').format(funds)}`;
 }
 
 async function waitForRuntimeState(
