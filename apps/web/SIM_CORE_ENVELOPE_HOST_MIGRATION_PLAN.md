@@ -67,7 +67,7 @@ Acceptance checks:
 
 ### Phase 2: Command Semantics with C-Parity Decisions
 
-- [ ] Implement tool commands via sim-core `applyToolAction` (no demo tile stamping).
+- [x] Implement tool commands via sim-core `applyToolAction` (no demo tile stamping).
 - [ ] Support the full playable tool set currently exposed by route `/`.
 - [ ] Keep canonical funds coupling: `SimState.TotalFunds` authoritative, `ToolContext.funds` synchronized before/after tool evaluation.
 - [ ] Implement sim-control commands (`pause`, `play`, `set-speed`) with C-equivalent `setSpeed`/pause/resume behavior.

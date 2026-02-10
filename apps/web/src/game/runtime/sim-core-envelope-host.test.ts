@@ -149,7 +149,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(map.tileWords).toEqual(authoritativeMapLayer);
   });
 
-  it('serves protocol-valid ack/patch for query and reject for unsupported commands', () => {
+  it('routes tool commands through sim-core applyToolAction outcomes and rejects unsupported commands', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
 
@@ -177,12 +177,22 @@ describe('SimCoreEnvelopeHost', () => {
       kind: 'command',
       roomId: 'room-a',
       clientId: 'client-a',
-      commandId: 'cmd-road',
+      commandId: 'cmd-query-oob',
       command: {
         kind: 'tool',
-        tool: 'road',
-        x: 8,
+        tool: 'query',
+        x: -1,
         y: 8,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      commandId: 'cmd-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
       },
     });
 
@@ -205,14 +215,24 @@ describe('SimCoreEnvelopeHost', () => {
       payload: {},
     });
 
-    const reject = captured.envelopes[4];
-    expect(reject).toEqual({
+    expect(captured.envelopes[4]).toEqual({
       kind: 'reject',
       roomId: 'room-a',
       clientId: 'client-a',
       tick: 2,
       serverSeq: 4,
-      commandId: 'cmd-road',
+      commandId: 'cmd-query-oob',
+      reason: 'out-of-bounds',
+    });
+
+    const reject = captured.envelopes[5];
+    expect(reject).toEqual({
+      kind: 'reject',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 3,
+      serverSeq: 5,
+      commandId: 'cmd-pause',
       reason: 'invalid-command',
     });
   });
@@ -338,10 +358,8 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       commandId: 'cmd-active',
       command: {
-        kind: 'tool',
-        tool: 'road',
-        x: 4,
-        y: 4,
+        kind: 'sim-control',
+        control: 'pause',
       },
     });
     secondSession.send({

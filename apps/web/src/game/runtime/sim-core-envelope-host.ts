@@ -1,3 +1,4 @@
+import { applyToolAction, type ToolResult } from '../../../../../packages/sim-core/src/index.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
@@ -9,6 +10,8 @@ import type {
   HostSnapshotPayload,
   PlayableClientCommand,
 } from './protocol.ts';
+
+type PlayableToolCommand = Extract<PlayableClientCommand, { kind: 'tool' }>;
 
 /**
  * Sim-core-authoritative envelope host for the route `/` migration path.
@@ -154,48 +157,19 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.tick += 1;
-    if (this.isNoOpAckPatchCommand(envelope.command)) {
+    if (envelope.command.kind === 'tool') {
+      const rejectReason = this.applyToolCommand(envelope.command);
+      if (rejectReason !== undefined) {
+        this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, rejectReason);
+        return;
+      }
+
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
       return;
     }
 
-    this.serverSeq += 1;
-    this.onEnvelope({
-      kind: 'reject',
-      roomId: envelope.roomId,
-      clientId: envelope.clientId,
-      tick: this.tick,
-      serverSeq: this.serverSeq,
-      commandId: envelope.commandId,
-      reason: 'invalid-command',
-    });
-  }
-
-  private isSessionActive(sessionId: number): boolean {
-    if (this.onEnvelope === undefined || this.lifecycle.phase === 'disconnected') {
-      return false;
-    }
-
-    return this.lifecycle.sessionId === sessionId;
-  }
-
-  private isReadySessionEnvelope(sessionId: number, roomId: string, clientId: string): boolean {
-    if (!this.isSessionActive(sessionId) || this.lifecycle.phase !== 'ready') {
-      return false;
-    }
-
-    return this.lifecycle.roomId === roomId && this.lifecycle.clientId === clientId;
-  }
-
-  /**
-   * Identifies command shapes that are accepted during lifecycle-envelope
-   * migration before full command semantics porting lands.
-   * Mirrors `query_tool` success path in `ref/micropolis/src/sim/w_tool.c`,
-   * where query is non-mutating and can settle without map edits.
-   */
-  private isNoOpAckPatchCommand(command: PlayableClientCommand): boolean {
-    return command.kind === 'tool' && command.tool === 'query';
+    this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, 'invalid-command');
   }
 
   /**
@@ -216,6 +190,28 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tick: this.tick,
       serverSeq: this.serverSeq,
       commandId,
+    });
+  }
+
+  /**
+   * Emits one command rejection envelope.
+   * Mirrors command-denial settlement ordering from `SimCmd` handling in
+   * `ref/micropolis/src/sim/w_sim.c`, adapted to typed bridge envelopes.
+   */
+  private emitReject(roomId: string, clientId: string, commandId: string, reason: string): void {
+    if (this.onEnvelope === undefined) {
+      return;
+    }
+
+    this.serverSeq += 1;
+    this.onEnvelope({
+      kind: 'reject',
+      roomId,
+      clientId,
+      tick: this.tick,
+      serverSeq: this.serverSeq,
+      commandId,
+      reason,
     });
   }
 
@@ -241,13 +237,60 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Builds a patch payload for non-mutating acknowledged commands.
-   * Mirrors `query_tool` in `ref/micropolis/src/sim/w_tool.c`, which reports
-   * status without mutating map state; envelope migration keeps this as a valid
-   * empty patch payload.
+   * Builds the temporary patch payload emitted for acknowledged tool commands.
+   * Mirrors command/update settlement ordering from `ref/micropolis/src/sim/w_sim.c`
+   * and `ref/micropolis/src/sim/w_update.c`.
+   * Parity note: Phase 2 keeps map patch payload empty while Phase 3 ports
+   * authoritative map tile deltas/redraw plans.
    */
   private buildNoOpPatchPayload(): HostPatchPayload {
     return {};
+  }
+
+  /**
+   * Applies one tool command using sim-core tool semantics.
+   * Mirrors `DoTool` dispatch and return-code behavior in
+   * `ref/micropolis/src/sim/w_tool.c` by routing through sim-core
+   * `applyToolAction` and translating outcome classes into host reject reasons.
+   * Parity note: this stage intentionally leaves patch payload map deltas empty;
+   * Phase 3 ports authoritative map delta/redraw payload emission.
+   */
+  private applyToolCommand(command: PlayableToolCommand): string | undefined {
+    if (!isPlacementCoordinate(command.x, command.y)) {
+      return 'out-of-bounds';
+    }
+
+    this.authorityState.toolContext.store.beginTick();
+    try {
+      const toolResult = applyToolAction(this.authorityState.toolContext, {
+        tool: command.tool,
+        x: command.x,
+        y: command.y,
+        simStep: this.authorityState.simState.Scycle,
+        order: 0,
+        tickId: this.tick,
+        seq: this.serverSeq,
+      });
+      return rejectReasonFromToolResult(toolResult.result);
+    } finally {
+      this.authorityState.toolContext.store.commitTick();
+    }
+  }
+
+  private isSessionActive(sessionId: number): boolean {
+    if (this.onEnvelope === undefined || this.lifecycle.phase === 'disconnected') {
+      return false;
+    }
+
+    return this.lifecycle.sessionId === sessionId;
+  }
+
+  private isReadySessionEnvelope(sessionId: number, roomId: string, clientId: string): boolean {
+    if (!this.isSessionActive(sessionId) || this.lifecycle.phase !== 'ready') {
+      return false;
+    }
+
+    return this.lifecycle.roomId === roomId && this.lifecycle.clientId === clientId;
   }
 
   /**
@@ -294,4 +337,32 @@ export class SimCoreEnvelopeHost implements CoreHost {
       },
     };
   }
+}
+
+/**
+ * Converts sim-core tool result classes into Playable Runtime reject reasons.
+ * Mirrors `DoTool` return-code classes in `ref/micropolis/src/sim/w_tool.c`
+ * (`-1` out-of-bounds, `-2` no-funds, and other non-success values rejected).
+ */
+function rejectReasonFromToolResult(result: ToolResult): string | undefined {
+  if (result === 'ok') {
+    return undefined;
+  }
+  if (result === 'out-of-bounds') {
+    return 'out-of-bounds';
+  }
+  if (result === 'no-funds') {
+    return 'no-funds';
+  }
+
+  return 'invalid-placement';
+}
+
+/**
+ * Validates tool coordinates as integer tile positions.
+ * Mirrors C tool ingress expecting integral tile coordinates in
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/src/sim/w_con.c`.
+ */
+function isPlacementCoordinate(x: number, y: number): boolean {
+  return Number.isInteger(x) && Number.isInteger(y);
 }
