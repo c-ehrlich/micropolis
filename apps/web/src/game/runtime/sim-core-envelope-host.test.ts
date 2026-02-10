@@ -12,12 +12,15 @@ import {
 } from '../../../../../packages/sim-core/src/index.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
+import { projectRealtimeOverlaySprites } from '../map/map-canvas.tsx';
 import {
   type HostEnvelope,
   type HostHudMessagePayload,
   type HostHudPayload,
   type HostMapPatchPayload,
+  type HostPatchPayload,
   type HostRealtimePayload,
+  type HostSnapshotPayload,
   PLAYABLE_TOOL_SPECS,
 } from './protocol.ts';
 import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
@@ -170,6 +173,48 @@ function readRealtimePayloadFromEnvelope(envelope: HostEnvelope): HostRealtimePa
   }
 
   return realtimePayload as HostRealtimePayload;
+}
+
+/**
+ * Rewrites one host realtime payload to explicit snapshot/delta transport fields.
+ * Mirrors bridge migration toward deterministic baseline + incremental sprite
+ * updates from `DrawObjects`/sprite lifecycle behavior in
+ * `ref/micropolis/src/sim/w_sprite.c`, while dropping legacy `objects` compatibility.
+ */
+function toSnapshotDeltaRealtimeTransportEnvelope(envelope: HostEnvelope): HostEnvelope {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return envelope;
+  }
+
+  const realtimePayload = envelope.payload.realtime;
+  if (realtimePayload === undefined) {
+    return envelope;
+  }
+
+  const normalizedRealtimePayload: HostRealtimePayload =
+    envelope.kind === 'snapshot'
+      ? { snapshot: realtimePayload.snapshot ?? realtimePayload.objects ?? [] }
+      : { deltas: realtimePayload.deltas ?? [] };
+
+  if (envelope.kind === 'snapshot') {
+    const payload: HostSnapshotPayload = {
+      ...envelope.payload,
+      realtime: normalizedRealtimePayload,
+    };
+    return {
+      ...envelope,
+      payload,
+    };
+  }
+
+  const payload: HostPatchPayload = {
+    ...envelope.payload,
+    realtime: normalizedRealtimePayload,
+  };
+  return {
+    ...envelope,
+    payload,
+  };
 }
 
 describe('SimCoreEnvelopeHost', () => {
@@ -506,6 +551,101 @@ describe('SimCoreEnvelopeHost', () => {
         id: copterObject.id,
       },
     ]);
+  });
+
+  it('keeps realtime overlays functional with realtime snapshot + delta transport', () => {
+    const roomId = 'room-realtime-snapshot-deltas';
+    const clientId = 'client-realtime-snapshot-deltas';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simContext: {
+          hooks: {
+            generateCopter(): void;
+            destroyAllSprites(): void;
+          };
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    hostInternals.authorityState.simContext.hooks.generateCopter();
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-realtime-overlay-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    hostInternals.authorityState.simContext.hooks.destroyAllSprites();
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-realtime-overlay-speed',
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 3,
+      },
+    });
+
+    const transported = captured.envelopes.map(toSnapshotDeltaRealtimeTransportEnvelope);
+    let reducedState = createInitialWebRuntimeState({ roomId, clientId });
+    let overlaysAfterUpsert: ReturnType<typeof projectRealtimeOverlaySprites> | undefined;
+    let overlaysAfterRemove: ReturnType<typeof projectRealtimeOverlaySprites> | undefined;
+
+    for (const envelope of transported) {
+      const reduction = reduceHostEnvelope(reducedState, envelope);
+      expect(reduction.outcome).toBe('applied');
+      reducedState = reduction.state;
+
+      if (envelope.kind !== 'patch') {
+        continue;
+      }
+      const deltas = envelope.payload.realtime?.deltas;
+      if (deltas === undefined) {
+        continue;
+      }
+
+      const overlays = projectRealtimeOverlaySprites({
+        objects: reducedState.realtimeState.objects,
+        tileSize: 16,
+        mapWidth: reducedState.mapState.width,
+        mapHeight: reducedState.mapState.height,
+      });
+      if (deltas.some((delta) => delta.kind === 'upsert')) {
+        overlaysAfterUpsert = overlays;
+      }
+      if (deltas.some((delta) => delta.kind === 'remove')) {
+        overlaysAfterRemove = overlays;
+      }
+    }
+
+    if (overlaysAfterUpsert === undefined) {
+      throw new Error('expected upsert delta patch to project realtime overlays');
+    }
+    if (overlaysAfterRemove === undefined) {
+      throw new Error('expected remove delta patch to project realtime overlays');
+    }
+
+    // Sprite type `2` is copter (`COP`) in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(overlaysAfterUpsert.some((overlay) => overlay.label === 'COP')).toBe(true);
+    expect(overlaysAfterUpsert.some((overlay) => overlay.key.startsWith('id:rt-'))).toBe(true);
+    expect(overlaysAfterRemove).toEqual([]);
+    expect(reducedState.realtimeState.objects).toEqual([]);
   });
 
   it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {
