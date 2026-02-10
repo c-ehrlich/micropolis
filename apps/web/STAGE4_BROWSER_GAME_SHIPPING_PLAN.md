@@ -370,7 +370,7 @@ Deletion execution notes:
 - [x] Implement Stage 4 save command path using `sim-io` C-style save packing.
 - [x] Implement Stage 4 load command path using `sim-io` C-style load orchestration.
 - [x] Implement scenario start path using `snro.*` data and scenario metadata constants.
-- [ ] Ensure save/load round-trip restores map and scalar game state.
+- [x] Ensure save/load round-trip restores map and scalar game state.
 
 ### Verification checklist
 
@@ -567,5 +567,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 

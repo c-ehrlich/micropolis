@@ -217,8 +217,9 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
   });
 
   it('round-trips save/export bytes through load/import in the web runtime', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
     const runtime = createWebHostRuntime({
-      host: new DemoMapHost({ enableAmbientTicks: false }),
+      host,
     });
     const exportCapture: { cityBytes: Uint8Array | null } = { cityBytes: null };
 
@@ -234,16 +235,60 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     });
 
     runtime.connect();
+    const authority = host as unknown as {
+      simState: {
+        CityTime: number;
+        TotalFunds: number;
+        SimSpeed: number;
+        SimMetaSpeed: number;
+        CityTax: number;
+        autoBulldoze: boolean;
+        autoBudget: boolean;
+        autoGo: boolean;
+        userSoundOn: boolean;
+      };
+    };
+    authority.simState.CityTime = 4321;
+    authority.simState.CityTax = 11;
+    authority.simState.autoBulldoze = false;
+    authority.simState.autoBudget = false;
+    authority.simState.autoGo = false;
+    authority.simState.userSoundOn = false;
+    authority.simState.SimSpeed = 1;
+    authority.simState.SimMetaSpeed = 1;
+
     runtime.sendCommand('tool-1', {
       kind: 'tool',
       tool: 'road',
       x: 6,
       y: 6,
     });
+    runtime.sendCommand('tool-2', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 10,
+      y: 12,
+    });
 
-    const changedTileIndex = 6 + 6 * 120;
-    const savedFundsLabel = runtime.getState().hudState.fundsLabel;
-    const savedTile = runtime.getState().mapState.tiles[changedTileIndex];
+    const runtimeStateBeforeSave = runtime.getState();
+    const changedTileIndex = 6 + 6 * runtimeStateBeforeSave.mapState.width;
+    const savedMapTiles = Uint16Array.from(runtimeStateBeforeSave.mapState.tiles);
+    const savedHud = {
+      fundsLabel: runtimeStateBeforeSave.hudState.fundsLabel,
+      dateLabel: runtimeStateBeforeSave.hudState.dateLabel,
+      speed: runtimeStateBeforeSave.hudState.speed,
+    };
+    const savedScalars = {
+      CityTime: authority.simState.CityTime,
+      TotalFunds: authority.simState.TotalFunds,
+      SimSpeed: authority.simState.SimSpeed,
+      SimMetaSpeed: authority.simState.SimMetaSpeed,
+      CityTax: authority.simState.CityTax,
+      autoBulldoze: authority.simState.autoBulldoze,
+      autoBudget: authority.simState.autoBudget,
+      autoGo: authority.simState.autoGo,
+      userSoundOn: authority.simState.userSoundOn,
+    };
 
     runtime.sendCommand('save-1', {
       kind: 'city-io',
@@ -264,7 +309,9 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       action: 'new-city',
     });
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $20,000');
-    expect(runtime.getState().mapState.tiles[changedTileIndex]).not.toBe(savedTile);
+    expect(runtime.getState().mapState.tiles[changedTileIndex]).not.toBe(
+      savedMapTiles[changedTileIndex],
+    );
 
     runtime.sendCommand('load-1', {
       kind: 'city-io',
@@ -273,8 +320,24 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       cityBytes: exportedCityBytes,
     });
 
-    expect(runtime.getState().hudState.fundsLabel).toBe(savedFundsLabel);
-    expect(runtime.getState().mapState.tiles[changedTileIndex]).toBe(savedTile);
+    // `loadFile` calls `DoSimInit`, which may rewrite non-identity tile bits
+    // after `_load_file`; compare `LOMASK` identities to mirror C parity.
+    // Sources: `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/g_bigmap.c`.
+    expect(Array.from(runtime.getState().mapState.tiles, (tile) => tile & TileMask.LOMASK)).toEqual(
+      Array.from(savedMapTiles, (tile) => tile & TileMask.LOMASK),
+    );
+    expect(runtime.getState().hudState.fundsLabel).toBe(savedHud.fundsLabel);
+    expect(runtime.getState().hudState.dateLabel).toBe(savedHud.dateLabel);
+    expect(runtime.getState().hudState.speed).toBe(savedHud.speed);
+    expect(authority.simState.CityTime).toBe(savedScalars.CityTime);
+    expect(authority.simState.TotalFunds).toBe(savedScalars.TotalFunds);
+    expect(authority.simState.SimSpeed).toBe(savedScalars.SimSpeed);
+    expect(authority.simState.SimMetaSpeed).toBe(savedScalars.SimMetaSpeed);
+    expect(authority.simState.CityTax).toBe(savedScalars.CityTax);
+    expect(authority.simState.autoBulldoze).toBe(savedScalars.autoBulldoze);
+    expect(authority.simState.autoBudget).toBe(savedScalars.autoBudget);
+    expect(authority.simState.autoGo).toBe(savedScalars.autoGo);
+    expect(authority.simState.userSoundOn).toBe(savedScalars.userSoundOn);
   });
 
   it('persists history buffers in save-city export bytes using C save packing', () => {
