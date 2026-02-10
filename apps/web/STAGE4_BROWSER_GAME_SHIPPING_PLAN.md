@@ -477,7 +477,7 @@ Deletion execution notes:
 
 - [x] `packages/sim-core/src/core/map-invalidation.ts`
 - [x] `packages/sim-core/src/core/map-invalidation.test.ts`
-- [ ] `apps/web/src/game/map/map-canvas.tsx`
+- [x] `apps/web/src/game/map/map-canvas.tsx`
 - [ ] `apps/web/src/routes/index.tsx`
 - [ ] `packages/sim-ui/IMPORTANT.md`
 
@@ -574,3 +574,4 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
