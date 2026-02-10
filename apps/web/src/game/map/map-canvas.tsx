@@ -10,7 +10,7 @@ import {
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
-import type { RuntimeMapState } from '../runtime/map-state.ts';
+import { coalesceQueuedRuntimeMapState, type RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
@@ -371,7 +371,7 @@ export function MapCanvas({
       return;
     }
 
-    queuedMapFrameRef.current = {
+    const nextFrame: MapCanvasRenderFrame = {
       mapState,
       tileSize,
       tileRenderer: {
@@ -380,6 +380,14 @@ export function MapCanvas({
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
+    const queuedFrame = queuedMapFrameRef.current;
+    queuedMapFrameRef.current =
+      queuedFrame === null
+        ? nextFrame
+        : {
+            ...nextFrame,
+            mapState: coalesceQueuedRuntimeMapState(queuedFrame.mapState, nextFrame.mapState),
+          };
 
     if (pendingAnimationFrameRef.current !== null) {
       return;
@@ -860,7 +868,8 @@ export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
  * where invalid/backing-store resets force full `MemDrawMap` redraw before
  * incremental updates continue.
  * Parity note: browser mode detects invalidation via resized canvas backing
- * store and skipped render epochs (React batched snapshot+patch states).
+ * store and render-epoch regression; skipped patch epochs are coalesced
+ * upstream so dirty redraw remains sufficient without forced full redraw.
  */
 export function selectMapCanvasDrawMode({
   mapDrawMode,
@@ -877,7 +886,7 @@ export function selectMapCanvasDrawMode({
     return 'snapshot';
   }
 
-  if (renderEpoch > lastRenderedEpoch + 1) {
+  if (renderEpoch < lastRenderedEpoch) {
     return 'snapshot';
   }
 

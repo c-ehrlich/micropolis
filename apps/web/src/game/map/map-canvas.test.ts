@@ -99,9 +99,9 @@ describe('map canvas draw-mode selection', () => {
     ).toBe('snapshot');
   });
 
-  it('forces full redraw when runtime skipped intermediate map epochs', () => {
-    // Stage 4 runtime envelopes can be batched by React state updates; when
-    // more than one map epoch is skipped, redraw from full authoritative tiles.
+  it('keeps patch redraw when runtime skipped intermediate map epochs', () => {
+    // Stage 9 coalesces queued map dirty coverage across skipped epochs, so
+    // patch repaint remains sufficient without forcing full-canvas redraw.
     expect(
       selectMapCanvasDrawMode({
         mapDrawMode: 'patch',
@@ -109,7 +109,7 @@ describe('map canvas draw-mode selection', () => {
         lastRenderedEpoch: 6,
         resized: false,
       }),
-    ).toBe('snapshot');
+    ).toBe('patch');
   });
 
   it('keeps patch redraw when epochs are contiguous', () => {

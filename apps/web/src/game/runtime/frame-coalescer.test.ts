@@ -109,4 +109,24 @@ describe('createCoalescedStateDispatcher', () => {
 
     expect(committedStates).toEqual([7]);
   });
+
+  it('supports caller-provided queued-state coalescing before frame flush', () => {
+    const scheduler = createManualFrameScheduler();
+    const committedStates: number[] = [];
+    const dispatcher = createCoalescedStateDispatcher<number>({
+      scheduleFrame: scheduler.scheduleFrame,
+      cancelFrame: scheduler.cancelFrame,
+      commitState: (nextState) => {
+        committedStates.push(nextState);
+      },
+      coalesceQueuedState: (queuedState, nextState) => queuedState + nextState,
+    });
+
+    dispatcher.queue(1);
+    dispatcher.queue(2);
+    dispatcher.queue(3);
+    scheduler.runNextFrame();
+
+    expect(committedStates).toEqual([6]);
+  });
 });

@@ -87,6 +87,58 @@ export function projectRuntimeMapState(
   return state;
 }
 
+/**
+ * Coalesces two queued runtime map states into one paint-safe map projection.
+ * Mirrors Micropolis separation between sim tick mutation and one later map
+ * repaint pass in `sim_update_maps` / `DoUpdateMap`
+ * (`ref/micropolis/src/sim/sim.c`, `ref/micropolis/src/sim/w_map.c`).
+ * Parity note: this is a browser-frame optimization that unions dirty coverage
+ * across queued patch states so incremental redraw stays correct without
+ * forcing full-canvas snapshot redraw.
+ */
+export function coalesceQueuedRuntimeMapState(
+  queuedState: RuntimeMapState,
+  nextState: RuntimeMapState,
+): RuntimeMapState {
+  if (!queuedState.hasSnapshot || !nextState.hasSnapshot) {
+    return nextState;
+  }
+
+  if (nextState.drawMode === 'snapshot') {
+    return nextState;
+  }
+
+  if (queuedState.drawMode === 'snapshot') {
+    return {
+      ...nextState,
+      drawMode: 'snapshot',
+      dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
+      dirtyRects: EMPTY_DIRTY_RECTS,
+    };
+  }
+
+  if (queuedState.width !== nextState.width || queuedState.height !== nextState.height) {
+    return nextState;
+  }
+
+  const tileCount = nextState.width * nextState.height;
+  if (tileCount <= 0) {
+    return nextState;
+  }
+
+  const mergedDirtyTileIndexes = unionQueuedDirtyTileIndexes(queuedState, nextState, tileCount);
+  if (mergedDirtyTileIndexes.length === 0) {
+    return nextState;
+  }
+
+  return {
+    ...nextState,
+    drawMode: 'patch',
+    dirtyTileIndexes: mergedDirtyTileIndexes,
+    dirtyRects: EMPTY_DIRTY_RECTS,
+  };
+}
+
 interface SnapshotPayload {
   width: number;
   height: number;
@@ -418,6 +470,81 @@ function convertSnapshotTileWordsToRuntimeTiles(
  */
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
+}
+
+function unionQueuedDirtyTileIndexes(
+  queuedState: RuntimeMapState,
+  nextState: RuntimeMapState,
+  tileCount: number,
+): Uint32Array {
+  const dirtyMask = new Uint8Array(tileCount);
+  markDirtyTileMask(
+    dirtyMask,
+    queuedState.dirtyTileIndexes,
+    queuedState.dirtyRects,
+    queuedState.width,
+    queuedState.height,
+  );
+  markDirtyTileMask(
+    dirtyMask,
+    nextState.dirtyTileIndexes,
+    nextState.dirtyRects,
+    nextState.width,
+    nextState.height,
+  );
+  return dirtyMaskToSortedIndexes(dirtyMask);
+}
+
+function markDirtyTileMask(
+  dirtyMask: Uint8Array,
+  dirtyTileIndexes: Uint32Array,
+  dirtyRects: readonly RuntimeMapDirtyRect[],
+  width: number,
+  height: number,
+): void {
+  const tileCount = dirtyMask.length;
+  for (const tileIndex of dirtyTileIndexes) {
+    if (tileIndex < tileCount) {
+      dirtyMask[tileIndex] = 1;
+    }
+  }
+
+  for (const rect of dirtyRects) {
+    const startX = Math.max(0, rect.x);
+    const startY = Math.max(0, rect.y);
+    const endX = Math.min(width, rect.x + rect.width);
+    const endY = Math.min(height, rect.y + rect.height);
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        const tileIndex = y * width + x;
+        if (tileIndex < tileCount) {
+          dirtyMask[tileIndex] = 1;
+        }
+      }
+    }
+  }
+}
+
+function dirtyMaskToSortedIndexes(dirtyMask: Uint8Array): Uint32Array {
+  let dirtyCount = 0;
+  for (const marker of dirtyMask) {
+    if (marker !== 0) {
+      dirtyCount += 1;
+    }
+  }
+  if (dirtyCount === 0) {
+    return EMPTY_DIRTY_TILE_INDEXES;
+  }
+
+  const dirtyTileIndexes = new Uint32Array(dirtyCount);
+  let cursor = 0;
+  for (let tileIndex = 0; tileIndex < dirtyMask.length; tileIndex += 1) {
+    if (dirtyMask[tileIndex] !== 0) {
+      dirtyTileIndexes[cursor] = tileIndex;
+      cursor += 1;
+    }
+  }
+  return dirtyTileIndexes;
 }
 
 function normalizeDirtyTileIndexes(indexes: readonly number[], tileCount: number): Uint32Array {

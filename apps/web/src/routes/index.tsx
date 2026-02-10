@@ -10,6 +10,7 @@ import {
 } from '../game/runtime/demo-map-host.ts';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
+  coalesceQueuedRuntimeMapState,
   createWebHostRuntime,
   PLAYABLE_TOOL_SPECS,
   type RuntimeHudMessageEvent,
@@ -81,6 +82,12 @@ function Stage4RuntimePanel() {
         cancelFrame: (frameHandle) => cancelAnimationFrame(frameHandle),
         commitState: (nextState) => {
           setState(nextState);
+        },
+        coalesceQueuedState: (queuedState, nextState) => {
+          return {
+            ...nextState,
+            mapState: coalesceQueuedRuntimeMapState(queuedState.mapState, nextState.mapState),
+          };
         },
       }),
     [],

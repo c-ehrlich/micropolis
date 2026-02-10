@@ -10,6 +10,13 @@ export interface CoalescedStateDispatcherOptions<State> {
   scheduleFrame: (flush: () => void) => number;
   cancelFrame: (frameHandle: number) => void;
   commitState: (nextState: State) => void;
+  /**
+   * Optional queued-state reducer used when multiple updates arrive before one
+   * scheduled frame flush.
+   * Parity note: this is a browser-only coalescing seam and does not affect
+   * authoritative host ordering.
+   */
+  coalesceQueuedState?: (queuedState: State, nextState: State) => State;
 }
 
 /**
@@ -53,7 +60,11 @@ export function createCoalescedStateDispatcher<State>(
 
   return {
     queue(nextState) {
-      queuedState = nextState;
+      if (hasQueuedState && options.coalesceQueuedState !== undefined) {
+        queuedState = options.coalesceQueuedState(queuedState, nextState);
+      } else {
+        queuedState = nextState;
+      }
       hasQueuedState = true;
 
       if (pendingFrameHandle !== null) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  coalesceQueuedRuntimeMapState,
   createInitialRuntimeMapState,
   projectRuntimeMapState,
   type RuntimeMapState,
@@ -343,5 +344,55 @@ describe('runtime map projection', () => {
     expect(Array.from(redrawOnlyPatch.tiles)).toEqual(Array.from(afterSnapshot.tiles));
     expect(Array.from(redrawOnlyPatch.dirtyTileIndexes)).toEqual([]);
     expect(redrawOnlyPatch.dirtyRects).toEqual([]);
+  });
+
+  it('coalesces queued patch dirty coverage across skipped runtime epochs', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(
+        1,
+        0,
+        3,
+        2,
+        // C x-major tile order for row-major `[0, 1, 2, 3, 4, 5]`.
+        [0, 3, 1, 4, 2, 5],
+      ),
+    );
+    const queuedPatchState = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(2, 1, [{ x: 0, y: 0, tileWord: 9 }]),
+    );
+    const nextPatchState = projectRuntimeMapState(
+      queuedPatchState,
+      createPatchEnvelope(3, 2, [{ x: 1, y: 1, tileWord: 11 }]),
+    );
+
+    const coalesced = coalesceQueuedRuntimeMapState(queuedPatchState, nextPatchState);
+
+    expect(coalesced.drawMode).toBe('patch');
+    expect(coalesced.renderEpoch).toBe(nextPatchState.renderEpoch);
+    expect(Array.from(coalesced.tiles)).toEqual(Array.from(nextPatchState.tiles));
+    expect(Array.from(coalesced.dirtyTileIndexes)).toEqual([0, 4]);
+    expect(coalesced.dirtyRects).toEqual([]);
+  });
+
+  it('preserves queued full-redraw ownership when a snapshot was queued before patch', () => {
+    const initial = createInitialRuntimeMapState();
+    const queuedSnapshotState = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(1, 0, 2, 2, [0, 2, 1, 3]),
+    );
+    const nextPatchState = projectRuntimeMapState(
+      queuedSnapshotState,
+      createPatchEnvelope(2, 1, [{ x: 0, y: 0, tileWord: 9 }]),
+    );
+
+    const coalesced = coalesceQueuedRuntimeMapState(queuedSnapshotState, nextPatchState);
+
+    expect(coalesced.drawMode).toBe('snapshot');
+    expect(Array.from(coalesced.tiles)).toEqual(Array.from(nextPatchState.tiles));
+    expect(Array.from(coalesced.dirtyTileIndexes)).toEqual([]);
+    expect(coalesced.dirtyRects).toEqual([]);
   });
 });
