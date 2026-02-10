@@ -42,6 +42,22 @@ function buildLegacySyntheticDemoSnapshotTileWords(width: number, height: number
  * `ref/micropolis/src/sim/w_sim.c`, where users enter one primary path.
  */
 describe('routes/index default gameplay path', () => {
+  test('keeps "/" gameplay host contract isolated to runtime envelope protocol modules', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+    const playableRuntimeHostSource = readFileSync(
+      fileURLToPath(new URL('../game/runtime/playable-runtime-host.ts', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain("from '../game/runtime/protocol.ts'");
+    expect(routeSource).not.toMatch(/from ['"]\.\.\/game\/core-host(?:\.ts)?['"]/);
+    expect(playableRuntimeHostSource).toContain("import type { CoreHost } from './protocol.ts'");
+    expect(playableRuntimeHostSource).not.toMatch(/from ['"]\.\.\/core-host(?:\.ts)?['"]/);
+  });
+
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(
       fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),

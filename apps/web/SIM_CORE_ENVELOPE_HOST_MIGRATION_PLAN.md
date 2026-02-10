@@ -162,7 +162,7 @@ Required automated gates before handoff:
 
 ## Risks and Mitigations
 
-- [ ] Risk: dual host contracts can still drift during migration.
+- [x] Risk: dual host contracts can still drift during migration.
   Mitigation: keep route `/` migration isolated to envelope host path; avoid mixing event-contract logic into route host behavior.
 - [ ] Risk: payload drift breaks runtime reducers.
   Mitigation: keep payload schema compatibility fields during migration and validate via existing reducer/runtime tests.
