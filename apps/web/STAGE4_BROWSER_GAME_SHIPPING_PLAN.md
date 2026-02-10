@@ -467,6 +467,7 @@ Deletion execution notes:
 - Stage 9 update (2026-02-10): wired redraw planning to resolve active map mode from the `g_map.c` draw-mode table (`map_state` -> `NewMapFlags` slot) for `planMapRedraw` parity.
 - Stage 9 update (2026-02-10): completed a 10+ minute browser play session (continuous sim ticks with pan/zoom/tool use/resync checks) with no runaway latency growth or full-canvas redraw artifact regressions.
 - Stage 9 update (2026-02-10): fixed Stage 4 map-frame queue consumption so rendered patch frames are cleared after each paint; this prevents stale dirty-region carryover from degrading long-session redraw latency.
+- Stage 9 update (2026-02-10): hardened patch redraw tile iteration to union + dedupe dirty-rect and dirty-index coverage, preventing missed tile refreshes and redundant redraw work during long mixed invalidation sessions.
 
 ### C references to review
 

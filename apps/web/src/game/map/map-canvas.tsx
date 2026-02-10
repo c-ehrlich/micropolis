@@ -1205,30 +1205,43 @@ function drawPatchTiles(
  * Mirrors dirty-region traversal ownership in `DoUpdateMap` from
  * `ref/micropolis/src/sim/w_map.c`, where invalid rects are clipped to map
  * bounds before tile redraw iteration proceeds.
- * Parity note: this is a 1:1 extraction of the Stage 4 patch draw walk so
- * snapshot-vs-patch visual parity can be asserted without canvas APIs.
+ * Parity note: Stage 4 unions authority-provided dirty rects and dirty indexes
+ * before iteration so long-session browser redraw remains artifact-free even if
+ * payload sources diverge during transport/coalescing; C view code owns one
+ * invalidation source per cycle.
  */
 export function forEachMapCanvasPatchTileIndex(
   mapState: Readonly<Pick<RuntimeMapState, 'width' | 'height' | 'dirtyRects' | 'dirtyTileIndexes'>>,
   visit: (tileIndex: number) => void,
 ): void {
-  if (mapState.dirtyRects.length > 0) {
-    for (const rect of mapState.dirtyRects) {
-      const startX = Math.max(0, rect.x);
-      const startY = Math.max(0, rect.y);
-      const endX = Math.min(mapState.width, rect.x + rect.width);
-      const endY = Math.min(mapState.height, rect.y + rect.height);
-      for (let y = startY; y < endY; y += 1) {
-        for (let x = startX; x < endX; x += 1) {
-          const index = y * mapState.width + x;
-          visit(index);
-        }
-      }
-    }
+  const tileCount = mapState.width * mapState.height;
+  if (tileCount <= 0) {
     return;
   }
 
+  const seen = new Uint8Array(tileCount);
+  for (const rect of mapState.dirtyRects) {
+    const startX = Math.max(0, rect.x);
+    const startY = Math.max(0, rect.y);
+    const endX = Math.min(mapState.width, rect.x + rect.width);
+    const endY = Math.min(mapState.height, rect.y + rect.height);
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        const index = y * mapState.width + x;
+        if (seen[index] !== 0) {
+          continue;
+        }
+        seen[index] = 1;
+        visit(index);
+      }
+    }
+  }
+
   for (const tileIndex of mapState.dirtyTileIndexes) {
+    if (tileIndex >= tileCount || seen[tileIndex] !== 0) {
+      continue;
+    }
+    seen[tileIndex] = 1;
     visit(tileIndex);
   }
 }

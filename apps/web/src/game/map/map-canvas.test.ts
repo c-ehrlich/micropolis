@@ -584,6 +584,33 @@ describe('map canvas snapshot/patch visual parity', () => {
   });
 });
 
+describe('map canvas patch index iteration', () => {
+  it('unions dirty rect and dirty index coverage without duplicate tile visits', () => {
+    const visited: number[] = [];
+    forEachMapCanvasPatchTileIndex(
+      {
+        // Runtime patch redraw uses row-major indexing (`y * width + x`) from
+        // `apps/web/src/game/runtime/map-state.ts` snapshot/patch projection.
+        width: 4,
+        height: 3,
+        // Rects intentionally overlap at index 6 to assert de-dup behavior.
+        dirtyRects: [
+          { x: 1, y: 0, width: 2, height: 2 },
+          { x: 2, y: 1, width: 2, height: 2 },
+        ],
+        // Includes one out-of-bounds slot (`99`) and two already-covered tiles.
+        dirtyTileIndexes: Uint32Array.from([0, 5, 11, 99]),
+      },
+      (tileIndex) => {
+        visited.push(tileIndex);
+      },
+    );
+
+    expect(visited).toEqual([1, 2, 5, 6, 7, 10, 11, 0]);
+    expect(new Set(visited).size).toBe(visited.length);
+  });
+});
+
 describe('map canvas tile render mode selection', () => {
   it('uses diagnostic debug renderer only when explicit debug flag is enabled', () => {
     expect(
