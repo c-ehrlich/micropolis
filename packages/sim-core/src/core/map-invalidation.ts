@@ -77,10 +77,7 @@ export interface MapInvalidationFlagState {
   NewMapFlags: Uint8Array;
 }
 
-const markMapFlags = (
-  state: MapInvalidationFlagState,
-  flags: ReadonlyArray<MapFlagId>,
-): void => {
+const markMapFlags = (state: MapInvalidationFlagState, flags: ReadonlyArray<MapFlagId>): void => {
   for (const flag of flags) {
     state.NewMapFlags[MAP_FLAGS[flag]] = 1;
   }

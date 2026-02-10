@@ -7,8 +7,8 @@ import {
   consumeMapRedrawPlan,
   markCrimeScanMapFlags,
   markFireAnalysisMapFlags,
-  markPTLScanMapFlags,
   markPopDenScanMapFlags,
+  markPTLScanMapFlags,
   planMapRedraw,
 } from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
