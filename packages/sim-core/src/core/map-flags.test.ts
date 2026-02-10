@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { assertDefined } from './assert.ts';
 import {
+  getMapStateDrawModeEntry,
   MAP_FLAG_COUNT,
   MAP_FLAGS,
   MAP_STATE_DRAW_MODE_TABLE,
-  getMapStateDrawModeEntry,
 } from './map-flags.ts';
 
 describe('MAP_STATE_DRAW_MODE_TABLE', () => {
