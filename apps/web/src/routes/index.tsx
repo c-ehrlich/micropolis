@@ -2,12 +2,6 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MapCanvas } from '../game/map/map-canvas.tsx';
-import {
-  DemoMapHost,
-  readDemoCityExportPayload,
-  STAGE2_SCENARIO_CHOICES,
-  STAGE7_MANUAL_REALTIME_EVENT_CHOICES,
-} from '../game/runtime/demo-map-host.ts';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
   coalesceQueuedRuntimeMapState,
@@ -18,6 +12,11 @@ import {
   type Stage2ToolName,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
+import {
+  createStage4PrimaryPlayableHost,
+  readStage4CityExportPayload,
+  STAGE4_SCENARIO_CHOICES,
+} from '../game/runtime/stage4-primary-playable-host.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -34,8 +33,8 @@ const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
  * Primary Stage 4 gameplay route rendered at `/`.
  * Mirrors the single command-surface gameplay intent from `w_sim.c` in
  * `ref/micropolis/src/sim/w_sim.c`.
- * Difference: bridge convergence still runs through the deterministic
- * `DemoMapHost` adapter rather than direct sim-core authority payloads.
+ * Parity note: route wiring imports a Stage 4 primary-host surface so users do
+ * not depend on demo-only host controls in the default gameplay path.
  */
 function HomePage() {
   return (
@@ -66,7 +65,7 @@ function HomePage() {
  * with the full authoritative map/HUD/control projection path.
  */
 function Stage4RuntimePanel() {
-  const host = useMemo(() => new DemoMapHost(), []);
+  const host = useMemo(() => createStage4PrimaryPlayableHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   /**
@@ -94,12 +93,11 @@ function Stage4RuntimePanel() {
   );
   const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
-    STAGE2_SCENARIO_CHOICES[0]?.id ?? 1,
+    STAGE4_SCENARIO_CHOICES[0]?.id ?? 1,
   );
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
-  const [stage7EventStatus, setStage7EventStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const commandCounter = useRef(1);
 
@@ -111,7 +109,7 @@ function Stage4RuntimePanel() {
         return;
       }
 
-      const savePayload = readDemoCityExportPayload(event.envelope.payload);
+      const savePayload = readStage4CityExportPayload(event.envelope.payload);
       if (savePayload === null) {
         return;
       }
@@ -149,8 +147,7 @@ function Stage4RuntimePanel() {
     >
       <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
-        {state.pendingTools.length}
+        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
       </div>
       <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
@@ -160,9 +157,6 @@ function Stage4RuntimePanel() {
       </div>
       <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {lastSaveStatus}
-      </div>
-      <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {stage7EventStatus}
       </div>
       <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {formatRuntimePhaseStatus(state.phase)}
@@ -240,7 +234,6 @@ function Stage4RuntimePanel() {
                 y,
               });
             }}
-            pendingTools={state.pendingTools}
             realtimeObjects={state.realtimeState.objects}
             tileSize={STAGE4_MAP_TILE_SIZE}
           />
@@ -405,7 +398,7 @@ function Stage4RuntimePanel() {
                 }}
                 value={selectedScenarioId}
               >
-                {STAGE2_SCENARIO_CHOICES.map((scenario) => (
+                {STAGE4_SCENARIO_CHOICES.map((scenario) => (
                   <option key={scenario.id} value={scenario.id}>
                     {scenario.id}. {scenario.name} ({scenario.startYear})
                   </option>
@@ -414,7 +407,7 @@ function Stage4RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
-                  const scenario = STAGE2_SCENARIO_CHOICES.find(
+                  const scenario = STAGE4_SCENARIO_CHOICES.find(
                     (entry) => entry.id === selectedScenarioId,
                   );
                   if (scenario !== undefined) {
@@ -431,29 +424,6 @@ function Stage4RuntimePanel() {
               >
                 Start Scenario
               </button>
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Stage 7 Events</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {STAGE7_MANUAL_REALTIME_EVENT_CHOICES.map((eventChoice) => (
-                <button
-                  key={eventChoice.id}
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    const emitted = host.triggerManualRealtimeEvent(eventChoice.id);
-                    if (!emitted) {
-                      setStage7EventStatus('Stage 7 event trigger requires an active connection.');
-                      return;
-                    }
-                    setStage7EventStatus(`Triggered ${eventChoice.label.toLowerCase()}.`);
-                  }}
-                  type="button"
-                >
-                  {eventChoice.label}
-                </button>
-              ))}
             </div>
           </section>
 
@@ -499,7 +469,7 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
 }
 
 /**
- * Runtime phase status text shown above Stage 2 reconnect/resync controls.
+ * Runtime phase status text shown above Stage 4 reconnect/resync controls.
  * Mirrors reconnect/resync lifecycle intent from
  * `ref/micropolis/spec/integration/SPEC.md`.
  */
@@ -526,7 +496,7 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
 }
 
 /**
- * Stage 2 message feed view.
+ * Stage 4 message feed view.
  * Mirrors user-visible message surface from `UISetMessage` in
  * `ref/micropolis/src/sim/s_msg.c`, with a bounded reverse-chronological list.
  */

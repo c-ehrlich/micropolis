@@ -2,7 +2,6 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { gameRuntime } from './game/runtime-instance';
 import { routeTree } from './routeTree.gen';
 
 const router = createRouter({ routeTree });
@@ -17,15 +16,6 @@ const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Root element not found');
 }
-
-gameRuntime.start();
-window.addEventListener(
-  'beforeunload',
-  () => {
-    gameRuntime.stop();
-  },
-  { once: true },
-);
 
 createRoot(rootElement).render(
   <React.StrictMode>

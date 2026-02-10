@@ -1,3 +1,9 @@
+import {
+  CoreBridgeV1SequenceAction,
+  CoreBridgeV1SequenceReason,
+  createCoreBridgeV1SequenceState,
+  evaluateCoreBridgeV1SequenceDecision,
+} from '../../../../packages/core-bridge/src/sequencing.ts';
 import type {
   CoreHost,
   CoreHostAckEvent,
@@ -267,9 +273,18 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     }
 
     if (isSequencedEvent(event)) {
-      const staleServerSeq = event.serverSeq <= state.lastAppliedServerSeq;
-      const staleTick = event.tick < state.lastAppliedTick;
-      if (staleServerSeq || staleTick) {
+      const sequenceDecision = evaluateCoreBridgeV1SequenceDecision(
+        createCoreBridgeV1SequenceState({
+          lastAppliedServerSeq: state.lastAppliedServerSeq,
+          lastTick: state.lastAppliedTick,
+        }),
+        {
+          serverSeq: event.serverSeq,
+          tick: event.tick,
+        },
+      );
+
+      if (sequenceDecision.action === CoreBridgeV1SequenceAction.DROP) {
         updateState((current) => ({
           ...current,
           commandLifecycleLog: [
@@ -280,16 +295,17 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         return;
       }
 
-      const expectedServerSeq = state.lastAppliedServerSeq + 1;
-      if (event.serverSeq > expectedServerSeq) {
+      if (sequenceDecision.action === CoreBridgeV1SequenceAction.RESYNC) {
         if (!state.isResyncing) {
+          const resyncLogEntry =
+            sequenceDecision.reason === CoreBridgeV1SequenceReason.SERVER_SEQ_GAP
+              ? `resync-request:gap:expected=${sequenceDecision.expectedServerSeq}:received=${event.serverSeq}`
+              : `resync-request:tick-regression:last=${state.lastAppliedTick}:received=${event.tick}`;
+
           updateState((current) => ({
             ...current,
             isResyncing: true,
-            commandLifecycleLog: [
-              ...current.commandLifecycleLog,
-              `resync-request:gap:expected=${expectedServerSeq}:received=${event.serverSeq}`,
-            ],
+            commandLifecycleLog: [...current.commandLifecycleLog, resyncLogEntry],
           }));
           host.requestSnapshot(state.lastAppliedServerSeq);
         }

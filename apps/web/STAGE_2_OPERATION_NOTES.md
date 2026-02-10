@@ -1,4 +1,10 @@
-# Stage 2 LocalHost Operation Notes
+# Stage 2 LocalHost Operation Notes (Legacy Reference)
+
+## Status
+
+As of 2026-02-10, Stage 4 at route `/` is the authoritative browser gameplay shipping path.
+Contributors should treat `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md` as the active implementation plan for shipping behavior.
+This Stage 2 runbook remains only for historical/debug reference on the old `DemoMapHost` path.
 
 ## Purpose
 

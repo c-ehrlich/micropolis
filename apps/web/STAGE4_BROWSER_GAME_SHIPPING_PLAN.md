@@ -503,35 +503,39 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make Stage 4 the primary playable route and retire user-visible dependence on legacy demo/placement paths.
+- [x] Make Stage 4 the primary playable route and retire user-visible dependence on legacy demo/placement paths.
+- Stage 10 update (2026-02-10): consolidated Stage 4 default-route host wiring behind
+  `createStage4PrimaryPlayableHost(...)`, preserving one lifecycle/tool/io command surface
+  aligned with `ref/micropolis/src/sim/w_sim.c` while removing route-level dependence on
+  legacy `Demo*` parser naming.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sim.c` (single command surface concept)
-- [ ] `ref/micropolis/spec/integration/SPEC.md` (ordering/recovery contracts)
+- [x] `ref/micropolis/src/sim/w_sim.c` (single command surface concept)
+- [x] `ref/micropolis/spec/integration/SPEC.md` (ordering/recovery contracts)
 
 ### TS references to review
 
-- [ ] `apps/web/src/routes/index.tsx`
-- [ ] `apps/web/src/game/runtime-instance.ts`
-- [ ] `apps/web/src/game/runtime.ts`
-- [ ] `apps/web/src/game/runtime/runtime.ts`
-- [ ] `apps/web/src/__tests__/basic.test.ts`
-- [ ] `apps/web/src/game/runtime.ordering-resync.test.ts`
-- [ ] `apps/web/src/game/runtime.command-lifecycle.test.ts`
+- [x] `apps/web/src/routes/index.tsx`
+- [x] `apps/web/src/game/runtime-instance.ts`
+- [x] `apps/web/src/game/runtime.ts`
+- [x] `apps/web/src/game/runtime/runtime.ts`
+- [x] `apps/web/src/__tests__/basic.test.ts`
+- [x] `apps/web/src/game/runtime.ordering-resync.test.ts`
+- [x] `apps/web/src/game/runtime.command-lifecycle.test.ts`
 
 ### Implementation checklist
 
-- [ ] Remove or hide placement-only Stage 4 visual path from default gameplay flow.
-- [ ] Keep deterministic shim only where it materially helps isolated tests.
-- [ ] Add/update Stage 4 smoke coverage for boot, tools+funds, save/load, scenario, resync.
-- [ ] Update docs so contributors know Stage 4 is authoritative shipping path.
+- [x] Remove or hide placement-only Stage 4 visual path from default gameplay flow.
+- [x] Keep deterministic shim only where it materially helps isolated tests.
+- [x] Add/update Stage 4 smoke coverage for boot, tools+funds, save/load, scenario, resync.
+- [x] Update docs so contributors know Stage 4 is authoritative shipping path.
 
 ### Verification checklist
 
-- [ ] Stage 4 is the default route users land on for gameplay.
-- [ ] No user-visible dependency on debug map renderer remains.
-- [ ] Smoke tests are stable/repeatable across runs.
+- [x] Stage 4 is the default route users land on for gameplay.
+- [x] No user-visible dependency on debug map renderer remains.
+- [x] Smoke tests are stable/repeatable across runs.
 
 ---
 

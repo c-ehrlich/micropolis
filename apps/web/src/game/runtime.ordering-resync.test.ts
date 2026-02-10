@@ -304,6 +304,46 @@ describe('runtime ordering/resync/reconnect invariants', () => {
   );
 
   test.each(['local', 'do'] as const)(
+    'requests resync on tick regression and replays snapshot + ordered tail in %s mode',
+    (mode) => {
+      const host = new ScriptedHost({
+        mode,
+        onConnect(scriptHost) {
+          scriptHost.pushEvents([
+            patchEvent(mode, 'cmd-a', 1, 15, 'road', 14, 14),
+            patchEvent(mode, 'cmd-b', 2, 14, 'rail', 15, 15),
+          ]);
+        },
+        onRequestSnapshot(scriptHost, lastAppliedServerSeq) {
+          expect(lastAppliedServerSeq).toBe(1);
+          scriptHost.pushEvents([
+            snapshotEvent(mode, 15, 1, [{ commandId: 'cmd-a', tool: 'road', x: 14, y: 14 }]),
+            patchEvent(mode, 'cmd-b', 2, 15, 'rail', 15, 15),
+          ]);
+        },
+      });
+      const runtime = createGameRuntime(host);
+
+      runtime.start();
+
+      const state = runtime.getState();
+      expect(host.requestSnapshotCalls).toEqual([1]);
+      expect(state.lastAppliedServerSeq).toBe(2);
+      expect(state.lastAppliedTick).toBe(15);
+      expect(state.committedPlacements).toEqual([
+        { commandId: 'cmd-a', tool: 'road', x: 14, y: 14 },
+        { commandId: 'cmd-b', tool: 'rail', x: 15, y: 15 },
+      ]);
+      expect(state.commandLifecycleLog).toEqual([
+        'patch:cmd-a:road@14,14',
+        'resync-request:tick-regression:last=15:received=14',
+        'snapshot:1@15',
+        'patch:cmd-b:rail@15,15',
+      ]);
+    },
+  );
+
+  test.each(['local', 'do'] as const)(
     'rebuilds reconnect state from snapshot baseline plus patch tail in %s mode',
     (mode) => {
       let connectCount = 0;

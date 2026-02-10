@@ -16,6 +16,11 @@ pnpm dev
 ## Workspace layout
 - `apps/web`: Vite + React app using TanStack Router (file-based routes live in `src/routes`)
 
+## Gameplay path ownership
+- Stage 4 is the authoritative browser gameplay shipping path at route `/`.
+- Contributor implementation and verification checklist: `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md`.
+- `apps/web/STAGE_2_OPERATION_NOTES.md` is legacy reference material for the old Stage 2 `DemoMapHost` path and is not the shipping route.
+
 ## Common commands
 ```bash
 pnpm dev

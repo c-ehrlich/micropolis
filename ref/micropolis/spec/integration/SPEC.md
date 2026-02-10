@@ -8,6 +8,31 @@ This spec covers the platform glue around the core Micropolis executable:
 
 It does not restate UI or sim internals beyond what the integration layer calls.
 
+## Browser bridge ordering/recovery contracts (Stage 4 shipping path)
+Micropolis C integration does not define a wire-level `serverSeq` cursor. For browser
+shipping, the bridge layer adds an explicit sequencing contract while preserving C's
+forward-only simulation intent (`CityTime` in `src/sim/s_sim.c`, frame progression in
+`src/sim/sim.c`).
+
+### Sequencing fields
+- Every sequenced authoritative envelope carries both `serverSeq` and `tick`.
+- `serverSeq` is strictly monotonic and gap-free in the normal apply path.
+- `tick` is monotonic non-decreasing for applied envelopes.
+
+### Client/runtime apply rules
+1. Drop stale envelopes when `serverSeq <= lastAppliedServerSeq`.
+2. Enter recovery and request snapshot when `serverSeq > expectedServerSeq`
+   (`expectedServerSeq = lastAppliedServerSeq + 1`).
+3. Enter recovery and request snapshot on tick regression
+   (`tick < lastAppliedTick`) even when `serverSeq` is in order.
+4. During recovery, preserve last committed authoritative state and clear
+   client-only pending tool visuals.
+
+### Snapshot recovery rules
+- Recovery requests carry `fromServerSeq` as the first missing sequence.
+- Snapshot envelopes establish a new authoritative baseline (`serverSeq`/base seq + tick).
+- Ordered tail envelopes replay after snapshot to rebuild current state deterministically.
+
 ## Sugar Activity Wrapper (Python)
 ### Activity metadata (activity/activity.info)
 - INI-style file with a single [Activity] section:

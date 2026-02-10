@@ -14,7 +14,6 @@ import { coalesceQueuedRuntimeMapState, type RuntimeMapState } from '../runtime/
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
-  isStage4DebugTileRendererEnabled,
   lookupStage8TileSprite,
   resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
@@ -284,8 +283,8 @@ export function zoomMapCanvasCameraOffsetAtAnchor({
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
  * `ref/micropolis/src/sim/g_bigmap.c`.
- * Parity note: Stage 8 now uses Micropolis-derived tile sprites from canonical
- * `tiles.xpm` identity with a deterministic debug-color fallback flag.
+ * Parity note: Stage 8 uses Micropolis-derived tile sprites from canonical
+ * `tiles.xpm` identity and treats missing atlas images as explicit fallback.
  */
 export function MapCanvas({
   mapState,
@@ -317,14 +316,8 @@ export function MapCanvas({
     x: 0,
     y: 0,
   });
-  const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
 
   useEffect(() => {
-    if (debugTileRendererEnabled) {
-      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
-      return;
-    }
-
     const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
       STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     );
@@ -358,7 +351,7 @@ export function MapCanvas({
     return () => {
       cancelled = true;
     };
-  }, [debugTileRendererEnabled]);
+  }, []);
 
   useEffect(() => {
     if (!mapState.hasSnapshot) {
@@ -375,7 +368,6 @@ export function MapCanvas({
       mapState,
       tileSize,
       tileRenderer: {
-        debugTileRendererEnabled,
         baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
@@ -405,7 +397,7 @@ export function MapCanvas({
         lastRenderedEpoch: lastRenderedEpochRef.current,
       });
     });
-  }, [debugTileRendererEnabled, mapState, tileAtlasRenderVersion, tileSize]);
+  }, [mapState, tileAtlasRenderVersion, tileSize]);
 
   useEffect(() => {
     return () => {
@@ -774,7 +766,6 @@ type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay';
 
 interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
-  debugTileRendererEnabled: boolean;
   tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
 }
 
@@ -855,7 +846,7 @@ function drawMapCanvasFrame({
   return frame.mapState.renderEpoch;
 }
 
-type MapCanvasTileRenderMode = 'atlas' | 'diagnostic-debug' | 'missing-atlas';
+type MapCanvasTileRenderMode = 'atlas' | 'missing-atlas';
 const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
 
 /**
@@ -1263,7 +1254,6 @@ function drawMapCanvasTile(
     sprite.atlasCanonicalIdentityKey,
   );
   const tileRenderMode = selectMapCanvasTileRenderMode({
-    debugTileRendererEnabled: tileRenderer.debugTileRendererEnabled,
     hasAtlasImage: atlasImage !== undefined,
   });
 
@@ -1285,12 +1275,6 @@ function drawMapCanvasTile(
     return;
   }
 
-  if (tileRenderMode === 'diagnostic-debug') {
-    context.fillStyle = sprite.debugFallbackColor;
-    context.fillRect(targetX, targetY, tileSize, tileSize);
-    return;
-  }
-
   context.fillStyle = MAP_CANVAS_MISSING_TILE_ATLAS_COLOR;
   context.fillRect(targetX, targetY, tileSize, tileSize);
 }
@@ -1300,20 +1284,14 @@ function drawMapCanvasTile(
  * Micropolis C draw flow assumes `GetViewTiles` art resources are available
  * before `MemDrawBeegMapRect` draws tiles (`ref/micropolis/src/sim/g_setup.c`,
  * `ref/micropolis/src/sim/g_bigmap.c`).
- * Parity note: TypeScript adds an explicit diagnostics-only debug renderer flag
- * and keeps missing-atlas fallback separate so debug colors are opt-in only.
+ * Parity note: TypeScript keeps missing-atlas fallback explicit when browser
+ * atlas images are unavailable; C expects assets to be loaded before draw.
  */
 export function selectMapCanvasTileRenderMode({
-  debugTileRendererEnabled,
   hasAtlasImage,
 }: {
-  debugTileRendererEnabled: boolean;
   hasAtlasImage: boolean;
 }): MapCanvasTileRenderMode {
-  if (debugTileRendererEnabled) {
-    return 'diagnostic-debug';
-  }
-
   return hasAtlasImage ? 'atlas' : 'missing-atlas';
 }
 
