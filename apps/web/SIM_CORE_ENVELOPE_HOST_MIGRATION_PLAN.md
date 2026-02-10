@@ -50,7 +50,7 @@ Canonical `/` gameplay host path (migration lock):
 Acceptance checks:
 
 - [x] One canonical gameplay host path for `/` is documented.
-- [x] No new gameplay behavior is added to `DemoMapHost`.
+- [x] No new gameplay behavior is added to `DemoMapHost`. (Migration-freeze lock reaffirmed on 2026-02-10.)
 
 ### Phase 1: Introduce Sim-Core Envelope Host (New Class)
 
