@@ -1194,7 +1194,7 @@ describe('SimCoreEnvelopeHost', () => {
       fromServerSeq: 3,
       reason: 'manual',
     });
-    expect(secondSessionEnvelopes).toHaveLength(5);
+    expect(secondSessionEnvelopes).toHaveLength(6);
     expect(secondSessionEnvelopes[2]).toEqual({
       kind: 'ack',
       roomId: 'room-second',
@@ -1218,6 +1218,14 @@ describe('SimCoreEnvelopeHost', () => {
       tick: 1,
       serverSeq: 5,
     });
+    expect(secondSessionEnvelopes[5]).toEqual({
+      kind: 'patch',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      tick: 1,
+      serverSeq: 6,
+      payload: {},
+    });
 
     secondSession.disconnect();
     secondSession.send({
@@ -1227,7 +1235,144 @@ describe('SimCoreEnvelopeHost', () => {
       fromServerSeq: 4,
       reason: 'manual',
     });
-    expect(secondSessionEnvelopes).toHaveLength(5);
+    expect(secondSessionEnvelopes).toHaveLength(6);
+  });
+
+  it('clamps request_snapshot replay cursor to valid range before baseline + tail replay', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      commandId: 'cmd-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      fromServerSeq: 99,
+      reason: 'manual',
+    });
+
+    expect(captured.envelopes[4]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      tick: 1,
+      serverSeq: 4,
+    });
+    expect(captured.envelopes).toHaveLength(5);
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      fromServerSeq: -20,
+      reason: 'manual',
+    });
+
+    expect(captured.envelopes[5]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      tick: 1,
+      serverSeq: 5,
+    });
+    expect(captured.envelopes[6]).toEqual({
+      kind: 'ack',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      tick: 1,
+      serverSeq: 6,
+      commandId: 'cmd-pause',
+    });
+    expect(captured.envelopes[7]).toEqual({
+      kind: 'patch',
+      roomId: 'room-snapshot-cursor-clamp',
+      clientId: 'client-snapshot-cursor-clamp',
+      tick: 1,
+      serverSeq: 7,
+      payload: {},
+    });
+  });
+
+  it('emits deterministic snapshot baseline plus ordered replay tail for request_snapshot', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      commandId: 'cmd-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      commandId: 'cmd-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      fromServerSeq: 3,
+      reason: 'sequence-gap',
+    });
+
+    expect(captured.envelopes[6]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      tick: 2,
+      serverSeq: 6,
+    });
+    expect(captured.envelopes[7]).toEqual({
+      kind: 'ack',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      tick: 2,
+      serverSeq: 7,
+      commandId: 'cmd-play',
+    });
+    expect(captured.envelopes[8]).toEqual({
+      kind: 'patch',
+      roomId: 'room-snapshot-replay-tail',
+      clientId: 'client-snapshot-replay-tail',
+      tick: 2,
+      serverSeq: 8,
+      payload: {},
+    });
   });
 
   it('keeps serverSeq strictly increasing across sync and async sequenced envelope emission', async () => {

@@ -36,6 +36,10 @@ type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
   ? Omit<TValue, TKey>
   : never;
 type SequencedHostEnvelopeWithoutServerSeq = DistributiveOmit<SequencedHostEnvelope, 'serverSeq'>;
+interface SnapshotReplayCheckpoint {
+  tick: number;
+  payload: HostSnapshotPayload;
+}
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
@@ -89,6 +93,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
   private cityName = DEFAULT_CITY_NAME;
+  private readonly sequencedReplayLog: SequencedHostEnvelope[] = [];
+  private readonly snapshotReplayCheckpoints = new Map<number, SnapshotReplayCheckpoint>();
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
 
@@ -103,6 +109,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
       scenarioResourceLoader === undefined
         ? (fileName) => this.loadScenarioResourceBytes(fileName)
         : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
+    this.snapshotReplayCheckpoints.set(0, {
+      tick: 0,
+      payload: this.buildSnapshotPayload(),
+    });
   }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
@@ -194,7 +204,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    this.emitSnapshot(envelope.roomId, envelope.clientId);
+    const replayCursor = normalizeReplayCursor(envelope.fromServerSeq, this.lastEmittedServerSeq);
+    this.emitSnapshotReplay(envelope.roomId, envelope.clientId, replayCursor);
   }
 
   private handleCommandEnvelope(
@@ -706,12 +717,42 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors full update refresh behavior in `ref/micropolis/src/sim/w_update.c`.
    */
   private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
+    this.emitSnapshotFromPayload(roomId, clientId, this.buildSnapshotPayload(), tickOverride);
+  }
+
+  /**
+   * Emits one deterministic replay stream as snapshot baseline plus ordered tail.
+   * Mirrors reconnect/resync replay intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: replay cursor is clamped to known sequenced history before
+   * building baseline + tail for reducer-compatible recovery ordering.
+   */
+  private emitSnapshotReplay(roomId: string, clientId: string, replayCursor: number): void {
+    const baseline = this.readSnapshotReplayBaseline(replayCursor);
+    const replayTail = this.readSnapshotReplayTail(replayCursor);
+    this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick);
+    for (const envelope of replayTail) {
+      this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId));
+    }
+  }
+
+  /**
+   * Emits one snapshot envelope from an explicit payload/tick baseline.
+   * Mirrors full-state checkpoint emission intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private emitSnapshotFromPayload(
+    roomId: string,
+    clientId: string,
+    payload: HostSnapshotPayload,
+    tickOverride: number,
+  ): void {
     this.emitSequencedEnvelope({
       kind: 'snapshot',
       roomId,
       clientId,
       tick: tickOverride,
-      payload: this.buildSnapshotPayload(),
+      payload,
     });
   }
 
@@ -731,6 +772,67 @@ export class SimCoreEnvelopeHost implements CoreHost {
       serverSeq: this.nextServerSeq(),
     };
     this.onEnvelope(sequencedEnvelope);
+    this.recordReplayEnvelope(sequencedEnvelope);
+  }
+
+  /**
+   * Reads one replay-baseline snapshot checkpoint for a clamped cursor.
+   * Mirrors checkpoint-based recovery baseline intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private readSnapshotReplayBaseline(replayCursor: number): SnapshotReplayCheckpoint {
+    const checkpoint = this.snapshotReplayCheckpoints.get(replayCursor);
+    if (checkpoint !== undefined) {
+      return checkpoint;
+    }
+
+    return {
+      tick: this.tick,
+      payload: this.buildSnapshotPayload(),
+    };
+  }
+
+  /**
+   * Reads one ordered sequenced tail replay after a clamped replay cursor.
+   * Mirrors bridge replay-tail ordering intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: snapshot envelopes are excluded from tail replay because this
+   * host emits exactly one deterministic replay baseline snapshot first.
+   */
+  private readSnapshotReplayTail(replayCursor: number): SequencedHostEnvelope[] {
+    return this.sequencedReplayLog
+      .filter((envelope) => envelope.serverSeq > replayCursor && envelope.kind !== 'snapshot')
+      .sort((left, right) => left.serverSeq - right.serverSeq);
+  }
+
+  /**
+   * Retargets a replayed sequenced envelope to the active room/client identity.
+   * Mirrors room/client envelope identity ownership in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private retargetSequencedEnvelope(
+    envelope: SequencedHostEnvelope,
+    roomId: string,
+    clientId: string,
+  ): SequencedHostEnvelopeWithoutServerSeq {
+    const { serverSeq: _serverSeq, ...withoutServerSeq } = envelope;
+    return {
+      ...withoutServerSeq,
+      roomId,
+      clientId,
+    };
+  }
+
+  /**
+   * Appends one emitted sequenced envelope into replay history checkpoints.
+   * Mirrors deterministic replay checkpoint intent from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private recordReplayEnvelope(envelope: SequencedHostEnvelope): void {
+    this.sequencedReplayLog.push(envelope);
+    this.snapshotReplayCheckpoints.set(envelope.serverSeq, {
+      tick: envelope.tick,
+      payload: this.buildSnapshotPayload(),
+    });
   }
 
   /**
@@ -852,6 +954,27 @@ function normalizePlayableSpeed(candidate: number): number {
     return 3;
   }
   return speed;
+}
+
+/**
+ * Clamps snapshot replay cursor requests to the known sequenced envelope range.
+ * Mirrors bridge snapshot cursor recovery rules from
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function normalizeReplayCursor(candidate: number, highestKnown: number): number {
+  if (!Number.isFinite(candidate)) {
+    return 0;
+  }
+
+  const truncatedCandidate = Math.trunc(candidate);
+  if (truncatedCandidate < 0) {
+    return 0;
+  }
+  if (truncatedCandidate > highestKnown) {
+    return highestKnown;
+  }
+
+  return truncatedCandidate;
 }
 
 /**

@@ -88,7 +88,8 @@ Sequence/tick decision:
 - [x] Keep non-regressing `tick` progression.
 - Implemented by guarded command-tick advancement plus emit-time tick clamping in
   `SimCoreEnvelopeHost.advanceCommandTick()`/`nextEnvelopeTick()` so async scenario settlement and stale internal cursor rollback cannot regress emitted envelope tick order.
-- [ ] On `request_snapshot`, clamp replay cursor to valid range and emit deterministic baseline + tail replay behavior expected by current runtime reducers.
+- [x] On `request_snapshot`, clamp replay cursor to valid range and emit deterministic baseline + tail replay behavior expected by current runtime reducers.
+  - Implemented in `SimCoreEnvelopeHost` replay checkpoint/tail emission so `request_snapshot` emits one clamped-baseline `snapshot` followed by deterministic ordered replay tail envelopes.
 
 Acceptance checks:
 
