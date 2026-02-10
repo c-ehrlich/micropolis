@@ -131,10 +131,10 @@ Acceptance checks:
 ### Phase 5: Route Cutover + Demo Host Deletion
 
 - [x] Change `createPlayableRuntimeHost()` to return the new sim-core envelope host.
-- [x] Remove `DemoMapHost` imports from gameplay-path modules. (Revalidated on 2026-02-10; only legacy `demo-map-host.test.ts` still imports it for migration-held tests.)
+- [x] Remove `DemoMapHost` imports from gameplay-path modules. (Revalidated on 2026-02-10; no gameplay/runtime modules import it.)
 - [x] Migrate or delete tests that validate demo-only, non-parity behavior.
-- [ ] Delete `apps/web/src/game/runtime/demo-map-host.ts`.
-- [ ] Delete `apps/web/src/game/runtime/demo-map-host.test.ts` after equivalent/new parity coverage exists.
+- [x] Delete `apps/web/src/game/runtime/demo-map-host.ts`.
+- [x] Delete `apps/web/src/game/runtime/demo-map-host.test.ts` after equivalent/new parity coverage exists. (Completed on 2026-02-10.)
 - [ ] Remove dead helpers tied to synthetic map bootstrap and demo custom tool logic.
 
 Acceptance checks:
