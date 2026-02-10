@@ -415,8 +415,16 @@ function runCommand(command, args, options) {
     /** @type {Buffer[]} */
     const stderr = [];
 
-    child.stdout?.on('data', (chunk) => stdout.push(Buffer.from(chunk)));
-    child.stderr?.on('data', (chunk) => stderr.push(Buffer.from(chunk)));
+    child.stdout?.on('data', (chunk) => {
+      const buffer = Buffer.from(chunk);
+      stdout.push(buffer);
+      options.onStdoutChunk?.(buffer);
+    });
+    child.stderr?.on('data', (chunk) => {
+      const buffer = Buffer.from(chunk);
+      stderr.push(buffer);
+      options.onStderrChunk?.(buffer);
+    });
     child.on('error', (error) => reject(error));
     child.on('close', (code, signal) => {
       resolve({
@@ -540,7 +548,15 @@ async function runCodexExec(cwd, prompt, logPath, model) {
 
   args.push(prompt);
 
-  const result = await runCommand('codex', args, { cwd });
+  const result = await runCommand('codex', args, {
+    cwd,
+    onStdoutChunk: (chunk) => {
+      process.stdout.write(chunk);
+    },
+    onStderrChunk: (chunk) => {
+      process.stderr.write(chunk);
+    },
+  });
   const combinedOutput = `${result.stdout}${result.stderr}`;
   await appendFile(logPath, combinedOutput, 'utf8');
 
