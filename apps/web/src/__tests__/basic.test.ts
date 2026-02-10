@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DemoMapHost, readDemoCityExportPayload } from '../game/runtime/demo-map-host.ts';
+import {
+  createPlayableRuntimeHost,
+  readCityExportPayload,
+} from '../game/runtime/playable-runtime-host.ts';
 import { createWebHostRuntime } from '../game/runtime/runtime.ts';
 
 interface LocalHostSmokeSummary {
@@ -22,11 +25,12 @@ interface LocalHostSmokeSummary {
  * Mirrors user-facing command/tick/update/save-load behavior across
  * `ref/micropolis/src/sim/sim.c`, `ref/micropolis/src/sim/w_tool.c`,
  * `ref/micropolis/src/sim/w_update.c`, and `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: Playable Runtime uses the scripted `DemoMapHost` adapter instead of full sim-core ticking.
+ * Difference: this uses `createPlayableRuntimeHost` (sim-core envelope host) instead of
+ * the legacy scripted demo host.
  */
 function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
   const runtime = createWebHostRuntime({
-    host: new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
+    host: createPlayableRuntimeHost({ enableAmbientTicks: true, patchIntervalMs: 10 }),
   });
   const savedCityExports: Uint8Array[] = [];
   const unsubscribe = runtime.subscribe((event) => {
@@ -34,7 +38,7 @@ function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
       return;
     }
 
-    const savePayload = readDemoCityExportPayload(event.envelope.payload);
+    const savePayload = readCityExportPayload(event.envelope.payload);
     if (savePayload !== null) {
       savedCityExports.push(savePayload.cityBytes.slice());
     }
