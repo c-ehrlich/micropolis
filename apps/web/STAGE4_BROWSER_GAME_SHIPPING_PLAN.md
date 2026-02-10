@@ -377,7 +377,7 @@ Deletion execution notes:
 - [x] `apps/web/src/game/runtime.persistence.test.ts` passes with Stage 4 authority.
 - [x] `packages/sim-io/src/load.test.ts` and `packages/sim-io/src/save.test.ts` pass.
 - [x] `packages/sim-io/src/scenarios.test.ts` passes.
-- [ ] Manual: save city, mutate state, load city, confirm restored state.
+- [x] Manual: save city, mutate state, load city, confirm restored state.
 - [ ] Manual: each scenario starts with expected year/funds/speed.
 
 ---
