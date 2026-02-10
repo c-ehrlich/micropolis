@@ -1,5 +1,11 @@
-import { applyToolAction, type ToolResult } from '../../../../../packages/sim-core/src/index.ts';
+import {
+  applyToolAction,
+  resetForNewCityFromSeed,
+  type ToolResult,
+} from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
+import { loadCityLikeC } from '../../../../../packages/sim-io/src/load.ts';
+import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
@@ -14,6 +20,18 @@ import type {
 
 type PlayableToolCommand = Extract<PlayableClientCommand, { kind: 'tool' }>;
 type PlayableSimControlCommand = Extract<PlayableClientCommand, { kind: 'sim-control' }>;
+type PlayableCityLifecycleCommand = Extract<PlayableClientCommand, { kind: 'city-lifecycle' }>;
+type PlayableCityIoCommand = Extract<PlayableClientCommand, { kind: 'city-io' }>;
+type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-city' }>;
+type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
+
+const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
+const DEFAULT_CITY_NAME = 'New City';
+const NEW_CITY_STARTING_FUNDS = 20_000;
+const NEW_CITY_TREE_LEVEL = -1;
+const NEW_CITY_LAKE_LEVEL = -1;
+const NEW_CITY_CURVE_LEVEL = -1;
+const NEW_CITY_CREATE_ISLAND = -1;
 
 /**
  * Sim-core-authoritative envelope host for the route `/` migration path.
@@ -23,6 +41,9 @@ type PlayableSimControlCommand = Extract<PlayableClientCommand, { kind: 'sim-con
  * authoritative snapshot surface; full command semantics are migrated in
  * subsequent checklist tasks. It also accepts `createPlayableRuntimeHost(...)`
  * compatibility options so route call sites/tests can migrate without option-surface churn.
+ * Stage note: city lifecycle and city save/load commands now route through
+ * sim-core reset flow plus `sim-io` load/save helpers from
+ * `ref/micropolis/src/sim/s_gen.c` and `ref/micropolis/src/sim/s_fileio.c`.
  */
 export class SimCoreEnvelopeHost implements CoreHost {
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
@@ -48,6 +69,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private tick = 0;
   private simPaused = false;
   private simPausedSpeed = 3;
+  private cityFileName = DEFAULT_CITY_FILE_NAME;
+  private cityName = DEFAULT_CITY_NAME;
 
   public constructor(_options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState();
@@ -181,6 +204,35 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
+    if (envelope.command.kind === 'city-lifecycle') {
+      this.applyCityLifecycleCommand(envelope.command);
+      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      this.emitSnapshot(envelope.roomId, envelope.clientId);
+      return;
+    }
+
+    if (envelope.command.kind === 'city-io') {
+      const cityIoOutcome = this.applyCityIoCommand(envelope.command);
+      if (cityIoOutcome.kind === 'reject') {
+        this.emitReject(
+          envelope.roomId,
+          envelope.clientId,
+          envelope.commandId,
+          cityIoOutcome.reason,
+        );
+        return;
+      }
+
+      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      if (cityIoOutcome.kind === 'save') {
+        this.emitPatch(envelope.roomId, envelope.clientId, cityIoOutcome.patchPayload);
+        return;
+      }
+
+      this.emitSnapshot(envelope.roomId, envelope.clientId);
+      return;
+    }
+
     this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, 'invalid-command');
   }
 
@@ -272,7 +324,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return 'out-of-bounds';
     }
 
-    this.syncToolContextFundsFromState();
+    this.syncToolContextFromState();
     this.authorityState.toolContext.store.beginTick();
     try {
       const toolResult = applyToolAction(this.authorityState.toolContext, {
@@ -296,8 +348,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors funds ownership in `Spend`/`SetFunds` call flow from
    * `ref/micropolis/src/sim/w_stubs.c`, where `TotalFunds` is authoritative.
    */
-  private syncToolContextFundsFromState(): void {
+  private syncToolContextFromState(): void {
     this.authorityState.toolContext.funds = this.authorityState.simState.TotalFunds;
+    this.authorityState.toolContext.autoBulldoze = this.authorityState.simState.autoBulldoze;
+    this.authorityState.toolContext.doAnimation = this.authorityState.simState.doAnimation;
   }
 
   /**
@@ -374,6 +428,131 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.authorityState.simState.SimSpeed = speed;
+  }
+
+  /**
+   * Applies the `new-city` lifecycle reset through authoritative sim-core state.
+   * Mirrors `GenerateSomeCity` command intent in `ref/micropolis/src/sim/s_gen.c`:
+   * regenerate terrain, re-run init lifecycle, and reset city metadata to defaults.
+   * Parity note: host-only UI/eval calls in C remain outside this envelope host.
+   */
+  private applyCityLifecycleCommand(_command: PlayableCityLifecycleCommand): void {
+    const terrainSeed = this.authorityState.simContext.rng.next16();
+    resetForNewCityFromSeed(this.authorityState.simState, this.authorityState.simContext, {
+      seed: terrainSeed,
+      treeLevel: NEW_CITY_TREE_LEVEL,
+      lakeLevel: NEW_CITY_LAKE_LEVEL,
+      curveLevel: NEW_CITY_CURVE_LEVEL,
+      createIsland: NEW_CITY_CREATE_ISLAND,
+    });
+
+    setFunds(this.authorityState.simState, NEW_CITY_STARTING_FUNDS);
+    this.authorityState.simState.SimMetaSpeed = 3;
+    this.authorityState.simState.SimSpeed = 3;
+    this.cityFileName = DEFAULT_CITY_FILE_NAME;
+    this.cityName = DEFAULT_CITY_NAME;
+    this.syncHostStateAfterLoadLikeCommand();
+  }
+
+  /**
+   * Applies `save-city` / `load-city` commands through `sim-io` orchestration helpers.
+   * Mirrors `SaveCityAs` and `LoadCity` flows in `ref/micropolis/src/sim/s_fileio.c`.
+   */
+  private applyCityIoCommand(command: PlayableCityIoCommand):
+    | {
+        kind: 'save';
+        patchPayload: HostPatchPayload;
+      }
+    | {
+        kind: 'load';
+      }
+    | {
+        kind: 'reject';
+        reason: string;
+      } {
+    if (command.action === 'save-city') {
+      return this.applySaveCityCommand(command);
+    }
+    return this.applyLoadCityCommand(command);
+  }
+
+  /**
+   * Applies `save-city` bytes export through `saveCityAsLikeC`.
+   * Mirrors `SaveCityAs` serialization ownership in `ref/micropolis/src/sim/s_fileio.c`.
+   */
+  private applySaveCityCommand(command: PlayableSaveCityCommand): {
+    kind: 'save';
+    patchPayload: HostPatchPayload;
+  } {
+    const fileName = sanitizeCityFileName(command.fileName);
+    const saveResult = saveCityAsLikeC(
+      this.authorityState.simState,
+      this.authorityState.simContext,
+      fileName,
+    );
+    this.cityFileName = saveResult.cityFileName;
+    this.cityName = saveResult.cityName;
+
+    return {
+      kind: 'save',
+      patchPayload: {
+        cityIo: {
+          save: {
+            fileName: this.cityFileName,
+            cityName: this.cityName,
+            cityBytes: saveResult.cityBytes,
+          },
+        },
+      },
+    };
+  }
+
+  /**
+   * Applies `load-city` state import through `loadCityLikeC`.
+   * Mirrors `LoadCity` decode + lifecycle init in `ref/micropolis/src/sim/s_fileio.c`.
+   */
+  private applyLoadCityCommand(command: PlayableLoadCityCommand):
+    | {
+        kind: 'load';
+      }
+    | {
+        kind: 'reject';
+        reason: string;
+      } {
+    const fileName = sanitizeCityFileName(command.fileName);
+
+    let loadResult: ReturnType<typeof loadCityLikeC>;
+    try {
+      loadResult = loadCityLikeC(
+        this.authorityState.simState,
+        this.authorityState.simContext,
+        fileName,
+        command.cityBytes,
+      );
+    } catch {
+      return {
+        kind: 'reject',
+        reason: 'invalid-city-file',
+      };
+    }
+
+    this.cityFileName = loadResult.cityFileName;
+    this.cityName = loadResult.cityName;
+    this.syncHostStateAfterLoadLikeCommand();
+    return {
+      kind: 'load',
+    };
+  }
+
+  /**
+   * Synchronizes host pause/tool mirrors after load/new-city lifecycle commands.
+   * Mirrors host-side pause/timer bookkeeping around load/new-city flows in
+   * `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/s_gen.c`.
+   */
+  private syncHostStateAfterLoadLikeCommand(): void {
+    this.simPaused = false;
+    this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
+    this.syncToolContextFromState();
   }
 
   private isSessionActive(sessionId: number): boolean {
@@ -479,4 +658,16 @@ function normalizePlayableSpeed(candidate: number): number {
     return 3;
   }
   return speed;
+}
+
+/**
+ * Normalizes browser city file names to C-style `.cty` save/load paths.
+ * Mirrors `SaveCityAs` filename usage in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function sanitizeCityFileName(fileName: string): string {
+  const trimmed = fileName.trim();
+  if (trimmed.length === 0) {
+    return DEFAULT_CITY_FILE_NAME;
+  }
+  return trimmed.toLowerCase().endsWith('.cty') ? trimmed : `${trimmed}.cty`;
 }

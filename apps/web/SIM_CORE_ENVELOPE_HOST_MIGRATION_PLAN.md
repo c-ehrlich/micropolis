@@ -71,7 +71,7 @@ Acceptance checks:
 - [x] Support the full playable tool set currently exposed by route `/`.
 - [x] Keep canonical funds coupling: `SimState.TotalFunds` authoritative, `ToolContext.funds` synchronized before/after tool evaluation.
 - [x] Implement sim-control commands (`pause`, `play`, `set-speed`) with C-equivalent `setSpeed`/pause/resume behavior.
-- [ ] Implement city lifecycle + IO commands (`new-city`, `save-city`, `load-city`) through `sim-io` helpers.
+- [x] Implement city lifecycle + IO commands (`new-city`, `save-city`, `load-city`) through `sim-io` helpers.
 - [ ] Implement scenario loading via `loadScenarioLikeC` with async resource loading.
 
 Scenario command settlement decision:

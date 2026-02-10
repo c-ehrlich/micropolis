@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { Tile, World } from '../../../../../packages/sim-core/src/index.ts';
+import { decodeCityFileForMap, Tile, World } from '../../../../../packages/sim-core/src/index.ts';
 import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
@@ -31,6 +31,49 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
     disconnect: () => {
       connection.disconnect();
     },
+  };
+}
+
+/**
+ * Reads save-city export bytes from a patch payload.
+ * Mirrors `SaveCityAs` byte export delivery from `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function readSaveCityPayload(payload: unknown): {
+  fileName: string;
+  cityName: string;
+  cityBytes: Uint8Array;
+} | null {
+  if (payload === null || typeof payload !== 'object') {
+    return null;
+  }
+
+  const cityIo = (payload as { cityIo?: unknown }).cityIo;
+  if (cityIo === null || typeof cityIo !== 'object') {
+    return null;
+  }
+
+  const save = (cityIo as { save?: unknown }).save;
+  if (save === null || typeof save !== 'object') {
+    return null;
+  }
+
+  const candidate = save as Partial<{
+    fileName: string;
+    cityName: string;
+    cityBytes: Uint8Array;
+  }>;
+  if (
+    typeof candidate.fileName !== 'string' ||
+    typeof candidate.cityName !== 'string' ||
+    !(candidate.cityBytes instanceof Uint8Array)
+  ) {
+    return null;
+  }
+
+  return {
+    fileName: candidate.fileName,
+    cityName: candidate.cityName,
+    cityBytes: candidate.cityBytes,
   };
 }
 
@@ -149,7 +192,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(map.tileWords).toEqual(authoritativeMapLayer);
   });
 
-  it('routes tool commands and sim-control commands through authoritative command semantics', () => {
+  it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
 
@@ -305,13 +348,186 @@ describe('SimCoreEnvelopeHost', () => {
       payload: {},
     });
     expect(captured.envelopes[11]).toEqual({
-      kind: 'reject',
+      kind: 'ack',
       roomId: 'room-a',
       clientId: 'client-a',
       tick: 6,
       serverSeq: 11,
       commandId: 'cmd-new-city',
-      reason: 'invalid-command',
+    });
+    expect(captured.envelopes[12]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 6,
+      serverSeq: 12,
+    });
+  });
+
+  it('routes save-city/load-city through sim-io helpers and restores saved state on load', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          snapshot(layer: 'map'): Uint16Array | unknown;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      commandId: 'cmd-save-city',
+      command: {
+        kind: 'city-io',
+        action: 'save-city',
+        fileName: 'sim-core-envelope-roundtrip',
+      },
+    });
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-save-city',
+    });
+
+    const savePatch = captured.envelopes[3];
+    expect(savePatch).toMatchObject({
+      kind: 'patch',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      tick: 1,
+      serverSeq: 3,
+    });
+    if (savePatch === undefined || savePatch.kind !== 'patch') {
+      throw new Error('expected save-city patch');
+    }
+
+    const savePayload = readSaveCityPayload(savePatch.payload);
+    if (savePayload === null) {
+      throw new Error('expected save-city payload');
+    }
+    expect(savePayload.fileName).toBe('sim-core-envelope-roundtrip.cty');
+    expect(savePayload.cityName).toBe('sim-core-envelope-roundtrip');
+    // Magic-number source: classic `.cty` byte size packed by `saveFile` in
+    // `ref/micropolis/src/sim/s_fileio.c`.
+    expect(savePayload.cityBytes.byteLength).toBe(27120);
+
+    const savedCity = decodeCityFileForMap(savePayload.cityBytes, {
+      width: World.WORLD_X,
+      height: World.WORLD_Y,
+    });
+    const restoreX = 10;
+    const restoreY = 10;
+    const restoreIndex = restoreX * World.WORLD_Y + restoreY;
+    const savedTileWord = savedCity.map[restoreIndex];
+    if (savedTileWord === undefined) {
+      throw new Error(`expected saved map word at index ${restoreIndex}`);
+    }
+    const changedTileWord = savedTileWord === Tile.DIRT ? Tile.RIVER : Tile.DIRT;
+    const savedFunds = hostInternals.authorityState.simState.TotalFunds;
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[restoreIndex] = changedTileWord;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+    hostInternals.authorityState.simState.TotalFunds = 1;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      commandId: 'cmd-load-city',
+      command: {
+        kind: 'city-io',
+        action: 'load-city',
+        fileName: 'sim-core-envelope-roundtrip.cty',
+        cityBytes: savePayload.cityBytes,
+      },
+    });
+
+    expect(captured.envelopes[4]).toEqual({
+      kind: 'ack',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      tick: 2,
+      serverSeq: 4,
+      commandId: 'cmd-load-city',
+    });
+    expect(captured.envelopes[5]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-io',
+      clientId: 'client-io',
+      tick: 2,
+      serverSeq: 5,
+    });
+
+    const reloadedMap = hostInternals.authorityState.store.snapshot('map');
+    if (!(reloadedMap instanceof Uint16Array)) {
+      throw new Error('expected reloaded map layer Uint16Array');
+    }
+    expect(reloadedMap[restoreIndex]).toBe(savedTileWord);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(savedFunds);
+  });
+
+  it('rejects malformed load-city bytes with invalid-city-file', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-io-reject',
+      clientId: 'client-io-reject',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io-reject',
+      clientId: 'client-io-reject',
+      commandId: 'cmd-load-bad-city',
+      command: {
+        kind: 'city-io',
+        action: 'load-city',
+        fileName: 'broken.cty',
+        cityBytes: new Uint8Array([1, 2, 3]),
+      },
+    });
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-io-reject',
+      clientId: 'client-io-reject',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-load-bad-city',
+      reason: 'invalid-city-file',
     });
   });
 
