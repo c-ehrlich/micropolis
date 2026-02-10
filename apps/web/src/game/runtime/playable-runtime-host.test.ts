@@ -112,7 +112,7 @@ function readLatestTick(hostEnvelopes: readonly HostEnvelope[]): number {
 
 // Magic-number source: playable tool costs from `CostOf[]` in
 // `ref/micropolis/src/sim/w_tool.c`.
-const STAGE11_PLAYABLE_TOOL_COSTS = {
+const PLAYABLE_CERT_PLAYABLE_TOOL_COSTS = {
   road: 10,
   rail: 20,
   wire: 5,
@@ -122,7 +122,7 @@ const STAGE11_PLAYABLE_TOOL_COSTS = {
   ind: 100,
 } as const;
 
-const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
+const PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES = [
   { tool: 'road', placeX: 10, placeY: 10, rejectX: -1, rejectY: 10 },
   { tool: 'rail', placeX: 11, placeY: 10, rejectX: -1, rejectY: 11 },
   { tool: 'wire', placeX: 12, placeY: 10, rejectX: -1, rejectY: 12 },
@@ -132,36 +132,46 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
   { tool: 'ind', placeX: 40, placeY: 20, rejectX: 0, rejectY: 40 },
 ] as const;
 
-type Stage11PlayableToolCertificationCase =
-  (typeof STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES)[number];
-type Stage11ZoneTool = Extract<Stage11PlayableToolCertificationCase['tool'], 'res' | 'com' | 'ind'>;
-type Stage11ZoneToolPlacements = Record<Stage11ZoneTool, { x: number; y: number }>;
+type PlayableCertificationPlayableToolCertificationCase =
+  (typeof PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES)[number];
+type PlayableCertificationZoneTool = Extract<
+  PlayableCertificationPlayableToolCertificationCase['tool'],
+  'res' | 'com' | 'ind'
+>;
+type PlayableCertificationZoneToolPlacements = Record<
+  PlayableCertificationZoneTool,
+  { x: number; y: number }
+>;
 
-const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
-const STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 8;
-const STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 12;
+const PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS = 10;
+const PLAYABLE_CERT_HEADS_MESSAGES_OBSERVE_DURATION_MS =
+  PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 8;
+const PLAYABLE_CERT_REALTIME_VISUAL_OBSERVE_DURATION_MS =
+  PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 12;
 // Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
 // `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
-const STAGE11_SCENARIO_START_CERTIFICATION = {
+const PLAYABLE_CERT_SCENARIO_START_CERTIFICATION = {
   scenarioId: 1,
   startYear: 1900,
   startFunds: 5_000,
 } as const;
-// Magic-number source: Stage 11 manual release-gate checklist requirement in
-// `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md` ("at least 15 minutes").
-const STAGE11_CONTINUOUS_PLAY_SESSION_DURATION_MS = 15 * 60 * 1000;
-// Magic-number source: shipped Stage 4 host ambient cadence default
+// Magic-number source: Playable Certification manual release-gate checklist requirement in
+// `apps/web/MASTER_GAME_ALIGNMENT_PLAN.md` ("at least 15 minutes").
+const PLAYABLE_CERT_CONTINUOUS_PLAY_SESSION_DURATION_MS = 15 * 60 * 1000;
+// Magic-number source: shipped Authoritative Runtime host ambient cadence default
 // (`DEMO_PATCH_INTERVAL_MS = 180`) in `apps/web/src/game/runtime/demo-map-host.ts`.
-const STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS = 180;
-const STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS = 3 * 60 * 1000;
-const STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT =
-  STAGE11_CONTINUOUS_PLAY_SESSION_DURATION_MS / STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS;
-const STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK =
-  STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS / STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS;
-const STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS =
-  STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK * STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT;
+const PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS = 180;
+const PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS = 3 * 60 * 1000;
+const PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_COUNT =
+  PLAYABLE_CERT_CONTINUOUS_PLAY_SESSION_DURATION_MS /
+  PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS;
+const PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK =
+  PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS / PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS;
+const PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS =
+  PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK *
+  PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_COUNT;
 
-interface Stage11AmbientMessageAuthority {
+interface PlayableCertificationAmbientMessageAuthority {
   simState: {
     CityTime: number;
     MessagePort: number;
@@ -178,8 +188,8 @@ interface Stage11AmbientMessageAuthority {
  * `z = CityTime & 63` and `z == 1` enqueues message id `1` when
  * `(TotalZPop >> 2) >= ResZPop`.
  */
-function primeStage11NormalSimulationMessageTrigger(host: unknown): void {
-  const authority = host as Stage11AmbientMessageAuthority;
+function primePlayableCertificationNormalSimulationMessageTrigger(host: unknown): void {
+  const authority = host as PlayableCertificationAmbientMessageAuthority;
   authority.simState.CityTime = 0;
   authority.simState.MessagePort = 0;
   authority.simState.MesNum = 0;
@@ -196,7 +206,7 @@ function readFundsFromLabel(label: string): number {
   return Number.parseInt(digits, 10);
 }
 
-interface Stage11RealtimeTrackableObject {
+interface PlayableCertificationRealtimeTrackableObject {
   id?: string;
   x: number;
   y: number;
@@ -205,15 +215,15 @@ interface Stage11RealtimeTrackableObject {
 
 /**
  * Reads one realtime object list from snapshot/patch payload sections.
- * Mirrors Stage 7 full-list + compatibility object payload ownership in
+ * Mirrors Realtime Overlay full-list + compatibility object payload ownership in
  * `DrawObjects`/`MoveObjects` from `ref/micropolis/src/sim/w_sprite.c`.
  * Parity note: missing `frame` values are normalized to `0`, matching runtime
  * realtime projection defaults in `readInteger(record.frame) ?? 0` from
  * `apps/web/src/game/runtime/realtime-state.ts`.
  */
-function readStage11RealtimeObjectsFromPayload(
+function readPlayableCertificationRealtimeObjectsFromPayload(
   payload: HostPatchEnvelope['payload'] | HostSnapshotEnvelope['payload'],
-): readonly Stage11RealtimeTrackableObject[] {
+): readonly PlayableCertificationRealtimeTrackableObject[] {
   const realtime = payload.realtime;
   const rawObjects = realtime?.snapshot ?? realtime?.objects ?? [];
   return rawObjects.map((object) => ({
@@ -229,8 +239,8 @@ function readStage11RealtimeObjectsFromPayload(
  * Mirrors sprite position/frame mutation in `MoveObjects` from
  * `ref/micropolis/src/sim/w_sprite.c`.
  */
-function trackStage11RealtimeMovement(
-  objects: readonly Stage11RealtimeTrackableObject[],
+function trackPlayableCertificationRealtimeMovement(
+  objects: readonly PlayableCertificationRealtimeTrackableObject[],
   signaturesById: Map<string, string>,
 ): boolean {
   let sawMovement = false;
@@ -248,7 +258,7 @@ function trackStage11RealtimeMovement(
   return sawMovement;
 }
 
-interface Stage11HostHudRestorationSignature {
+interface PlayableCertificationHostHudRestorationSignature {
   funds: number | undefined;
   dateMonth: number | undefined;
   dateYear: number | undefined;
@@ -262,7 +272,7 @@ interface Stage11HostHudRestorationSignature {
   userSoundOn: boolean | undefined;
 }
 
-interface Stage11RuntimeHudRestorationSignature {
+interface PlayableCertificationRuntimeHudRestorationSignature {
   fundsLabel: string;
   dateLabel: string;
   demandR: number;
@@ -272,11 +282,11 @@ interface Stage11RuntimeHudRestorationSignature {
 }
 
 /**
- * Reads authoritative snapshot map tile words for Stage 11 save/load assertions.
+ * Reads authoritative snapshot map tile words for Playable Certification save/load assertions.
  * Mirrors classic city map payload ownership in `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: accepts both canonical `tileWords` and legacy `tiles` snapshot fields.
  */
-function readStage11SnapshotTileWords(
+function readPlayableCertificationSnapshotTileWords(
   snapshot: HostSnapshotEnvelope,
   label: string,
 ): readonly number[] | Uint16Array {
@@ -298,7 +308,7 @@ function readStage11SnapshotTileWords(
  * Mirrors deep-water exclusion in `check3x3` / `tally` from
  * `ref/micropolis/src/sim/w_tool.c`, where river/channel tiles are not zone-buildable.
  */
-function isStage11ZonePlacableTile(tileWord: number): boolean {
+function isPlayableCertificationZonePlacableTile(tileWord: number): boolean {
   const tileId = tileWord & TileMask.LOMASK;
   return tileId !== Tile.RIVER && tileId !== Tile.REDGE && tileId !== Tile.CHANNEL;
 }
@@ -308,7 +318,7 @@ function isStage11ZonePlacableTile(tileWord: number): boolean {
  * Mirrors 3x3 zone footprint checks in `check3x3` from
  * `ref/micropolis/src/sim/w_tool.c`.
  */
-function isStage11ZoneFootprintPlacable(
+function isPlayableCertificationZoneFootprintPlacable(
   tileWords: readonly number[] | Uint16Array,
   width: number,
   height: number,
@@ -326,7 +336,7 @@ function isStage11ZoneFootprintPlacable(
   for (let yy = startY; yy <= endY; yy += 1) {
     for (let xx = startX; xx <= endX; xx += 1) {
       const tileWord = tileWords[yy * width + xx] ?? 0;
-      if (!isStage11ZonePlacableTile(tileWord)) {
+      if (!isPlayableCertificationZonePlacableTile(tileWord)) {
         return false;
       }
     }
@@ -340,10 +350,10 @@ function isStage11ZoneFootprintPlacable(
  * Parity note: picks first valid centers from snapshot map scan to avoid hard-coded
  * coordinates landing on deep-water tiles.
  */
-function readStage11ZoneToolPlacementsFromSnapshot(
+function readPlayableCertificationZoneToolPlacementsFromSnapshot(
   snapshot: HostSnapshotEnvelope,
   label: string,
-): Stage11ZoneToolPlacements {
+): PlayableCertificationZoneToolPlacements {
   const map = snapshot.payload.map;
   if (map === undefined) {
     throw new Error(`${label} snapshot missing map payload`);
@@ -354,12 +364,12 @@ function readStage11ZoneToolPlacementsFromSnapshot(
 
   const width = map.width;
   const height = map.height;
-  const tileWords = readStage11SnapshotTileWords(snapshot, label);
-  const placements: Partial<Stage11ZoneToolPlacements> = {};
+  const tileWords = readPlayableCertificationSnapshotTileWords(snapshot, label);
+  const placements: Partial<PlayableCertificationZoneToolPlacements> = {};
 
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
-      if (!isStage11ZoneFootprintPlacable(tileWords, width, height, x, y)) {
+      if (!isPlayableCertificationZoneFootprintPlacable(tileWords, width, height, x, y)) {
         continue;
       }
       if (placements.res === undefined) {
@@ -372,7 +382,7 @@ function readStage11ZoneToolPlacementsFromSnapshot(
       }
       if (placements.ind === undefined) {
         placements.ind = { x, y };
-        return placements as Stage11ZoneToolPlacements;
+        return placements as PlayableCertificationZoneToolPlacements;
       }
     }
   }
@@ -385,9 +395,9 @@ function readStage11ZoneToolPlacementsFromSnapshot(
  * Mirrors Micropolis 3x3 tool center semantics from `toolOffset[]` in
  * `ref/micropolis/src/sim/w_tool.c`.
  */
-function readStage11PlacementCoordinateForTool(
-  toolCase: Stage11PlayableToolCertificationCase,
-  zonePlacements: Stage11ZoneToolPlacements,
+function readPlayableCertificationPlacementCoordinateForTool(
+  toolCase: PlayableCertificationPlayableToolCertificationCase,
+  zonePlacements: PlayableCertificationZoneToolPlacements,
 ): { x: number; y: number } {
   if (toolCase.tool === 'res' || toolCase.tool === 'com' || toolCase.tool === 'ind') {
     return zonePlacements[toolCase.tool];
@@ -400,7 +410,9 @@ function readStage11PlacementCoordinateForTool(
  * Mirrors `LOMASK` tile identity usage in `ref/micropolis/src/sim/g_bigmap.c`.
  * Parity note: `DoSimInit` can rewrite non-identity flag bits after `loadFile`.
  */
-function maskStage11TileIdentities(tileWords: readonly number[] | Uint16Array): number[] {
+function maskPlayableCertificationTileIdentities(
+  tileWords: readonly number[] | Uint16Array,
+): number[] {
   return Array.from(tileWords, (tileWord) => tileWord & TileMask.LOMASK);
 }
 
@@ -408,9 +420,9 @@ function maskStage11TileIdentities(tileWords: readonly number[] | Uint16Array): 
  * Captures host HUD heads used to certify save/load round-trip restoration.
  * Mirrors `DoUpdateHeads` scalar projections in `ref/micropolis/src/sim/w_update.c`.
  */
-function readStage11HostHudRestorationSignature(
+function readPlayableCertificationHostHudRestorationSignature(
   snapshot: HostSnapshotEnvelope,
-): Stage11HostHudRestorationSignature {
+): PlayableCertificationHostHudRestorationSignature {
   return {
     funds: snapshot.payload.hud?.funds,
     dateMonth: snapshot.payload.hud?.date?.month,
@@ -430,9 +442,9 @@ function readStage11HostHudRestorationSignature(
  * Captures shipped runtime HUD heads used to certify save/load restoration.
  * Mirrors projected `UISet*` heads flow from `ref/micropolis/src/sim/w_update.c`.
  */
-function readStage11RuntimeHudRestorationSignature(
+function readPlayableCertificationRuntimeHudRestorationSignature(
   state: WebRuntimeState,
-): Stage11RuntimeHudRestorationSignature {
+): PlayableCertificationRuntimeHudRestorationSignature {
   return {
     fundsLabel: state.hudState.fundsLabel,
     dateLabel: state.hudState.dateLabel,
@@ -443,7 +455,7 @@ function readStage11RuntimeHudRestorationSignature(
   };
 }
 
-interface Stage4SmokeSummary {
+interface PlayableRuntimeSmokeSummary {
   envelopeKinds: HostEnvelope['kind'][];
   finalServerSeq: number;
   ackCount: number;
@@ -453,11 +465,11 @@ interface Stage4SmokeSummary {
 }
 
 /**
- * Certifies Stage 11 tool placement costs/rejects/funds on the host-envelope path.
+ * Certifies Playable Certification tool placement costs/rejects/funds on the host-envelope path.
  * Mirrors `do_tool` cost handling from `CostOf[]` and reject outcomes in
  * `ref/micropolis/src/sim/w_tool.c`.
  */
-async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<void> {
+async function certifyPlayableCertificationPlayableToolCostsOnHost(runId: string): Promise<void> {
   const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -504,14 +516,17 @@ async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<voi
         envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
       `${runId} new-city snapshot`,
     );
-    const zonePlacements = readStage11ZoneToolPlacementsFromSnapshot(
+    const zonePlacements = readPlayableCertificationZoneToolPlacementsFromSnapshot(
       newCitySnapshot,
       `${runId} new-city`,
     );
 
     let expectedFunds = 20_000;
-    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
-      const placement = readStage11PlacementCoordinateForTool(toolCase, zonePlacements);
+    for (const toolCase of PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const placement = readPlayableCertificationPlacementCoordinateForTool(
+        toolCase,
+        zonePlacements,
+      );
       const commandId = `${runId}-cmd-place-${toolCase.tool}`;
       connection.send({
         kind: 'command',
@@ -540,11 +555,11 @@ async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<voi
           envelope.payload.hud?.funds !== undefined,
         `${runId} ${toolCase.tool} funds patch`,
       );
-      expectedFunds -= STAGE11_PLAYABLE_TOOL_COSTS[toolCase.tool];
+      expectedFunds -= PLAYABLE_CERT_PLAYABLE_TOOL_COSTS[toolCase.tool];
       expect(fundsPatch.payload.hud?.funds).toBe(expectedFunds);
     }
 
-    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+    for (const toolCase of PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES) {
       const commandId = `${runId}-cmd-reject-${toolCase.tool}`;
       connection.send({
         kind: 'command',
@@ -589,11 +604,13 @@ async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<voi
 }
 
 /**
- * Certifies Stage 11 tool placement costs/rejects/funds on the shipped runtime path.
+ * Certifies Playable Certification tool placement costs/rejects/funds on the shipped runtime path.
  * Mirrors tool command routing and reject propagation from
  * `ref/micropolis/src/sim/w_tool.c` through host envelope projection.
  */
-async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<void> {
+async function certifyPlayableCertificationPlayableToolCostsOnRuntime(
+  runId: string,
+): Promise<void> {
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
   const newCityCommandId = `${runId}-cmd-new-city`;
@@ -633,14 +650,17 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
         event.envelope.serverSeq > newCityAck.envelope.serverSeq,
       `${runId} new-city snapshot`,
     );
-    const zonePlacements = readStage11ZoneToolPlacementsFromSnapshot(
+    const zonePlacements = readPlayableCertificationZoneToolPlacementsFromSnapshot(
       newCitySnapshot.envelope,
       `${runId} runtime new-city`,
     );
 
     let expectedFunds = 20_000;
-    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
-      const placement = readStage11PlacementCoordinateForTool(toolCase, zonePlacements);
+    for (const toolCase of PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const placement = readPlayableCertificationPlacementCoordinateForTool(
+        toolCase,
+        zonePlacements,
+      );
       const commandId = `${runId}-cmd-place-${toolCase.tool}`;
       runtime.sendCommand(commandId, {
         kind: 'tool',
@@ -662,12 +682,12 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
           event.envelope.payload.hud?.funds !== undefined,
         `${runId} runtime ${toolCase.tool} funds patch`,
       );
-      expectedFunds -= STAGE11_PLAYABLE_TOOL_COSTS[toolCase.tool];
+      expectedFunds -= PLAYABLE_CERT_PLAYABLE_TOOL_COSTS[toolCase.tool];
       expect(fundsPatch.envelope.payload.hud?.funds).toBe(expectedFunds);
       expect(readFundsFromLabel(runtime.getState().hudState.fundsLabel)).toBe(expectedFunds);
     }
 
-    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+    for (const toolCase of PLAYABLE_CERT_PLAYABLE_TOOL_CERTIFICATION_CASES) {
       const commandId = `${runId}-cmd-reject-${toolCase.tool}`;
       runtime.sendCommand(commandId, {
         kind: 'tool',
@@ -702,15 +722,15 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
 }
 
 /**
- * Certifies Stage 11 speed/pause cadence changes on host envelopes.
+ * Certifies Playable Certification speed/pause cadence changes on host envelopes.
  * Mirrors `Pause`/`Resume`/`setSpeed` from `ref/micropolis/src/sim/w_util.c`
  * and `Spdcycle` speed gates in `ref/micropolis/src/sim/s_sim.c`.
  */
-function certifyStage11PlayableCadenceOnHost(runId: string): void {
+function certifyPlayableCertificationPlayableCadenceOnHost(runId: string): void {
   vi.useFakeTimers();
   const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
-    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
   });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -775,7 +795,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
     });
     const speedOneBefore = requestSnapshot(`${runId} speed-1 before`);
     expect(speedOneBefore.payload.hud?.speed).toBe(1);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 5);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 5);
     const speedOneAfter = requestSnapshot(`${runId} speed-1 after`);
     // Magic-number source: speed 1 emits one sim step every 5 `Spdcycle` loops in
     // `ref/micropolis/src/sim/s_sim.c`.
@@ -788,7 +808,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
     });
     const speedTwoBefore = requestSnapshot(`${runId} speed-2 before`);
     expect(speedTwoBefore.payload.hud?.speed).toBe(2);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 6);
     const speedTwoAfter = requestSnapshot(`${runId} speed-2 after`);
     // Magic-number source: speed 2 emits one sim step every 3 `Spdcycle` loops in
     // `ref/micropolis/src/sim/s_sim.c`.
@@ -801,7 +821,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
     });
     const speedThreeBefore = requestSnapshot(`${runId} speed-3 before`);
     expect(speedThreeBefore.payload.hud?.speed).toBe(3);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 6);
     const speedThreeAfter = requestSnapshot(`${runId} speed-3 after`);
     // Magic-number source: speed 3 steps each ambient cycle (no modulo gate) in
     // `ref/micropolis/src/sim/s_sim.c`.
@@ -813,7 +833,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
     });
     const pausedBefore = requestSnapshot(`${runId} paused before`);
     expect(pausedBefore.payload.hud?.speed).toBe(0);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 12);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 12);
     const pausedAfter = requestSnapshot(`${runId} paused after`);
     expect(pausedAfter.payload.hud?.speed).toBe(0);
     expect(pausedAfter.tick - pausedBefore.tick).toBe(0);
@@ -826,7 +846,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
     // Magic-number source: `Resume()` restores prior paused speed from
     // `ref/micropolis/src/sim/w_util.c`.
     expect(resumedBefore.payload.hud?.speed).toBe(3);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 4);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 4);
     const resumedAfter = requestSnapshot(`${runId} resumed after`);
     expect(resumedAfter.payload.hud?.speed).toBe(3);
     expect(resumedAfter.tick - resumedBefore.tick).toBe(4);
@@ -839,16 +859,16 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 speed/pause cadence changes on the shipped runtime path.
+ * Certifies Playable Certification speed/pause cadence changes on the shipped runtime path.
  * Mirrors host cadence gates from `ref/micropolis/src/sim/s_sim.c` projected
- * through Stage 4 runtime envelopes.
+ * through Authoritative Runtime runtime envelopes.
  */
-function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
+function certifyPlayableCertificationPlayableCadenceOnRuntime(runId: string): void {
   vi.useFakeTimers();
   const runtime = createWebHostRuntime({
     host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
-      patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+      patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
     }),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
@@ -879,7 +899,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     });
     const speedOneBefore = requestSnapshot();
     expect(speedOneBefore.speed).toBe(1);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 5);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 5);
     const speedOneAfter = requestSnapshot();
     // Magic-number source: speed 1 modulo gate (`Spdcycle % 5`) in
     // `ref/micropolis/src/sim/s_sim.c`.
@@ -892,7 +912,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     });
     const speedTwoBefore = requestSnapshot();
     expect(speedTwoBefore.speed).toBe(2);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 6);
     const speedTwoAfter = requestSnapshot();
     // Magic-number source: speed 2 modulo gate (`Spdcycle % 3`) in
     // `ref/micropolis/src/sim/s_sim.c`.
@@ -905,7 +925,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     });
     const speedThreeBefore = requestSnapshot();
     expect(speedThreeBefore.speed).toBe(3);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 6);
     const speedThreeAfter = requestSnapshot();
     expect(speedThreeAfter.tick - speedThreeBefore.tick).toBe(6);
 
@@ -915,7 +935,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     });
     const pausedBefore = requestSnapshot();
     expect(pausedBefore.speed).toBe(0);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 12);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 12);
     const pausedAfter = requestSnapshot();
     expect(pausedAfter.speed).toBe(0);
     expect(pausedAfter.tick - pausedBefore.tick).toBe(0);
@@ -926,7 +946,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
     });
     const resumedBefore = requestSnapshot();
     expect(resumedBefore.speed).toBe(3);
-    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 4);
+    vi.advanceTimersByTime(PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 4);
     const resumedAfter = requestSnapshot();
     expect(resumedAfter.speed).toBe(3);
     expect(resumedAfter.tick - resumedBefore.tick).toBe(4);
@@ -937,17 +957,17 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 heads/message-feed updates on host envelopes.
+ * Certifies Playable Certification heads/message-feed updates on host envelopes.
  * Mirrors normal simulation progression from `Simulate` in
  * `ref/micropolis/src/sim/s_sim.c`, heads updates from
  * `ref/micropolis/src/sim/w_update.c`, and message dispatch in
  * `ref/micropolis/src/sim/s_msg.c`.
  */
-function certifyStage11HeadsAndMessagesOnHost(runId: string): void {
+function certifyPlayableCertificationHeadsAndMessagesOnHost(runId: string): void {
   vi.useFakeTimers();
   const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
-    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
   });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -998,12 +1018,12 @@ function certifyStage11HeadsAndMessagesOnHost(runId: string): void {
     const initialMessageCount = bootSnapshot.payload.messages?.length ?? 0;
     const initialTick = bootSnapshot.tick;
     const initialServerSeq = bootSnapshot.serverSeq;
-    primeStage11NormalSimulationMessageTrigger(host);
+    primePlayableCertificationNormalSimulationMessageTrigger(host);
 
     // Magic-number source: `updateDate` in `w_update.c` derives month as
     // `(CityTime % 48) >> 2`, so eight ambient sim steps guarantee a visible
     // month/year head change under speed 3 cadence.
-    vi.advanceTimersByTime(STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS);
+    vi.advanceTimersByTime(PLAYABLE_CERT_HEADS_MESSAGES_OBSERVE_DURATION_MS);
 
     const ambientPatches = hostEnvelopes.filter(
       (envelope): envelope is HostPatchEnvelope =>
@@ -1038,18 +1058,18 @@ function certifyStage11HeadsAndMessagesOnHost(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 heads/message-feed updates on the shipped runtime path.
+ * Certifies Playable Certification heads/message-feed updates on the shipped runtime path.
  * Mirrors host-driven `DoUpdateHeads`/`doMessage` output projection from
  * `ref/micropolis/src/sim/w_update.c` and `ref/micropolis/src/sim/s_msg.c`
- * through authoritative Stage 4 runtime envelopes.
+ * through authoritative Authoritative Runtime runtime envelopes.
  */
-function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
+function certifyPlayableCertificationHeadsAndMessagesOnRuntime(runId: string): void {
   vi.useFakeTimers();
   let sawHudPatch = false;
   let sawMessageDeltaPatch = false;
   const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
-    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
   });
   const runtime = createWebHostRuntime({
     host,
@@ -1077,12 +1097,12 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
     const initialMessageCount = initialState.hudState.messages.length;
     const initialTick = initialState.lastAppliedTick;
     const initialServerSeq = initialState.lastAppliedServerSeq;
-    primeStage11NormalSimulationMessageTrigger(host);
+    primePlayableCertificationNormalSimulationMessageTrigger(host);
 
     // Magic-number source: ambient speed-3 simulation increments `CityTime` every
     // cycle in `s_sim.c`; at least four ticks are required for `updateDate` month
     // rollover math (`(CityTime % 48) >> 2`) in `w_update.c`.
-    vi.advanceTimersByTime(STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS);
+    vi.advanceTimersByTime(PLAYABLE_CERT_HEADS_MESSAGES_OBSERVE_DURATION_MS);
 
     const state = runtime.getState();
     expect(state.lastAppliedTick).toBeGreaterThan(initialTick);
@@ -1105,16 +1125,16 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 in-map realtime/disaster visual movement on host envelopes.
+ * Certifies Playable Certification in-map realtime/disaster visual movement on host envelopes.
  * Mirrors sprite update/render eligibility from `MoveObjects`/`DrawObjects` in
  * `ref/micropolis/src/sim/w_sprite.c` under normal speed-3 simulation cadence
  * from `ref/micropolis/src/sim/s_sim.c`.
  */
-function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
+function certifyPlayableCertificationRealtimeVisualEventOnHost(runId: string): void {
   vi.useFakeTimers();
   const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
-    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
   });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -1156,10 +1176,12 @@ function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
 
     const bootSnapshot = requestSnapshot(`${runId} boot`);
     const realtimeSignaturesById = new Map<string, string>();
-    const bootRealtimeObjects = readStage11RealtimeObjectsFromPayload(bootSnapshot.payload);
+    const bootRealtimeObjects = readPlayableCertificationRealtimeObjectsFromPayload(
+      bootSnapshot.payload,
+    );
     expect(bootRealtimeObjects.length).toBeGreaterThan(0);
 
-    let sawRealtimeMovement = trackStage11RealtimeMovement(
+    let sawRealtimeMovement = trackPlayableCertificationRealtimeMovement(
       bootRealtimeObjects,
       realtimeSignaturesById,
     );
@@ -1168,19 +1190,19 @@ function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
     // Magic-number source: speed-3 ambient cadence advances one realtime
     // `MoveObjects` pass per interval (`s_sim.c` + `w_sprite.c`), so twelve
     // intervals guarantee multiple observable overlay frames.
-    vi.advanceTimersByTime(STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS);
+    vi.advanceTimersByTime(PLAYABLE_CERT_REALTIME_VISUAL_OBSERVE_DURATION_MS);
 
     const realtimePatches = hostEnvelopes.filter(
       (envelope): envelope is HostPatchEnvelope =>
         envelope.kind === 'patch' &&
         envelope.serverSeq > bootSnapshot.serverSeq &&
-        readStage11RealtimeObjectsFromPayload(envelope.payload).length > 0,
+        readPlayableCertificationRealtimeObjectsFromPayload(envelope.payload).length > 0,
     );
     expect(realtimePatches.length).toBeGreaterThan(0);
     for (const patch of realtimePatches) {
       if (
-        trackStage11RealtimeMovement(
-          readStage11RealtimeObjectsFromPayload(patch.payload),
+        trackPlayableCertificationRealtimeMovement(
+          readPlayableCertificationRealtimeObjectsFromPayload(patch.payload),
           realtimeSignaturesById,
         )
       ) {
@@ -1191,8 +1213,8 @@ function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
     const postObserveSnapshot = requestSnapshot(`${runId} realtime observe`);
     expect(postObserveSnapshot.tick).toBeGreaterThan(bootTick);
     if (
-      trackStage11RealtimeMovement(
-        readStage11RealtimeObjectsFromPayload(postObserveSnapshot.payload),
+      trackPlayableCertificationRealtimeMovement(
+        readPlayableCertificationRealtimeObjectsFromPayload(postObserveSnapshot.payload),
         realtimeSignaturesById,
       )
     ) {
@@ -1207,11 +1229,11 @@ function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 in-map realtime/disaster visual movement on the shipped runtime path.
+ * Certifies Playable Certification in-map realtime/disaster visual movement on the shipped runtime path.
  * Mirrors host realtime sprite updates from `MoveObjects` in
- * `ref/micropolis/src/sim/w_sprite.c`, projected through Stage 4 runtime state.
+ * `ref/micropolis/src/sim/w_sprite.c`, projected through Authoritative Runtime runtime state.
  */
-function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
+function certifyPlayableCertificationRealtimeVisualEventOnRuntime(runId: string): void {
   vi.useFakeTimers();
   let sawRealtimePatch = false;
   let sawRealtimeMovement = false;
@@ -1219,7 +1241,7 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
   const runtime = createWebHostRuntime({
     host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
-      patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+      patchIntervalMs: PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS,
     }),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
@@ -1228,12 +1250,14 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
     if (event.envelope?.kind !== 'patch') {
       return;
     }
-    const realtimeObjects = readStage11RealtimeObjectsFromPayload(event.envelope.payload);
+    const realtimeObjects = readPlayableCertificationRealtimeObjectsFromPayload(
+      event.envelope.payload,
+    );
     if (realtimeObjects.length === 0) {
       return;
     }
     sawRealtimePatch = true;
-    if (trackStage11RealtimeMovement(realtimeObjects, realtimeSignaturesById)) {
+    if (trackPlayableCertificationRealtimeMovement(realtimeObjects, realtimeSignaturesById)) {
       sawRealtimeMovement = true;
     }
   });
@@ -1252,15 +1276,17 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
     const bootState = requestSnapshotState();
     expect(bootState.realtimeState.objects.length).toBeGreaterThan(0);
     sawRealtimeMovement =
-      trackStage11RealtimeMovement(bootState.realtimeState.objects, realtimeSignaturesById) ||
-      sawRealtimeMovement;
+      trackPlayableCertificationRealtimeMovement(
+        bootState.realtimeState.objects,
+        realtimeSignaturesById,
+      ) || sawRealtimeMovement;
     const bootTick = bootState.lastAppliedTick;
 
-    vi.advanceTimersByTime(STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS);
+    vi.advanceTimersByTime(PLAYABLE_CERT_REALTIME_VISUAL_OBSERVE_DURATION_MS);
 
     const postObserveState = requestSnapshotState();
     sawRealtimeMovement =
-      trackStage11RealtimeMovement(
+      trackPlayableCertificationRealtimeMovement(
         postObserveState.realtimeState.objects,
         realtimeSignaturesById,
       ) || sawRealtimeMovement;
@@ -1275,11 +1301,13 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 `.cty` save->mutate->load full restoration on host envelopes.
+ * Certifies Playable Certification `.cty` save->mutate->load full restoration on host envelopes.
  * Mirrors `SaveCityAs`/`loadFile` round-trip semantics in
  * `ref/micropolis/src/sim/s_fileio.c`.
  */
-async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Promise<void> {
+async function certifyPlayableCertificationCityRoundTripRestorationOnHost(
+  runId: string,
+): Promise<void> {
   const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -1377,10 +1405,10 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
         envelope.kind === 'snapshot' && envelope.serverSeq > preSaveServerSeq,
       `${runId} pre-save snapshot`,
     );
-    const preSaveMaskedTiles = maskStage11TileIdentities(
-      readStage11SnapshotTileWords(preSaveSnapshot, `${runId} pre-save`),
+    const preSaveMaskedTiles = maskPlayableCertificationTileIdentities(
+      readPlayableCertificationSnapshotTileWords(preSaveSnapshot, `${runId} pre-save`),
     );
-    const preSaveHud = readStage11HostHudRestorationSignature(preSaveSnapshot);
+    const preSaveHud = readPlayableCertificationHostHudRestorationSignature(preSaveSnapshot);
 
     connection.send({
       kind: 'command',
@@ -1390,7 +1418,7 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
       command: {
         kind: 'city-io',
         action: 'save-city',
-        fileName: 'stage11-roundtrip.cty',
+        fileName: 'playable-cert-roundtrip.cty',
       },
     });
     const saveAck = await waitForHostEnvelope(
@@ -1456,9 +1484,13 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
       `${runId} mutated snapshot`,
     );
     expect(
-      maskStage11TileIdentities(readStage11SnapshotTileWords(mutatedSnapshot, `${runId} mutated`)),
+      maskPlayableCertificationTileIdentities(
+        readPlayableCertificationSnapshotTileWords(mutatedSnapshot, `${runId} mutated`),
+      ),
     ).not.toEqual(preSaveMaskedTiles);
-    expect(readStage11HostHudRestorationSignature(mutatedSnapshot)).not.toEqual(preSaveHud);
+    expect(readPlayableCertificationHostHudRestorationSignature(mutatedSnapshot)).not.toEqual(
+      preSaveHud,
+    );
 
     connection.send({
       kind: 'command',
@@ -1468,7 +1500,7 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
       command: {
         kind: 'city-io',
         action: 'load-city',
-        fileName: 'stage11-roundtrip.cty',
+        fileName: 'playable-cert-roundtrip.cty',
         cityBytes: savePayload.cityBytes,
       },
     });
@@ -1486,20 +1518,26 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
     );
 
     expect(
-      maskStage11TileIdentities(readStage11SnapshotTileWords(restoredSnapshot, `${runId} load`)),
+      maskPlayableCertificationTileIdentities(
+        readPlayableCertificationSnapshotTileWords(restoredSnapshot, `${runId} load`),
+      ),
     ).toEqual(preSaveMaskedTiles);
-    expect(readStage11HostHudRestorationSignature(restoredSnapshot)).toEqual(preSaveHud);
+    expect(readPlayableCertificationHostHudRestorationSignature(restoredSnapshot)).toEqual(
+      preSaveHud,
+    );
   } finally {
     connection.disconnect();
   }
 }
 
 /**
- * Certifies Stage 11 `.cty` save->mutate->load full restoration on the shipped runtime path.
+ * Certifies Playable Certification `.cty` save->mutate->load full restoration on the shipped runtime path.
  * Mirrors browser-command save/load flow mapped from `SaveCityAs`/`loadFile` in
  * `ref/micropolis/src/sim/s_fileio.c`.
  */
-async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): Promise<void> {
+async function certifyPlayableCertificationCityRoundTripRestorationOnRuntime(
+  runId: string,
+): Promise<void> {
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
   const commandIds = {
@@ -1571,13 +1609,13 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
     );
 
     const preSaveState = runtime.getState();
-    const preSaveMaskedTiles = maskStage11TileIdentities(preSaveState.mapState.tiles);
-    const preSaveHud = readStage11RuntimeHudRestorationSignature(preSaveState);
+    const preSaveMaskedTiles = maskPlayableCertificationTileIdentities(preSaveState.mapState.tiles);
+    const preSaveHud = readPlayableCertificationRuntimeHudRestorationSignature(preSaveState);
 
     runtime.sendCommand(commandIds.save, {
       kind: 'city-io',
       action: 'save-city',
-      fileName: 'stage11-roundtrip.cty',
+      fileName: 'playable-cert-roundtrip.cty',
     });
     const saveAck = await waitForRuntimeEvent(
       runtimeEvents,
@@ -1620,13 +1658,17 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
       `${runId} mutate-city bulldoze funds patch`,
     );
     const mutatedState = runtime.getState();
-    expect(maskStage11TileIdentities(mutatedState.mapState.tiles)).not.toEqual(preSaveMaskedTiles);
-    expect(readStage11RuntimeHudRestorationSignature(mutatedState)).not.toEqual(preSaveHud);
+    expect(maskPlayableCertificationTileIdentities(mutatedState.mapState.tiles)).not.toEqual(
+      preSaveMaskedTiles,
+    );
+    expect(readPlayableCertificationRuntimeHudRestorationSignature(mutatedState)).not.toEqual(
+      preSaveHud,
+    );
 
     runtime.sendCommand(commandIds.load, {
       kind: 'city-io',
       action: 'load-city',
-      fileName: 'stage11-roundtrip.cty',
+      fileName: 'playable-cert-roundtrip.cty',
       cityBytes: savePayload.cityBytes,
     });
     const loadAck = await waitForRuntimeEvent(
@@ -1643,8 +1685,12 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
       `${runId} restored snapshot`,
     );
     const restoredState = runtime.getState();
-    expect(maskStage11TileIdentities(restoredState.mapState.tiles)).toEqual(preSaveMaskedTiles);
-    expect(readStage11RuntimeHudRestorationSignature(restoredState)).toEqual(preSaveHud);
+    expect(maskPlayableCertificationTileIdentities(restoredState.mapState.tiles)).toEqual(
+      preSaveMaskedTiles,
+    );
+    expect(readPlayableCertificationRuntimeHudRestorationSignature(restoredState)).toEqual(
+      preSaveHud,
+    );
   } finally {
     unsubscribe();
     runtime.disconnect();
@@ -1652,11 +1698,11 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
 }
 
 /**
- * Certifies Stage 11 scenario start year/funds on host envelopes.
+ * Certifies Playable Certification scenario start year/funds on host envelopes.
  * Mirrors `LoadScenario` scenario metadata initialization in
  * `ref/micropolis/src/sim/s_fileio.c` (`CityTime` year + `TotalFunds`).
  */
-async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
+async function certifyPlayableCertificationScenarioStartOnHost(runId: string): Promise<void> {
   const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -1688,7 +1734,7 @@ async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: STAGE11_SCENARIO_START_CERTIFICATION.scenarioId,
+        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
       },
     });
     const scenarioAck = await waitForHostEnvelope(
@@ -1705,10 +1751,10 @@ async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
     );
 
     expect(scenarioSnapshot.payload.hud?.funds).toBe(
-      STAGE11_SCENARIO_START_CERTIFICATION.startFunds,
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startFunds,
     );
     expect(scenarioSnapshot.payload.hud?.date?.year).toBe(
-      STAGE11_SCENARIO_START_CERTIFICATION.startYear,
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startYear,
     );
   } finally {
     connection.disconnect();
@@ -1716,11 +1762,11 @@ async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
 }
 
 /**
- * Certifies Stage 11 scenario start year/funds on the shipped runtime path.
+ * Certifies Playable Certification scenario start year/funds on the shipped runtime path.
  * Mirrors `LoadScenario` start-year/funds projection in
- * `ref/micropolis/src/sim/s_fileio.c` through Stage 4 HUD runtime state.
+ * `ref/micropolis/src/sim/s_fileio.c` through Authoritative Runtime HUD runtime state.
  */
-async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void> {
+async function certifyPlayableCertificationScenarioStartOnRuntime(runId: string): Promise<void> {
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
   const commandId = `${runId}-cmd-scenario-start`;
@@ -1746,7 +1792,7 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
     runtime.sendCommand(commandId, {
       kind: 'scenario',
       action: 'load-scenario',
-      scenarioId: STAGE11_SCENARIO_START_CERTIFICATION.scenarioId,
+      scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
     });
     const scenarioAck = await waitForRuntimeEvent(
       runtimeEvents,
@@ -1764,9 +1810,9 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
 
     const state = runtime.getState();
     expect(readFundsFromLabel(state.hudState.fundsLabel)).toBe(
-      STAGE11_SCENARIO_START_CERTIFICATION.startFunds,
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startFunds,
     );
-    expect(state.hudState.dateYear).toBe(STAGE11_SCENARIO_START_CERTIFICATION.startYear);
+    expect(state.hudState.dateYear).toBe(PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startYear);
   } finally {
     unsubscribe();
     runtime.disconnect();
@@ -1774,18 +1820,18 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
 }
 
 /**
- * Certifies Stage 11 continuous 15-minute play-session responsiveness on host envelopes.
+ * Certifies Playable Certification continuous 15-minute play-session responsiveness on host envelopes.
  * Mirrors ambient timer cadence gating from `setSpeed` / `Pause` / `Resume` in
  * `ref/micropolis/src/sim/w_util.c` and speed-3 `SimFrame` stepping in
  * `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: fake timers accelerate wall-clock runtime only; authoritative
  * host envelope sequencing/tick progression semantics are unchanged.
  */
-function certifyStage11ContinuousPlaySessionOnHost(runId: string): void {
+function certifyPlayableCertificationContinuousPlaySessionOnHost(runId: string): void {
   vi.useFakeTimers();
   const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
-    patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
+    patchIntervalMs: PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
   });
   let latestSnapshot: HostSnapshotEnvelope | null = null;
   let patchCount = 0;
@@ -1844,20 +1890,24 @@ function certifyStage11ContinuousPlaySessionOnHost(runId: string): void {
     const bootTick = snapshot.tick;
     expect(snapshot.payload.hud?.speed).toBe(3);
 
-    for (let chunkIndex = 0; chunkIndex < STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT; chunkIndex += 1) {
+    for (
+      let chunkIndex = 0;
+      chunkIndex < PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_COUNT;
+      chunkIndex += 1
+    ) {
       const beforeChunkTick = snapshot.tick;
-      vi.advanceTimersByTime(STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
+      vi.advanceTimersByTime(PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
       snapshot = requestSnapshot(`${runId} chunk-${chunkIndex + 1}`);
       expect(snapshot.payload.hud?.speed).toBe(3);
       expect(snapshot.tick - beforeChunkTick).toBeGreaterThanOrEqual(
-        STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
+        PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
       );
     }
 
     expect(snapshot.tick - bootTick).toBeGreaterThanOrEqual(
-      STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
+      PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
     );
-    expect(patchCount).toBeGreaterThanOrEqual(STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
+    expect(patchCount).toBeGreaterThanOrEqual(PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
     expect(rejectCount).toBe(0);
   } finally {
     connection.disconnect();
@@ -1866,12 +1916,12 @@ function certifyStage11ContinuousPlaySessionOnHost(runId: string): void {
 }
 
 /**
- * Certifies Stage 11 continuous 15-minute play-session responsiveness on shipped runtime projection.
+ * Certifies Playable Certification continuous 15-minute play-session responsiveness on shipped runtime projection.
  * Mirrors authoritative speed-3 ambient stepping from `ref/micropolis/src/sim/s_sim.c`
- * projected through Stage 4 runtime sequencing/reducer ownership.
+ * projected through Authoritative Runtime runtime sequencing/reducer ownership.
  * Parity note: this validates shipped runtime envelope consumption under sustained load.
  */
-function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
+function certifyPlayableCertificationContinuousPlaySessionOnRuntime(runId: string): void {
   vi.useFakeTimers();
   let patchCount = 0;
   let rejectCount = 0;
@@ -1880,7 +1930,7 @@ function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
   const runtime = createWebHostRuntime({
     host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
-      patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
+      patchIntervalMs: PLAYABLE_CERT_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
     }),
     roomId: `${runId}-room`,
     clientId: `${runId}-client`,
@@ -1927,23 +1977,27 @@ function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
     expect(state.pendingTools).toHaveLength(0);
     expect(state.lastRejectReason).toBeNull();
 
-    for (let chunkIndex = 0; chunkIndex < STAGE11_CONTINUOUS_PLAY_CHUNK_COUNT; chunkIndex += 1) {
+    for (
+      let chunkIndex = 0;
+      chunkIndex < PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_COUNT;
+      chunkIndex += 1
+    ) {
       const beforeChunkTick = state.lastAppliedTick;
-      vi.advanceTimersByTime(STAGE11_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
+      vi.advanceTimersByTime(PLAYABLE_CERT_CONTINUOUS_PLAY_CHUNK_DURATION_MS);
       state = requestSnapshotState(`${runId} chunk-${chunkIndex + 1}`);
       expect(state.phase).toBe('ready');
       expect(state.hudState.speed).toBe(3);
       expect(state.pendingTools).toHaveLength(0);
       expect(state.lastRejectReason).toBeNull();
       expect(state.lastAppliedTick - beforeChunkTick).toBeGreaterThanOrEqual(
-        STAGE11_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
+        PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_STEPS_PER_CHUNK,
       );
     }
 
     expect(state.lastAppliedTick - bootTick).toBeGreaterThanOrEqual(
-      STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
+      PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS,
     );
-    expect(patchCount).toBeGreaterThanOrEqual(STAGE11_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
+    expect(patchCount).toBeGreaterThanOrEqual(PLAYABLE_CERT_CONTINUOUS_PLAY_EXPECTED_TOTAL_STEPS);
     expect(rejectCount).toBe(0);
   } finally {
     unsubscribe();
@@ -1953,12 +2007,12 @@ function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
 }
 
 /**
- * Runs one Stage 4 default-host smoke flow and returns deterministic envelope summary data.
+ * Runs one Authoritative Runtime default-host smoke flow and returns deterministic envelope summary data.
  * Mirrors `SimCmd`/`LoadScenario`/save-load command completion flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: this is a test harness wrapper over bridge envelopes; runtime behavior is unchanged.
  */
-async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4SmokeSummary> {
+async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRuntimeSmokeSummary> {
   const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
@@ -2174,7 +2228,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
       command: {
         kind: 'city-io',
         action: 'save-city',
-        fileName: 'stage4-smoke.cty',
+        fileName: 'playable-runtime-smoke.cty',
       },
     });
 
@@ -2188,7 +2242,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     const savePayload = readCityExportPayload(savePatch.payload);
     expect(savePayload).not.toBeNull();
     if (savePayload === null) {
-      throw new Error('Expected Stage 4 save payload');
+      throw new Error('Expected Authoritative Runtime save payload');
     }
     expect(savePatch.payload.messageDeltas).toEqual(
       expect.arrayContaining([
@@ -2239,7 +2293,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
       command: {
         kind: 'city-io',
         action: 'load-city',
-        fileName: 'stage4-smoke.cty',
+        fileName: 'playable-runtime-smoke.cty',
         cityBytes: savePayload.cityBytes,
       },
     });
@@ -2347,7 +2401,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
 }
 
 /**
- * Command-surface smoke for the Stage 4 default host factory.
+ * Command-surface smoke for the Authoritative Runtime default host factory.
  * Mirrors `SimCmd` table routing intent in `ref/micropolis/src/sim/w_sim.c`,
  * where tool/sim/lifecycle/io subcommands all flow through one command surface.
  * Parity note: typed envelopes replace Tcl argv dispatch.
@@ -2356,7 +2410,7 @@ describe('createPlayableRuntimeHost', () => {
   test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
     const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
     const hostEnvelopes: HostEnvelope[] = [];
-    const runId = 'stage11-new-city-map-hud';
+    const runId = 'playable-cert-new-city-map-hud';
     const roomId = `${runId}-room`;
     const clientId = `${runId}-client`;
     const commandId = `${runId}-cmd-new-city`;
@@ -2423,8 +2477,8 @@ describe('createPlayableRuntimeHost', () => {
     }
   });
 
-  test('certifies runtime new-city command hydrates map + HUD on the shipped Stage 4 route', async () => {
-    const runId = 'stage11-new-city-runtime-map-hud';
+  test('certifies runtime new-city command hydrates map + HUD on the shipped Authoritative Runtime route', async () => {
+    const runId = 'playable-cert-new-city-runtime-map-hud';
     const roomId = `${runId}-room`;
     const clientId = `${runId}-client`;
     const commandId = `${runId}-cmd-new-city`;
@@ -2482,42 +2536,46 @@ describe('createPlayableRuntimeHost', () => {
   });
 
   test('certifies host tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
-    await certifyStage11PlayableToolCostsOnHost('stage11-tool-costs-host');
+    await certifyPlayableCertificationPlayableToolCostsOnHost('playable-cert-tool-costs-host');
   }, 15_000);
 
   test('certifies runtime tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
-    await certifyStage11PlayableToolCostsOnRuntime('stage11-tool-costs-runtime');
+    await certifyPlayableCertificationPlayableToolCostsOnRuntime(
+      'playable-cert-tool-costs-runtime',
+    );
   }, 15_000);
 
   test('certifies host speed 1/2/3 with pause/resume cadence changes', () => {
-    certifyStage11PlayableCadenceOnHost('stage11-cadence-host');
+    certifyPlayableCertificationPlayableCadenceOnHost('playable-cert-cadence-host');
   });
 
-  test('certifies runtime speed 1/2/3 with pause/resume cadence changes on Stage 4 route', () => {
-    certifyStage11PlayableCadenceOnRuntime('stage11-cadence-runtime');
+  test('certifies runtime speed 1/2/3 with pause/resume cadence changes on Authoritative Runtime route', () => {
+    certifyPlayableCertificationPlayableCadenceOnRuntime('playable-cert-cadence-runtime');
   });
 
   test('certifies host heads + message feed updates during normal simulation', () => {
-    certifyStage11HeadsAndMessagesOnHost('stage11-heads-messages-host');
+    certifyPlayableCertificationHeadsAndMessagesOnHost('playable-cert-heads-messages-host');
   });
 
-  test('certifies runtime heads + message feed updates during normal simulation on Stage 4 route', () => {
-    certifyStage11HeadsAndMessagesOnRuntime('stage11-heads-messages-runtime');
+  test('certifies runtime heads + message feed updates during normal simulation on Authoritative Runtime route', () => {
+    certifyPlayableCertificationHeadsAndMessagesOnRuntime('playable-cert-heads-messages-runtime');
   });
 
   test('certifies host realtime/disaster visual event appears in-map', () => {
-    certifyStage11RealtimeVisualEventOnHost('stage11-realtime-visual-host');
+    certifyPlayableCertificationRealtimeVisualEventOnHost('playable-cert-realtime-visual-host');
   });
 
-  test('certifies runtime realtime/disaster visual event appears in-map on Stage 4 route', () => {
-    certifyStage11RealtimeVisualEventOnRuntime('stage11-realtime-visual-runtime');
+  test('certifies runtime realtime/disaster visual event appears in-map on Authoritative Runtime route', () => {
+    certifyPlayableCertificationRealtimeVisualEventOnRuntime(
+      'playable-cert-realtime-visual-runtime',
+    );
   });
 
   test('surfaces full Micropolis Disasters menu choices through the playable host adapter', () => {
     const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
     const hostEnvelopes: HostEnvelope[] = [];
-    const roomId = 'stage11-manual-disaster-room';
-    const clientId = 'stage11-manual-disaster-client';
+    const roomId = 'playable-cert-manual-disaster-room';
+    const clientId = 'playable-cert-manual-disaster-client';
     const connection = host.connect((envelope) => {
       hostEnvelopes.push(envelope);
     });
@@ -2558,38 +2616,46 @@ describe('createPlayableRuntimeHost', () => {
   });
 
   test('certifies host save `.cty` -> mutate city -> load `.cty` fully restores map + HUD', async () => {
-    await certifyStage11CityRoundTripRestorationOnHost('stage11-save-load-restore-host');
+    await certifyPlayableCertificationCityRoundTripRestorationOnHost(
+      'playable-cert-save-load-restore-host',
+    );
   });
 
-  test('certifies runtime save `.cty` -> mutate city -> load `.cty` fully restores map + HUD on Stage 4 route', async () => {
-    await certifyStage11CityRoundTripRestorationOnRuntime('stage11-save-load-restore-runtime');
+  test('certifies runtime save `.cty` -> mutate city -> load `.cty` fully restores map + HUD on Authoritative Runtime route', async () => {
+    await certifyPlayableCertificationCityRoundTripRestorationOnRuntime(
+      'playable-cert-save-load-restore-runtime',
+    );
   });
 
   test('certifies host scenario start sets expected year/funds', async () => {
-    await certifyStage11ScenarioStartOnHost('stage11-scenario-start-host');
+    await certifyPlayableCertificationScenarioStartOnHost('playable-cert-scenario-start-host');
   });
 
-  test('certifies runtime scenario start sets expected year/funds on Stage 4 route', async () => {
-    await certifyStage11ScenarioStartOnRuntime('stage11-scenario-start-runtime');
+  test('certifies runtime scenario start sets expected year/funds on Authoritative Runtime route', async () => {
+    await certifyPlayableCertificationScenarioStartOnRuntime(
+      'playable-cert-scenario-start-runtime',
+    );
   });
 
   test('certifies host continuous 15-minute play session responsiveness', () => {
-    certifyStage11ContinuousPlaySessionOnHost('stage11-continuous-play-host');
+    certifyPlayableCertificationContinuousPlaySessionOnHost('playable-cert-continuous-play-host');
   });
 
-  test('certifies runtime continuous 15-minute play session responsiveness on Stage 4 route', () => {
-    certifyStage11ContinuousPlaySessionOnRuntime('stage11-continuous-play-runtime');
+  test('certifies runtime continuous 15-minute play session responsiveness on Authoritative Runtime route', () => {
+    certifyPlayableCertificationContinuousPlaySessionOnRuntime(
+      'playable-cert-continuous-play-runtime',
+    );
   });
 
-  test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
-    const summary = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-main');
+  test('proves the shipped Authoritative Runtime host path is playable end-to-end', async () => {
+    const summary = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-main');
     expect(summary.rejectReasons).toEqual(['invalid-command']);
   });
 
-  test('remains deterministic across repeated Stage 4 smoke runs', async () => {
-    const run1 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-1');
-    const run2 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-2');
-    const run3 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-3');
+  test('remains deterministic across repeated Authoritative Runtime smoke runs', async () => {
+    const run1 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-1');
+    const run2 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-2');
+    const run3 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-3');
 
     expect(run2).toStrictEqual(run1);
     expect(run3).toStrictEqual(run1);
@@ -2597,7 +2663,7 @@ describe('createPlayableRuntimeHost', () => {
 });
 
 /**
- * Stage 4 save-payload parser checks.
+ * Authoritative Runtime save-payload parser checks.
  * Mirrors `SaveCityAs` payload ownership in `ref/micropolis/src/sim/s_fileio.c`,
  * while preserving strict envelope-shape checks in TypeScript.
  */
