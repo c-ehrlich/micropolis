@@ -1,11 +1,11 @@
 import {
-  DemoMapHost,
   PLAYABLE_SCENARIO_CHOICES as DEMO_PLAYABLE_SCENARIO_CHOICES,
   type PlayableScenarioChoice as DemoPlayableScenarioChoice,
 } from './demo-map-host.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type { CoreHost } from './protocol.ts';
+import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 export {
   PLAYABLE_DISASTER_CHOICES,
@@ -43,11 +43,11 @@ export interface CityExportPayload {
 /**
  * Build the default Authoritative Runtime playable route host.
  * Mirrors single command-surface ownership in `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: this still uses `DemoMapHost` as the authority adapter, but now
- * exposes options so default-path wiring and tests share one Authoritative Runtime factory.
+ * Parity note: this now returns `SimCoreEnvelopeHost` as the authoritative host while
+ * preserving the existing compatibility option surface during route cutover.
  */
 export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = {}): CoreHost {
-  return new DemoMapHost(options);
+  return new SimCoreEnvelopeHost(options);
 }
 
 /**

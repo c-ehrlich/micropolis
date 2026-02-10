@@ -44,7 +44,7 @@ Canonical `/` gameplay host path (migration lock):
 
 - Route entrypoint: `apps/web/src/routes/index.tsx` (`createFileRoute('/')`).
 - Host factory used by `/`: `createPlayableRuntimeHost(...)` from `apps/web/src/game/runtime/playable-runtime-host.ts`.
-- Current concrete host returned by that factory during migration: `DemoMapHost`.
+- Current concrete host returned by that factory during migration: `SimCoreEnvelopeHost`.
 - Migration constraint: gameplay host changes for `/` must be implemented behind `createPlayableRuntimeHost(...)` and this plan's sim-core envelope-host cutover tasks, not through alternate route-specific host wiring.
 
 Acceptance checks:
@@ -130,7 +130,7 @@ Acceptance checks:
 
 ### Phase 5: Route Cutover + Demo Host Deletion
 
-- [ ] Change `createPlayableRuntimeHost()` to return the new sim-core envelope host.
+- [x] Change `createPlayableRuntimeHost()` to return the new sim-core envelope host.
 - [ ] Remove `DemoMapHost` imports from gameplay-path modules.
 - [ ] Migrate or delete tests that validate demo-only, non-parity behavior.
 - [ ] Delete `apps/web/src/game/runtime/demo-map-host.ts`.
