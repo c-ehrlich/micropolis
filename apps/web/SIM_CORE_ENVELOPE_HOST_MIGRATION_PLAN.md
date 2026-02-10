@@ -154,7 +154,7 @@ Acceptance checks:
 
 Required automated gates before handoff:
 
-- [ ] `pnpm typecheck`
+- [x] `pnpm typecheck`
 - [ ] `pnpm lint`
 - [ ] `pnpm format`
 - [ ] `pnpm --filter @city/web test -- src/game/runtime/playable-runtime-host.test.ts`
