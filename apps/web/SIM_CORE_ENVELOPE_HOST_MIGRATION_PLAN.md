@@ -141,7 +141,7 @@ Acceptance checks:
 
 - [x] No gameplay route imports `DemoMapHost`. (Verified 2026-02-10 via repo search for route/runtime gameplay imports.)
 - [x] Codebase no longer contains synthetic gameplay map bootstrap logic. (Verified 2026-02-10 via repo search: no remaining gameplay implementation references to demo synthetic bootstrap helpers; only migration-history assertions remain in tests/docs.)
-- [ ] Coverage remains for all gameplay-critical parity behaviors.
+- [x] Coverage remains for all gameplay-critical parity behaviors. (Verified 2026-02-10 against parity-oriented certification suites in `apps/web/src/game/runtime/playable-runtime-host.test.ts` and targeted C-behavior checks in `apps/web/src/game/runtime/sim-core-envelope-host.test.ts`.)
 
 ### Phase 6: Test and Verification Hardening
 
