@@ -545,7 +545,6 @@ describe('SimCoreEnvelopeHost', () => {
     });
     const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
     const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
-    const captured = connectAndCapture(host);
     const hostInternals = host as unknown as {
       authorityState: {
         simState: {
@@ -560,15 +559,29 @@ describe('SimCoreEnvelopeHost', () => {
       cityFileName: string;
       cityName: string;
     };
+    const envelopes: HostEnvelope[] = [];
+    const authoritativeScenarioStateAtEnvelope: Array<{
+      scenarioId: number;
+      cityTime: number;
+      totalFunds: number;
+    }> = [];
+    const connection = host.connect((envelope) => {
+      authoritativeScenarioStateAtEnvelope.push({
+        scenarioId: hostInternals.authorityState.simState.ScenarioID,
+        cityTime: hostInternals.authorityState.simState.CityTime,
+        totalFunds: hostInternals.authorityState.simState.TotalFunds,
+      });
+      envelopes.push(envelope);
+    });
 
-    captured.send({
+    connection.send({
       kind: 'hello',
       roomId: 'room-scenario',
       clientId: 'client-scenario',
       protocolVersion: 'core-bridge/v1',
       coreVersion: 'test-core',
     });
-    captured.send({
+    connection.send({
       kind: 'command',
       roomId: 'room-scenario',
       clientId: 'client-scenario',
@@ -581,7 +594,8 @@ describe('SimCoreEnvelopeHost', () => {
     });
 
     expect(scenarioResourceLoader).toHaveBeenCalledWith(scenario.fileName);
-    expect(captured.envelopes).toHaveLength(2);
+    expect(envelopes).toHaveLength(2);
+    expect(envelopes.some((envelope) => envelope.kind === 'ack')).toBe(false);
 
     const resolve = resolveScenarioBytes;
     if (resolve === undefined) {
@@ -591,7 +605,16 @@ describe('SimCoreEnvelopeHost', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(captured.envelopes[2]).toEqual({
+    const scenarioAckIndex = envelopes.findIndex(
+      (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-load-scenario',
+    );
+    expect(scenarioAckIndex).toBe(2);
+    expect(authoritativeScenarioStateAtEnvelope[scenarioAckIndex]).toEqual({
+      scenarioId: scenario.id,
+      cityTime: scenario.startCityTime,
+      totalFunds: scenario.startFunds,
+    });
+    expect(envelopes[scenarioAckIndex]).toEqual({
       kind: 'ack',
       roomId: 'room-scenario',
       clientId: 'client-scenario',
@@ -599,7 +622,7 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-load-scenario',
     });
-    expect(captured.envelopes[3]).toMatchObject({
+    expect(envelopes[3]).toMatchObject({
       kind: 'snapshot',
       roomId: 'room-scenario',
       clientId: 'client-scenario',
@@ -645,6 +668,11 @@ describe('SimCoreEnvelopeHost', () => {
     });
     await Promise.resolve();
     await Promise.resolve();
+    expect(
+      captured.envelopes.some(
+        (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-bad-scenario',
+      ),
+    ).toBe(false);
 
     expect(captured.envelopes[2]).toEqual({
       kind: 'reject',
