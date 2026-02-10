@@ -17,19 +17,57 @@ const STAGE8_TILE_ATLAS_IMPORT_PATH =
 const COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.color);
 
 const STAGE8_TILE_ATLAS_TILE_WIDTH = COLOR_TILE_SHEET_HEADER.width;
-const STAGE8_TILE_ATLAS_TILE_HEIGHT = COLOR_TILE_SHEET_HEADER.width;
+const STAGE8_TILE_ATLAS_TILE_HEIGHT = COLOR_TILE_SHEET_HEADER.height / Tile.TILE_COUNT;
 const STAGE8_TILE_ATLAS_ROW_COUNT = Math.trunc(
   COLOR_TILE_SHEET_HEADER.height / STAGE8_TILE_ATLAS_TILE_HEIGHT,
 );
+const STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
+  'ref/micropolis/images/tiles.xpm',
+);
+const STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
+  'ref/micropolis/images/tilesbw.xpm',
+);
+const STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
+  'ref/micropolis/images/tilessm.xpm',
+);
+
+/**
+ * `GetViewTiles` class branches that select tile art sources in Micropolis.
+ * Mirrors `Editor_Class` and `Map_Class` in `ref/micropolis/src/sim/g_setup.c`
+ * (1:1 branch names normalized to lowercase string literals).
+ */
+export type Stage8MicropolisTileSheetViewClass = 'editor' | 'map';
 
 /**
  * Canonical key for the Micropolis color tile atlas source image.
  * Mirrors tile-sheet identity loaded by `GetViewTiles` in
  * `ref/micropolis/src/sim/g_setup.c` (`tiles.xpm`).
  */
-export const STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
-  'ref/micropolis/images/tiles.xpm',
-);
+export const STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+
+/**
+ * Resolve canonical Micropolis tile-sheet identity by view class + color mode.
+ * Mirrors `GetViewTiles` filename selection in `ref/micropolis/src/sim/g_setup.c`.
+ * Parity note: this is 1:1 for XPM-backed branches (`tiles.xpm`, `tilesbw.xpm`,
+ * `tilessm.xpm`). Map-class monochrome in C uses `MickGetHexa(SIM_GSMTILE)`
+ * (non-XPM resource bytes), so TypeScript returns `undefined` for that branch.
+ */
+export function resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+  viewClass,
+  color,
+}: Readonly<{
+  viewClass: Stage8MicropolisTileSheetViewClass;
+  color: boolean;
+}>): CanonicalImageIdentityKey | undefined {
+  if (viewClass === 'editor') {
+    return color
+      ? STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY
+      : STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+  }
+
+  return color ? STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY : undefined;
+}
 
 /**
  * One Stage 8 base-map atlas source, keyed by canonical Micropolis image id.

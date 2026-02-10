@@ -5,6 +5,7 @@ import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   isStage4DebugTileRendererEnabled,
   lookupStage8TileSprite,
+  resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
 } from './stage8-tile-sprite-atlas.ts';
 
@@ -52,5 +53,24 @@ describe('stage8 tile sprite atlas', () => {
     expect(isStage4DebugTileRendererEnabled({ VITE_STAGE4_DEBUG_TILE_RENDERER: 'true' })).toBe(
       true,
     );
+  });
+
+  it('mirrors GetViewTiles image identity selection by view class and color mode', () => {
+    // `GetViewTiles` in `g_setup.c` picks `tiles.xpm` for Editor_Class color.
+    expect(
+      resolveStage8MicropolisTileSheetCanonicalIdentityKey({ viewClass: 'editor', color: true }),
+    ).toBe('ref/micropolis/images/tiles.xpm');
+    // `GetViewTiles` in `g_setup.c` picks `tilesbw.xpm` for Editor_Class monochrome.
+    expect(
+      resolveStage8MicropolisTileSheetCanonicalIdentityKey({ viewClass: 'editor', color: false }),
+    ).toBe('ref/micropolis/images/tilesbw.xpm');
+    // `GetViewTiles` in `g_setup.c` picks `tilessm.xpm` for Map_Class color.
+    expect(
+      resolveStage8MicropolisTileSheetCanonicalIdentityKey({ viewClass: 'map', color: true }),
+    ).toBe('ref/micropolis/images/tilessm.xpm');
+    // Map_Class monochrome path uses `MickGetHexa(SIM_GSMTILE)` (not an XPM file key).
+    expect(
+      resolveStage8MicropolisTileSheetCanonicalIdentityKey({ viewClass: 'map', color: false }),
+    ).toBeUndefined();
   });
 });

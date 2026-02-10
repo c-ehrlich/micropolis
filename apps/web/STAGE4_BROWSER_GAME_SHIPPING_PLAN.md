@@ -430,7 +430,7 @@ Deletion execution notes:
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/g_setup.c` (image asset identity/loading)
+- [x] `ref/micropolis/src/sim/g_setup.c` (image asset identity/loading)
 - [ ] `ref/micropolis/src/sim/g_bigmap.c` (tile-to-graphic draw relationship)
 - [ ] `ref/micropolis/src/sim/headers/sim.h` (tile id/layout constants context)
 - [ ] `ref/micropolis/images/*.xpm` (canonical art sources)
