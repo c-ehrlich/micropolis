@@ -86,13 +86,22 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
 
   it('maps playable tool ids to canonical bridge tool ids and back', () => {
     const tools: readonly PlayableToolName[] = [
-      'road',
-      'rail',
-      'wire',
-      'bulldoze',
       'res',
       'com',
       'ind',
+      'fire',
+      'query',
+      'police',
+      'wire',
+      'bulldoze',
+      'rail',
+      'road',
+      'stadium',
+      'park',
+      'seaport',
+      'coal',
+      'nuclear',
+      'airport',
     ];
 
     for (const tool of tools) {
@@ -103,9 +112,11 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
 
   it('keeps playable tool footprints aligned with w_tool.c toolSize/toolOffset tables', () => {
     // Magic-number source: `toolSize[]`/`toolOffset[]` in
-    // `ref/micropolis/src/sim/w_tool.c` for roadState/rrState/wireState/dozeState
-    // (all 1x1, offset 0) and residentialState/commercialState/industrialState
-    // (all 3x3, offset 1).
+    // `ref/micropolis/src/sim/w_tool.c` for the full editor tool set:
+    // - 3x3 offset 1: residential/commercial/industrial/fire/police
+    // - 1x1 offset 0: query/wire/doze/rail/road/park
+    // - 4x4 offset 1: stadium/seaport/coal/nuclear
+    // - 6x6 offset 1: airport.
     expect(
       PLAYABLE_TOOL_SPECS.map((spec) => ({
         tool: spec.tool,
@@ -113,17 +124,27 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         offset: spec.offset,
       })),
     ).toEqual([
-      { tool: 'road', size: 1, offset: 0 },
-      { tool: 'rail', size: 1, offset: 0 },
-      { tool: 'wire', size: 1, offset: 0 },
-      { tool: 'bulldoze', size: 1, offset: 0 },
       { tool: 'res', size: 3, offset: 1 },
       { tool: 'com', size: 3, offset: 1 },
       { tool: 'ind', size: 3, offset: 1 },
+      { tool: 'fire', size: 3, offset: 1 },
+      { tool: 'query', size: 1, offset: 0 },
+      { tool: 'police', size: 3, offset: 1 },
+      { tool: 'wire', size: 1, offset: 0 },
+      { tool: 'bulldoze', size: 1, offset: 0 },
+      { tool: 'rail', size: 1, offset: 0 },
+      { tool: 'road', size: 1, offset: 0 },
+      { tool: 'stadium', size: 4, offset: 1 },
+      { tool: 'park', size: 1, offset: 0 },
+      { tool: 'seaport', size: 4, offset: 1 },
+      { tool: 'coal', size: 4, offset: 1 },
+      { tool: 'nuclear', size: 4, offset: 1 },
+      { tool: 'airport', size: 6, offset: 1 },
     ]);
 
     expect(getPlayableToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
     expect(getPlayableToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
+    expect(getPlayableToolSpec('airport')).toMatchObject({ size: 6, offset: 1 });
   });
 
   it('accepts only frozen Bridge V1 playable command discriminants', () => {

@@ -1,7 +1,12 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { Tile, TileMask } from '../../../../../packages/sim-core/src/index.ts';
-import { createPlayableRuntimeHost, readCityExportPayload } from './playable-runtime-host.ts';
+import {
+  createPlayableRuntimeHost,
+  PLAYABLE_DISASTER_CHOICES,
+  readCityExportPayload,
+  triggerPlayableRuntimeDisaster,
+} from './playable-runtime-host.ts';
 import type {
   ClientEnvelope,
   HostAckEnvelope,
@@ -2506,6 +2511,50 @@ describe('createPlayableRuntimeHost', () => {
 
   test('certifies runtime realtime/disaster visual event appears in-map on Stage 4 route', () => {
     certifyStage11RealtimeVisualEventOnRuntime('stage11-realtime-visual-runtime');
+  });
+
+  test('surfaces full Micropolis Disasters menu choices through the playable host adapter', () => {
+    const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
+    const hostEnvelopes: HostEnvelope[] = [];
+    const roomId = 'stage11-manual-disaster-room';
+    const clientId = 'stage11-manual-disaster-client';
+    const connection = host.connect((envelope) => {
+      hostEnvelopes.push(envelope);
+    });
+
+    try {
+      connection.send({
+        kind: 'hello',
+        roomId,
+        clientId,
+        protocolVersion: 'bridge-v1',
+        coreVersion: 'sim-core',
+      });
+
+      expect(triggerPlayableRuntimeDisaster(host, 'earthquake')).toBe(true);
+
+      const latestPatch = [...hostEnvelopes]
+        .reverse()
+        .find((envelope): envelope is HostPatchEnvelope => envelope.kind === 'patch');
+      if (latestPatch === undefined) {
+        throw new Error('expected manual disaster trigger to emit a patch envelope');
+      }
+
+      // Magic number source: `MakeEarthquake` in `ref/micropolis/src/sim/s_disast.c`
+      // dispatches earthquake message id `-23` via `SendMesAt`.
+      expect(latestPatch.payload.messageDeltas?.some((message) => message.id === -23)).toBe(true);
+
+      expect(PLAYABLE_DISASTER_CHOICES.map((choice) => choice.id)).toEqual([
+        'tornado',
+        'monster',
+        'fire',
+        'flood',
+        'meltdown',
+        'earthquake',
+      ]);
+    } finally {
+      connection.disconnect();
+    }
   });
 
   test('certifies host save `.cty` -> mutate city -> load `.cty` fully restores map + HUD', async () => {

@@ -11,8 +11,12 @@ import {
   generateShip as generateRealtimeShip,
   generateTrain as generateRealtimeTrain,
   getSprite as getRealtimeSprite,
+  makeEarthquake,
   makeExplosion as makeRealtimeExplosion,
   makeExplosionAt as makeRealtimeExplosionAt,
+  makeFire,
+  makeFlood,
+  makeMeltdown,
   makeMonster as makeRealtimeMonster,
   makeTornado as makeRealtimeTornado,
   type MapRedrawPlan,
@@ -95,28 +99,57 @@ type NodeFsPromisesModule = {
 };
 
 const TOOL_TILE_VALUES: Record<PlayableToolName, number> = {
-  road: 66,
-  rail: 226,
-  wire: 210,
-  bulldoze: 0,
-  res: 240,
-  com: 423,
-  ind: 612,
+  res: Tile.RESBASE,
+  com: Tile.COMBASE,
+  ind: Tile.INDBASE,
+  fire: Tile.FIRESTBASE,
+  query: Tile.DIRT,
+  police: Tile.POLICESTBASE,
+  wire: Tile.LHPOWER,
+  bulldoze: Tile.DIRT,
+  rail: Tile.LHRAIL,
+  road: Tile.ROADS,
+  stadium: Tile.STADIUMBASE,
+  park: Tile.WOODS2,
+  seaport: Tile.PORTBASE,
+  coal: Tile.COALBASE,
+  nuclear: Tile.NUCLEARBASE,
+  airport: Tile.AIRPORTBASE,
 };
 
 const TOOL_COSTS: Record<PlayableToolName, number> = {
-  // Mirrors `CostOf[]` values for road/rail/wire/bulldoze/R/C/I in
+  // Mirrors `CostOf[]` values for all playable editor tools in
   // `ref/micropolis/src/sim/w_tool.c`.
-  road: 10,
-  rail: 20,
-  wire: 5,
-  bulldoze: 1,
   res: 100,
   com: 100,
   ind: 100,
+  fire: 500,
+  query: 0,
+  police: 500,
+  wire: 5,
+  bulldoze: 1,
+  rail: 20,
+  road: 10,
+  stadium: 5000,
+  park: 10,
+  seaport: 3000,
+  coal: 3000,
+  nuclear: 5000,
+  airport: 10000,
 };
 
-const ZONE_TOOLS = new Set<PlayableToolName>(['res', 'com', 'ind']);
+const AREA_STAMP_TOOLS = new Set<PlayableToolName>([
+  'res',
+  'com',
+  'ind',
+  'fire',
+  'police',
+  'stadium',
+  'seaport',
+  'coal',
+  'nuclear',
+  'airport',
+]);
 const DEMO_WIRE_REBUILD_MIN_TILE_ID = 210;
 const DEMO_WIRE_REBUILD_MAX_TILE_ID = 220;
 
@@ -162,10 +195,9 @@ const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
 };
 
 /**
- * Manual Realtime Overlay realtime event choices exposed in the browser QA panel.
- * Mirrors tornado/monster disaster sprite entrypoints (`MakeTornado`,
- * `MakeMonster`) in `ref/micropolis/src/sim/w_sprite.c`.
- * Difference: this explicit chooser is a browser-only manual verification aid.
+ * Manual disaster choices exposed in the browser QA panel.
+ * Mirrors the Disasters menu entries in `ref/micropolis/res/whead.tcl`
+ * (`Monster`, `Fire`, `Flood`, `Meltdown`, `Tornado`, `Earthquake`).
  */
 export const MANUAL_REALTIME_EVENT_CHOICES = [
   {
@@ -176,13 +208,28 @@ export const MANUAL_REALTIME_EVENT_CHOICES = [
     id: 'monster',
     label: 'Trigger Monster',
   },
+  {
+    id: 'fire',
+    label: 'Trigger Fire',
+  },
+  {
+    id: 'flood',
+    label: 'Trigger Flood',
+  },
+  {
+    id: 'meltdown',
+    label: 'Trigger Meltdown',
+  },
+  {
+    id: 'earthquake',
+    label: 'Trigger Earthquake',
+  },
 ] as const;
 
 /**
- * Union of manual Realtime Overlay QA event ids.
- * Mirrors the `MakeTornado`/`MakeMonster` disaster entrypoint set in
- * `ref/micropolis/src/sim/w_sprite.c`.
- * Difference: this browser-only union narrows explicit manual trigger inputs.
+ * Union of manual disaster ids.
+ * Mirrors disaster entrypoint families in `ref/micropolis/src/sim/s_disast.c`
+ * and sprite disaster entrypoints in `ref/micropolis/src/sim/w_sprite.c`.
  */
 export type ManualRealtimeEventId = (typeof MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
 
@@ -414,12 +461,12 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Triggers one manual Realtime Overlay disaster overlay/message event patch.
-   * Mirrors `MakeTornado`/`MakeMonster` entrypoints in
-   * `ref/micropolis/src/sim/w_sprite.c` and message delivery through
-   * `doMessage` in `ref/micropolis/src/sim/s_msg.c`.
-   * Difference: this is a browser QA seam so manual Realtime Overlay verification can
-   * deterministically produce coherent overlay + message behavior on demand.
+   * Triggers one manual disaster event from the browser QA panel.
+   * Mirrors Disasters menu entrypoints in `ref/micropolis/res/whead.tcl` and
+   * the corresponding runtime handlers in `ref/micropolis/src/sim/s_disast.c`
+   * and `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: the host first mirrors runtime row-major tiles back to classic
+   * `Map[x][y]` storage so disaster handlers operate over the current visible map.
    */
   public triggerManualRealtimeEvent(eventId: ManualRealtimeEventId): boolean {
     if (
@@ -429,6 +476,9 @@ export class DemoMapHost implements CoreHost {
     ) {
       return false;
     }
+
+    const previousRuntimeTiles = new Uint16Array(this.mapTiles);
+    this.syncRuntimeTilesToClassicMapLayerForSave();
 
     this.tick += 1;
     this.simContext.store.beginTick();
@@ -440,11 +490,20 @@ export class DemoMapHost implements CoreHost {
       this.simContext.store.commitTick();
     }
 
+    this.syncRuntimeTilesFromClassicMapLayer();
+    const mapTileWordDeltas = buildRuntimeMapTileWordDeltas(
+      previousRuntimeTiles,
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+    );
+
     this.emitPatch(
       this.activeRoomId,
       this.activeClientId,
       this.buildHookDrivenPatchPayload({
         includeHud: true,
+        mapTileWordDeltas,
       }),
     );
 
@@ -1399,18 +1458,33 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Applies one manual Realtime Overlay realtime event into authoritative sprite state.
-   * Mirrors disaster sprite creation paths in `MakeTornado`/`MakeMonster` from
-   * `ref/micropolis/src/sim/w_sprite.c`.
-   * Difference: host operators explicitly pick the event kind for manual QA.
+   * Applies one manual disaster event into authoritative sim/realtime state.
+   * Mirrors disaster handlers in `ref/micropolis/src/sim/s_disast.c`
+   * (`MakeFire`, `MakeFlood`, `MakeMeltdown`, `MakeEarthquake`) and sprite
+   * disaster entrypoints in `ref/micropolis/src/sim/w_sprite.c`
+   * (`MakeTornado`, `MakeMonster`).
    */
   private applyManualRealtimeEvent(eventId: ManualRealtimeEventId): void {
-    if (eventId === 'tornado') {
-      makeRealtimeTornado(this.realtimeContext);
-      return;
+    switch (eventId) {
+      case 'tornado':
+        makeRealtimeTornado(this.realtimeContext);
+        return;
+      case 'monster':
+        makeRealtimeMonster(this.realtimeContext);
+        return;
+      case 'fire':
+        makeFire(this.simState, this.simContext);
+        return;
+      case 'flood':
+        makeFlood(this.simState, this.simContext);
+        return;
+      case 'meltdown':
+        makeMeltdown(this.simState, this.simContext);
+        return;
+      case 'earthquake':
+        makeEarthquake(this.simState, this.simContext);
+        return;
     }
-
-    makeRealtimeMonster(this.realtimeContext);
   }
 
   /**
@@ -1912,7 +1986,7 @@ function formatDollarDecimal(value: number): string {
  * Applies one Playable Runtime tool command to the local demo map and returns changed
  * tiles for a host `patch` envelope.
  * Mirrors placement footprint rules from `ref/micropolis/src/sim/w_tool.c`
- * (`toolSize[]`, `toolOffset[]`, 3x3 zone stamp shape).
+ * (`toolSize[]`, `toolOffset[]`, and multi-tile stamp shapes for 3x3/4x4/6x6 tools).
  * Difference: this uses synthetic debug tile ids and does not run simulation.
  */
 function applyDemoToolCommand(
@@ -1939,6 +2013,10 @@ function applyDemoToolCommand(
 
   const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
 
+  if (command.tool === 'query') {
+    return { accepted: true, deltas };
+  }
+
   if (command.tool === 'wire') {
     return {
       accepted: true,
@@ -1946,7 +2024,7 @@ function applyDemoToolCommand(
     };
   }
 
-  if (ZONE_TOOLS.has(command.tool)) {
+  if (AREA_STAMP_TOOLS.has(command.tool)) {
     for (let yy = startY; yy < endY; yy += 1) {
       for (let xx = startX; xx < endX; xx += 1) {
         const index = yy * width + xx;
@@ -2208,6 +2286,42 @@ function writeDemoTile(
 
   tiles[index] = tile;
   deltas.push({ x, y, tileWord: tile });
+}
+
+/**
+ * Computes coordinate-addressed tile deltas between two runtime row-major map buffers.
+ * Mirrors patch payload coordinate ownership used by `DoUpdateMap` in
+ * `ref/micropolis/src/sim/w_map.c`, while preserving Playable Runtime row-major
+ * storage in this host adapter.
+ */
+function buildRuntimeMapTileWordDeltas(
+  previousTiles: Uint16Array,
+  nextTiles: Uint16Array,
+  width: number,
+  height: number,
+): DemoMapTileWordDelta[] | undefined {
+  const deltas: DemoMapTileWordDelta[] = [];
+  for (let index = 0; index < nextTiles.length; index += 1) {
+    const previousTileWord = previousTiles[index] ?? 0;
+    const nextTileWord = nextTiles[index] ?? 0;
+    if (previousTileWord === nextTileWord) {
+      continue;
+    }
+
+    const y = Math.trunc(index / width);
+    const x = index - y * width;
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      continue;
+    }
+
+    deltas.push({
+      x,
+      y,
+      tileWord: nextTileWord,
+    });
+  }
+
+  return deltas.length > 0 ? deltas : undefined;
 }
 
 /**

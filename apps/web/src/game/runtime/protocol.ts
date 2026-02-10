@@ -169,16 +169,48 @@ export function isPlayableBridgeCommandType(
  */
 export type PlayableCanonicalToolName = Extract<
   CityToolV1,
-  'road' | 'rail' | 'wire' | 'bulldoze' | 'residential' | 'commercial' | 'industrial'
+  | 'road'
+  | 'rail'
+  | 'wire'
+  | 'bulldoze'
+  | 'residential'
+  | 'commercial'
+  | 'industrial'
+  | 'query'
+  | 'police_dept'
+  | 'fire_dept'
+  | 'stadium'
+  | 'park'
+  | 'seaport'
+  | 'coal_power'
+  | 'nuclear_power'
+  | 'airport'
 >;
 
 /**
  * Playable Runtime tool identifiers exposed in the simple playable toolbar.
- * Mirrors tool state names from `ref/micropolis/src/sim/w_tool.c` (`roadState`,
- * `rrState`, `wireState`, `dozeState`, `residentialState`,
- * `commercialState`, `industrialState`).
+ * Mirrors tool state names from `ref/micropolis/src/sim/w_tool.c` (`residentialState`,
+ * `commercialState`, `industrialState`, `fireState`, `queryState`, `policeState`,
+ * `wireState`, `dozeState`, `rrState`, `roadState`, `stadiumState`, `parkState`,
+ * `seaportState`, `powerState`, `nuclearState`, `airportState`).
  */
-export type PlayableToolName = 'road' | 'rail' | 'wire' | 'bulldoze' | 'res' | 'com' | 'ind';
+export type PlayableToolName =
+  | 'res'
+  | 'com'
+  | 'ind'
+  | 'fire'
+  | 'query'
+  | 'police'
+  | 'wire'
+  | 'bulldoze'
+  | 'rail'
+  | 'road'
+  | 'stadium'
+  | 'park'
+  | 'seaport'
+  | 'coal'
+  | 'nuclear'
+  | 'airport';
 
 /**
  * High-level Playable Runtime tool placement command sent through `command` envelopes.
@@ -201,23 +233,41 @@ export interface PlayableToolCommand {
 export type PlayableSimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
 
 const PLAYABLE_TO_CANONICAL_TOOL_NAME: Record<PlayableToolName, PlayableCanonicalToolName> = {
-  road: 'road',
-  rail: 'rail',
-  wire: 'wire',
-  bulldoze: 'bulldoze',
   res: 'residential',
   com: 'commercial',
   ind: 'industrial',
+  fire: 'fire_dept',
+  query: 'query',
+  police: 'police_dept',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  rail: 'rail',
+  road: 'road',
+  stadium: 'stadium',
+  park: 'park',
+  seaport: 'seaport',
+  coal: 'coal_power',
+  nuclear: 'nuclear_power',
+  airport: 'airport',
 };
 
 const CANONICAL_TO_PLAYABLE_TOOL_NAME: Record<PlayableCanonicalToolName, PlayableToolName> = {
-  road: 'road',
-  rail: 'rail',
-  wire: 'wire',
-  bulldoze: 'bulldoze',
   residential: 'res',
   commercial: 'com',
   industrial: 'ind',
+  fire_dept: 'fire',
+  query: 'query',
+  police_dept: 'police',
+  wire: 'wire',
+  bulldoze: 'bulldoze',
+  rail: 'rail',
+  road: 'road',
+  stadium: 'stadium',
+  park: 'park',
+  seaport: 'seaport',
+  coal_power: 'coal',
+  nuclear_power: 'nuclear',
+  airport: 'airport',
 };
 
 /**
@@ -404,13 +454,22 @@ export interface PlayableToolSpec {
 }
 
 const PLAYABLE_TOOL_STATE_ID: Record<PlayableToolName, number> = {
-  road: TOOL_STATE.road,
-  rail: TOOL_STATE.rail,
-  wire: TOOL_STATE.wire,
-  bulldoze: TOOL_STATE.bulldoze,
   res: TOOL_STATE.res,
   com: TOOL_STATE.com,
   ind: TOOL_STATE.ind,
+  fire: TOOL_STATE.fire,
+  query: TOOL_STATE.query,
+  police: TOOL_STATE.police,
+  wire: TOOL_STATE.wire,
+  bulldoze: TOOL_STATE.bulldoze,
+  rail: TOOL_STATE.rail,
+  road: TOOL_STATE.road,
+  stadium: TOOL_STATE.stadium,
+  park: TOOL_STATE.park,
+  seaport: TOOL_STATE.seaport,
+  coal: TOOL_STATE.coal,
+  nuclear: TOOL_STATE.nuclear,
+  airport: TOOL_STATE.airport,
 };
 
 interface PlayableToolVisualSpec {
@@ -420,13 +479,22 @@ interface PlayableToolVisualSpec {
 }
 
 const PLAYABLE_TOOL_VISUAL_SPECS: readonly PlayableToolVisualSpec[] = [
-  { tool: 'road', label: 'Road', pendingColor: '#f6d365' },
-  { tool: 'rail', label: 'Rail', pendingColor: '#c3aed6' },
+  { tool: 'res', label: 'Residential', pendingColor: '#86efac' },
+  { tool: 'com', label: 'Commercial', pendingColor: '#7dd3fc' },
+  { tool: 'ind', label: 'Industrial', pendingColor: '#fde047' },
+  { tool: 'fire', label: 'Fire Dept', pendingColor: '#fca5a5' },
+  { tool: 'query', label: 'Query', pendingColor: '#fdba74' },
+  { tool: 'police', label: 'Police Dept', pendingColor: '#bfdbfe' },
   { tool: 'wire', label: 'Wire', pendingColor: '#93c5fd' },
   { tool: 'bulldoze', label: 'Bulldoze', pendingColor: '#fca5a5' },
-  { tool: 'res', label: 'R', pendingColor: '#86efac' },
-  { tool: 'com', label: 'C', pendingColor: '#7dd3fc' },
-  { tool: 'ind', label: 'I', pendingColor: '#fde047' },
+  { tool: 'rail', label: 'Rail', pendingColor: '#c3aed6' },
+  { tool: 'road', label: 'Road', pendingColor: '#f6d365' },
+  { tool: 'stadium', label: 'Stadium', pendingColor: '#d9f99d' },
+  { tool: 'park', label: 'Park', pendingColor: '#bbf7d0' },
+  { tool: 'seaport', label: 'Seaport', pendingColor: '#99f6e4' },
+  { tool: 'coal', label: 'Coal Plant', pendingColor: '#cbd5e1' },
+  { tool: 'nuclear', label: 'Nuclear Plant', pendingColor: '#fecaca' },
+  { tool: 'airport', label: 'Airport', pendingColor: '#e2e8f0' },
 ] as const;
 
 /**
@@ -449,7 +517,7 @@ function playableFootprintFromToolTables(
 /**
  * Playable tool metadata table.
  * Mirrors `toolSize[]`/`toolOffset[]` entries from `ref/micropolis/src/sim/w_tool.c`
- * for road, rail, wire, bulldoze, residential, commercial, and industrial tools.
+ * for the full editor-palette build/query tool set.
  * Parity note: `size`/`offset` values are derived from sim-core C-parity tool tables
  * (`TOOL_SIZE`, `TOOL_OFFSET`) to keep 1x1 vs 3x3 behavior locked to Micropolis.
  */

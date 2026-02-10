@@ -18,8 +18,10 @@ import {
 } from '../game/runtime/index.ts';
 import {
   createPlayableRuntimeHost,
+  PLAYABLE_DISASTER_CHOICES,
   PLAYABLE_SCENARIO_CHOICES,
   readCityExportPayload,
+  triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
 
 export const Route = createFileRoute('/')({
@@ -103,6 +105,7 @@ function RuntimePanel() {
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
   const [soundStatus, setSoundStatus] = useState<string>('');
+  const [disasterStatus, setDisasterStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
   const commandCounter = useRef(1);
@@ -324,6 +327,37 @@ function RuntimePanel() {
                   x{speed}
                 </button>
               ))}
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gap: 6 }}>
+            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
+            <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+              Mirrors the Micropolis Disasters menu (`Monster`, `Fire`, `Flood`, `Meltdown`,
+              `Tornado`, `Earthquake`) from `ref/micropolis/res/whead.tcl`.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {PLAYABLE_DISASTER_CHOICES.map((choice) => (
+                <button
+                  key={choice.id}
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    const triggered = triggerPlayableRuntimeDisaster(host, choice.id);
+                    if (triggered) {
+                      setDisasterStatus(`${choice.label}.`);
+                      return;
+                    }
+
+                    setDisasterStatus('Disaster trigger is unavailable on this host.');
+                  }}
+                  type="button"
+                >
+                  {choice.label.replace('Trigger ', '')}
+                </button>
+              ))}
+            </div>
+            <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+              {disasterStatus}
             </div>
           </section>
 

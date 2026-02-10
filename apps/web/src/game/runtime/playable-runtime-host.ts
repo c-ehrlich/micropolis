@@ -1,10 +1,25 @@
 import {
   DemoMapHost,
   type DemoMapHostOptions,
+  MANUAL_REALTIME_EVENT_CHOICES,
+  type ManualRealtimeEventId,
   PLAYABLE_SCENARIO_CHOICES as DEMO_PLAYABLE_SCENARIO_CHOICES,
   type PlayableScenarioChoice as DemoPlayableScenarioChoice,
 } from './demo-map-host.ts';
 import type { CoreHost } from './protocol.ts';
+
+/**
+ * Manual disaster button definitions for the playable route UI.
+ * Mirrors Disasters menu entries in `ref/micropolis/res/whead.tcl`.
+ */
+export const PLAYABLE_DISASTER_CHOICES = MANUAL_REALTIME_EVENT_CHOICES;
+
+/**
+ * Manual disaster id union for playable route UI controls.
+ * Mirrors disaster command identities in `ref/micropolis/src/sim/s_disast.c`
+ * and `ref/micropolis/src/sim/w_sprite.c`.
+ */
+export type PlayableDisasterChoiceId = ManualRealtimeEventId;
 
 /**
  * Authoritative Runtime scenario choice metadata used by the default playable route.
@@ -49,6 +64,23 @@ export type PlayableRuntimeHostOptions = DemoMapHostOptions;
  */
 export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = {}): CoreHost {
   return new DemoMapHost(options);
+}
+
+/**
+ * Triggers one manual disaster event on hosts that expose the demo disaster seam.
+ * Mirrors Disasters menu entry intent in `ref/micropolis/res/whead.tcl`.
+ * Difference: this helper is host-adapter based and returns `false` for hosts
+ * that do not expose manual-disaster entrypoints.
+ */
+export function triggerPlayableRuntimeDisaster(
+  host: CoreHost,
+  disasterId: PlayableDisasterChoiceId,
+): boolean {
+  if (!(host instanceof DemoMapHost)) {
+    return false;
+  }
+
+  return host.triggerManualRealtimeEvent(disasterId);
 }
 
 /**
