@@ -145,7 +145,7 @@ Acceptance checks:
 
 ### Phase 6: Test and Verification Hardening
 
-- [ ] Add/keep route-level tests proving initial map is authoritative sim-core output (not synthetic tiles).
+- [x] Add/keep route-level tests proving initial map is authoritative sim-core output (not synthetic tiles).
 - [ ] Add targeted crossing parity tests grounded in C behavior:
 - [ ] Wire over valid straight roads succeeds (`w_con.c` `_LayWire` rules).
 - [ ] Wire over unsupported road shapes rejects according to C paths.
