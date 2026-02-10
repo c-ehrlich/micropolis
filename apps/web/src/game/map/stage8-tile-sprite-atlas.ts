@@ -12,12 +12,18 @@ import {
 import { Tile, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 import { getStage4TileDebugColor, toStage4DrawTileId } from './stage4-tile-renderer.ts';
 
-const STAGE8_EDITOR_COLOR_TILE_ATLAS_IMPORT_PATH =
-  '../../../../../packages/sim-assets/generated-images/images/tiles.png';
-const STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_IMPORT_PATH =
-  '../../../../../packages/sim-assets/generated-images/images/tilesbw.png';
-const STAGE8_MAP_COLOR_TILE_ATLAS_IMPORT_PATH =
-  '../../../../../packages/sim-assets/generated-images/images/tilessm.png';
+const STAGE8_EDITOR_COLOR_TILE_ATLAS_URL = new URL(
+  '../../../../../packages/sim-assets/generated-images/images/tiles.png',
+  import.meta.url,
+).href;
+const STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_URL = new URL(
+  '../../../../../packages/sim-assets/generated-images/images/tilesbw.png',
+  import.meta.url,
+).href;
+const STAGE8_MAP_COLOR_TILE_ATLAS_URL = new URL(
+  '../../../../../packages/sim-assets/generated-images/images/tilessm.png',
+  import.meta.url,
+).href;
 const STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
   'ref/micropolis/images/tiles.xpm',
 );
@@ -31,7 +37,7 @@ const STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdent
 interface Stage8TileAtlasDefinition {
   readonly canonicalIdentityKey: CanonicalImageIdentityKey;
   readonly expectedDerivedPngPath: string;
-  readonly spriteSheetImportPath: string;
+  readonly spriteSheetUrl: string;
   readonly tileSheetHeader: TileSheetHeader;
 }
 
@@ -41,7 +47,7 @@ const STAGE8_TILE_ATLAS_DEFINITIONS: readonly Stage8TileAtlasDefinition[] = Obje
     expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
       STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
-    spriteSheetImportPath: STAGE8_EDITOR_COLOR_TILE_ATLAS_IMPORT_PATH,
+    spriteSheetUrl: STAGE8_EDITOR_COLOR_TILE_ATLAS_URL,
     tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.color),
   }),
   Object.freeze({
@@ -49,7 +55,7 @@ const STAGE8_TILE_ATLAS_DEFINITIONS: readonly Stage8TileAtlasDefinition[] = Obje
     expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
       STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
-    spriteSheetImportPath: STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_IMPORT_PATH,
+    spriteSheetUrl: STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_URL,
     tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.monochrome),
   }),
   Object.freeze({
@@ -57,7 +63,7 @@ const STAGE8_TILE_ATLAS_DEFINITIONS: readonly Stage8TileAtlasDefinition[] = Obje
     expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
       STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
-    spriteSheetImportPath: STAGE8_MAP_COLOR_TILE_ATLAS_IMPORT_PATH,
+    spriteSheetUrl: STAGE8_MAP_COLOR_TILE_ATLAS_URL,
     tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.small),
   }),
 ]);
@@ -251,7 +257,7 @@ function createStage8TileAtlasSourceByCanonicalIdentityKey(): ReadonlyMap<
       Object.freeze<Stage8TileAtlasSource>({
         canonicalIdentityKey: definition.canonicalIdentityKey,
         derivedPngPath: manifestEntry.derivedPngPath,
-        spriteSheetUrl: new URL(definition.spriteSheetImportPath, import.meta.url).href,
+        spriteSheetUrl: definition.spriteSheetUrl,
         tileWidth: definition.tileSheetHeader.width,
         tileHeight,
         tileCount: Tile.TILE_COUNT,

@@ -234,6 +234,7 @@ function Stage4RuntimePanel() {
                 y,
               });
             }}
+            pendingTools={state.pendingTools}
             realtimeObjects={state.realtimeState.objects}
             tileSize={STAGE4_MAP_TILE_SIZE}
           />
