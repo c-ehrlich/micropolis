@@ -549,7 +549,7 @@ Deletion execution notes:
 
 - [x] Start a new city and confirm map + HUD load correctly.
 - [x] Place road/rail/wire/bulldoze/R/C/I and confirm costs/rejects/funds behavior.
-- [ ] Run sim at speed 1/2/3, pause/resume, and confirm cadence changes.
+- [x] Run sim at speed 1/2/3, pause/resume, and confirm cadence changes.
 - [ ] Observe heads + message feed update during normal simulation.
 - [ ] Save `.cty`, mutate city, reload `.cty`, confirm full restoration.
 - [ ] Start at least one scenario and confirm expected start year/funds.
@@ -559,6 +559,7 @@ Deletion execution notes:
 Implementation trace (2026-02-10):
 - Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies new-city snapshot loads authoritative map and HUD heads`) and shipped runtime-path certification (`certifies runtime new-city command hydrates map + HUD on the shipped Stage 4 route`).
 - Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds`) and shipped runtime-path certification (`certifies runtime tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds`).
+- Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host speed 1/2/3 with pause/resume cadence changes`) and shipped runtime-path certification (`certifies runtime speed 1/2/3 with pause/resume cadence changes on Stage 4 route`).
 
 ### Certification checklist (automated)
 

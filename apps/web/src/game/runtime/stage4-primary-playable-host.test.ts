@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import type {
   ClientEnvelope,
@@ -93,6 +93,20 @@ function readLatestServerSeq(hostEnvelopes: readonly HostEnvelope[]): number {
   return latestServerSeq;
 }
 
+/**
+ * Reads the latest authoritative tick seen on host envelopes.
+ * Mirrors monotonic frame/tick progression from `ref/micropolis/src/sim/s_sim.c`.
+ */
+function readLatestTick(hostEnvelopes: readonly HostEnvelope[]): number {
+  let latestTick = 0;
+  for (const envelope of hostEnvelopes) {
+    if ('tick' in envelope && typeof envelope.tick === 'number') {
+      latestTick = Math.max(latestTick, envelope.tick);
+    }
+  }
+  return latestTick;
+}
+
 // Magic-number source: playable tool costs from `CostOf[]` in
 // `ref/micropolis/src/sim/w_tool.c`.
 const STAGE11_PLAYABLE_TOOL_COSTS = {
@@ -114,6 +128,8 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
   { tool: 'com', placeX: 30, placeY: 20, rejectX: 0, rejectY: 30 },
   { tool: 'ind', placeX: 40, placeY: 20, rejectX: 0, rejectY: 40 },
 ] as const;
+
+const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
 
 function readFundsFromLabel(label: string): number {
   const digits = label.replaceAll(/[^0-9]/g, '');
@@ -368,6 +384,241 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
   } finally {
     unsubscribe();
     runtime.disconnect();
+  }
+}
+
+/**
+ * Certifies Stage 11 speed/pause cadence changes on host envelopes.
+ * Mirrors `Pause`/`Resume`/`setSpeed` from `ref/micropolis/src/sim/w_util.c`
+ * and `Spdcycle` speed gates in `ref/micropolis/src/sim/s_sim.c`.
+ */
+function certifyStage11PlayableCadenceOnHost(runId: string): void {
+  vi.useFakeTimers();
+  const host = createStage4PrimaryPlayableHost({
+    enableAmbientTicks: true,
+    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+  });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  const requestSnapshot = (label: string): HostSnapshotEnvelope => {
+    const previousServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      reason: 'manual',
+      fromServerSeq: previousServerSeq,
+    });
+    for (let index = hostEnvelopes.length - 1; index >= 0; index -= 1) {
+      const envelope = hostEnvelopes[index];
+      if (
+        envelope !== undefined &&
+        envelope.kind === 'snapshot' &&
+        envelope.serverSeq > previousServerSeq
+      ) {
+        return envelope;
+      }
+    }
+    throw new Error(`Expected ${label} snapshot envelope`);
+  };
+
+  const sendSimControl = (
+    commandId: string,
+    command: Extract<ClientEnvelope, { kind: 'command' }>['command'],
+  ): void => {
+    const previousServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId,
+      command,
+    });
+    expect(readLatestServerSeq(hostEnvelopes)).toBeGreaterThan(previousServerSeq);
+  };
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+
+    const bootSnapshot = requestSnapshot(`${runId} boot`);
+    expect(bootSnapshot.payload.hud?.speed).toBe(3);
+
+    sendSimControl(`${runId}-cmd-speed-1`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 1,
+    });
+    const speedOneBefore = requestSnapshot(`${runId} speed-1 before`);
+    expect(speedOneBefore.payload.hud?.speed).toBe(1);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 5);
+    const speedOneAfter = requestSnapshot(`${runId} speed-1 after`);
+    // Magic-number source: speed 1 emits one sim step every 5 `Spdcycle` loops in
+    // `ref/micropolis/src/sim/s_sim.c`.
+    expect(speedOneAfter.tick - speedOneBefore.tick).toBe(1);
+
+    sendSimControl(`${runId}-cmd-speed-2`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 2,
+    });
+    const speedTwoBefore = requestSnapshot(`${runId} speed-2 before`);
+    expect(speedTwoBefore.payload.hud?.speed).toBe(2);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    const speedTwoAfter = requestSnapshot(`${runId} speed-2 after`);
+    // Magic-number source: speed 2 emits one sim step every 3 `Spdcycle` loops in
+    // `ref/micropolis/src/sim/s_sim.c`.
+    expect(speedTwoAfter.tick - speedTwoBefore.tick).toBe(2);
+
+    sendSimControl(`${runId}-cmd-speed-3`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 3,
+    });
+    const speedThreeBefore = requestSnapshot(`${runId} speed-3 before`);
+    expect(speedThreeBefore.payload.hud?.speed).toBe(3);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    const speedThreeAfter = requestSnapshot(`${runId} speed-3 after`);
+    // Magic-number source: speed 3 steps each ambient cycle (no modulo gate) in
+    // `ref/micropolis/src/sim/s_sim.c`.
+    expect(speedThreeAfter.tick - speedThreeBefore.tick).toBe(6);
+
+    sendSimControl(`${runId}-cmd-pause`, {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+    const pausedBefore = requestSnapshot(`${runId} paused before`);
+    expect(pausedBefore.payload.hud?.speed).toBe(0);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 12);
+    const pausedAfter = requestSnapshot(`${runId} paused after`);
+    expect(pausedAfter.payload.hud?.speed).toBe(0);
+    expect(pausedAfter.tick - pausedBefore.tick).toBe(0);
+
+    sendSimControl(`${runId}-cmd-play`, {
+      kind: 'sim-control',
+      control: 'play',
+    });
+    const resumedBefore = requestSnapshot(`${runId} resumed before`);
+    // Magic-number source: `Resume()` restores prior paused speed from
+    // `ref/micropolis/src/sim/w_util.c`.
+    expect(resumedBefore.payload.hud?.speed).toBe(3);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 4);
+    const resumedAfter = requestSnapshot(`${runId} resumed after`);
+    expect(resumedAfter.payload.hud?.speed).toBe(3);
+    expect(resumedAfter.tick - resumedBefore.tick).toBe(4);
+
+    expect(readLatestTick(hostEnvelopes)).toBeGreaterThan(0);
+  } finally {
+    connection.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 speed/pause cadence changes on the shipped runtime path.
+ * Mirrors host cadence gates from `ref/micropolis/src/sim/s_sim.c` projected
+ * through Stage 4 runtime envelopes.
+ */
+function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
+  vi.useFakeTimers();
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({
+      enableAmbientTicks: true,
+      patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    }),
+    roomId: `${runId}-room`,
+    clientId: `${runId}-client`,
+  });
+
+  const requestSnapshot = (): { tick: number; speed: number; serverSeq: number } => {
+    const previousServerSeq = runtime.getState().lastAppliedServerSeq;
+    runtime.requestSnapshot('manual');
+    const state = runtime.getState();
+    expect(state.lastAppliedServerSeq).toBeGreaterThan(previousServerSeq);
+    return {
+      tick: state.lastAppliedTick,
+      speed: state.hudState.speed,
+      serverSeq: state.lastAppliedServerSeq,
+    };
+  };
+
+  try {
+    runtime.connect();
+
+    const bootSnapshot = requestSnapshot();
+    expect(bootSnapshot.speed).toBe(3);
+
+    runtime.sendCommand(`${runId}-cmd-speed-1`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 1,
+    });
+    const speedOneBefore = requestSnapshot();
+    expect(speedOneBefore.speed).toBe(1);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 5);
+    const speedOneAfter = requestSnapshot();
+    // Magic-number source: speed 1 modulo gate (`Spdcycle % 5`) in
+    // `ref/micropolis/src/sim/s_sim.c`.
+    expect(speedOneAfter.tick - speedOneBefore.tick).toBe(1);
+
+    runtime.sendCommand(`${runId}-cmd-speed-2`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 2,
+    });
+    const speedTwoBefore = requestSnapshot();
+    expect(speedTwoBefore.speed).toBe(2);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    const speedTwoAfter = requestSnapshot();
+    // Magic-number source: speed 2 modulo gate (`Spdcycle % 3`) in
+    // `ref/micropolis/src/sim/s_sim.c`.
+    expect(speedTwoAfter.tick - speedTwoBefore.tick).toBe(2);
+
+    runtime.sendCommand(`${runId}-cmd-speed-3`, {
+      kind: 'sim-control',
+      control: 'set-speed',
+      speed: 3,
+    });
+    const speedThreeBefore = requestSnapshot();
+    expect(speedThreeBefore.speed).toBe(3);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 6);
+    const speedThreeAfter = requestSnapshot();
+    expect(speedThreeAfter.tick - speedThreeBefore.tick).toBe(6);
+
+    runtime.sendCommand(`${runId}-cmd-pause`, {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+    const pausedBefore = requestSnapshot();
+    expect(pausedBefore.speed).toBe(0);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 12);
+    const pausedAfter = requestSnapshot();
+    expect(pausedAfter.speed).toBe(0);
+    expect(pausedAfter.tick - pausedBefore.tick).toBe(0);
+
+    runtime.sendCommand(`${runId}-cmd-play`, {
+      kind: 'sim-control',
+      control: 'play',
+    });
+    const resumedBefore = requestSnapshot();
+    expect(resumedBefore.speed).toBe(3);
+    vi.advanceTimersByTime(STAGE11_CADENCE_PATCH_INTERVAL_MS * 4);
+    const resumedAfter = requestSnapshot();
+    expect(resumedAfter.speed).toBe(3);
+    expect(resumedAfter.tick - resumedBefore.tick).toBe(4);
+  } finally {
+    runtime.disconnect();
+    vi.useRealTimers();
   }
 }
 
@@ -906,6 +1157,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
     await certifyStage11PlayableToolCostsOnRuntime('stage11-tool-costs-runtime');
+  });
+
+  test('certifies host speed 1/2/3 with pause/resume cadence changes', () => {
+    certifyStage11PlayableCadenceOnHost('stage11-cadence-host');
+  });
+
+  test('certifies runtime speed 1/2/3 with pause/resume cadence changes on Stage 4 route', () => {
+    certifyStage11PlayableCadenceOnRuntime('stage11-cadence-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
