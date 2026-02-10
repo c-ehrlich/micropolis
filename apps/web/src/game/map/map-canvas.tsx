@@ -177,6 +177,10 @@ export function MapCanvas({
           cursor: onTileClick === undefined ? 'default' : 'crosshair',
           display: 'block',
           imageRendering: 'pixelated',
+          left: 0,
+          position: 'absolute',
+          top: 0,
+          zIndex: getMapCanvasLayerZIndex('map'),
         }}
       />
       {pendingTools.map((pending) => {
@@ -197,6 +201,7 @@ export function MapCanvas({
               position: 'absolute',
               top,
               width: side,
+              zIndex: getMapCanvasLayerZIndex('pending-tool'),
             }}
           />
         );
@@ -223,6 +228,7 @@ export function MapCanvas({
             position: 'absolute',
             top: sprite.top,
             width: sprite.width,
+            zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
           }}
           title={`${sprite.name} frame ${sprite.frame}`}
         >
@@ -240,6 +246,8 @@ type MapCanvasDrawProc = (
   tileRenderer: MapCanvasTileRenderer,
 ) => void;
 
+type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay';
+
 interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
   debugTileRendererEnabled: boolean;
@@ -248,6 +256,25 @@ interface MapCanvasTileRenderer {
 
 type MapCanvasTileRenderMode = 'atlas' | 'diagnostic-debug' | 'missing-atlas';
 const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
+
+/**
+ * Returns deterministic DOM stacking order for Stage 4 map layers.
+ * Mirrors `DoUpdateEditor` draw order in `ref/micropolis/src/sim/w_editor.c`:
+ * `MemDrawBeegMapRect` base map, then `DrawPending`, then `DrawObjects`.
+ * Parity note: browser rendering uses CSS z-index instead of a single X11 pixmap.
+ */
+export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
+  switch (layer) {
+    case 'map':
+      return 0;
+    case 'pending-tool':
+      return 1;
+    case 'realtime-overlay':
+      return 2;
+    default:
+      return assertNever(layer);
+  }
+}
 
 /**
  * Selects canvas redraw mode from authoritative map draw metadata.
@@ -698,4 +725,8 @@ function getClickedTilePosition(
  */
 function isTileInBounds(x: number, y: number, mapState: RuntimeMapState): boolean {
   return x >= 0 && y >= 0 && x < mapState.width && y < mapState.height;
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected map canvas layer "${String(value)}"`);
 }

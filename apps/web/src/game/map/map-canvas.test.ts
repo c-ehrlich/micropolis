@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getMapCanvasLayerZIndex,
   projectRealtimeOverlaySprites,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
@@ -281,5 +282,16 @@ describe('map canvas tile render mode selection', () => {
         hasAtlasImage: false,
       }),
     ).toBe('missing-atlas');
+  });
+});
+
+describe('map canvas layer ordering', () => {
+  it('keeps map, pending tool, and realtime overlays in Micropolis draw order', () => {
+    // `DoUpdateEditor` in `w_editor.c` draws map first, then pending tool preview,
+    // then realtime objects (`DrawObjects`) on top.
+    expect(getMapCanvasLayerZIndex('map')).toBeLessThan(getMapCanvasLayerZIndex('pending-tool'));
+    expect(getMapCanvasLayerZIndex('pending-tool')).toBeLessThan(
+      getMapCanvasLayerZIndex('realtime-overlay'),
+    );
   });
 });
