@@ -7,21 +7,59 @@ import {
   lookupStage8TileSprite,
   resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEYS,
 } from './stage8-tile-sprite-atlas.ts';
 
 describe('stage8 tile sprite atlas', () => {
-  it('resolves deterministic atlas metadata from canonical tiles.xpm identity', () => {
+  it('resolves deterministic atlas metadata from canonical GetViewTiles image keys', () => {
     const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
       STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     );
+    const editorMonochromeKey = resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+      viewClass: 'editor',
+      color: false,
+    });
+    const mapColorKey = resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+      viewClass: 'map',
+      color: true,
+    });
+    const editorMonochromeAtlas =
+      editorMonochromeKey === undefined
+        ? undefined
+        : getStage8TileAtlasSourceByCanonicalIdentityKey(editorMonochromeKey);
+    const mapColorAtlas =
+      mapColorKey === undefined
+        ? undefined
+        : getStage8TileAtlasSourceByCanonicalIdentityKey(mapColorKey);
 
+    expect(STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toEqual([
+      'ref/micropolis/images/tiles.xpm',
+      'ref/micropolis/images/tilesbw.xpm',
+      'ref/micropolis/images/tilessm.xpm',
+    ]);
     expect(atlas).toBeDefined();
     expect(atlas?.canonicalIdentityKey).toBe(STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY);
     expect(atlas?.derivedPngPath).toBe('packages/sim-assets/generated-images/images/tiles.png');
     expect(atlas?.tileWidth).toBe(16);
     expect(atlas?.tileHeight).toBe(16);
+    expect(editorMonochromeAtlas?.canonicalIdentityKey).toBe('ref/micropolis/images/tilesbw.xpm');
+    expect(editorMonochromeAtlas?.derivedPngPath).toBe(
+      'packages/sim-assets/generated-images/images/tilesbw.png',
+    );
+    // `TILE_SHEET_HEADERS.monochrome` is `"16 15360 2 1"` in `packages/sim-assets/src/tiles.ts`.
+    expect(editorMonochromeAtlas?.tileWidth).toBe(16);
+    expect(editorMonochromeAtlas?.tileHeight).toBe(16);
+    expect(mapColorAtlas?.canonicalIdentityKey).toBe('ref/micropolis/images/tilessm.xpm');
+    expect(mapColorAtlas?.derivedPngPath).toBe(
+      'packages/sim-assets/generated-images/images/tilessm.png',
+    );
+    // `TILE_SHEET_HEADERS.small` is `"4 2880 14 1"` in `packages/sim-assets/src/tiles.ts`.
+    expect(mapColorAtlas?.tileWidth).toBe(4);
+    expect(mapColorAtlas?.tileHeight).toBe(3);
     // Source: `#define TILE_COUNT 960` in `ref/micropolis/src/sim/headers/sim.h`.
     expect(atlas?.tileCount).toBe(Tile.TILE_COUNT);
+    expect(editorMonochromeAtlas?.tileCount).toBe(Tile.TILE_COUNT);
+    expect(mapColorAtlas?.tileCount).toBe(Tile.TILE_COUNT);
   });
 
   it('maps authoritative tile words to deterministic atlas rects with LOMASK parity', () => {
@@ -34,6 +72,28 @@ describe('stage8 tile sprite atlas', () => {
     expect(wrapped.sourceY).toBe(7 * 16);
     expect(wrapped.sourceWidth).toBe(16);
     expect(wrapped.sourceHeight).toBe(16);
+  });
+
+  it('uses canonical atlas identity key to select sprite dimensions deterministically', () => {
+    // `GetViewTiles` map-class color branch in `g_setup.c` reads `tilessm.xpm`.
+    const mapColorKey = resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+      viewClass: 'map',
+      color: true,
+    });
+    if (mapColorKey === undefined) {
+      throw new Error('Expected map color atlas canonical key');
+    }
+
+    const sprite = lookupStage8TileSprite(Tile.TILE_COUNT + 7, {
+      atlasCanonicalIdentityKey: mapColorKey,
+    });
+
+    expect(sprite.atlasCanonicalIdentityKey).toBe(mapColorKey);
+    expect(sprite.tileId).toBe(7);
+    // `tilessm.xpm` header in `packages/sim-assets/src/tiles.ts` is `"4 2880 14 1"`.
+    expect(sprite.sourceWidth).toBe(4);
+    expect(sprite.sourceHeight).toBe(3);
+    expect(sprite.sourceY).toBe(7 * 3);
   });
 
   it('ignores high tile flags when selecting sprite rects', () => {

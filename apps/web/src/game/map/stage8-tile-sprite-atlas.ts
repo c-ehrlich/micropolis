@@ -1,26 +1,23 @@
 import {
   type CanonicalImageIdentityKey,
+  canonicalSourcePathToDerivedPngPath,
   getDerivedImagePathManifestEntry,
   toCanonicalImageIdentityKey,
 } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import {
   parseTileSheetHeader,
   TILE_SHEET_HEADERS,
+  type TileSheetHeader,
 } from '../../../../../packages/sim-assets/src/tiles.ts';
 import { Tile } from '../../../../../packages/sim-core/src/core/constants.ts';
 import { getStage4TileDebugColor, toStage4DrawTileId } from './stage4-tile-renderer.ts';
 
-const STAGE8_TILE_ATLAS_DERIVED_PNG_PATH = 'packages/sim-assets/generated-images/images/tiles.png';
-const STAGE8_TILE_ATLAS_IMPORT_PATH =
+const STAGE8_EDITOR_COLOR_TILE_ATLAS_IMPORT_PATH =
   '../../../../../packages/sim-assets/generated-images/images/tiles.png';
-
-const COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.color);
-
-const STAGE8_TILE_ATLAS_TILE_WIDTH = COLOR_TILE_SHEET_HEADER.width;
-const STAGE8_TILE_ATLAS_TILE_HEIGHT = COLOR_TILE_SHEET_HEADER.height / Tile.TILE_COUNT;
-const STAGE8_TILE_ATLAS_ROW_COUNT = Math.trunc(
-  COLOR_TILE_SHEET_HEADER.height / STAGE8_TILE_ATLAS_TILE_HEIGHT,
-);
+const STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_IMPORT_PATH =
+  '../../../../../packages/sim-assets/generated-images/images/tilesbw.png';
+const STAGE8_MAP_COLOR_TILE_ATLAS_IMPORT_PATH =
+  '../../../../../packages/sim-assets/generated-images/images/tilessm.png';
 const STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
   'ref/micropolis/images/tiles.xpm',
 );
@@ -30,6 +27,40 @@ const STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalIm
 const STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
   'ref/micropolis/images/tilessm.xpm',
 );
+
+interface Stage8TileAtlasDefinition {
+  readonly canonicalIdentityKey: CanonicalImageIdentityKey;
+  readonly expectedDerivedPngPath: string;
+  readonly spriteSheetImportPath: string;
+  readonly tileSheetHeader: TileSheetHeader;
+}
+
+const STAGE8_TILE_ATLAS_DEFINITIONS: readonly Stage8TileAtlasDefinition[] = Object.freeze([
+  Object.freeze({
+    canonicalIdentityKey: STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
+      STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    ),
+    spriteSheetImportPath: STAGE8_EDITOR_COLOR_TILE_ATLAS_IMPORT_PATH,
+    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.color),
+  }),
+  Object.freeze({
+    canonicalIdentityKey: STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
+      STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    ),
+    spriteSheetImportPath: STAGE8_EDITOR_MONOCHROME_TILE_ATLAS_IMPORT_PATH,
+    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.monochrome),
+  }),
+  Object.freeze({
+    canonicalIdentityKey: STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    expectedDerivedPngPath: canonicalSourcePathToDerivedPngPath(
+      STAGE8_MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    ),
+    spriteSheetImportPath: STAGE8_MAP_COLOR_TILE_ATLAS_IMPORT_PATH,
+    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.small),
+  }),
+]);
 
 /**
  * `GetViewTiles` class branches that select tile art sources in Micropolis.
@@ -45,6 +76,16 @@ export type Stage8MicropolisTileSheetViewClass = 'editor' | 'map';
  */
 export const STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
   STAGE8_EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+
+/**
+ * Canonical identity keys for supported Stage 8 tile atlases.
+ * Mirrors the XPM-backed `GetViewTiles` sources from
+ * `ref/micropolis/src/sim/g_setup.c` (`tiles.xpm`, `tilesbw.xpm`, `tilessm.xpm`).
+ * Parity note: this excludes the map-class monochrome `SIM_GSMTILE` byte resource
+ * branch, which does not have an XPM canonical key.
+ */
+export const STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEYS: readonly CanonicalImageIdentityKey[] =
+  Object.freeze(STAGE8_TILE_ATLAS_DEFINITIONS.map((atlas) => atlas.canonicalIdentityKey));
 
 /**
  * Resolve canonical Micropolis tile-sheet identity by view class + color mode.
@@ -108,6 +149,7 @@ export interface Stage8TileSpriteLookup {
  * `ref/micropolis/src/sim/g_bigmap.c` for lightning-bolt substitution.
  */
 export interface Stage8TileSpriteLookupOptions {
+  readonly atlasCanonicalIdentityKey?: CanonicalImageIdentityKey;
   readonly blinkUnpoweredZoneCenter?: boolean;
 }
 
@@ -140,10 +182,21 @@ export function lookupStage8TileSprite(
   tileWord: number,
   options: Stage8TileSpriteLookupOptions = {},
 ): Stage8TileSpriteLookup {
+  const atlasCanonicalIdentityKey =
+    options.atlasCanonicalIdentityKey ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
   const tileId = toStage4DrawTileId(tileWord, {
     blinkUnpoweredZoneCenter: options.blinkUnpoweredZoneCenter,
   });
-  const cached = STAGE8_TILE_SPRITE_LOOKUP_BY_TILE_ID[tileId];
+  const lookupForAtlas =
+    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(atlasCanonicalIdentityKey) ??
+    STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY.get(
+      STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  assertDefined(
+    lookupForAtlas,
+    `Missing Stage 8 tile sprite lookup table for atlas "${atlasCanonicalIdentityKey}"`,
+  );
+  const cached = lookupForAtlas[tileId];
   assertDefined(cached, `Missing Stage 8 tile sprite lookup row for tile id ${tileId}`);
   return cached;
 }
@@ -165,42 +218,67 @@ function createStage8TileAtlasSourceByCanonicalIdentityKey(): ReadonlyMap<
   CanonicalImageIdentityKey,
   Stage8TileAtlasSource
 > {
-  const manifestEntry = getDerivedImagePathManifestEntry(STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY);
-  if (
-    manifestEntry?.derivedPngPath !== STAGE8_TILE_ATLAS_DERIVED_PNG_PATH ||
-    STAGE8_TILE_ATLAS_ROW_COUNT !== Tile.TILE_COUNT
-  ) {
-    return new Map();
+  const atlasSourceByCanonicalIdentityKey = new Map<
+    CanonicalImageIdentityKey,
+    Stage8TileAtlasSource
+  >();
+  for (const definition of STAGE8_TILE_ATLAS_DEFINITIONS) {
+    const manifestEntry = getDerivedImagePathManifestEntry(definition.canonicalIdentityKey);
+    const tileHeight = Math.trunc(definition.tileSheetHeader.height / Tile.TILE_COUNT);
+    const hasExactTileRows =
+      tileHeight > 0 &&
+      tileHeight * Tile.TILE_COUNT === definition.tileSheetHeader.height &&
+      Math.trunc(definition.tileSheetHeader.height / tileHeight) === Tile.TILE_COUNT;
+    if (manifestEntry?.derivedPngPath !== definition.expectedDerivedPngPath || !hasExactTileRows) {
+      continue;
+    }
+
+    atlasSourceByCanonicalIdentityKey.set(
+      definition.canonicalIdentityKey,
+      Object.freeze<Stage8TileAtlasSource>({
+        canonicalIdentityKey: definition.canonicalIdentityKey,
+        derivedPngPath: manifestEntry.derivedPngPath,
+        spriteSheetUrl: new URL(definition.spriteSheetImportPath, import.meta.url).href,
+        tileWidth: definition.tileSheetHeader.width,
+        tileHeight,
+        tileCount: Tile.TILE_COUNT,
+      }),
+    );
   }
 
-  const source = Object.freeze<Stage8TileAtlasSource>({
-    canonicalIdentityKey: STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-    derivedPngPath: manifestEntry.derivedPngPath,
-    spriteSheetUrl: new URL(STAGE8_TILE_ATLAS_IMPORT_PATH, import.meta.url).href,
-    tileWidth: STAGE8_TILE_ATLAS_TILE_WIDTH,
-    tileHeight: STAGE8_TILE_ATLAS_TILE_HEIGHT,
-    tileCount: Tile.TILE_COUNT,
-  });
-
-  return new Map<CanonicalImageIdentityKey, Stage8TileAtlasSource>([
-    [STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY, source],
-  ]);
+  return atlasSourceByCanonicalIdentityKey;
 }
 
-function createStage8TileSpriteLookupByTileId(): readonly Stage8TileSpriteLookup[] {
-  const lookup: Stage8TileSpriteLookup[] = new Array(Tile.TILE_COUNT);
-  for (let tileId = 0; tileId < Tile.TILE_COUNT; tileId += 1) {
-    lookup[tileId] = Object.freeze({
-      atlasCanonicalIdentityKey: STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-      tileId,
-      sourceX: 0,
-      sourceY: tileId * STAGE8_TILE_ATLAS_TILE_HEIGHT,
-      sourceWidth: STAGE8_TILE_ATLAS_TILE_WIDTH,
-      sourceHeight: STAGE8_TILE_ATLAS_TILE_HEIGHT,
-      debugFallbackColor: getStage4TileDebugColor(tileId),
-    });
+function createStage8TileSpriteLookupByCanonicalIdentityKey(): ReadonlyMap<
+  CanonicalImageIdentityKey,
+  readonly Stage8TileSpriteLookup[]
+> {
+  const lookupsByCanonicalIdentityKey = new Map<
+    CanonicalImageIdentityKey,
+    readonly Stage8TileSpriteLookup[]
+  >();
+  for (const definition of STAGE8_TILE_ATLAS_DEFINITIONS) {
+    const tileHeight = Math.trunc(definition.tileSheetHeader.height / Tile.TILE_COUNT);
+    if (tileHeight <= 0 || tileHeight * Tile.TILE_COUNT !== definition.tileSheetHeader.height) {
+      continue;
+    }
+
+    const lookup: Stage8TileSpriteLookup[] = new Array(Tile.TILE_COUNT);
+    for (let tileId = 0; tileId < Tile.TILE_COUNT; tileId += 1) {
+      lookup[tileId] = Object.freeze({
+        atlasCanonicalIdentityKey: definition.canonicalIdentityKey,
+        tileId,
+        sourceX: 0,
+        sourceY: tileId * tileHeight,
+        sourceWidth: definition.tileSheetHeader.width,
+        sourceHeight: tileHeight,
+        debugFallbackColor: getStage4TileDebugColor(tileId),
+      });
+    }
+    lookupsByCanonicalIdentityKey.set(definition.canonicalIdentityKey, Object.freeze(lookup));
   }
-  return Object.freeze(lookup);
+
+  return lookupsByCanonicalIdentityKey;
 }
 
 function assertDefined<T>(value: T, message: string): asserts value is NonNullable<T> {
@@ -211,4 +289,5 @@ function assertDefined<T>(value: T, message: string): asserts value is NonNullab
 
 const STAGE8_TILE_ATLAS_SOURCE_BY_CANONICAL_IDENTITY_KEY =
   createStage8TileAtlasSourceByCanonicalIdentityKey();
-const STAGE8_TILE_SPRITE_LOOKUP_BY_TILE_ID = createStage8TileSpriteLookupByTileId();
+const STAGE8_TILE_SPRITE_LOOKUP_BY_CANONICAL_IDENTITY_KEY =
+  createStage8TileSpriteLookupByCanonicalIdentityKey();

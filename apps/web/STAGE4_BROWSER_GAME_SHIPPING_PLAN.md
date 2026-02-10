@@ -445,7 +445,7 @@ Deletion execution notes:
 
 ### Implementation checklist
 
-- [ ] Build/consume deterministic atlas mapping from canonical Micropolis image identity keys.
+- [x] Build/consume deterministic atlas mapping from canonical Micropolis image identity keys.
 - [ ] Implement tile-id to sprite-rect lookup with `LOMASK` masking.
 - [ ] Keep debug renderer behind explicit feature flag for diagnostics.
 - [ ] Ensure overlay sprites layer correctly with map sprites.

@@ -1,5 +1,6 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
@@ -7,8 +8,15 @@ import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   isStage4DebugTileRendererEnabled,
   lookupStage8TileSprite,
+  resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
 } from './stage8-tile-sprite-atlas.ts';
+
+const STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+    viewClass: 'editor',
+    color: true,
+  }) ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
 
 /**
  * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
@@ -32,22 +40,24 @@ export function MapCanvas({
   tileSize?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const tileAtlasImageRef = useRef<HTMLImageElement | null>(null);
+  const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
+    ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
+  >(new Map());
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
   const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
 
   useEffect(() => {
     if (debugTileRendererEnabled) {
-      tileAtlasImageRef.current = null;
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
       return;
     }
 
     const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
-      STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+      STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     );
     if (atlas === undefined) {
-      tileAtlasImageRef.current = null;
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
       return;
     }
 
@@ -58,7 +68,9 @@ export function MapCanvas({
       if (cancelled) {
         return;
       }
-      tileAtlasImageRef.current = image;
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map([
+        [atlas.canonicalIdentityKey, image],
+      ]);
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -66,7 +78,7 @@ export function MapCanvas({
       if (cancelled) {
         return;
       }
-      tileAtlasImageRef.current = null;
+      tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -109,7 +121,8 @@ export function MapCanvas({
     });
     MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize, {
       debugTileRendererEnabled,
-      tileAtlasImage: tileAtlasImageRef.current,
+      baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+      tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
     });
     lastRenderedEpochRef.current = mapState.renderEpoch;
   }, [debugTileRendererEnabled, mapState, tileAtlasRenderVersion, tileSize]);
@@ -228,8 +241,9 @@ type MapCanvasDrawProc = (
 ) => void;
 
 interface MapCanvasTileRenderer {
+  baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
   debugTileRendererEnabled: boolean;
-  tileAtlasImage: HTMLImageElement | null;
+  tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
 }
 
 /**
@@ -587,11 +601,15 @@ function drawMapCanvasTile(
   tileSize: number,
   tileRenderer: MapCanvasTileRenderer,
 ): void {
-  const sprite = lookupStage8TileSprite(tileWord);
+  const sprite = lookupStage8TileSprite(tileWord, {
+    atlasCanonicalIdentityKey: tileRenderer.baseTileAtlasCanonicalIdentityKey,
+  });
   const targetX = x * tileSize;
   const targetY = y * tileSize;
-  const atlasImage = tileRenderer.tileAtlasImage;
-  if (!tileRenderer.debugTileRendererEnabled && atlasImage !== null) {
+  const atlasImage = tileRenderer.tileAtlasImagesByCanonicalIdentityKey.get(
+    sprite.atlasCanonicalIdentityKey,
+  );
+  if (!tileRenderer.debugTileRendererEnabled && atlasImage !== undefined) {
     context.drawImage(
       atlasImage,
       sprite.sourceX,
