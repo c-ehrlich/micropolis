@@ -46,6 +46,7 @@ import type {
   HostEnvelope,
   HostHudMessagePayload,
   HostHudOptionsPayload,
+  HostHudPayload,
   HostMapPatchTileWordDelta,
   HostMapRedrawPlanPayload,
   HostPatchPayload,
@@ -657,7 +658,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
     const messageDeltas = this.drainPendingHookMessages();
     if (messageDeltas.length > 0) {
-      payload.messageDeltas = messageDeltas;
+      const canonicalMessageDeltas = cloneHostHudMessagePayloadList(messageDeltas);
+      payload.messageDeltas = canonicalMessageDeltas;
+      payload.messages = cloneHostHudMessagePayloadList(canonicalMessageDeltas);
+      payload.hud = withLegacyHudMessageCompatibility(payload.hud, canonicalMessageDeltas);
     }
     const realtimePayload = this.buildRealtimeDeltaPayload();
     if (realtimePayload !== undefined) {
@@ -1237,11 +1241,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
       }
 
       this.appendMessageLog(normalized);
+      const canonicalMessageDeltas = cloneHostHudMessagePayloadList(normalized);
       return {
         ...envelope,
         payload: {
           ...envelope.payload,
-          messageDeltas: normalized,
+          hud: withLegacyHudMessageCompatibility(envelope.payload.hud, canonicalMessageDeltas),
+          messageDeltas: canonicalMessageDeltas,
+          messages: cloneHostHudMessagePayloadList(canonicalMessageDeltas),
         },
       };
     }
@@ -1261,11 +1268,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.replaceMessageLog(normalized);
+    const canonicalSnapshotMessages = cloneHostHudMessagePayloadList(normalized);
     return {
       ...envelope,
       payload: {
         ...envelope.payload,
-        messages: normalized,
+        hud: withLegacyHudMessageCompatibility(envelope.payload.hud, canonicalSnapshotMessages),
+        messages: canonicalSnapshotMessages,
+        messageDeltas: cloneHostHudMessagePayloadList(canonicalSnapshotMessages),
       },
     };
   }
@@ -1408,17 +1418,30 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     const tileWords = buildSnapshotTileWordsFromSimCoreMap(mapLayer, this.mapWidth, this.mapHeight);
+    const hud = this.buildHudSnapshotPayload();
+    if (this.messageLog.length === 0) {
+      return {
+        map: {
+          width: this.mapWidth,
+          height: this.mapHeight,
+          tileWords,
+        },
+        hud,
+        realtime: this.buildRealtimeSnapshotPayload(),
+      };
+    }
+
+    const snapshotMessages = cloneHostHudMessagePayloadList(this.messageLog);
     return {
       map: {
         width: this.mapWidth,
         height: this.mapHeight,
         tileWords,
       },
-      hud: this.buildHudSnapshotPayload(),
+      hud: withLegacyHudMessageCompatibility(hud, snapshotMessages),
       realtime: this.buildRealtimeSnapshotPayload(),
-      ...(this.messageLog.length === 0
-        ? {}
-        : { messages: cloneHostHudMessagePayloadList(this.messageLog) }),
+      messages: snapshotMessages,
+      messageDeltas: cloneHostHudMessagePayloadList(snapshotMessages),
     };
   }
 
@@ -1761,9 +1784,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    const snapshotMessages = payload.messages ?? [];
+    const snapshotMessages = payload.messages ?? payload.messageDeltas ?? [];
     const mergedMessages = [...snapshotMessages, ...pendingMessages];
-    payload.messages = clampMessageFeed(mergedMessages);
+    const canonicalSnapshotMessages = clampMessageFeed(mergedMessages);
+    payload.messages = canonicalSnapshotMessages;
+    payload.messageDeltas = cloneHostHudMessagePayloadList(canonicalSnapshotMessages);
+    payload.hud = withLegacyHudMessageCompatibility(payload.hud, canonicalSnapshotMessages);
   }
 
   /**
@@ -2067,6 +2093,28 @@ function normalizeMessageReplayMetadata(
     tick: message.tick ?? fallbackTick,
     serverSeq: message.serverSeq ?? fallbackServerSeq,
   }));
+}
+
+/**
+ * Adds legacy `hud.message` compatibility metadata from canonical message arrays.
+ * Mirrors latest visible-message ownership in `SetMessageField`/`doMessage` from
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: C tracks one visible message slot, while bridge payloads also carry
+ * message arrays; this keeps both representations aligned during migration.
+ */
+function withLegacyHudMessageCompatibility(
+  hud: HostHudPayload | undefined,
+  messages: readonly HostHudMessagePayload[],
+): HostHudPayload | undefined {
+  const latestMessage = messages.at(-1);
+  if (latestMessage === undefined) {
+    return hud;
+  }
+
+  return {
+    ...(hud ?? {}),
+    message: { ...latestMessage },
+  };
 }
 
 /**

@@ -166,6 +166,44 @@ function readMessageDeltasFromEnvelope(
 }
 
 /**
+ * Reads legacy `payload.messages` compatibility entries from snapshot/patch envelopes.
+ * Mirrors migration-era append/feed compatibility kept alongside `SendMes` payload
+ * projection in `ref/micropolis/src/sim/s_msg.c`.
+ */
+function readLegacyMessagesFromEnvelope(
+  envelope: HostEnvelope,
+): readonly HostHudMessagePayload[] | null {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return null;
+  }
+
+  const messages = (envelope.payload as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) {
+    return null;
+  }
+
+  return messages as readonly HostHudMessagePayload[];
+}
+
+/**
+ * Reads legacy `hud.message` compatibility data from snapshot/patch envelopes.
+ * Mirrors single visible-message ownership in `SetMessageField`/`doMessage` from
+ * `ref/micropolis/src/sim/s_msg.c`.
+ */
+function readLegacyHudMessageFromEnvelope(envelope: HostEnvelope): HostHudMessagePayload | null {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return null;
+  }
+
+  const hudPayload = readHudPayloadFromEnvelope(envelope);
+  if (hudPayload === null || hudPayload.message === undefined) {
+    return null;
+  }
+
+  return hudPayload.message;
+}
+
+/**
  * Reads realtime payloads from snapshot/patch envelopes.
  * Mirrors sprite payload projection ownership from `ref/micropolis/src/sim/w_sprite.c`.
  */
@@ -1210,6 +1248,111 @@ describe('SimCoreEnvelopeHost', () => {
       tick: 1,
       serverSeq: 3,
     });
+  });
+
+  it('keeps canonical and compatibility message fields aligned without reducer duplication', () => {
+    const roomId = 'room-message-compatibility';
+    const clientId = 'client-message-compatibility';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Message-id source: `SendMessages` warning ids in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMesAt(
+        hostInternals.authorityState.simState,
+        hostInternals.authorityState.simContext,
+        14,
+        7,
+        9,
+      ),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-pause-message-compatibility',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const messagePatch = captured.envelopes[3];
+    if (messagePatch === undefined || messagePatch.kind !== 'patch') {
+      throw new Error('expected message patch envelope');
+    }
+    const canonicalMessageDeltas = readMessageDeltasFromEnvelope(messagePatch);
+    if (canonicalMessageDeltas === null || canonicalMessageDeltas.length === 0) {
+      throw new Error('expected canonical message delta payload');
+    }
+    const legacyMessages = readLegacyMessagesFromEnvelope(messagePatch);
+    if (legacyMessages === null || legacyMessages.length === 0) {
+      throw new Error('expected legacy messages compatibility payload');
+    }
+    expect(legacyMessages).toEqual(canonicalMessageDeltas);
+    expect(readLegacyHudMessageFromEnvelope(messagePatch)).toEqual(
+      canonicalMessageDeltas[canonicalMessageDeltas.length - 1],
+    );
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: messagePatch.serverSeq,
+      reason: 'manual',
+    });
+
+    const replaySnapshot = captured.envelopes[4];
+    if (replaySnapshot === undefined || replaySnapshot.kind !== 'snapshot') {
+      throw new Error('expected replay snapshot envelope');
+    }
+    if (
+      replaySnapshot.payload.messages === undefined ||
+      replaySnapshot.payload.messageDeltas === undefined
+    ) {
+      throw new Error('expected snapshot canonical + compatibility message fields');
+    }
+    expect(replaySnapshot.payload.messageDeltas).toEqual(replaySnapshot.payload.messages);
+    expect(readLegacyHudMessageFromEnvelope(replaySnapshot)).toEqual(
+      replaySnapshot.payload.messages[replaySnapshot.payload.messages.length - 1],
+    );
+
+    let liveState = createInitialWebRuntimeState({ roomId, clientId });
+    for (const envelope of captured.envelopes.slice(0, 4)) {
+      const reduction = reduceHostEnvelope(liveState, envelope);
+      expect(reduction.outcome).toBe('applied');
+      liveState = reduction.state;
+    }
+    expect(liveState.hudState.messages.filter((message) => message.id === 14)).toHaveLength(1);
+
+    const helloEnvelope = captured.envelopes[0];
+    if (helloEnvelope === undefined || helloEnvelope.kind !== 'hello') {
+      throw new Error('expected hello envelope');
+    }
+    const replayHelloReduction = reduceHostEnvelope(
+      createInitialWebRuntimeState({ roomId, clientId }),
+      helloEnvelope,
+    );
+    expect(replayHelloReduction.outcome).toBe('applied');
+    const replaySnapshotReduction = reduceHostEnvelope(replayHelloReduction.state, replaySnapshot);
+    expect(replaySnapshotReduction.outcome).toBe('applied');
+    expect(
+      replaySnapshotReduction.state.hudState.messages.filter((message) => message.id === 14),
+    ).toHaveLength(1);
   });
 
   it('routes save-city/load-city through sim-io helpers and restores saved state on load', () => {
