@@ -26,7 +26,6 @@ export const DEFAULT_STAGE4_AUTHORITY_MODE: Stage4AuthorityMode = 'sim-core';
  */
 export interface HostFactoryEnv {
   readonly VITE_CORE_HOST_MODE?: string;
-  readonly VITE_STAGE4_AUTHORITY_MODE?: string;
   // Stage 1 dev/runtime opt-in flag for sim-core authority ownership.
   readonly VITE_STAGE4_REAL_AUTHORITY?: string;
 }
@@ -66,10 +65,11 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
 }
 
 /**
- * Resolve Stage 4 authority mode from explicit options, then dev opt-in flag, then env mode.
+ * Resolve Stage 4 authority mode from explicit options, then legacy opt-in validation.
  * Mirrors Stage 1 host-authority migration intent rooted in `ref/micropolis/src/sim/w_sim.c`
  * and simulation ownership in `ref/micropolis/src/sim/s_sim.c`.
- * Parity note: fallback to deterministic authority is a temporary TypeScript migration seam.
+ * Parity note: deterministic fallback remains explicit test wiring only and is not
+ * selected from browser env flags on the shipping path.
  */
 export function resolveStage4AuthorityMode(
   options: CreateCoreHostOptions = {},
@@ -88,18 +88,7 @@ export function resolveStage4AuthorityMode(
       throw new Error(`Unsupported stage4 real authority flag: ${realAuthorityOptIn}`);
     }
   }
-
-  const configuredMode =
-    options.env?.VITE_STAGE4_AUTHORITY_MODE ?? import.meta.env.VITE_STAGE4_AUTHORITY_MODE;
-  if (configuredMode === undefined || configuredMode === '') {
-    return DEFAULT_STAGE4_AUTHORITY_MODE;
-  }
-
-  if (!isStage4AuthorityMode(configuredMode)) {
-    throw new Error(`Unsupported stage4 authority mode: ${configuredMode}`);
-  }
-
-  return configuredMode;
+  return DEFAULT_STAGE4_AUTHORITY_MODE;
 }
 
 /**
@@ -130,10 +119,6 @@ export function createCoreHost(options: CreateCoreHostOptions = {}): CoreHost {
 
 function isHostMode(value: string): value is HostMode {
   return value === 'local' || value === 'do';
-}
-
-function isStage4AuthorityMode(value: string): value is Stage4AuthorityMode {
-  return value === 'sim-core' || value === 'deterministic';
 }
 
 function isEnabledFlag(value: string): boolean {

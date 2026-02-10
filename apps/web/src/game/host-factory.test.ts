@@ -5,6 +5,7 @@ import {
   createCoreHost,
   DEFAULT_HOST_MODE,
   DEFAULT_STAGE4_AUTHORITY_MODE,
+  type HostFactoryEnv,
   resolveHostMode,
   resolveStage4AuthorityMode,
 } from './host-factory';
@@ -55,16 +56,14 @@ describe('resolveStage4AuthorityMode', () => {
     expect(resolveStage4AuthorityMode({ env: {} })).toBe(DEFAULT_STAGE4_AUTHORITY_MODE);
   });
 
-  test('reads deterministic authority mode from env config', () => {
+  test('keeps sim-core as default when deprecated env authority mode is present', () => {
     expect(
-      resolveStage4AuthorityMode({ env: { VITE_STAGE4_AUTHORITY_MODE: 'deterministic' } }),
-    ).toBe('deterministic');
-  });
-
-  test('throws on unsupported authority mode strings', () => {
-    expect(() =>
-      resolveStage4AuthorityMode({ env: { VITE_STAGE4_AUTHORITY_MODE: 'invalid-authority-mode' } }),
-    ).toThrow('Unsupported stage4 authority mode: invalid-authority-mode');
+      resolveStage4AuthorityMode({
+        env: {
+          VITE_STAGE4_AUTHORITY_MODE: 'deterministic',
+        } as unknown as HostFactoryEnv,
+      }),
+    ).toBe('sim-core');
   });
 
   test('lets explicit authority mode override real-authority env wiring', () => {
@@ -128,7 +127,6 @@ describe('createCoreHost', () => {
     const host = createCoreHost({
       mode: 'local',
       env: {
-        VITE_STAGE4_AUTHORITY_MODE: 'deterministic',
         VITE_STAGE4_REAL_AUTHORITY: '1',
       },
     });

@@ -527,7 +527,7 @@ Deletion execution notes:
 ### Implementation checklist
 
 - [x] Remove or hide placement-only Stage 4 visual path from default gameplay flow.
-- [ ] Keep deterministic shim only where it materially helps isolated tests.
+- [x] Keep deterministic shim only where it materially helps isolated tests.
 - [ ] Add/update Stage 4 smoke coverage for boot, tools+funds, save/load, scenario, resync.
 - [ ] Update docs so contributors know Stage 4 is authoritative shipping path.
 
@@ -581,7 +581,6 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
 
 
 
