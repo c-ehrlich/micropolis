@@ -569,7 +569,7 @@ Implementation trace (2026-02-10):
 ### Certification checklist (automated)
 
 - [x] `pnpm test` passes.
-- [ ] `pnpm typecheck` passes.
+- [x] `pnpm typecheck` passes.
 - [ ] `pnpm lint` passes.
 - [ ] `pnpm format` passes.
 
