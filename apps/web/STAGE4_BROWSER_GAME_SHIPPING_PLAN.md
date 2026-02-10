@@ -570,7 +570,7 @@ Implementation trace (2026-02-10):
 
 - [x] `pnpm test` passes.
 - [x] `pnpm typecheck` passes.
-- [ ] `pnpm lint` passes.
+- [x] `pnpm lint` passes.
 - [ ] `pnpm format` passes.
 
 ---
