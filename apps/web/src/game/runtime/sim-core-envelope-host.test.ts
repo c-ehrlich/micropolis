@@ -2126,6 +2126,191 @@ describe('SimCoreEnvelopeHost', () => {
     }
   });
 
+  it('covers parity-oriented tool/map/HUD/message/realtime behavior in one deterministic host flow', () => {
+    const roomId = 'room-parity-certification';
+    const clientId = 'client-parity-certification';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const x = 28;
+    const y = 28;
+    const tileIndex = x * World.WORLD_Y + y;
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0] & {
+          TotalFunds: number;
+        };
+        simContext: Parameters<typeof sendMes>[1] & {
+          hooks: {
+            generateCopter(): void;
+          };
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[tileIndex] = Tile.DIRT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    hostInternals.authorityState.simState.TotalFunds = 100;
+    hostInternals.authorityState.toolContext.funds = 100;
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-road-parity-certification',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x,
+        y,
+      },
+    });
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId,
+      clientId,
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-road-parity-certification',
+    });
+
+    const roadPatchEnvelope = captured.envelopes[3];
+    if (roadPatchEnvelope === undefined) {
+      throw new Error('expected road patch envelope');
+    }
+    const roadMapPatch = readMapPatchPayloadFromEnvelope(roadPatchEnvelope);
+    if (roadMapPatch === null) {
+      throw new Error('expected road map patch payload');
+    }
+    expect(roadMapPatch.redrawPlan).toMatchObject({
+      reason: 'patch-rects',
+      fullRedraw: false,
+    });
+    const roadDeltaAtCommand = roadMapPatch.tileWordDeltas.find(
+      (delta) => delta.x === x && delta.y === y,
+    );
+    if (roadDeltaAtCommand === undefined) {
+      throw new Error('expected road map delta at command coordinates');
+    }
+    expect(roadDeltaAtCommand.tileWord & TileMask.LOMASK).not.toBe(Tile.DIRT);
+    const roadHudPatch = readHudPayloadFromEnvelope(roadPatchEnvelope);
+    if (roadHudPatch === null) {
+      throw new Error('expected road HUD patch payload');
+    }
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`.
+    expect(roadHudPatch.funds).toBe(90);
+    expect(roadHudPatch.fundsLabel).toBe('Funds: $90');
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(90);
+    expect(hostInternals.authorityState.toolContext.funds).toBe(90);
+
+    // Message-id source: `SendMessages` warning ids in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMesAt(
+        hostInternals.authorityState.simState,
+        hostInternals.authorityState.simContext,
+        14,
+        7,
+        9,
+      ),
+    ).toBe(true);
+    hostInternals.authorityState.simContext.hooks.generateCopter();
+    captured.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: 'cmd-pause-parity-certification',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    expect(captured.envelopes[4]).toEqual({
+      kind: 'ack',
+      roomId,
+      clientId,
+      tick: 2,
+      serverSeq: 4,
+      commandId: 'cmd-pause-parity-certification',
+    });
+    const parityPatchEnvelope = captured.envelopes[5];
+    if (parityPatchEnvelope === undefined) {
+      throw new Error('expected parity certification patch envelope');
+    }
+    const messageDeltas = readMessageDeltasFromEnvelope(parityPatchEnvelope);
+    if (messageDeltas === null) {
+      throw new Error('expected message delta payload in parity certification patch');
+    }
+    expect(messageDeltas).toContainEqual({
+      id: 14,
+      text: 'Residents demand police stations.',
+      x: 7,
+      y: 9,
+      tick: 2,
+      serverSeq: 5,
+    });
+    expect(readLegacyHudMessageFromEnvelope(parityPatchEnvelope)).toMatchObject({
+      id: 14,
+      x: 7,
+      y: 9,
+    });
+
+    const realtimePatch = readRealtimePayloadFromEnvelope(parityPatchEnvelope);
+    if (realtimePatch === null) {
+      throw new Error('expected realtime payload in parity certification patch');
+    }
+    const copterObject = realtimePatch.objects?.find((object) => object.type === 2);
+    if (copterObject === undefined) {
+      throw new Error('expected copter realtime object in parity certification patch');
+    }
+    // Sprite type `2` is copter (`COP`) in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(
+      realtimePatch.deltas?.some(
+        (delta) =>
+          delta.kind === 'upsert' && delta.object.type === 2 && delta.object.id === copterObject.id,
+      ),
+    ).toBe(true);
+
+    let reducedState = createInitialWebRuntimeState({ roomId, clientId });
+    for (const envelope of captured.envelopes.slice(0, 6)) {
+      const reduction = reduceHostEnvelope(reducedState, envelope);
+      expect(reduction.outcome).toBe('applied');
+      reducedState = reduction.state;
+    }
+
+    const roadRowMajorIndex = y * reducedState.mapState.width + x;
+    expect(reducedState.mapState.tiles[roadRowMajorIndex]).not.toBe(Tile.DIRT);
+    expect(reducedState.hudState.fundsLabel).toBe('Funds: $90');
+    expect(
+      reducedState.hudState.messages.some((message) => message.id === 14 && message.x === 7),
+    ).toBe(true);
+    expect(reducedState.realtimeState.objects.some((object) => object.type === 2)).toBe(true);
+  });
+
   it.each([
     {
       caseId: 'road-66',
