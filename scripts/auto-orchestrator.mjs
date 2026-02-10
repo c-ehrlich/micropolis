@@ -548,15 +548,94 @@ async function runCodexExec(cwd, prompt, logPath, model) {
 
   args.push(prompt);
 
+  /**
+   * Emits a progress line with an empty separator line for readability.
+   *
+   * Not from Micropolis C; this formats codex-cli activity output for
+   * human-readable terminal progress.
+   */
+  function writeProgressLine(line) {
+    process.stdout.write(`${line}\n\n`);
+  }
+
+  /**
+   * Handles a single output line from codex-cli streams.
+   *
+   * Not from Micropolis C; this decodes codex JSONL events and prints either
+   * event `type` progress lines or detailed fallback output.
+   */
+  function handleCodexOutputLine(line, streamLabel) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      const eventType = typeof parsed?.type === 'string' ? parsed.type : null;
+      if (!eventType) {
+        writeProgressLine(`[codex:${streamLabel}] ${line}`);
+        return;
+      }
+
+      if (eventType === 'error') {
+        writeProgressLine(`[codex:error] ${trimmed}`);
+        return;
+      }
+
+      writeProgressLine(eventType);
+    } catch {
+      writeProgressLine(`[codex:${streamLabel}] ${trimmed}`);
+    }
+  }
+
+  /**
+   * Builds a chunk handler that buffers until newline and dispatches lines.
+   *
+   * Not from Micropolis C; this supports streaming JSONL parsing over arbitrary
+   * chunk boundaries from Node child process pipes.
+   */
+  function createChunkLineHandler(streamLabel) {
+    let pending = '';
+    return {
+      onChunk(chunk) {
+        pending += chunk.toString('utf8');
+        while (true) {
+          const newlineIndex = pending.indexOf('\n');
+          if (newlineIndex < 0) {
+            break;
+          }
+
+          const line = pending.slice(0, newlineIndex).replace(/\r$/, '');
+          pending = pending.slice(newlineIndex + 1);
+          handleCodexOutputLine(line, streamLabel);
+        }
+      },
+      flush() {
+        if (pending.length === 0) {
+          return;
+        }
+        const line = pending.replace(/\r$/, '');
+        pending = '';
+        handleCodexOutputLine(line, streamLabel);
+      },
+    };
+  }
+
+  const stdoutProgress = createChunkLineHandler('stdout');
+  const stderrProgress = createChunkLineHandler('stderr');
+
   const result = await runCommand('codex', args, {
     cwd,
     onStdoutChunk: (chunk) => {
-      process.stdout.write(chunk);
+      stdoutProgress.onChunk(chunk);
     },
     onStderrChunk: (chunk) => {
-      process.stderr.write(chunk);
+      stderrProgress.onChunk(chunk);
     },
   });
+  stdoutProgress.flush();
+  stderrProgress.flush();
   const combinedOutput = `${result.stdout}${result.stderr}`;
   await appendFile(logPath, combinedOutput, 'utf8');
 
