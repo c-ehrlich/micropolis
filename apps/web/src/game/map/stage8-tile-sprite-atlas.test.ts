@@ -4,8 +4,8 @@ import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/consta
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   isStage4DebugTileRendererEnabled,
-  lookupStage8TileSpriteRectByTileId,
   lookupStage8TileSprite,
+  lookupStage8TileSpriteRectByTileId,
   resolveStage8MicropolisTileSheetCanonicalIdentityKey,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEYS,
