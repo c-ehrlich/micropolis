@@ -6,6 +6,7 @@ import {
   DemoMapHost,
   readDemoCityExportPayload,
   STAGE2_SCENARIO_CHOICES,
+  STAGE7_MANUAL_REALTIME_EVENT_CHOICES,
 } from '../game/runtime/demo-map-host.ts';
 import {
   createWebHostRuntime,
@@ -63,7 +64,8 @@ function HomePage() {
  * with the full authoritative map/HUD/control projection path.
  */
 function Stage4RuntimePanel() {
-  const runtime = useMemo(() => createWebHostRuntime({ host: new DemoMapHost() }), []);
+  const host = useMemo(() => new DemoMapHost(), []);
+  const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
@@ -72,6 +74,7 @@ function Stage4RuntimePanel() {
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
+  const [stage7EventStatus, setStage7EventStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const commandCounter = useRef(1);
 
@@ -131,6 +134,9 @@ function Stage4RuntimePanel() {
       </div>
       <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {lastSaveStatus}
+      </div>
+      <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+        {stage7EventStatus}
       </div>
       <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {formatRuntimePhaseStatus(state.phase)}
@@ -209,6 +215,7 @@ function Stage4RuntimePanel() {
               });
             }}
             pendingTools={state.pendingTools}
+            realtimeObjects={state.realtimeState.objects}
             tileSize={STAGE4_MAP_TILE_SIZE}
           />
         </div>
@@ -398,6 +405,29 @@ function Stage4RuntimePanel() {
               >
                 Start Scenario
               </button>
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gap: 6 }}>
+            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Stage 7 Events</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {STAGE7_MANUAL_REALTIME_EVENT_CHOICES.map((eventChoice) => (
+                <button
+                  key={eventChoice.id}
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    const emitted = host.triggerManualRealtimeEvent(eventChoice.id);
+                    if (!emitted) {
+                      setStage7EventStatus('Stage 7 event trigger requires an active connection.');
+                      return;
+                    }
+                    setStage7EventStatus(`Triggered ${eventChoice.label.toLowerCase()}.`);
+                  }}
+                  type="button"
+                >
+                  {eventChoice.label}
+                </button>
+              ))}
             </div>
           </section>
 

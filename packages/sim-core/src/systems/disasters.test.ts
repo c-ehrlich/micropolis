@@ -257,6 +257,120 @@ describe('Disaster events', () => {
     expect(messagesAt).toEqual([]);
   });
 
+  it('triggers tornado hook when DoDisasters picks case 5', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    state.GameLevel = 0;
+
+    let tornadoes = 0;
+    let monsters = 0;
+    const context = createSimContext({
+      store,
+      // `s_disast.c` DoDisasters: trigger when `Rand(10*48) == 0`, then route
+      // `Rand(8) == 5` to `MakeTornado()`.
+      rng: new StubRng([0, 5]),
+      hooks: {
+        makeTornado: () => {
+          tornadoes += 1;
+        },
+        makeMonster: () => {
+          monsters += 1;
+        },
+      },
+    });
+
+    doDisasters(state, context);
+
+    expect(tornadoes).toBe(1);
+    expect(monsters).toBe(0);
+  });
+
+  it('gates random monster trigger on PolluteAverage > 60', () => {
+    const lowPollutionStore = createClassicMapStore();
+    lowPollutionStore.beginTick();
+    const lowPollutionState = createSimState();
+    lowPollutionState.GameLevel = 0;
+    lowPollutionState.PolluteAverage = 60;
+    let lowPollutionMonsters = 0;
+    const lowPollutionContext = createSimContext({
+      store: lowPollutionStore,
+      // `s_disast.c` routes `Rand(8) == 7` to `MakeMonster()` only when
+      // `PolluteAverage > 60`.
+      rng: new StubRng([0, 7]),
+      hooks: {
+        makeMonster: () => {
+          lowPollutionMonsters += 1;
+        },
+      },
+    });
+
+    doDisasters(lowPollutionState, lowPollutionContext);
+
+    const highPollutionStore = createClassicMapStore();
+    highPollutionStore.beginTick();
+    const highPollutionState = createSimState();
+    highPollutionState.GameLevel = 0;
+    highPollutionState.PolluteAverage = 61;
+    let highPollutionMonsters = 0;
+    const highPollutionContext = createSimContext({
+      store: highPollutionStore,
+      rng: new StubRng([0, 7]),
+      hooks: {
+        makeMonster: () => {
+          highPollutionMonsters += 1;
+        },
+      },
+    });
+
+    doDisasters(highPollutionState, highPollutionContext);
+
+    expect(lowPollutionMonsters).toBe(0);
+    expect(highPollutionMonsters).toBe(1);
+  });
+
+  it('runs scenario timers before NoDisasters short-circuit', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    state.NoDisasters = true;
+    state.FloodCnt = 2;
+    // `s_disast.c` ScenarioDisaster case 3 (Hamburg) calls `DropFireBombs()`.
+    state.DisasterEvent = 3;
+    state.DisasterWait = 1;
+
+    let drops = 0;
+    let tornadoes = 0;
+    let monsters = 0;
+    const context = createSimContext({
+      store,
+      hooks: {
+        dropFireBombs: () => {
+          drops += 1;
+        },
+        makeTornado: () => {
+          tornadoes += 1;
+        },
+        makeMonster: () => {
+          monsters += 1;
+        },
+      },
+    });
+
+    doDisasters(state, context);
+
+    // `s_disast.c` decrements FloodCnt and runs ScenarioDisaster before
+    // checking `NoDisasters`.
+    expect(state.FloodCnt).toBe(1);
+    expect(state.DisasterWait).toBe(0);
+    expect(state.DisasterEvent).toBe(3);
+    expect(drops).toBe(1);
+    expect(tornadoes).toBe(0);
+    expect(monsters).toBe(0);
+  });
+
   it('ticks scenario timers and clears DisasterEvent after countdown', () => {
     const store = createClassicMapStore();
     store.beginTick();

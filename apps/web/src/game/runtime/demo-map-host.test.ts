@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ANI_TILE,
   createClassicMapStore,
   createRng,
   createSimContext,
@@ -10,7 +11,10 @@ import {
   resetForNewCityFromSeed,
   type SimContext,
   type SimState,
+  Tile,
+  TileFlag,
   TileMask,
+  World,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { decodeCityFileForMap } from '../../../../../packages/sim-core/src/io/cty.ts';
 import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
@@ -63,6 +67,322 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       expect(ambientPatchCount).toBeGreaterThan(0);
       expect(ambientPatchWithMapCount).toBe(0);
       expect(runtime.getState().mapState).toBe(initialMapState);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('advances ANIMBIT tiles only when DoAnimation is enabled', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+
+    try {
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simState: { doAnimation: boolean };
+        simContext: { store: ReturnType<typeof createClassicMapStore> };
+      };
+
+      const tileX = 10;
+      const tileY = 10;
+      const tileIndex = tileX * World.WORLD_Y + tileY;
+      authority.simContext.store.beginTick();
+      try {
+        authority.simContext.store.write('map', tileIndex, Tile.FIRE | TileFlag.ANIMBIT);
+      } finally {
+        authority.simContext.store.commitTick();
+      }
+
+      authority.simState.doAnimation = false;
+      vi.advanceTimersByTime(20);
+
+      const mapAfterDisabled = authority.simContext.store.snapshot('map') as Uint16Array;
+      const disabledTileWord = mapAfterDisabled[tileIndex];
+      if (disabledTileWord === undefined) {
+        throw new Error('expected disabled animation tile to exist');
+      }
+      // `DoUpdateEditor` only calls `animateTiles()` when `DoAnimation && SimSpeed`
+      // (`ref/micropolis/src/sim/w_editor.c`), so this must stay at FIRE.
+      expect(disabledTileWord & TileMask.LOMASK).toBe(Tile.FIRE);
+
+      authority.simState.doAnimation = true;
+      vi.advanceTimersByTime(10);
+
+      const mapAfterEnabled = authority.simContext.store.snapshot('map') as Uint16Array;
+      const enabledTileWord = mapAfterEnabled[tileIndex];
+      if (enabledTileWord === undefined) {
+        throw new Error('expected enabled animation tile to exist');
+      }
+      // `g_ani.c` rewrites animated tiles via `aniTile[id]`, preserving high bits.
+      expect(enabledTileWord & TileMask.LOMASK).toBe(ANI_TILE[Tile.FIRE]);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('seeds a moving realtime copter while ambient simulation runs', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const copterSnapshots: Array<{ x: number; y: number; frame: number }> = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const objects = event.envelope.payload.realtime?.objects;
+        if (objects === undefined) {
+          return;
+        }
+        const copter = objects.find((object) => object.type === 2);
+        if (copter !== undefined) {
+          copterSnapshots.push({ x: copter.x, y: copter.y, frame: copter.frame ?? 0 });
+        }
+      });
+
+      runtime.connect();
+
+      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Stage 7 host seeding
+      // now primes snapshot payloads so overlay entities appear immediately when
+      // the simulation is running.
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
+        true,
+      );
+
+      vi.advanceTimersByTime(140);
+
+      expect(copterSnapshots.length).toBeGreaterThan(1);
+      // `DoCopterSprite` mutates x/y/frame in `w_sprite.c`; payload snapshots must
+      // reflect multiple distinct movement frames while the sim runs.
+      expect(
+        new Set(copterSnapshots.map((snapshot) => `${snapshot.x}:${snapshot.y}:${snapshot.frame}`))
+          .size,
+      ).toBeGreaterThan(1);
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
+        true,
+      );
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('seeds realtime overlays on resume/set-speed patches before ambient ticks', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    runtime.sendCommand('stage7-seed-pause-1', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+
+    const authority = host as unknown as {
+      realtimeContext: {
+        globalSprites: Array<{ frame: number } | null>;
+      };
+    };
+    const copterSprite = authority.realtimeContext.globalSprites[2];
+    if (copterSprite == null) {
+      throw new Error('expected active copter sprite after snapshot seeding');
+    }
+    copterSprite.frame = 0;
+
+    runtime.sendCommand('stage7-seed-play-1', {
+      kind: 'sim-control',
+      control: 'play',
+    });
+
+    // Magic-number source: type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`.
+    expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(true);
+    // Magic-number source: `Resume()` restores the remembered playable speed in
+    // `ref/micropolis/src/sim/w_util.c` (`setSpeed(sim_paused_speed)` branch).
+    expect(runtime.getState().hudState.speed).toBe(3);
+  });
+
+  it('emits realtime object payload updates on ambient ticks', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const tornadoSnapshots: Array<{ x: number; y: number; frame: number }> = [];
+    let sawRealtimeSnapshot = false;
+    let sawRealtimeDelta = false;
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind === 'snapshot') {
+          if (event.envelope.payload.realtime?.snapshot !== undefined) {
+            sawRealtimeSnapshot = true;
+          }
+          return;
+        }
+
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const objects = event.envelope.payload.realtime?.objects;
+        if (objects === undefined) {
+          return;
+        }
+        const tornado = objects.find((object) => object.type === 6);
+        if (tornado !== undefined) {
+          tornadoSnapshots.push({ x: tornado.x, y: tornado.y, frame: tornado.frame ?? 0 });
+        }
+
+        const deltas = event.envelope.payload.realtime?.deltas;
+        if (deltas !== undefined && deltas.length > 0) {
+          sawRealtimeDelta = true;
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simContext: {
+          rng: { seed: (value: number) => void };
+          hooks: { makeTornado: () => void };
+        };
+      };
+
+      authority.simContext.rng.seed(0x1234);
+      // Sprite type 6 is `TOR` in `sim.h`; creation path matches `makeTornado` in `w_sprite.c`.
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(120);
+
+      expect(tornadoSnapshots.length).toBeGreaterThan(1);
+      // `MoveObjects` updates active tornado position/frame each cycle in `w_sprite.c`.
+      expect(
+        new Set(tornadoSnapshots.map((snapshot) => `${snapshot.x}:${snapshot.y}:${snapshot.frame}`))
+          .size,
+      ).toBeGreaterThan(1);
+      expect(runtime.getState().realtimeState.objects.some((object) => object.type === 6)).toBe(
+        true,
+      );
+      expect(sawRealtimeSnapshot).toBe(true);
+      expect(sawRealtimeDelta).toBe(true);
+    } finally {
+      runtime.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
+  it('emits coherent tornado overlay and message payloads for manual Stage 7 triggers', () => {
+    const host = new DemoMapHost({
+      enableAmbientTicks: false,
+      seedRealtimeDemoObject: false,
+    });
+    const runtime = createWebHostRuntime({ host });
+    let sawPatchWithTornadoMessageAndRealtime = false;
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind === 'patch') {
+        const messageDeltas = event.envelope.payload.messageDeltas;
+        const realtimeDeltas = event.envelope.payload.realtime?.deltas;
+        if (messageDeltas !== undefined && realtimeDeltas !== undefined) {
+          const hasTornadoMessage = messageDeltas.some((message) => message.id === -22);
+          const hasTornadoDelta = realtimeDeltas.some(
+            (delta) => delta.kind === 'upsert' && delta.object.type === 6,
+          );
+          if (hasTornadoMessage && hasTornadoDelta) {
+            sawPatchWithTornadoMessageAndRealtime = true;
+          }
+        }
+      }
+    });
+
+    runtime.connect();
+    expect(host.triggerManualRealtimeEvent('tornado')).toBe(true);
+    expect(sawPatchWithTornadoMessageAndRealtime).toBe(true);
+
+    const runtimeTornado = runtime
+      .getState()
+      .realtimeState.objects.find((object) => object.type === 6);
+    const runtimeTornadoMessage = runtime
+      .getState()
+      .hudState.messages.find((message) => message.id === -22 && message.dispatch === 'sendMesAt');
+    if (
+      runtimeTornado === undefined ||
+      runtimeTornadoMessage === undefined ||
+      runtimeTornadoMessage.x === null ||
+      runtimeTornadoMessage.y === null
+    ) {
+      throw new Error('expected tornado overlay object and coordinate message in runtime state');
+    }
+
+    // `MakeTornado` in `ref/micropolis/src/sim/w_sprite.c` dispatches:
+    // `SendMesAt(-22, (x >> 4) + 3, (y >> 4) + 2)`.
+    expect(runtimeTornadoMessage.x).toBe((runtimeTornado.x >> 4) + 3);
+    expect(runtimeTornadoMessage.y).toBe((runtimeTornado.y >> 4) + 2);
+  });
+
+  it('routes repeated realtime tornado picture events into message feed deltas', () => {
+    vi.useFakeTimers();
+    const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
+    const runtime = createWebHostRuntime({ host });
+    const tornadoPictureMessages: Array<{
+      id: number;
+      x: number | undefined;
+      y: number | undefined;
+    }> = [];
+
+    try {
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const deltas = event.envelope.payload.messageDeltas;
+        if (deltas === undefined) {
+          return;
+        }
+        for (const message of deltas) {
+          if (message.id === -22) {
+            tornadoPictureMessages.push({ id: message.id, x: message.x, y: message.y });
+          }
+        }
+      });
+
+      runtime.connect();
+
+      const authority = host as unknown as {
+        simContext: {
+          rng: { seed: (value: number) => void };
+          hooks: { makeTornado: () => void };
+        };
+        realtimeContext: {
+          globalSprites: Array<{ frame: number } | null>;
+        };
+      };
+
+      authority.simContext.rng.seed(0x1234);
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(30);
+
+      const tornadoSprite = authority.realtimeContext.globalSprites[6];
+      if (tornadoSprite == null) {
+        throw new Error('expected active tornado sprite after initial makeTornado');
+      }
+      tornadoSprite.frame = 0;
+
+      authority.simContext.hooks.makeTornado();
+      vi.advanceTimersByTime(30);
+
+      // w_sprite.c `MakeTornado` calls `ClearMes(); SendMesAt(-22, ...)`, so each
+      // new tornado event should emit a fresh picture message to the feed.
+      expect(tornadoPictureMessages.length).toBeGreaterThanOrEqual(2);
+      expect(tornadoPictureMessages.every((message) => message.x !== undefined)).toBe(true);
+      expect(tornadoPictureMessages.every((message) => message.y !== undefined)).toBe(true);
+      expect(
+        runtime
+          .getState()
+          .hudState.messages.filter(
+            (message) => message.id === -22 && message.dispatch === 'sendMesAt',
+          ).length,
+      ).toBeGreaterThanOrEqual(2);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();

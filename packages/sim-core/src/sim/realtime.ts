@@ -4,6 +4,9 @@ import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { MapStore } from '../core/map-store.ts';
 import type { MicropolisRng } from '../core/rng.ts';
+import type { SimContext } from '../core/sim-context.ts';
+import type { SimState } from '../core/sim-state.ts';
+import { clearMes, sendMesAt } from '../systems/messages.ts';
 
 const { WORLD_X, WORLD_Y, HWLDX, HWLDY, SmX, SmY } = World;
 const { ALLBITS, LOMASK } = TileMask;
@@ -34,6 +37,11 @@ const {
   VRAILROAD,
 } = Tile;
 
+/**
+ * Sprite kind identifiers used by Micropolis realtime object logic.
+ * Mirrors `TRA`..`BUS` constants in `ref/micropolis/src/sim/headers/sim.h`
+ * and type routing in `ref/micropolis/src/sim/w_sprite.c`.
+ */
 export const SPRITE_TYPE = {
   TRA: 1,
   COP: 2,
@@ -47,10 +55,51 @@ export const SPRITE_TYPE = {
 
 export type SpriteType = (typeof SPRITE_TYPE)[keyof typeof SPRITE_TYPE];
 
-const OBJN = 9;
+/**
+ * Total sprite slot count, including slot `0` (unused sentinel).
+ * Mirrors `OBJN` in `ref/micropolis/src/sim/headers/sim.h`.
+ */
+export const SPRITE_SLOT_COUNT = 9;
 
 export const POWER_BLINK_TICKS = 30;
 
+/**
+ * Layout-related fields initialized per sprite type in `InitSprite`.
+ * Mirrors width/offset/hotspot assignments in `ref/micropolis/src/sim/w_sprite.c`.
+ */
+export interface SimSpriteLayout {
+  width: number;
+  height: number;
+  x_offset: number;
+  y_offset: number;
+  x_hot: number;
+  y_hot: number;
+}
+
+/**
+ * Per-type sprite layout table copied from `InitSprite` in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this models only shape/offset/hotspot fields; runtime fields
+ * like `frame`, `dir`, and `count` are still assigned in sprite-type logic.
+ */
+export const SPRITE_LAYOUT_BY_TYPE: Readonly<Record<SpriteType, SimSpriteLayout>> = {
+  [SPRITE_TYPE.TRA]: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+  [SPRITE_TYPE.COP]: { width: 32, height: 32, x_offset: 32, y_offset: -16, x_hot: 40, y_hot: -8 },
+  [SPRITE_TYPE.AIR]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 48, y_hot: 16 },
+  [SPRITE_TYPE.SHI]: { width: 48, height: 48, x_offset: 32, y_offset: -16, x_hot: 48, y_hot: 0 },
+  [SPRITE_TYPE.GOD]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+  [SPRITE_TYPE.TOR]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 36 },
+  [SPRITE_TYPE.EXP]: { width: 48, height: 48, x_offset: 24, y_offset: 0, x_hot: 40, y_hot: 16 },
+  [SPRITE_TYPE.BUS]: { width: 32, height: 32, x_offset: 30, y_offset: -18, x_hot: 40, y_hot: -8 },
+};
+
+/**
+ * Active sprite state for realtime systems.
+ * Mirrors `SimSprite` fields from `ref/micropolis/src/sim/headers/view.h`
+ * and command/property access in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: C list-link field `next` is intentionally omitted because
+ * TypeScript uses array ownership in `RealtimeContext.sprites`.
+ */
 export interface SimSprite {
   name: string;
   type: SpriteType;
@@ -85,6 +134,20 @@ export interface RealtimeCallbacks {
   onClearMessages?: () => void;
 }
 
+/**
+ * Optional realtime-to-message port bridge for sprite/event message dispatch.
+ * Mirrors `Do*Sprite` -> `SendMesAt` coupling from `ref/micropolis/src/sim/w_sprite.c`
+ * into `ref/micropolis/src/sim/s_msg.c`.
+ *
+ * Parity note: when configured, realtime events enqueue through `sendMesAt`
+ * (`MessagePort`/`MesX`/`MesY`) and are later delivered by `doMessage()`;
+ * without this bridge, sim-core keeps legacy direct callback dispatch.
+ */
+export interface RealtimeMessageCoupling {
+  state: SimState;
+  context: SimContext;
+}
+
 export interface RealtimeContext extends RealtimeCallbacks {
   store: MapStore;
   rng: MicropolisRng;
@@ -104,6 +167,7 @@ export interface RealtimeContext extends RealtimeCallbacks {
   sprites: SimSprite[];
   globalSprites: Array<SimSprite | null>;
   toolContext: ToolContext;
+  messageCoupling?: RealtimeMessageCoupling;
 }
 
 export interface RealtimeContextOptions extends RealtimeCallbacks {
@@ -117,6 +181,7 @@ export interface RealtimeContextOptions extends RealtimeCallbacks {
   polMaxX?: number;
   polMaxY?: number;
   toolContext: ToolContext;
+  messageCoupling?: RealtimeMessageCoupling;
 }
 
 export function createRealtimeContext(options: RealtimeContextOptions): RealtimeContext {
@@ -140,14 +205,22 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
     crashX: 0,
     crashY: 0,
     sprites: [],
-    globalSprites: Array.from({ length: OBJN }, () => null),
+    globalSprites: Array.from({ length: SPRITE_SLOT_COUNT }, () => null),
     toolContext: options.toolContext,
+    messageCoupling: options.messageCoupling,
     onMessage: options.onMessage,
     onSound: options.onSound,
     onClearMessages: options.onClearMessages,
   };
 }
 
+/**
+ * Tile animation remap table used by Micropolis animated terrain.
+ * Mirrors `aniTile[]` from `ref/micropolis/src/sim/animtab.h`, consumed by
+ * `animateTiles` in `ref/micropolis/src/sim/g_ani.c`.
+ * Parity note: this follows the active one-step `aniTile` path; the optional
+ * `tileSynch`/`aniSynch` branch in `g_ani.c` is compiled out behind `#if 0`.
+ */
 export const ANI_TILE = Uint16Array.from([
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
   27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
@@ -362,6 +435,10 @@ function checkWet(tile: number): boolean {
 }
 
 function sendMessage(context: RealtimeContext, id: number, x: number, y: number) {
+  if (context.messageCoupling !== undefined) {
+    sendMesAt(context.messageCoupling.state, context.messageCoupling.context, id, x, y);
+    return;
+  }
   context.onMessage?.(id, x, y);
 }
 
@@ -370,7 +447,22 @@ function makeSound(context: RealtimeContext, channel: string, id: string) {
 }
 
 function clearMessages(context: RealtimeContext) {
+  if (context.messageCoupling !== undefined) {
+    // w_sprite.c disaster entrypoints call ClearMes() before SendMesAt(...) so
+    // repeated picture/event ids (e.g. tornado/monster) are not suppressed.
+    clearMes(context.messageCoupling.state);
+  }
   context.onClearMessages?.();
+}
+
+function assignSpriteLayoutFields(sprite: SimSprite) {
+  const layout = SPRITE_LAYOUT_BY_TYPE[sprite.type];
+  sprite.width = layout.width;
+  sprite.height = layout.height;
+  sprite.x_offset = layout.x_offset;
+  sprite.y_offset = layout.y_offset;
+  sprite.x_hot = layout.x_hot;
+  sprite.y_hot = layout.y_hot;
 }
 
 function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: number) {
@@ -395,25 +487,14 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
   if (context.globalSprites[sprite.type] === null) {
     context.globalSprites[sprite.type] = sprite;
   }
+  assignSpriteLayoutFields(sprite);
 
   switch (sprite.type) {
     case SPRITE_TYPE.TRA:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 1;
       sprite.dir = 4;
       break;
     case SPRITE_TYPE.SHI:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 48;
-      sprite.y_hot = 0;
       if (x < 4 << 4) {
         sprite.frame = 3;
       } else if (x >= (WORLD_X - 4) << 4) {
@@ -430,12 +511,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.count = 1;
       break;
     case SPRITE_TYPE.GOD:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 16;
       if (x > (WORLD_X << 4) / 2) {
         sprite.frame = y > (WORLD_Y << 4) / 2 ? 10 : 7;
       } else {
@@ -448,12 +523,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.orig_y = sprite.y;
       break;
     case SPRITE_TYPE.COP:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 32;
-      sprite.y_offset = -16;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 5;
       sprite.count = 1500;
       sprite.dest_x = rand(context, (WORLD_X << 4) - 1);
@@ -462,12 +531,6 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.orig_y = y;
       break;
     case SPRITE_TYPE.AIR:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 48;
-      sprite.y_hot = 16;
       if (x > (WORLD_X - 20) << 4) {
         sprite.x -= 148;
         sprite.dest_x = sprite.x - 200;
@@ -479,31 +542,13 @@ function initSprite(context: RealtimeContext, sprite: SimSprite, x: number, y: n
       sprite.dest_y = sprite.y;
       break;
     case SPRITE_TYPE.TOR:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 36;
       sprite.frame = 1;
       sprite.count = 200;
       break;
     case SPRITE_TYPE.EXP:
-      sprite.width = 48;
-      sprite.height = 48;
-      sprite.x_offset = 24;
-      sprite.y_offset = 0;
-      sprite.x_hot = 40;
-      sprite.y_hot = 16;
       sprite.frame = 1;
       break;
     case SPRITE_TYPE.BUS:
-      sprite.width = 32;
-      sprite.height = 32;
-      sprite.x_offset = 30;
-      sprite.y_offset = -18;
-      sprite.x_hot = 40;
-      sprite.y_hot = -8;
       sprite.frame = 1;
       sprite.dir = 1;
       break;
@@ -605,6 +650,12 @@ export function updatePowerBlink(context: RealtimeContext) {
   context.powerBlink = context.powerBlinkTick < POWER_BLINK_TICKS;
 }
 
+/**
+ * Animate all `ANIMBIT` tiles in the map by one frame.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c`.
+ * Parity note: high flag bits (`ALLBITS`) are preserved while only the low
+ * tile-id bits (`LOMASK`) are remapped through `ANI_TILE`.
+ */
 export function animateTiles(context: RealtimeContext, map?: Uint16Array) {
   const mapLayer = map ?? (context.store.getLayer('map') as Uint16Array);
   for (let i = 0; i < mapLayer.length; i += 1) {
@@ -621,6 +672,13 @@ export function animateTiles(context: RealtimeContext, map?: Uint16Array) {
   }
 }
 
+/**
+ * Run one realtime object/animation pass for the active world.
+ * Mirrors `MoveObjects` in `ref/micropolis/src/sim/w_sprite.c` and the
+ * `DoAnimation && SimSpeed` animation gate in `ref/micropolis/src/sim/w_editor.c`.
+ * Parity note: C uses `TilesAnimated` to avoid duplicate animation across multiple
+ * views; this port runs a single authoritative pass per tick.
+ */
 export function runRealtimeTick(context: RealtimeContext) {
   updatePowerBlink(context);
   if (context.simSpeed <= 0) {

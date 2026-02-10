@@ -634,10 +634,11 @@ export type HostMessageDeltaPayload = HostHudMessagePayload;
  * One authoritative realtime object entry carried by snapshot/patch envelopes.
  * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
  * represented by `SimSprite` in `packages/sim-core/src/sim/realtime.ts`.
- * Parity note: Stage 2 carries a minimal placeholder subset; Stage 7 expands
- * this into full overlay rendering semantics.
+ * Parity note: this adds a bridge-level `id` key for deterministic per-tick
+ * delta application; C sprite structs are pointer-addressed in-process.
  */
 export interface HostRealtimeObjectPayload {
+  id?: string;
   name: string;
   type: number;
   x: number;
@@ -646,11 +647,32 @@ export interface HostRealtimeObjectPayload {
 }
 
 /**
+ * One incremental realtime object delta entry for Stage 7 payloads.
+ * Mirrors ordered sprite lifecycle/mutation progression in
+ * `ref/micropolis/src/sim/w_sprite.c` (`InitSprite`/move/destroy paths).
+ * Parity note: explicit `upsert`/`remove` transport records are additive vs C,
+ * which mutates in-memory sprite structs directly.
+ */
+export type HostRealtimeObjectDeltaPayload =
+  | Readonly<{
+      kind: 'upsert';
+      object: HostRealtimeObjectPayload;
+    }>
+  | Readonly<{
+      kind: 'remove';
+      id: string;
+    }>;
+
+/**
  * Realtime payload section carried by Stage 2 snapshot/patch envelopes.
  * Mirrors realtime object stream intent from `ref/micropolis/src/sim/w_sprite.c`.
- * Parity note: this payload is optional until Stage 7 and may be empty.
+ * Parity note: `objects` remains a compatibility full-object stream while
+ * Stage 7 adds explicit `snapshot` and `deltas` fields for deterministic
+ * realtime baseline + per-tick projection.
  */
 export interface HostRealtimePayload {
+  snapshot?: readonly HostRealtimeObjectPayload[];
+  deltas?: readonly HostRealtimeObjectDeltaPayload[];
   objects?: readonly HostRealtimeObjectPayload[];
 }
 

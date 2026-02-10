@@ -386,35 +386,39 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Render moving realtime objects/events on top of authoritative base map.
+- [x] Render moving realtime objects/events on top of authoritative base map.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/w_sprite.c` (sprite model/fields/types)
-- [ ] `ref/micropolis/src/sim/s_disast.c` (disaster/event triggers)
-- [ ] `ref/micropolis/src/sim/s_msg.c` (`SendMesAt` event coupling)
-- [ ] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
+- [x] `ref/micropolis/src/sim/w_sprite.c` (sprite model/fields/types)
+- [x] `ref/micropolis/src/sim/s_disast.c` (disaster/event triggers)
+- [x] `ref/micropolis/src/sim/s_msg.c` (`SendMesAt` event coupling)
+- [x] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
+- Stage 7 update: authoritative host tick now mirrors `DoAnimation && SimSpeed` realtime timing gate and `ANIMBIT` remap behavior for overlay payload cadence.
+- Stage 7 update (2026-02-10): map overlay projection now sorts objects by deterministic id/type/name/position/frame ordering and uses stable id-first plus legacy type/name keys so overlay reconciliation stays deterministic across payload ordering while map patch redraw cadence remains unchanged.
+- Stage 7 update (2026-02-10): snapshot emission now seeds one active realtime demo object only when effective speed is non-zero so manual browser runs show overlay entities immediately on connect while paused snapshots do not fabricate movement.
+- Stage 7 update (2026-02-10): command-driven patch payloads now run the same non-zero-speed realtime seed guard as snapshots/ambient ticks, so `play`/`set-speed` immediately surface overlay entities before the next ambient timer tick.
 
 ### TS references to review
 
-- [ ] `packages/sim-core/src/sim/realtime.ts`
-- [ ] `packages/sim-core/src/sim/realtime.test.ts`
-- [ ] `apps/web/src/game/map/map-canvas.tsx`
-- [ ] `apps/web/src/routes/index.tsx`
+- [x] `packages/sim-core/src/sim/realtime.ts`
+- [x] `packages/sim-core/src/sim/realtime.test.ts`
+- [x] `apps/web/src/game/map/map-canvas.tsx`
+- [x] `apps/web/src/routes/index.tsx`
 
 ### Implementation checklist
 
-- [ ] Extend authority payloads with realtime object snapshots/deltas per tick.
-- [ ] Add overlay renderer for trains/ships/planes/copter/monster/tornado/explosion.
-- [ ] Ensure overlay updates are deterministic and compatible with map patch redraw cadence.
-- [ ] Hook realtime event messages to message feed when applicable.
+- [x] Extend authority payloads with realtime object snapshots/deltas per tick.
+- [x] Add overlay renderer for trains/ships/planes/copter/monster/tornado/explosion.
+- [x] Ensure overlay updates are deterministic and compatible with map patch redraw cadence.
+- [x] Hook realtime event messages to message feed when applicable.
 
 ### Verification checklist
 
-- [ ] `packages/sim-core/src/sim/realtime.test.ts` remains green.
-- [ ] Add/extend web runtime tests for overlay payload projection.
-- [ ] Manual: realtime entities appear and move while sim runs.
-- [ ] Manual: disasters/events produce coherent overlay + message behavior.
+- [x] `packages/sim-core/src/sim/realtime.test.ts` remains green.
+- [x] Add/extend web runtime tests for overlay payload projection.
+- [x] Manual: realtime entities appear and move while sim runs.
+- [x] Manual: disasters/events produce coherent overlay + message behavior.
 
 ---
 

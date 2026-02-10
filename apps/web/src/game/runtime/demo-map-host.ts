@@ -2,11 +2,25 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  createRealtimeContext,
+  destroyAllSprites as destroyRealtimeSprites,
+  generateCopter as generateRealtimeCopter,
+  generatePlane as generateRealtimePlane,
+  generateShip as generateRealtimeShip,
+  generateTrain as generateRealtimeTrain,
+  getSprite as getRealtimeSprite,
+  makeExplosion as makeRealtimeExplosion,
+  makeExplosionAt as makeRealtimeExplosionAt,
+  makeMonster as makeRealtimeMonster,
+  makeTornado as makeRealtimeTornado,
+  type RealtimeContext,
   resetForNewCityFromSeed,
+  runRealtimeTick,
   runUiUpdate,
   sendMessages,
   setValves,
   type SimContext,
+  type SimSprite,
   type SimState,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -27,6 +41,8 @@ import {
   type HostHudMessagePayload,
   type HostHudOptionsPayload,
   type HostPatchPayload,
+  type HostRealtimeObjectDeltaPayload,
+  type HostRealtimeObjectPayload,
   isStage2CityIoCommand,
   isStage2CityLifecycleCommand,
   isStage2ScenarioCommand,
@@ -102,10 +118,59 @@ const STAGE2_MESSAGE_TEXT: Record<number, string> = {
   17: 'Road maintenance is low.',
   18: 'Fire coverage is low.',
   19: 'Police coverage is low.',
+  20: 'Fire reported.',
+  21: 'Monster sighted.',
+  22: 'Tornado sighted.',
+  23: 'Earthquake reported.',
+  24: 'Plane crash reported.',
+  25: 'Shipwreck reported.',
+  26: 'Train crash reported.',
+  27: 'Helicopter crash reported.',
+  30: 'Explosion reported.',
+  32: 'Explosion reported.',
+  41: 'Heavy traffic reported.',
+  42: 'Flooding reported.',
+  [-20]: 'Fire reported.',
+  [-21]: 'Monster sighted.',
+  [-22]: 'Tornado sighted.',
+  [-23]: 'Earthquake reported.',
+  [-24]: 'Plane crash reported.',
+  [-25]: 'Shipwreck reported.',
+  [-26]: 'Train crash reported.',
+  [-27]: 'Helicopter crash reported.',
+  [-30]: 'Explosion reported.',
+  [-41]: 'Heavy traffic reported.',
+  [-42]: 'Flooding reported.',
   [-10]: 'Pollution has reached dangerous levels.',
   [-11]: 'Crime is out of control.',
   [-12]: 'Traffic is congested.',
 };
+
+/**
+ * Manual Stage 7 realtime event choices exposed in the browser QA panel.
+ * Mirrors tornado/monster disaster sprite entrypoints (`MakeTornado`,
+ * `MakeMonster`) in `ref/micropolis/src/sim/w_sprite.c`.
+ * Difference: this explicit chooser is a browser-only manual verification aid.
+ */
+export const STAGE7_MANUAL_REALTIME_EVENT_CHOICES = [
+  {
+    id: 'tornado',
+    label: 'Trigger Tornado',
+  },
+  {
+    id: 'monster',
+    label: 'Trigger Monster',
+  },
+] as const;
+
+/**
+ * Union of manual Stage 7 QA event ids.
+ * Mirrors the `MakeTornado`/`MakeMonster` disaster entrypoint set in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Difference: this browser-only union narrows explicit manual trigger inputs.
+ */
+export type Stage7ManualRealtimeEventId =
+  (typeof STAGE7_MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
 
 /**
  * Scenario choice metadata shown in the Stage 2 browser selector.
@@ -151,6 +216,10 @@ interface DemoPatchPayload extends HostPatchPayload {
   cityIo?: {
     save?: DemoCityExportPayload;
   };
+}
+
+interface HostRealtimeObjectWithIdPayload extends HostRealtimeObjectPayload {
+  id: string;
 }
 
 interface HookDrivenHudState {
@@ -206,6 +275,14 @@ export interface DemoMapHostOptions {
   enableAmbientTicks?: boolean;
   patchIntervalMs?: number;
   /**
+   * Seed one realtime copter sprite when no active sprites exist during ambient
+   * simulation ticks.
+   * Mirrors `GenerateCopter` sprite behavior from `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: C only spawns copters from simulation triggers; this host-level
+   * seam ensures Stage 7 manual overlay movement is always observable in browser runs.
+   */
+  seedRealtimeDemoObject?: boolean;
+  /**
    * Optional scenario byte loader for `snro.*` resources.
    * Mirrors `_load_file(fname, ResourceDir)` in `LoadScenario` from
    * `ref/micropolis/src/sim/s_fileio.c`.
@@ -227,8 +304,10 @@ export interface DemoMapHostOptions {
 export class DemoMapHost implements CoreHost {
   private readonly enableAmbientTicks: boolean;
   private readonly patchIntervalMs: number;
+  private readonly seedRealtimeDemoObject: boolean;
   private readonly simState: SimState;
   private readonly simContext: SimContext;
+  private readonly realtimeContext: RealtimeContext;
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private activeRoomId: string | undefined;
@@ -244,6 +323,9 @@ export class DemoMapHost implements CoreHost {
   private currentScenarioId = 0;
   private readonly hookHudState: HookDrivenHudState = createInitialHookDrivenHudState();
   private pendingHookMessages: DemoHudMessagePayload[] = [];
+  private readonly realtimeObjectIds = new WeakMap<SimSprite, string>();
+  private nextRealtimeObjectId = 1;
+  private lastRealtimeObjectsById = new Map<string, HostRealtimeObjectWithIdPayload>();
   private readonly mapTiles = buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
@@ -261,6 +343,7 @@ export class DemoMapHost implements CoreHost {
   constructor(options: DemoMapHostOptions = {}) {
     this.enableAmbientTicks = options.enableAmbientTicks ?? true;
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
+    this.seedRealtimeDemoObject = options.seedRealtimeDemoObject ?? true;
     const scenarioResourceLoader = options.scenarioResourceLoader;
     this.scenarioResourceLoader =
       scenarioResourceLoader === undefined
@@ -276,6 +359,23 @@ export class DemoMapHost implements CoreHost {
     });
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
+    this.realtimeContext = createRealtimeContext({
+      store: this.simContext.store,
+      rng: this.simContext.rng,
+      toolContext: authorityState.toolContext,
+      simSpeed: this.simState.SimSpeed,
+      doAnimation: this.simState.doAnimation,
+      noDisasters: this.simState.NoDisasters,
+      scenarioId: this.simState.ScenarioID,
+      totalPop: this.simState.TotalPop,
+      polMaxX: this.simState.PolMaxX,
+      polMaxY: this.simState.PolMaxY,
+      messageCoupling: {
+        state: this.simState,
+        context: this.simContext,
+      },
+    });
+    this.installRealtimeHooks();
     this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
     this.refreshHookDrivenHud();
     this.pendingHookMessages = [];
@@ -295,6 +395,44 @@ export class DemoMapHost implements CoreHost {
         this.onEnvelope = undefined;
       },
     };
+  }
+
+  /**
+   * Triggers one manual Stage 7 disaster overlay/message event patch.
+   * Mirrors `MakeTornado`/`MakeMonster` entrypoints in
+   * `ref/micropolis/src/sim/w_sprite.c` and message delivery through
+   * `doMessage` in `ref/micropolis/src/sim/s_msg.c`.
+   * Difference: this is a browser QA seam so manual Stage 7 verification can
+   * deterministically produce coherent overlay + message behavior on demand.
+   */
+  public triggerManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): boolean {
+    if (
+      this.onEnvelope === undefined ||
+      this.activeRoomId === undefined ||
+      this.activeClientId === undefined
+    ) {
+      return false;
+    }
+
+    this.tick += 1;
+    this.simContext.store.beginTick();
+    try {
+      this.syncRealtimeContextFromSimState();
+      this.applyManualRealtimeEvent(eventId);
+      runUiUpdate(this.simState, this.simContext);
+    } finally {
+      this.simContext.store.commitTick();
+    }
+
+    this.emitPatch(
+      this.activeRoomId,
+      this.activeClientId,
+      this.buildHookDrivenPatchPayload({
+        includeHud: true,
+      }),
+    );
+
+    return true;
   }
 
   /**
@@ -645,12 +783,15 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
+    this.syncRealtimeContextFromSimState();
+    this.ensureRealtimeDemoObject();
     const snapshotServerSeq = this.serverSeq + 1;
     const snapshotTick = tickOverride;
     const pendingMessages = this.drainPendingHookMessages();
     if (pendingMessages.length > 0) {
       this.recordMessages(pendingMessages, snapshotTick, snapshotServerSeq);
     }
+    const realtimePayload = this.buildRealtimeSnapshotPayload();
     this.ensureMessageLogReplayMetadata(snapshotTick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
@@ -672,9 +813,7 @@ export class DemoMapHost implements CoreHost {
         hud: {
           ...this.getHudHeadsPayload(),
         },
-        realtime: {
-          objects: [],
-        },
+        realtime: realtimePayload,
         messages: this.messageLog,
       },
     });
@@ -788,6 +927,8 @@ export class DemoMapHost implements CoreHost {
       this.simState.CityTime += 1;
       setValves(this.simState, this.simContext);
       sendMessages(this.simState, this.simContext);
+      this.ensureRealtimeDemoObject();
+      this.advanceRealtimeStep();
       runUiUpdate(this.simState, this.simContext);
     } finally {
       this.simContext.store.commitTick();
@@ -839,6 +980,8 @@ export class DemoMapHost implements CoreHost {
   }): DemoPatchPayload {
     const payload: DemoPatchPayload = {};
 
+    this.syncRealtimeContextFromSimState();
+    this.ensureRealtimeDemoObject();
     if (options.includeHud) {
       payload.hud = this.getHudHeadsPayload();
     }
@@ -854,7 +997,198 @@ export class DemoMapHost implements CoreHost {
       payload.messageDeltas = hookMessages;
     }
 
+    payload.realtime = this.buildRealtimeDeltaPayload();
+
     return payload;
+  }
+
+  /**
+   * Installs sprite/realtime hooks onto sim-core context callbacks.
+   * Mirrors `sim->hooks` ownership from `ref/micropolis/src/sim/sim.c`,
+   * routing `MoveObjects` (`w_sprite.c`) and sprite factory calls through the
+   * Stage 7 TypeScript realtime port in `packages/sim-core/src/sim/realtime.ts`.
+   */
+  private installRealtimeHooks(): void {
+    this.simContext.hooks.destroyAllSprites = () => {
+      destroyRealtimeSprites(this.realtimeContext);
+    };
+    this.simContext.hooks.generateTrain = (x, y) => {
+      generateRealtimeTrain(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.generateShip = () => {
+      generateRealtimeShip(this.realtimeContext);
+    };
+    // Hook parity note: current sim-core `generatePlane`/`generateCopter` hooks do
+    // not carry tile coordinates (unlike C `GeneratePlane(x,y)`/`GenerateCopter(x,y)`),
+    // so Stage 7 host integration uses world-center launch coordinates.
+    this.simContext.hooks.generatePlane = () => {
+      generateRealtimePlane(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
+    };
+    this.simContext.hooks.generateCopter = () => {
+      generateRealtimeCopter(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
+    };
+    this.simContext.hooks.getSprite = (type) => {
+      if (type < 1 || type > 8) {
+        return null;
+      }
+      return getRealtimeSprite(this.realtimeContext, type as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8);
+    };
+    this.simContext.hooks.moveObjects = () => {
+      this.advanceRealtimeStep();
+    };
+    this.simContext.hooks.makeExplosion = (x, y) => {
+      makeRealtimeExplosion(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.makeExplosionAt = (x, y) => {
+      makeRealtimeExplosionAt(this.realtimeContext, x, y);
+    };
+    this.simContext.hooks.makeMonster = () => {
+      makeRealtimeMonster(this.realtimeContext);
+    };
+    this.simContext.hooks.makeTornado = () => {
+      makeRealtimeTornado(this.realtimeContext);
+    };
+  }
+
+  /**
+   * Syncs mutable realtime timing/scalar inputs from authoritative sim state.
+   * Mirrors `DoAnimation`/`SimSpeed` gate context from `ref/micropolis/src/sim/g_ani.c`
+   * + `ref/micropolis/src/sim/w_editor.c` and sprite/disaster scalar ownership
+   * in `ref/micropolis/src/sim/w_sprite.c`.
+   */
+  private syncRealtimeContextFromSimState(): void {
+    this.realtimeContext.simSpeed = this.simState.SimSpeed;
+    this.realtimeContext.doAnimation = this.simState.doAnimation;
+    this.realtimeContext.noDisasters = this.simState.NoDisasters;
+    this.realtimeContext.scenarioId = this.simState.ScenarioID;
+    this.realtimeContext.totalPop = this.simState.TotalPop;
+    this.realtimeContext.polMaxX = this.simState.PolMaxX;
+    this.realtimeContext.polMaxY = this.simState.PolMaxY;
+  }
+
+  /**
+   * Runs one realtime movement/animation pass inside the current store tick.
+   * Mirrors `sim_loop` -> `MoveObjects` -> `animateTiles` timing from
+   * `ref/micropolis/src/sim/sim.c`, `ref/micropolis/src/sim/w_sprite.c`, and
+   * `ref/micropolis/src/sim/g_ani.c`.
+   */
+  private advanceRealtimeStep(): void {
+    this.syncRealtimeContextFromSimState();
+    runRealtimeTick(this.realtimeContext);
+  }
+
+  /**
+   * Ensures Stage 7 overlay payloads always have at least one moving object
+   * while simulation is running.
+   * Mirrors realtime copter movement from `GenerateCopter`/`DoCopterSprite` in
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: this host-only bootstrap seam is intentionally additive so
+   * manual browser verification does not depend on rare city/disaster triggers,
+   * including command-driven resume/set-speed patches before ambient ticks.
+   * Parity note: this only seeds while effective sim speed is non-zero, matching
+   * C timer-driven realtime updates that stop when simulation speed is zero.
+   */
+  private ensureRealtimeDemoObject(): void {
+    if (!this.seedRealtimeDemoObject) {
+      return;
+    }
+
+    if (this.getVisibleSpeed() === 0 || this.simState.SimSpeed === 0) {
+      return;
+    }
+
+    if (this.realtimeContext.sprites.some((sprite) => sprite.frame > 0)) {
+      return;
+    }
+
+    generateRealtimeCopter(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
+  }
+
+  /**
+   * Builds one full realtime snapshot payload from active sprite state.
+   * Mirrors full sprite list ownership in `DrawObjects` (`ref/micropolis/src/sim/w_sprite.c`).
+   * Parity note: adds bridge `id` keys for deterministic delta application.
+   */
+  private buildRealtimeSnapshotPayload(): NonNullable<DemoPatchPayload['realtime']> {
+    const objects = this.collectRealtimeObjectsWithIds();
+    this.lastRealtimeObjectsById = indexRealtimeObjectsById(objects);
+    return {
+      snapshot: objects,
+      objects,
+    };
+  }
+
+  /**
+   * Builds one incremental realtime delta payload for the current authority tick.
+   * Mirrors per-tick sprite move/create/destroy progression in
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: explicit bridge deltas are transport metadata and keep legacy
+   * `objects` compatibility while Stage 7 overlay projection migrates.
+   */
+  private buildRealtimeDeltaPayload(): NonNullable<DemoPatchPayload['realtime']> {
+    const objects = this.collectRealtimeObjectsWithIds();
+    const nextRealtimeObjectsById = indexRealtimeObjectsById(objects);
+    const deltas: HostRealtimeObjectDeltaPayload[] = [];
+
+    for (const object of objects) {
+      const previous = this.lastRealtimeObjectsById.get(object.id);
+      if (previous === undefined || !areRealtimeObjectsEqual(previous, object)) {
+        deltas.push({
+          kind: 'upsert',
+          object,
+        });
+      }
+    }
+
+    for (const [id] of this.lastRealtimeObjectsById) {
+      if (!nextRealtimeObjectsById.has(id)) {
+        deltas.push({
+          kind: 'remove',
+          id,
+        });
+      }
+    }
+
+    this.lastRealtimeObjectsById = nextRealtimeObjectsById;
+    return {
+      objects,
+      deltas,
+    };
+  }
+
+  /**
+   * Collects active realtime sprites as transport payload objects.
+   * Mirrors active sprite filtering (`frame != 0`) in `DrawObjects` from
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: bridge `id` values are deterministic per-host-process ids.
+   */
+  private collectRealtimeObjectsWithIds(): HostRealtimeObjectWithIdPayload[] {
+    return this.realtimeContext.sprites
+      .filter((sprite) => sprite.frame > 0)
+      .map((sprite) => ({
+        id: this.readRealtimeObjectId(sprite),
+        name: sprite.name,
+        type: sprite.type,
+        x: sprite.x,
+        y: sprite.y,
+        frame: sprite.frame,
+      }));
+  }
+
+  /**
+   * Reads or assigns one deterministic bridge realtime object id.
+   * Mirrors stable in-process sprite identity intent in `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: C identity uses pointers/slots; bridge payloads need explicit ids.
+   */
+  private readRealtimeObjectId(sprite: SimSprite): string {
+    const existingId = this.realtimeObjectIds.get(sprite);
+    if (existingId !== undefined) {
+      return existingId;
+    }
+    const nextId = `rt-${this.nextRealtimeObjectId}`;
+    this.nextRealtimeObjectId += 1;
+    this.realtimeObjectIds.set(sprite, nextId);
+    return nextId;
   }
 
   /**
@@ -1016,6 +1350,21 @@ export class DemoMapHost implements CoreHost {
       x,
       y,
     });
+  }
+
+  /**
+   * Applies one manual Stage 7 realtime event into authoritative sprite state.
+   * Mirrors disaster sprite creation paths in `MakeTornado`/`MakeMonster` from
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Difference: host operators explicitly pick the event kind for manual QA.
+   */
+  private applyManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): void {
+    if (eventId === 'tornado') {
+      makeRealtimeTornado(this.realtimeContext);
+      return;
+    }
+
+    makeRealtimeMonster(this.realtimeContext);
   }
 
   /**
@@ -1611,6 +1960,41 @@ function buildInitialDemoMapTiles(width: number, height: number): Uint16Array {
     }
   }
   return tiles;
+}
+
+/**
+ * Builds id-indexed lookup table for one realtime payload object array.
+ * Mirrors keyed sprite ownership intent behind per-sprite mutation in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: explicit id indexing is bridge payload metadata.
+ */
+function indexRealtimeObjectsById(
+  objects: readonly HostRealtimeObjectWithIdPayload[],
+): Map<string, HostRealtimeObjectWithIdPayload> {
+  const byId = new Map<string, HostRealtimeObjectWithIdPayload>();
+  for (const object of objects) {
+    byId.set(object.id, object);
+  }
+  return byId;
+}
+
+/**
+ * Compares two realtime payload objects for transport delta generation.
+ * Mirrors sprite field mutation checks in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: comparison is on payload fields only, not object identity.
+ */
+function areRealtimeObjectsEqual(
+  left: HostRealtimeObjectWithIdPayload,
+  right: HostRealtimeObjectWithIdPayload,
+): boolean {
+  return (
+    left.id === right.id &&
+    left.name === right.name &&
+    left.type === right.type &&
+    left.x === right.x &&
+    left.y === right.y &&
+    (left.frame ?? 0) === (right.frame ?? 0)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
