@@ -137,9 +137,11 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       runtime.connect();
 
-      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`.
+      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Stage 7 host seeding
+      // now primes snapshot payloads so overlay entities appear immediately when
+      // the simulation is running.
       expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
-        false,
+        true,
       );
 
       vi.advanceTimersByTime(140);

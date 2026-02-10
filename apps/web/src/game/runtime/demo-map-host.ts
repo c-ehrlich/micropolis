@@ -697,6 +697,7 @@ export class DemoMapHost implements CoreHost {
     }
 
     this.syncRealtimeContextFromSimState();
+    this.ensureRealtimeDemoObject();
     const snapshotServerSeq = this.serverSeq + 1;
     const snapshotTick = tickOverride;
     const pendingMessages = this.drainPendingHookMessages();
@@ -995,9 +996,15 @@ export class DemoMapHost implements CoreHost {
    * `ref/micropolis/src/sim/w_sprite.c`.
    * Difference: this host-only bootstrap seam is intentionally additive so
    * manual browser verification does not depend on rare city/disaster triggers.
+   * Parity note: this only seeds while effective sim speed is non-zero, matching
+   * C timer-driven realtime updates that stop when simulation speed is zero.
    */
   private ensureRealtimeDemoObject(): void {
     if (!this.seedRealtimeDemoObject) {
+      return;
+    }
+
+    if (this.getVisibleSpeed() === 0 || this.simState.SimSpeed === 0) {
       return;
     }
 

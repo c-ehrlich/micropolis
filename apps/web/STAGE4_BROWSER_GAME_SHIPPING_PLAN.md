@@ -396,6 +396,7 @@ Deletion execution notes:
 - [x] `ref/micropolis/src/sim/g_ani.c` (animated tile/object timing context)
 - Stage 7 update: authoritative host tick now mirrors `DoAnimation && SimSpeed` realtime timing gate and `ANIMBIT` remap behavior for overlay payload cadence.
 - Stage 7 update (2026-02-10): map overlay projection now sorts objects by deterministic id/type/name/position/frame ordering and uses stable id-first plus legacy type/name keys so overlay reconciliation stays deterministic across payload ordering while map patch redraw cadence remains unchanged.
+- Stage 7 update (2026-02-10): snapshot emission now seeds one active realtime demo object only when effective speed is non-zero so manual browser runs show overlay entities immediately on connect while paused snapshots do not fabricate movement.
 
 ### TS references to review
 
