@@ -132,6 +132,7 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
 
 const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
 const STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 8;
+const STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 12;
 // Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
 // `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
 const STAGE11_SCENARIO_START_CERTIFICATION = {
@@ -173,6 +174,58 @@ function readFundsFromLabel(label: string): number {
     return 0;
   }
   return Number.parseInt(digits, 10);
+}
+
+interface Stage11RealtimeTrackableObject {
+  id?: string;
+  x: number;
+  y: number;
+  frame: number;
+}
+
+/**
+ * Reads one realtime object list from snapshot/patch payload sections.
+ * Mirrors Stage 7 full-list + compatibility object payload ownership in
+ * `DrawObjects`/`MoveObjects` from `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: missing `frame` values are normalized to `0`, matching runtime
+ * realtime projection defaults in `readInteger(record.frame) ?? 0` from
+ * `apps/web/src/game/runtime/realtime-state.ts`.
+ */
+function readStage11RealtimeObjectsFromPayload(
+  payload: HostPatchEnvelope['payload'] | HostSnapshotEnvelope['payload'],
+): readonly Stage11RealtimeTrackableObject[] {
+  const realtime = payload.realtime;
+  const rawObjects = realtime?.snapshot ?? realtime?.objects ?? [];
+  return rawObjects.map((object) => ({
+    id: object.id,
+    x: object.x,
+    y: object.y,
+    frame: object.frame ?? 0,
+  }));
+}
+
+/**
+ * Tracks realtime object coordinates/frames and reports whether any object moved.
+ * Mirrors sprite position/frame mutation in `MoveObjects` from
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ */
+function trackStage11RealtimeMovement(
+  objects: readonly Stage11RealtimeTrackableObject[],
+  signaturesById: Map<string, string>,
+): boolean {
+  let sawMovement = false;
+  for (const object of objects) {
+    if (typeof object.id !== 'string' || object.id.length === 0) {
+      continue;
+    }
+    const signature = `${object.x}:${object.y}:${object.frame}`;
+    const previousSignature = signaturesById.get(object.id);
+    if (previousSignature !== undefined && previousSignature !== signature) {
+      sawMovement = true;
+    }
+    signaturesById.set(object.id, signature);
+  }
+  return sawMovement;
 }
 
 interface Stage11HostHudRestorationSignature {
@@ -912,6 +965,176 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
     ).toBe(true);
     expect(sawHudPatch).toBe(true);
     expect(sawMessageDeltaPatch).toBe(true);
+  } finally {
+    unsubscribe();
+    runtime.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 in-map realtime/disaster visual movement on host envelopes.
+ * Mirrors sprite update/render eligibility from `MoveObjects`/`DrawObjects` in
+ * `ref/micropolis/src/sim/w_sprite.c` under normal speed-3 simulation cadence
+ * from `ref/micropolis/src/sim/s_sim.c`.
+ */
+function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
+  vi.useFakeTimers();
+  const host = createStage4PrimaryPlayableHost({
+    enableAmbientTicks: true,
+    patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+  });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  const requestSnapshot = (label: string): HostSnapshotEnvelope => {
+    const previousServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      reason: 'manual',
+      fromServerSeq: previousServerSeq,
+    });
+    for (let index = hostEnvelopes.length - 1; index >= 0; index -= 1) {
+      const envelope = hostEnvelopes[index];
+      if (
+        envelope !== undefined &&
+        envelope.kind === 'snapshot' &&
+        envelope.serverSeq > previousServerSeq
+      ) {
+        return envelope;
+      }
+    }
+    throw new Error(`Expected ${label} snapshot envelope`);
+  };
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+
+    const bootSnapshot = requestSnapshot(`${runId} boot`);
+    const realtimeSignaturesById = new Map<string, string>();
+    const bootRealtimeObjects = readStage11RealtimeObjectsFromPayload(bootSnapshot.payload);
+    expect(bootRealtimeObjects.length).toBeGreaterThan(0);
+
+    let sawRealtimeMovement = trackStage11RealtimeMovement(
+      bootRealtimeObjects,
+      realtimeSignaturesById,
+    );
+    const bootTick = bootSnapshot.tick;
+
+    // Magic-number source: speed-3 ambient cadence advances one realtime
+    // `MoveObjects` pass per interval (`s_sim.c` + `w_sprite.c`), so twelve
+    // intervals guarantee multiple observable overlay frames.
+    vi.advanceTimersByTime(STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS);
+
+    const realtimePatches = hostEnvelopes.filter(
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > bootSnapshot.serverSeq &&
+        readStage11RealtimeObjectsFromPayload(envelope.payload).length > 0,
+    );
+    expect(realtimePatches.length).toBeGreaterThan(0);
+    for (const patch of realtimePatches) {
+      if (
+        trackStage11RealtimeMovement(
+          readStage11RealtimeObjectsFromPayload(patch.payload),
+          realtimeSignaturesById,
+        )
+      ) {
+        sawRealtimeMovement = true;
+      }
+    }
+
+    const postObserveSnapshot = requestSnapshot(`${runId} realtime observe`);
+    expect(postObserveSnapshot.tick).toBeGreaterThan(bootTick);
+    if (
+      trackStage11RealtimeMovement(
+        readStage11RealtimeObjectsFromPayload(postObserveSnapshot.payload),
+        realtimeSignaturesById,
+      )
+    ) {
+      sawRealtimeMovement = true;
+    }
+
+    expect(sawRealtimeMovement).toBe(true);
+  } finally {
+    connection.disconnect();
+    vi.useRealTimers();
+  }
+}
+
+/**
+ * Certifies Stage 11 in-map realtime/disaster visual movement on the shipped runtime path.
+ * Mirrors host realtime sprite updates from `MoveObjects` in
+ * `ref/micropolis/src/sim/w_sprite.c`, projected through Stage 4 runtime state.
+ */
+function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
+  vi.useFakeTimers();
+  let sawRealtimePatch = false;
+  let sawRealtimeMovement = false;
+  const realtimeSignaturesById = new Map<string, string>();
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({
+      enableAmbientTicks: true,
+      patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
+    }),
+    roomId: `${runId}-room`,
+    clientId: `${runId}-client`,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    if (event.envelope?.kind !== 'patch') {
+      return;
+    }
+    const realtimeObjects = readStage11RealtimeObjectsFromPayload(event.envelope.payload);
+    if (realtimeObjects.length === 0) {
+      return;
+    }
+    sawRealtimePatch = true;
+    if (trackStage11RealtimeMovement(realtimeObjects, realtimeSignaturesById)) {
+      sawRealtimeMovement = true;
+    }
+  });
+
+  const requestSnapshotState = (): WebRuntimeState => {
+    const previousServerSeq = runtime.getState().lastAppliedServerSeq;
+    runtime.requestSnapshot('manual');
+    const state = runtime.getState();
+    expect(state.lastAppliedServerSeq).toBeGreaterThan(previousServerSeq);
+    return state;
+  };
+
+  try {
+    runtime.connect();
+
+    const bootState = requestSnapshotState();
+    expect(bootState.realtimeState.objects.length).toBeGreaterThan(0);
+    sawRealtimeMovement =
+      trackStage11RealtimeMovement(bootState.realtimeState.objects, realtimeSignaturesById) ||
+      sawRealtimeMovement;
+    const bootTick = bootState.lastAppliedTick;
+
+    vi.advanceTimersByTime(STAGE11_REALTIME_VISUAL_OBSERVE_DURATION_MS);
+
+    const postObserveState = requestSnapshotState();
+    sawRealtimeMovement =
+      trackStage11RealtimeMovement(
+        postObserveState.realtimeState.objects,
+        realtimeSignaturesById,
+      ) || sawRealtimeMovement;
+    expect(postObserveState.lastAppliedTick).toBeGreaterThan(bootTick);
+    expect(sawRealtimePatch).toBe(true);
+    expect(sawRealtimeMovement).toBe(true);
   } finally {
     unsubscribe();
     runtime.disconnect();
@@ -1969,6 +2192,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime heads + message feed updates during normal simulation on Stage 4 route', () => {
     certifyStage11HeadsAndMessagesOnRuntime('stage11-heads-messages-runtime');
+  });
+
+  test('certifies host realtime/disaster visual event appears in-map', () => {
+    certifyStage11RealtimeVisualEventOnHost('stage11-realtime-visual-host');
+  });
+
+  test('certifies runtime realtime/disaster visual event appears in-map on Stage 4 route', () => {
+    certifyStage11RealtimeVisualEventOnRuntime('stage11-realtime-visual-runtime');
   });
 
   test('certifies host save `.cty` -> mutate city -> load `.cty` fully restores map + HUD', async () => {

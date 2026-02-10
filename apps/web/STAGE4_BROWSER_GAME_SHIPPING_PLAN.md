@@ -553,7 +553,7 @@ Deletion execution notes:
 - [x] Observe heads + message feed update during normal simulation.
 - [x] Save `.cty`, mutate city, reload `.cty`, confirm full restoration.
 - [x] Start at least one scenario and confirm expected start year/funds.
-- [ ] Observe at least one realtime/disaster visual event in-map.
+- [x] Observe at least one realtime/disaster visual event in-map.
 - [ ] Run a continuous play session for at least 15 minutes with acceptable responsiveness.
 
 Implementation trace (2026-02-10):
@@ -563,6 +563,7 @@ Implementation trace (2026-02-10):
 - Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host heads + message feed updates during normal simulation`) and shipped runtime-path certification (`certifies runtime heads + message feed updates during normal simulation on Stage 4 route`).
 - Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host save .cty -> mutate city -> load .cty fully restores map + HUD`) and shipped runtime-path certification (`certifies runtime save .cty -> mutate city -> load .cty fully restores map + HUD on Stage 4 route`).
 - Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host scenario start sets expected year/funds`) and shipped runtime-path certification (`certifies runtime scenario start sets expected year/funds on Stage 4 route`).
+- Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies host realtime/disaster visual event appears in-map`) and shipped runtime-path certification (`certifies runtime realtime/disaster visual event appears in-map on Stage 4 route`).
 
 ### Certification checklist (automated)
 
