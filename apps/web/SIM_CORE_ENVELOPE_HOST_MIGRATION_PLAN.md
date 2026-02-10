@@ -79,7 +79,7 @@ Scenario command settlement decision:
 - [x] Emit `ack` only after scenario bytes are loaded and applied successfully.
 - [x] Emit `reject` with `invalid-scenario-file` on load/decode failure.
 - Implemented in `SimCoreEnvelopeHost.applyScenarioCommandAsync(...)` for scenario-id resolution, resource load, and decode failures.
-- [ ] Emit fresh authoritative `snapshot` immediately after scenario `ack`.
+- [x] Emit fresh authoritative `snapshot` immediately after scenario `ack`.
 
 Sequence/tick decision:
 

@@ -547,6 +547,9 @@ describe('SimCoreEnvelopeHost', () => {
     const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
     const hostInternals = host as unknown as {
       authorityState: {
+        store: {
+          snapshot(layer: 'map'): Uint16Array | unknown;
+        };
         simState: {
           ScenarioID: number;
           CityTime: number;
@@ -565,12 +568,18 @@ describe('SimCoreEnvelopeHost', () => {
       cityTime: number;
       totalFunds: number;
     }> = [];
+    const authoritativeMapAtEnvelope: Uint16Array[] = [];
     const connection = host.connect((envelope) => {
       authoritativeScenarioStateAtEnvelope.push({
         scenarioId: hostInternals.authorityState.simState.ScenarioID,
         cityTime: hostInternals.authorityState.simState.CityTime,
         totalFunds: hostInternals.authorityState.simState.TotalFunds,
       });
+      const authoritativeMap = hostInternals.authorityState.store.snapshot('map');
+      if (!(authoritativeMap instanceof Uint16Array)) {
+        throw new Error('Expected authoritative map layer snapshot to be Uint16Array');
+      }
+      authoritativeMapAtEnvelope.push(Uint16Array.from(authoritativeMap));
       envelopes.push(envelope);
     });
 
@@ -622,13 +631,25 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-load-scenario',
     });
-    expect(envelopes[3]).toMatchObject({
+    const scenarioSnapshotIndex = scenarioAckIndex + 1;
+    const scenarioSnapshot = envelopes[scenarioSnapshotIndex];
+    expect(scenarioSnapshot).toMatchObject({
       kind: 'snapshot',
       roomId: 'room-scenario',
       clientId: 'client-scenario',
       tick: 1,
       serverSeq: 3,
     });
+    if (scenarioSnapshot === undefined || scenarioSnapshot.kind !== 'snapshot') {
+      throw new Error('expected scenario snapshot envelope immediately after scenario ack');
+    }
+    const scenarioSnapshotMap = scenarioSnapshot.payload.map;
+    if (scenarioSnapshotMap === undefined || !('tileWords' in scenarioSnapshotMap)) {
+      throw new Error('expected scenario snapshot map payload');
+    }
+    expect(scenarioSnapshotMap.tileWords).toEqual(
+      authoritativeMapAtEnvelope[scenarioSnapshotIndex],
+    );
 
     expect(hostInternals.authorityState.simState.ScenarioID).toBe(scenario.id);
     expect(hostInternals.authorityState.simState.CityTime).toBe(scenario.startCityTime);

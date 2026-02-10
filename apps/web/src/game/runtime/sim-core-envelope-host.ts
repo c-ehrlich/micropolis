@@ -645,6 +645,22 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
+    this.emitScenarioSuccessSettlement(roomId, clientId, commandId, commandTick);
+  }
+
+  /**
+   * Settles one successful scenario load with ordered `ack` + `snapshot` emission.
+   * Mirrors `LoadScenario` completion ownership in `ref/micropolis/src/sim/s_fileio.c`,
+   * with update propagation intent from `ref/micropolis/src/sim/w_update.c`.
+   * Parity note: Bridge settlement emits `ack` first, then a fresh authoritative
+   * snapshot on the same command tick.
+   */
+  private emitScenarioSuccessSettlement(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    commandTick: number,
+  ): void {
     this.emitAck(roomId, clientId, commandId, commandTick);
     this.emitSnapshot(roomId, clientId, commandTick);
   }
