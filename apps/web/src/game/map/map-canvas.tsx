@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useRef } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef } from 'react';
 
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import type { RuntimeMapState } from '../runtime/map-state.ts';
@@ -62,18 +62,22 @@ export function MapCanvas({
     lastRenderedEpochRef.current = mapState.renderEpoch;
   }, [mapState, tileSize]);
 
+  const widthPx = mapState.width * tileSize;
+  const heightPx = mapState.height * tileSize;
+  const realtimeOverlaySprites = useMemo(
+    () =>
+      projectRealtimeOverlaySprites({
+        objects: realtimeObjects,
+        tileSize,
+        mapWidth: mapState.width,
+        mapHeight: mapState.height,
+      }),
+    [mapState.height, mapState.width, realtimeObjects, tileSize],
+  );
+
   if (!mapState.hasSnapshot) {
     return <div>No map snapshot received yet.</div>;
   }
-
-  const widthPx = mapState.width * tileSize;
-  const heightPx = mapState.height * tileSize;
-  const realtimeOverlaySprites = projectRealtimeOverlaySprites({
-    objects: realtimeObjects,
-    tileSize,
-    mapWidth: mapState.width,
-    mapHeight: mapState.height,
-  });
 
   return (
     <div
@@ -332,6 +336,9 @@ const MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC: MapCanvasRealtimeSpriteSpec = {
  * object coordinates are 1/16-tile world pixels with sprite-type offsets.
  * Parity note: browser projection clips off-screen sprites and skips `frame=0`
  * objects the same way C draw code treats inactive sprites.
+ * Difference: Stage 7 sorts projected overlays by deterministic id/field order
+ * and uses stable id-first keys so React overlay updates remain replay-stable
+ * while base-map redraw cadence continues to follow map patch draw mode only.
  */
 export function projectRealtimeOverlaySprites({
   objects,
@@ -348,10 +355,12 @@ export function projectRealtimeOverlaySprites({
   const viewportWidth = mapWidth * tileSize;
   const viewportHeight = mapHeight * tileSize;
   const overlays: MapCanvasRealtimeOverlaySprite[] = [];
+  const deterministicObjects = createDeterministicRealtimeOverlayOrder(objects);
+  const overlayKeyCounts = new Map<string, number>();
 
-  for (let index = 0; index < objects.length; index += 1) {
-    const object = objects[index];
-    if (object === undefined || object.frame <= 0) {
+  for (const entry of deterministicObjects) {
+    const { object, sourceIndex } = entry;
+    if (object.frame <= 0) {
       continue;
     }
 
@@ -366,7 +375,7 @@ export function projectRealtimeOverlaySprites({
     }
 
     overlays.push({
-      key: `${object.type}:${object.name}:${index}`,
+      key: buildRealtimeOverlayKey(object, sourceIndex, overlayKeyCounts),
       name: spec.displayName,
       frame: object.frame,
       label: spec.label,
@@ -383,6 +392,87 @@ export function projectRealtimeOverlaySprites({
 
 function getRealtimeSpriteSpec(type: number): MapCanvasRealtimeSpriteSpec {
   return MAP_CANVAS_REALTIME_SPRITE_SPECS[type] ?? MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC;
+}
+
+interface RealtimeOverlayObjectReference {
+  object: RuntimeRealtimeObject;
+  sourceIndex: number;
+}
+
+function createDeterministicRealtimeOverlayOrder(
+  objects: readonly RuntimeRealtimeObject[],
+): RealtimeOverlayObjectReference[] {
+  const references: RealtimeOverlayObjectReference[] = [];
+  for (let index = 0; index < objects.length; index += 1) {
+    const object = objects[index];
+    if (object !== undefined) {
+      references.push({
+        object,
+        sourceIndex: index,
+      });
+    }
+  }
+
+  references.sort(compareRealtimeOverlayObjectReferences);
+  return references;
+}
+
+function compareRealtimeOverlayObjectReferences(
+  left: RealtimeOverlayObjectReference,
+  right: RealtimeOverlayObjectReference,
+): number {
+  const leftId = left.object.id;
+  const rightId = right.object.id;
+  if (leftId === undefined && rightId === undefined) {
+    return left.sourceIndex - right.sourceIndex;
+  }
+
+  if (leftId === undefined) {
+    return 1;
+  }
+  if (rightId === undefined) {
+    return -1;
+  }
+
+  const idCompare = leftId.localeCompare(rightId);
+  if (idCompare !== 0) {
+    return idCompare;
+  }
+
+  if (left.object.type !== right.object.type) {
+    return left.object.type - right.object.type;
+  }
+
+  const nameCompare = left.object.name.localeCompare(right.object.name);
+  if (nameCompare !== 0) {
+    return nameCompare;
+  }
+
+  if (left.object.x !== right.object.x) {
+    return left.object.x - right.object.x;
+  }
+  if (left.object.y !== right.object.y) {
+    return left.object.y - right.object.y;
+  }
+  if (left.object.frame !== right.object.frame) {
+    return left.object.frame - right.object.frame;
+  }
+
+  return left.sourceIndex - right.sourceIndex;
+}
+
+function buildRealtimeOverlayKey(
+  object: RuntimeRealtimeObject,
+  sourceIndex: number,
+  seenKeyBases: Map<string, number>,
+): string {
+  const keyBase =
+    object.id !== undefined
+      ? `id:${object.id}`
+      : `legacy:${object.type}:${object.name}:${sourceIndex}`;
+  const seenCount = seenKeyBases.get(keyBase) ?? 0;
+  seenKeyBases.set(keyBase, seenCount + 1);
+  return seenCount === 0 ? keyBase : `${keyBase}:${seenCount}`;
 }
 
 function drawAllTiles(
