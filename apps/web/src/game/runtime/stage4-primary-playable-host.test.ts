@@ -1,10 +1,61 @@
 import { describe, expect, test } from 'vitest';
 
-import type { ClientEnvelope, HostEnvelope, HostPatchEnvelope } from './protocol.ts';
+import type {
+  ClientEnvelope,
+  HostAckEnvelope,
+  HostEnvelope,
+  HostPatchEnvelope,
+  HostSnapshotEnvelope,
+} from './protocol.ts';
 import {
   createStage4PrimaryPlayableHost,
   readStage4CityExportPayload,
 } from './stage4-primary-playable-host.ts';
+
+/**
+ * Wait for one host envelope that matches the provided predicate.
+ * Mirrors async `LoadScenario` completion ordering in
+ * `ref/micropolis/src/sim/s_fileio.c`, where the command settles after resource
+ * bytes are loaded and applied.
+ */
+async function waitForHostEnvelope<TEnvelope extends HostEnvelope>(
+  hostEnvelopes: readonly HostEnvelope[],
+  predicate: (envelope: HostEnvelope) => envelope is TEnvelope,
+  label: string,
+): Promise<TEnvelope> {
+  const timeoutMs = 5_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    for (let index = hostEnvelopes.length - 1; index >= 0; index -= 1) {
+      const envelope = hostEnvelopes[index];
+      if (envelope !== undefined && predicate(envelope)) {
+        return envelope;
+      }
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+/**
+ * Reads the latest authoritative sequence cursor from host envelopes.
+ * Mirrors bridge snapshot-resync cursor semantics in
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function readLatestServerSeq(hostEnvelopes: readonly HostEnvelope[]): number {
+  let latestServerSeq = 0;
+  for (const envelope of hostEnvelopes) {
+    if ('serverSeq' in envelope && typeof envelope.serverSeq === 'number') {
+      latestServerSeq = Math.max(latestServerSeq, envelope.serverSeq);
+    }
+  }
+  return latestServerSeq;
+}
 
 /**
  * Command-surface smoke for the Stage 4 default host factory.
@@ -13,7 +64,7 @@ import {
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
 describe('createStage4PrimaryPlayableHost', () => {
-  test('routes tool/sim/lifecycle/io commands through one host command surface', () => {
+  test('covers Stage 4 smoke flow for boot, tools+funds, save/load, scenario, and resync', async () => {
     const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
     const hostEnvelopes: HostEnvelope[] = [];
     const connection = host.connect((envelope) => {
@@ -28,6 +79,21 @@ describe('createStage4PrimaryPlayableHost', () => {
         protocolVersion: 'bridge-v1',
         coreVersion: 'sim-core',
       });
+      expect(hostEnvelopes[0]).toMatchObject({
+        kind: 'hello',
+        accepted: true,
+      });
+
+      const bootSnapshot = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+        'boot snapshot',
+      );
+      expect(bootSnapshot.tick).toBe(0);
+      expect(bootSnapshot.serverSeq).toBe(1);
+      // Magic number source: initial city funds baseline in `setAnyCityName` /
+      // `DoSimInit` bootstrap flow in `ref/micropolis/src/sim/s_init.c`.
+      expect(bootSnapshot.payload.hud?.funds).toBe(20_000);
 
       connection.send({
         kind: 'command',
@@ -51,6 +117,25 @@ describe('createStage4PrimaryPlayableHost', () => {
           y: 10,
         },
       });
+
+      const roadAck = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === 'cmd-road',
+        'road command ack',
+      );
+      const roadFundsPatch = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostPatchEnvelope =>
+          envelope.kind === 'patch' &&
+          envelope.serverSeq > roadAck.serverSeq &&
+          envelope.payload.hud?.funds !== undefined,
+        'road funds patch',
+      );
+      // Magic number source: road cost `10` from `CostOf[]` in
+      // `ref/micropolis/src/sim/w_tool.c`.
+      expect(roadFundsPatch.payload.hud?.funds).toBe(19_990);
+
       connection.send({
         kind: 'command',
         roomId: 'stage4-room',
@@ -74,13 +159,12 @@ describe('createStage4PrimaryPlayableHost', () => {
         },
       });
 
-      const savePatch = hostEnvelopes.find((envelope): envelope is HostPatchEnvelope => {
-        return envelope.kind === 'patch' && readStage4CityExportPayload(envelope.payload) !== null;
-      });
-      expect(savePatch).toBeDefined();
-      if (savePatch === undefined) {
-        throw new Error('Expected save-city patch payload');
-      }
+      const savePatch = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostPatchEnvelope =>
+          envelope.kind === 'patch' && readStage4CityExportPayload(envelope.payload) !== null,
+        'save-city patch payload',
+      );
 
       const savePayload = readStage4CityExportPayload(savePatch.payload);
       expect(savePayload).not.toBeNull();
@@ -103,6 +187,63 @@ describe('createStage4PrimaryPlayableHost', () => {
           cityBytes: savePayload.cityBytes,
         },
       });
+      const loadAck = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === 'cmd-load',
+        'load-city ack',
+      );
+      await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope =>
+          envelope.kind === 'snapshot' && envelope.serverSeq > loadAck.serverSeq,
+        'load-city snapshot',
+      );
+
+      connection.send({
+        kind: 'command',
+        roomId: 'stage4-room',
+        clientId: 'stage4-client',
+        commandId: 'cmd-scenario',
+        command: {
+          kind: 'scenario',
+          action: 'load-scenario',
+          scenarioId: 1,
+        },
+      });
+      const scenarioAck = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario',
+        'scenario ack',
+      );
+      const scenarioSnapshot = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope =>
+          envelope.kind === 'snapshot' && envelope.serverSeq > scenarioAck.serverSeq,
+        'scenario snapshot',
+      );
+      // Magic numbers source: scenario 1 (`Dullsville`) metadata constants in
+      // `LoadScenario` (`ref/micropolis/src/sim/s_fileio.c`): funds=5000, year=1900.
+      expect(scenarioSnapshot.payload.hud?.funds).toBe(5_000);
+      expect(scenarioSnapshot.payload.hud?.date?.year).toBe(1900);
+
+      const lastServerSeq = readLatestServerSeq(hostEnvelopes);
+      connection.send({
+        kind: 'request_snapshot',
+        roomId: 'stage4-room',
+        clientId: 'stage4-client',
+        fromServerSeq: lastServerSeq,
+        reason: 'resync',
+      });
+      const resyncSnapshot = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostSnapshotEnvelope =>
+          envelope.kind === 'snapshot' && envelope.serverSeq > lastServerSeq,
+        'resync snapshot',
+      );
+      expect(resyncSnapshot.serverSeq).toBeGreaterThan(lastServerSeq);
+      expect(resyncSnapshot.payload.hud?.funds).toBe(5_000);
 
       connection.send({
         kind: 'command',
@@ -114,7 +255,6 @@ describe('createStage4PrimaryPlayableHost', () => {
         },
       } as unknown as ClientEnvelope);
 
-      expect(hostEnvelopes.some((envelope) => envelope.kind === 'snapshot')).toBe(true);
       expect(hostEnvelopes.some((envelope) => envelope.kind === 'ack')).toBe(true);
       expect(
         hostEnvelopes.some(
