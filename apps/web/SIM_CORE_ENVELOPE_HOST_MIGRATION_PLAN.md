@@ -150,7 +150,7 @@ Acceptance checks:
 - [x] Wire over valid straight roads succeeds (`w_con.c` `_LayWire` rules).
 - [x] Wire over unsupported road shapes rejects according to C paths.
 - [x] Verify save/load/scenario parity tests reference C constants where assertions use fixed values.
-- [ ] Ensure any remaining runtime certification tests align to C behavior and delete non-parity expectations.
+- [x] Ensure any remaining runtime certification tests align to C behavior and delete non-parity expectations.
 
 Required automated gates before handoff:
 
