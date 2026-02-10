@@ -38,7 +38,7 @@ Use sim-core functionality where possible, we should not reimplement anything as
 - [x] Add a migration note in this file that `DemoMapHost` must not receive new gameplay logic.
 - [x] Confirm route `/` remains on envelope runtime contract (`apps/web/src/game/runtime/protocol.ts`) for this migration.
 - [x] Record that event-contract host runtime (`apps/web/src/game/core-host.ts`) is not part of route `/` cutover scope.
-- [ ] Update stale path references from `apps/web/src/game/runtime/sim-core-runtime-state.ts` to `apps/web/src/game/sim-core-runtime-state.ts`.
+- [x] Update stale path references from `apps/web/src/game/runtime/sim-core-runtime-state.ts` to `apps/web/src/game/sim-core-runtime-state.ts`.
 
 Acceptance checks:
 
