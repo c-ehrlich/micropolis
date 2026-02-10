@@ -503,7 +503,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make Stage 4 the primary playable route and retire user-visible dependence on legacy demo/placement paths.
+- [x] Make Stage 4 the primary playable route and retire user-visible dependence on legacy demo/placement paths.
 
 ### C references to review
 
