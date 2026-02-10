@@ -74,6 +74,52 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('rebuilds wire corners from _WireTable adjacency instead of stamping horizontal wire tiles', () => {
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: false }),
+    });
+
+    runtime.connect();
+    runtime.sendCommand('wire-corner-1', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 20,
+      y: 20,
+    });
+    runtime.sendCommand('wire-corner-2', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 21,
+      y: 20,
+    });
+    runtime.sendCommand('wire-corner-3', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 21,
+      y: 21,
+    });
+
+    const mapState = runtime.getState().mapState;
+    const cornerIndex = 21 + 20 * mapState.width;
+    const leftIndex = 20 + 20 * mapState.width;
+    const downIndex = 21 + 21 * mapState.width;
+    const cornerTileWord = mapState.tiles[cornerIndex];
+    const leftTileWord = mapState.tiles[leftIndex];
+    const downTileWord = mapState.tiles[downIndex];
+    if (cornerTileWord === undefined || leftTileWord === undefined || downTileWord === undefined) {
+      throw new Error('expected wire corner test tiles to be in bounds');
+    }
+
+    // Magic-number source: `_WireTable[0x000c] == 214`,
+    // `_WireTable[0x0002] == 210`, and `_WireTable[0x0001] == 211` in
+    // `ref/micropolis/src/sim/w_con.c`.
+    expect(cornerTileWord & TileMask.LOMASK).toBe(214);
+    expect(leftTileWord & TileMask.LOMASK).toBe(210);
+    expect(downTileWord & TileMask.LOMASK).toBe(211);
+
+    runtime.disconnect();
+  });
+
   it('consumes redraw plans on both patch and full-redraw authority paths', () => {
     const host = new DemoMapHost({ enableAmbientTicks: false });
     const runtime = createWebHostRuntime({ host });

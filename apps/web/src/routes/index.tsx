@@ -1,6 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  STAGE4_SOUND_PREVIEW_SPECS,
+  toMicropolisSoundPreviewWavPath,
+} from '../game/audio/micropolis-soundboard.ts';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
@@ -98,7 +102,9 @@ function Stage4RuntimePanel() {
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
+  const [soundStatus, setSoundStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
   const commandCounter = useRef(1);
 
   useEffect(() => {
@@ -127,6 +133,17 @@ function Stage4RuntimePanel() {
       runtime.disconnect();
     };
   }, [runtime, stateCommitDispatcher]);
+
+  useEffect(() => {
+    const soundPreviewAudioElementsByPath = soundPreviewAudioByPath.current;
+    return () => {
+      for (const audioElement of soundPreviewAudioElementsByPath.values()) {
+        audioElement.pause();
+        audioElement.src = '';
+      }
+      soundPreviewAudioElementsByPath.clear();
+    };
+  }, []);
 
   const controlsDisabled = state.phase !== 'ready';
   const reconnectDisabled =
@@ -434,6 +451,48 @@ function Stage4RuntimePanel() {
           </section>
         </aside>
       </section>
+
+      <section
+        style={{
+          border: '1px solid #334155',
+          borderRadius: 6,
+          display: 'grid',
+          gap: 8,
+          padding: 10,
+        }}
+      >
+        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Sound Test</strong>
+        <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+          Manual Micropolis sound preview (`/sounds/*.wav`) from the Sugar-style token route.
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {STAGE4_SOUND_PREVIEW_SPECS.map((soundSpec) => (
+            <button
+              key={soundSpec.token}
+              onClick={() => {
+                void playMicropolisSoundPreview({
+                  token: soundSpec.token,
+                  audioByPath: soundPreviewAudioByPath.current,
+                })
+                  .then(() => {
+                    setSoundStatus(`Played ${soundSpec.label}`);
+                  })
+                  .catch((error: unknown) => {
+                    const detail =
+                      error instanceof Error ? error.message : 'unknown playback error';
+                    setSoundStatus(`Failed to play ${soundSpec.label}: ${detail}`);
+                  });
+              }}
+              type="button"
+            >
+              {soundSpec.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+          {soundStatus}
+        </div>
+      </section>
     </section>
   );
 }
@@ -467,6 +526,35 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
   const nextValue = counter.current;
   counter.current = nextValue + 1;
   return `${prefix}-${nextValue}`;
+}
+
+/**
+ * Plays one Micropolis preview sound via browser audio.
+ * Mirrors the Micropolis Tcl/Python sound path:
+ * `EchoPlaySound` emits a token and Sugar resolves `<token>.wav` in
+ * `ref/micropolis/micropolisactivity.py`, adapted here to Vite public assets.
+ */
+async function playMicropolisSoundPreview({
+  token,
+  audioByPath,
+}: {
+  token: string;
+  audioByPath: Map<string, HTMLAudioElement>;
+}): Promise<void> {
+  if (typeof Audio === 'undefined') {
+    throw new Error('Audio API unavailable in this environment.');
+  }
+
+  const wavPath = toMicropolisSoundPreviewWavPath(token);
+  let audioElement = audioByPath.get(wavPath);
+  if (audioElement === undefined) {
+    audioElement = new Audio(wavPath);
+    audioElement.preload = 'auto';
+    audioByPath.set(wavPath, audioElement);
+  }
+
+  audioElement.currentTime = 0;
+  await audioElement.play();
 }
 
 /**

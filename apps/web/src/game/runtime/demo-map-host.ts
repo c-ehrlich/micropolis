@@ -26,6 +26,9 @@ import {
   type SimContext,
   type SimSprite,
   type SimState,
+  Tile,
+  TileFlag,
+  WIRE_TABLE,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
@@ -112,6 +115,8 @@ const TOOL_COSTS: Record<Stage2ToolName, number> = {
 };
 
 const ZONE_TOOLS = new Set<Stage2ToolName>(['res', 'com', 'ind']);
+const DEMO_WIRE_REBUILD_MIN_TILE_ID = 210;
+const DEMO_WIRE_REBUILD_MAX_TILE_ID = 220;
 
 const STAGE2_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -1925,6 +1930,13 @@ function applyDemoToolCommand(
 
   const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
 
+  if (command.tool === 'wire') {
+    return {
+      accepted: true,
+      deltas: applyDemoWireToolCommand(tiles, width, height, command.x, command.y),
+    };
+  }
+
   if (ZONE_TOOLS.has(command.tool)) {
     const base = TOOL_TILE_VALUES[command.tool];
     let offset = 0;
@@ -1939,6 +1951,211 @@ function applyDemoToolCommand(
 
   writeDemoTile(tiles, width, command.x, command.y, TOOL_TILE_VALUES[command.tool], deltas);
   return { accepted: true, deltas };
+}
+
+/**
+ * Applies one wire placement and rebuilds local wire connectivity.
+ * Mirrors `_FixZone` + `_FixSingle` cleanup for wire tiles in
+ * `ref/micropolis/src/sim/w_con.c` using `_WireTable` adjacency mapping.
+ * Parity note: demo map tiles may be stored without `CONDBIT`, so this treats
+ * bare conductive tile ids as connectable in addition to `CONDBIT`-flagged
+ * words to keep browser-stage wire visuals coherent.
+ */
+function applyDemoWireToolCommand(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): DemoMapTileWordDelta[] {
+  const fixupCoords = collectDemoWireFixupCoordinates(width, height, x, y);
+  const previousTileWordByIndex = new Map<number, number>();
+  for (const coord of fixupCoords) {
+    const index = coord.y * width + coord.x;
+    previousTileWordByIndex.set(index, tiles[index] ?? 0);
+  }
+
+  const centerIndex = y * width + x;
+  tiles[centerIndex] = TOOL_TILE_VALUES.wire;
+  for (const coord of fixupCoords) {
+    fixDemoWireTileAt(tiles, width, height, coord.x, coord.y);
+  }
+
+  const deltas: DemoMapTileWordDelta[] = [];
+  for (const coord of fixupCoords) {
+    const index = coord.y * width + coord.x;
+    const previousTileWord = previousTileWordByIndex.get(index) ?? 0;
+    const nextTileWord = tiles[index] ?? 0;
+    if (previousTileWord === nextTileWord) {
+      continue;
+    }
+    deltas.push({
+      x: coord.x,
+      y: coord.y,
+      tileWord: nextTileWord,
+    });
+  }
+  return deltas;
+}
+
+/**
+ * Collects the wire fixup neighborhood for one placement.
+ * Mirrors `_FixZone` visit order in `ref/micropolis/src/sim/w_con.c`:
+ * center, north, east, south, west.
+ */
+function collectDemoWireFixupCoordinates(
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): ReadonlyArray<Readonly<{ x: number; y: number }>> {
+  const coords: Array<{ x: number; y: number }> = [{ x, y }];
+  if (y > 0) {
+    coords.push({ x, y: y - 1 });
+  }
+  if (x < width - 1) {
+    coords.push({ x: x + 1, y });
+  }
+  if (y < height - 1) {
+    coords.push({ x, y: y + 1 });
+  }
+  if (x > 0) {
+    coords.push({ x: x - 1, y });
+  }
+  return coords;
+}
+
+/**
+ * Rebuilds one wire tile by cardinal-neighbor adjacency.
+ * Mirrors the wire branch in `_FixSingle` from `ref/micropolis/src/sim/w_con.c`,
+ * including direction-specific exclusions for `HPOWER`/`VPOWER`,
+ * `HROADPOWER`/`VROADPOWER`, and `RAILHPOWERV`/`RAILVPOWERH`.
+ */
+function fixDemoWireTileAt(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): void {
+  const index = y * width + x;
+  const tileWord = tiles[index] ?? 0;
+  const normalizedTile = normalizeDemoRoadLikeC(tileWord);
+  if (
+    normalizedTile < DEMO_WIRE_REBUILD_MIN_TILE_ID ||
+    normalizedTile > DEMO_WIRE_REBUILD_MAX_TILE_ID
+  ) {
+    return;
+  }
+
+  let adjacency = 0;
+  if (
+    y > 0 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[(y - 1) * width + x] ?? 0,
+      axis: 'vertical',
+    })
+  ) {
+    adjacency |= 0x0001;
+  }
+  if (
+    x < width - 1 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[y * width + (x + 1)] ?? 0,
+      axis: 'horizontal',
+    })
+  ) {
+    adjacency |= 0x0002;
+  }
+  if (
+    y < height - 1 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[(y + 1) * width + x] ?? 0,
+      axis: 'vertical',
+    })
+  ) {
+    adjacency |= 0x0004;
+  }
+  if (
+    x > 0 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[y * width + (x - 1)] ?? 0,
+      axis: 'horizontal',
+    })
+  ) {
+    adjacency |= 0x0008;
+  }
+
+  const rebuiltWireTile = WIRE_TABLE[adjacency];
+  if (rebuiltWireTile === undefined) {
+    throw new Error(`Missing wire adjacency mapping for index ${adjacency}`);
+  }
+  tiles[index] = rebuiltWireTile;
+}
+
+/**
+ * Checks whether one neighboring tile contributes wire connectivity.
+ * Mirrors `_FixSingle` wire-neighbor tests in `ref/micropolis/src/sim/w_con.c`:
+ * only conductive neighbors are considered, then direction-specific exclusions
+ * filter out incompatible straight-through variants.
+ */
+function isDemoWireNeighborConnected({
+  tileWord,
+  axis,
+}: Readonly<{
+  tileWord: number;
+  axis: 'vertical' | 'horizontal';
+}>): boolean {
+  const normalizedNeighborTile = normalizeDemoRoadLikeC(tileWord);
+  if (!isDemoConductiveTileWord(tileWord, normalizedNeighborTile)) {
+    return false;
+  }
+
+  if (axis === 'vertical') {
+    return (
+      normalizedNeighborTile !== Tile.VPOWER &&
+      normalizedNeighborTile !== Tile.VROADPOWER &&
+      normalizedNeighborTile !== Tile.RAILVPOWERH
+    );
+  }
+
+  return (
+    normalizedNeighborTile !== Tile.HPOWER &&
+    normalizedNeighborTile !== Tile.HROADPOWER &&
+    normalizedNeighborTile !== Tile.RAILHPOWERV
+  );
+}
+
+/**
+ * Determines whether one tile participates in power conductivity checks.
+ * Mirrors `_FixSingle` `if (Tile & CONDBIT)` behavior in
+ * `ref/micropolis/src/sim/w_con.c`.
+ * Parity note: demo writes often omit high-bit flags, so this also recognizes
+ * bare conductive tile ids in the power/road-power/rail-power families.
+ */
+function isDemoConductiveTileWord(tileWord: number, normalizedTile: number): boolean {
+  if ((tileWord & TileFlag.CONDBIT) !== 0) {
+    return true;
+  }
+
+  return (
+    (normalizedTile >= Tile.HPOWER && normalizedTile <= Tile.RAILVPOWERH) ||
+    normalizedTile === Tile.HROADPOWER ||
+    normalizedTile === Tile.VROADPOWER
+  );
+}
+
+/**
+ * Applies C road neutralization before adjacency checks.
+ * Mirrors `NeutralizeRoad(Tile)` macro in `ref/micropolis/src/sim/w_con.c`,
+ * where road variants in `[64, 207]` are normalized to base nibble forms.
+ */
+function normalizeDemoRoadLikeC(tileWord: number): number {
+  let tile = tileWord & 0xffff;
+  if (tile >= Tile.ROADBASE && tile <= Tile.LASTROAD) {
+    tile = (tile & 0x000f) + Tile.ROADBASE;
+  }
+  return tile;
 }
 
 /**

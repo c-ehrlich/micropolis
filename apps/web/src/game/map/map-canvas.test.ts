@@ -157,6 +157,8 @@ describe('map canvas draw-mode selection', () => {
     expect(projected.width).toBe(8);
     expect(projected.height).toBe(8);
     expect(projected.label).toBe('TRN');
+    // `DrawObjects` in `w_sprite.c` uses `(frame - 1)`, so TRA frame `2` draws `obj1-1`.
+    expect(projected.spriteFrameUrl).toContain('obj1-1');
   });
 
   it('skips inactive and out-of-bounds realtime overlay objects', () => {
@@ -193,6 +195,7 @@ describe('map canvas draw-mode selection', () => {
       overlays.map((overlay) => ({
         name: overlay.name,
         label: overlay.label,
+        spriteFrameUrlToken: overlay.spriteFrameUrl?.match(/obj\d+-\d+/)?.[0],
         left: overlay.left,
         top: overlay.top,
         width: overlay.width,
@@ -200,19 +203,75 @@ describe('map canvas draw-mode selection', () => {
       })),
     ).toEqual([
       // `InitSprite` in `w_sprite.c` sets TRA to width/height=32 and x/y offsets 32/-16.
-      { name: 'train', label: 'TRN', left: 160, top: 112, width: 32, height: 32 },
+      {
+        name: 'train',
+        label: 'TRN',
+        spriteFrameUrlToken: 'obj1-0',
+        left: 160,
+        top: 112,
+        width: 32,
+        height: 32,
+      },
       // `InitSprite` in `w_sprite.c` sets COP to width/height=32 and x/y offsets 32/-16.
-      { name: 'copter', label: 'COP', left: 160, top: 112, width: 32, height: 32 },
+      {
+        name: 'copter',
+        label: 'COP',
+        spriteFrameUrlToken: 'obj2-0',
+        left: 160,
+        top: 112,
+        width: 32,
+        height: 32,
+      },
       // `InitSprite` in `w_sprite.c` sets AIR to width/height=48 and x/y offsets 24/0.
-      { name: 'plane', label: 'AIR', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'plane',
+        label: 'AIR',
+        spriteFrameUrlToken: 'obj3-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets SHI to width/height=48 and x/y offsets 32/-16.
-      { name: 'ship', label: 'SHP', left: 160, top: 112, width: 48, height: 48 },
+      {
+        name: 'ship',
+        label: 'SHP',
+        spriteFrameUrlToken: 'obj4-0',
+        left: 160,
+        top: 112,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets GOD to width/height=48 and x/y offsets 24/0.
-      { name: 'monster', label: 'MON', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'monster',
+        label: 'MON',
+        spriteFrameUrlToken: 'obj5-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets TOR to width/height=48 and x/y offsets 24/0.
-      { name: 'tornado', label: 'TOR', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'tornado',
+        label: 'TOR',
+        spriteFrameUrlToken: 'obj6-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets EXP to width/height=48 and x/y offsets 24/0.
-      { name: 'explosion', label: 'EXP', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'explosion',
+        label: 'EXP',
+        spriteFrameUrlToken: 'obj7-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
     ]);
   });
 

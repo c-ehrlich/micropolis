@@ -12,6 +12,7 @@ import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-asse
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import { coalesceQueuedRuntimeMapState, type RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
+import { lookupStage8ObjectSpriteFrame } from './stage8-object-sprite-atlas.ts';
 import {
   getStage8TileAtlasSourceByCanonicalIdentityKey,
   lookupStage8TileSprite,
@@ -720,35 +721,56 @@ export function MapCanvas({
               />
             );
           })}
-          {realtimeOverlaySprites.map((sprite) => (
-            <div
-              key={sprite.key}
-              style={{
-                alignItems: 'center',
-                background: `${sprite.color}59`,
-                border: `1px solid ${sprite.color}`,
-                borderRadius: 3,
-                boxSizing: 'border-box',
-                color: '#0f172a',
-                display: 'flex',
-                fontFamily: 'monospace',
-                fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
-                fontWeight: 700,
-                height: sprite.height,
-                justifyContent: 'center',
-                left: sprite.left,
-                lineHeight: 1,
-                pointerEvents: 'none',
-                position: 'absolute',
-                top: sprite.top,
-                width: sprite.width,
-                zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
-              }}
-              title={`${sprite.name} frame ${sprite.frame}`}
-            >
-              {sprite.label}
-            </div>
-          ))}
+          {realtimeOverlaySprites.map((sprite) =>
+            sprite.spriteFrameUrl !== undefined ? (
+              <img
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                key={sprite.key}
+                src={sprite.spriteFrameUrl}
+                style={{
+                  height: sprite.height,
+                  imageRendering: 'pixelated',
+                  left: sprite.left,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  top: sprite.top,
+                  width: sprite.width,
+                  zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
+                }}
+                title={`${sprite.name} frame ${sprite.frame}`}
+              />
+            ) : (
+              <div
+                key={sprite.key}
+                style={{
+                  alignItems: 'center',
+                  background: `${sprite.color}59`,
+                  border: `1px solid ${sprite.color}`,
+                  borderRadius: 3,
+                  boxSizing: 'border-box',
+                  color: '#0f172a',
+                  display: 'flex',
+                  fontFamily: 'monospace',
+                  fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
+                  fontWeight: 700,
+                  height: sprite.height,
+                  justifyContent: 'center',
+                  left: sprite.left,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  top: sprite.top,
+                  width: sprite.width,
+                  zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
+                }}
+                title={`${sprite.name} frame ${sprite.frame}`}
+              >
+                {sprite.label}
+              </div>
+            ),
+          )}
         </div>
       </div>
     </div>
@@ -925,7 +947,9 @@ interface MapCanvasRealtimeSpriteSpec {
  * One projected realtime overlay sprite for browser map rendering.
  * Mirrors `DrawSprite` positioning in `ref/micropolis/src/sim/w_sprite.c`
  * (`x + x_offset`, `y + y_offset`, `width`, `height`) using Stage 7 payloads.
- * Parity note: this keeps debug-label rectangles instead of Micropolis sprite art.
+ * Parity note: object-frame artwork uses Micropolis-derived `obj*-*.xpm` image
+ * identity via exported PNG overlays, with deterministic label fallback when a
+ * frame image is unavailable.
  */
 export interface MapCanvasRealtimeOverlaySprite {
   key: string;
@@ -933,6 +957,7 @@ export interface MapCanvasRealtimeOverlaySprite {
   frame: number;
   label: string;
   color: string;
+  spriteFrameUrl?: string;
   left: number;
   top: number;
   width: number;
@@ -1060,6 +1085,10 @@ export function projectRealtimeOverlaySprites({
     }
 
     const spec = getRealtimeSpriteSpec(object.type);
+    const spriteFrame = lookupStage8ObjectSpriteFrame({
+      spriteType: object.type,
+      runtimeFrame: object.frame,
+    });
     const left = (object.x + spec.xOffset) * pixelsPerWorldUnit;
     const top = (object.y + spec.yOffset) * pixelsPerWorldUnit;
     const width = spec.width * pixelsPerWorldUnit;
@@ -1075,6 +1104,7 @@ export function projectRealtimeOverlaySprites({
       frame: object.frame,
       label: spec.label,
       color: spec.color,
+      spriteFrameUrl: spriteFrame?.spriteFrameUrl,
       left,
       top,
       width,
