@@ -148,7 +148,7 @@ Acceptance checks:
 - [x] Add/keep route-level tests proving initial map is authoritative sim-core output (not synthetic tiles).
 - [x] Add targeted crossing parity tests grounded in C behavior:
 - [x] Wire over valid straight roads succeeds (`w_con.c` `_LayWire` rules).
-- [ ] Wire over unsupported road shapes rejects according to C paths.
+- [x] Wire over unsupported road shapes rejects according to C paths.
 - [ ] Verify save/load/scenario parity tests reference C constants where assertions use fixed values.
 - [ ] Ensure any remaining runtime certification tests align to C behavior and delete non-parity expectations.
 
