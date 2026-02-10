@@ -1,11 +1,17 @@
+import type { readFile as nodeReadFile } from 'node:fs/promises';
+
 import {
   applyToolAction,
   resetForNewCityFromSeed,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
-import { loadCityLikeC } from '../../../../../packages/sim-io/src/load.ts';
+import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
+import {
+  getScenarioDefinition,
+  SCENARIO_TABLE,
+} from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
@@ -22,6 +28,7 @@ type PlayableToolCommand = Extract<PlayableClientCommand, { kind: 'tool' }>;
 type PlayableSimControlCommand = Extract<PlayableClientCommand, { kind: 'sim-control' }>;
 type PlayableCityLifecycleCommand = Extract<PlayableClientCommand, { kind: 'city-lifecycle' }>;
 type PlayableCityIoCommand = Extract<PlayableClientCommand, { kind: 'city-io' }>;
+type PlayableScenarioCommand = Extract<PlayableClientCommand, { kind: 'scenario' }>;
 type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-city' }>;
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
 
@@ -32,6 +39,10 @@ const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
 const NEW_CITY_CURVE_LEVEL = -1;
 const NEW_CITY_CREATE_ISLAND = -1;
+const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
+type NodeFsPromisesModule = {
+  readFile: typeof nodeReadFile;
+};
 
 /**
  * Sim-core-authoritative envelope host for the route `/` migration path.
@@ -71,13 +82,20 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
   private cityName = DEFAULT_CITY_NAME;
+  private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
+  private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
 
-  public constructor(_options: PlayableRuntimeHostOptions = {}) {
+  public constructor(options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState();
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
     this.mapWidth = mapLayerInfo.width;
     this.mapHeight = mapLayerInfo.height;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
+    const scenarioResourceLoader = options.scenarioResourceLoader;
+    this.scenarioResourceLoader =
+      scenarioResourceLoader === undefined
+        ? (fileName) => this.loadScenarioResourceBytes(fileName)
+        : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
   }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
@@ -233,6 +251,19 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
+    if (envelope.command.kind === 'scenario') {
+      const commandTick = this.tick;
+      void this.applyScenarioCommandAsync(
+        sessionId,
+        envelope.roomId,
+        envelope.clientId,
+        envelope.commandId,
+        envelope.command,
+        commandTick,
+      );
+      return;
+    }
+
     this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, 'invalid-command');
   }
 
@@ -241,7 +272,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors command-settlement acknowledgement ordering from `SimCmd` handling in
    * `ref/micropolis/src/sim/w_sim.c`, adapted to typed bridge envelopes.
    */
-  private emitAck(roomId: string, clientId: string, commandId: string): void {
+  private emitAck(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -251,7 +287,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       kind: 'ack',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
     });
@@ -262,7 +298,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors command-denial settlement ordering from `SimCmd` handling in
    * `ref/micropolis/src/sim/w_sim.c`, adapted to typed bridge envelopes.
    */
-  private emitReject(roomId: string, clientId: string, commandId: string, reason: string): void {
+  private emitReject(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    reason: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -272,7 +314,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       kind: 'reject',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
       reason,
@@ -545,6 +587,60 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Applies scenario start using async scenario byte loading plus `loadScenarioLikeC`.
+   * Mirrors `LoadScenario` resource read + decode + lifecycle sequence in
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   */
+  private async applyScenarioCommandAsync(
+    sessionId: number,
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    command: PlayableScenarioCommand,
+    commandTick: number,
+  ): Promise<void> {
+    const scenario = getScenarioDefinition(command.scenarioId);
+
+    let scenarioBytes: Uint8Array;
+    try {
+      scenarioBytes = await this.scenarioResourceLoader(scenario.fileName);
+    } catch {
+      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+        return;
+      }
+      this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
+      return;
+    }
+
+    let loadResult: ReturnType<typeof loadScenarioLikeC>;
+    try {
+      loadResult = loadScenarioLikeC(
+        this.authorityState.simState,
+        this.authorityState.simContext,
+        scenario.id,
+        scenarioBytes,
+      );
+    } catch {
+      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+        return;
+      }
+      this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
+      return;
+    }
+
+    this.cityFileName = `${loadResult.scenario.fileName}.cty`;
+    this.cityName = loadResult.scenario.name;
+    this.syncHostStateAfterLoadLikeCommand();
+
+    if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+      return;
+    }
+
+    this.emitAck(roomId, clientId, commandId, commandTick);
+    this.emitSnapshot(roomId, clientId, commandTick);
+  }
+
+  /**
    * Synchronizes host pause/tool mirrors after load/new-city lifecycle commands.
    * Mirrors host-side pause/timer bookkeeping around load/new-city flows in
    * `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/s_gen.c`.
@@ -553,6 +649,26 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.simPaused = false;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
     this.syncToolContextFromState();
+  }
+
+  /**
+   * Resolve and cache one scenario resource payload from canonical `snro.*` files.
+   * Mirrors `_load_file(fname, ResourceDir)` identity in
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   */
+  private loadScenarioResourceBytes(fileName: string): Promise<Uint8Array> {
+    const cached = this.scenarioResourceBytesCache.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const resourceUrl = getScenarioResourceUrl(fileName);
+    const pendingLoad = readBinaryResourceFromUrl(resourceUrl).catch(() => {
+      this.scenarioResourceBytesCache.delete(fileName);
+      throw new Error(`failed to load scenario resource ${fileName}`);
+    });
+    this.scenarioResourceBytesCache.set(fileName, pendingLoad);
+    return pendingLoad;
   }
 
   private isSessionActive(sessionId: number): boolean {
@@ -575,7 +691,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Emits one authoritative snapshot from sim-core map state.
    * Mirrors full update refresh behavior in `ref/micropolis/src/sim/w_update.c`.
    */
-  private emitSnapshot(roomId: string, clientId: string): void {
+  private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -585,7 +701,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       kind: 'snapshot',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       payload: this.buildSnapshotPayload(),
     });
@@ -670,4 +786,53 @@ function sanitizeCityFileName(fileName: string): string {
     return DEFAULT_CITY_FILE_NAME;
   }
   return trimmed.toLowerCase().endsWith('.cty') ? trimmed : `${trimmed}.cty`;
+}
+
+/**
+ * Resolve one scenario filename to its local/fetchable resource URL.
+ * Mirrors `LoadScenario` `fname = "snro.*"` lookup identity in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function getScenarioResourceUrl(fileName: string): URL {
+  const resourceUrl = SCENARIO_RESOURCE_URLS.get(fileName);
+  if (resourceUrl !== undefined) {
+    return resourceUrl;
+  }
+
+  throw new Error(`unsupported scenario file: ${fileName}`);
+}
+
+/**
+ * Build scenario resource URLs from canonical scenario metadata constants.
+ * Mirrors `LoadScenario` filename selection in `ref/micropolis/src/sim/s_fileio.c`,
+ * while resolving each `snro.*` payload to local `ref/micropolis/res`.
+ */
+function createScenarioResourceUrlTable(): ReadonlyMap<string, URL> {
+  return new Map(
+    SCENARIO_TABLE.map(({ fileName }) => [
+      fileName,
+      new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url),
+    ]),
+  );
+}
+
+/**
+ * Read one scenario binary payload from file/fetch resources.
+ * Mirrors `_load_file` byte acquisition in `ref/micropolis/src/sim/s_fileio.c`,
+ * adapted for node/browser runtime hosts.
+ */
+async function readBinaryResourceFromUrl(resourceUrl: URL): Promise<Uint8Array> {
+  if (resourceUrl.protocol === 'file:') {
+    const fsPromisesSpecifier = 'node:fs/promises';
+    const fsPromises = (await import(
+      /* @vite-ignore */ fsPromisesSpecifier
+    )) as NodeFsPromisesModule;
+    return new Uint8Array(await fsPromises.readFile(resourceUrl));
+  }
+
+  const response = await fetch(resourceUrl);
+  if (!response.ok) {
+    throw new Error(`failed to fetch scenario resource ${resourceUrl}: ${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
 }

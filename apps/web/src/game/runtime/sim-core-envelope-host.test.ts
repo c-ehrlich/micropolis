@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { decodeCityFileForMap, Tile, World } from '../../../../../packages/sim-core/src/index.ts';
+import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
@@ -528,6 +529,131 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-load-bad-city',
       reason: 'invalid-city-file',
+    });
+  });
+
+  it('loads scenario bytes asynchronously through loadScenarioLikeC', async () => {
+    const scenario = getScenarioDefinition(2);
+    const scenarioBytes = new Uint8Array(
+      readFileSync(
+        new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+      ),
+    );
+    let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
+    const pendingScenarioBytes = new Promise<Uint8Array>((resolve) => {
+      resolveScenarioBytes = resolve;
+    });
+    const scenarioResourceLoader = vi.fn((_fileName: string) => pendingScenarioBytes);
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          ScenarioID: number;
+          CityTime: number;
+          TotalFunds: number;
+          CityTax: number;
+          SimSpeed: number;
+          SimMetaSpeed: number;
+        };
+      };
+      cityFileName: string;
+      cityName: string;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-scenario',
+      clientId: 'client-scenario',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-scenario',
+      clientId: 'client-scenario',
+      commandId: 'cmd-load-scenario',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+
+    expect(scenarioResourceLoader).toHaveBeenCalledWith(scenario.fileName);
+    expect(captured.envelopes).toHaveLength(2);
+
+    const resolve = resolveScenarioBytes;
+    if (resolve === undefined) {
+      throw new Error('expected scenario loader resolver');
+    }
+    resolve(scenarioBytes);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-scenario',
+      clientId: 'client-scenario',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-load-scenario',
+    });
+    expect(captured.envelopes[3]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-scenario',
+      clientId: 'client-scenario',
+      tick: 1,
+      serverSeq: 3,
+    });
+
+    expect(hostInternals.authorityState.simState.ScenarioID).toBe(scenario.id);
+    expect(hostInternals.authorityState.simState.CityTime).toBe(scenario.startCityTime);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(scenario.startFunds);
+    // Magic numbers source: `LoadScenario` assigns `CityTax = 7` and calls
+    // `setSpeed(3)` in `ref/micropolis/src/sim/s_fileio.c`.
+    expect(hostInternals.authorityState.simState.CityTax).toBe(7);
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(3);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
+    expect(hostInternals.cityName).toBe(scenario.name);
+    expect(hostInternals.cityFileName).toBe(`${scenario.fileName}.cty`);
+  });
+
+  it('rejects scenario load when async scenario bytes are invalid', async () => {
+    const host = new SimCoreEnvelopeHost({
+      scenarioResourceLoader: async (_fileName: string) => new Uint8Array([1, 2, 3]),
+    });
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-scenario-reject',
+      clientId: 'client-scenario-reject',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-scenario-reject',
+      clientId: 'client-scenario-reject',
+      commandId: 'cmd-bad-scenario',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 2,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-scenario-reject',
+      clientId: 'client-scenario-reject',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-bad-scenario',
+      reason: 'invalid-scenario-file',
     });
   });
 
