@@ -32,5 +32,6 @@ describe('routes/index default gameplay path', () => {
     expect(markup).toContain('Authoritative Runtime Runtime');
     expect(markup).toContain('Sound Test');
     expect(markup).toContain('surviving gameplay route is');
+    expect(markup).toContain('Select a scenario to start.');
   });
 });

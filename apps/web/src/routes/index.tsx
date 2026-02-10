@@ -101,12 +101,14 @@ function RuntimePanel() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
     PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
   );
+  const [hasStartedPlayableSession, setHasStartedPlayableSession] = useState(false);
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
   const [soundStatus, setSoundStatus] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
   const commandCounter = useRef(1);
 
@@ -147,6 +149,32 @@ function RuntimePanel() {
       soundPreviewAudioElementsByPath.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (hasStartedPlayableSession) {
+      return;
+    }
+
+    const canvas = scenarioIntroCanvasRef.current;
+    if (canvas === null) {
+      return;
+    }
+
+    const context = canvas.getContext('2d');
+    if (context === null) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#f8fafc';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.fillStyle = '#0f172a';
+    context.font = '24px monospace';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText('Select a scenario to start.', canvas.width / 2, canvas.height / 2);
+  }, [hasStartedPlayableSession]);
 
   const controlsDisabled = state.phase !== 'ready';
   const reconnectDisabled =
@@ -242,24 +270,43 @@ function RuntimePanel() {
             })}
           </div>
 
-          <MapCanvas
-            mapState={state.mapState}
-            onTileClick={(x, y) => {
-              if (controlsDisabled) {
-                return;
-              }
+          {hasStartedPlayableSession ? (
+            <MapCanvas
+              mapState={state.mapState}
+              onTileClick={(x, y) => {
+                if (controlsDisabled) {
+                  return;
+                }
 
-              runtime.sendCommand(nextCommandId(commandCounter, 'tool'), {
-                kind: 'tool',
-                tool: activeTool,
-                x,
-                y,
-              });
-            }}
-            pendingTools={state.pendingTools}
-            realtimeObjects={state.realtimeState.objects}
-            tileSize={MAP_TILE_SIZE}
-          />
+                runtime.sendCommand(nextCommandId(commandCounter, 'tool'), {
+                  kind: 'tool',
+                  tool: activeTool,
+                  x,
+                  y,
+                });
+              }}
+              pendingTools={state.pendingTools}
+              realtimeObjects={state.realtimeState.objects}
+              tileSize={MAP_TILE_SIZE}
+            />
+          ) : (
+            <canvas
+              aria-label="Scenario start prompt"
+              height={480}
+              ref={scenarioIntroCanvasRef}
+              role="img"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: 6,
+                display: 'block',
+                maxWidth: '100%',
+              }}
+              width={640}
+            >
+              Select a scenario to start.
+            </canvas>
+          )}
         </div>
 
         <aside
@@ -367,6 +414,7 @@ function RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
+                  setHasStartedPlayableSession(true);
                   setSaveFileName('newcity.cty');
                   runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
                     kind: 'city-lifecycle',
@@ -424,6 +472,7 @@ function RuntimePanel() {
 
                 try {
                   const cityBytes = new Uint8Array(await file.arrayBuffer());
+                  setHasStartedPlayableSession(true);
                   setSaveFileName(file.name);
                   runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
                     kind: 'city-io',
@@ -461,6 +510,7 @@ function RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
+                  setHasStartedPlayableSession(true);
                   const scenario = PLAYABLE_SCENARIO_CHOICES.find(
                     (entry) => entry.id === selectedScenarioId,
                   );
