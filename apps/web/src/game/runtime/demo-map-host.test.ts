@@ -150,11 +150,11 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       };
     };
     // `DoUpdateMap` in `w_map.c` keys full redraw from the active draw mode only
-    // (`ALMAP` for Stage 4), while `sim_update_maps` in `sim.c` clears all C
+    // (`ALMAP` for Authoritative Runtime), while `sim_update_maps` in `sim.c` clears all C
     // `NewMapFlags[0..NMAPS-1]` slots each cycle.
     authority.simState.NewMapFlags[MAP_FLAGS.PDMAP] = 1;
 
-    runtime.sendCommand('stage9-redraw-base', {
+    runtime.sendCommand('redraw-coalesce-base', {
       kind: 'tool',
       tool: 'road',
       x: 10,
@@ -166,7 +166,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     authority.simState.NewMap = 1;
 
-    runtime.sendCommand('stage9-redraw-new-map', {
+    runtime.sendCommand('redraw-coalesce-new-map', {
       kind: 'tool',
       tool: 'road',
       x: 11,
@@ -275,7 +275,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       runtime.connect();
 
-      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Stage 7 host seeding
+      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Realtime Overlay host seeding
       // now primes snapshot payloads so overlay entities appear immediately when
       // the simulation is running.
       expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
@@ -305,7 +305,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     const runtime = createWebHostRuntime({ host });
     runtime.connect();
 
-    runtime.sendCommand('stage7-seed-pause-1', {
+    runtime.sendCommand('realtime-seed-pause-1', {
       kind: 'sim-control',
       control: 'pause',
     });
@@ -321,7 +321,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
     copterSprite.frame = 0;
 
-    runtime.sendCommand('stage7-seed-play-1', {
+    runtime.sendCommand('realtime-seed-play-1', {
       kind: 'sim-control',
       control: 'play',
     });
@@ -399,7 +399,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
-  it('emits coherent tornado overlay and message payloads for manual Stage 7 triggers', () => {
+  it('emits coherent tornado overlay and message payloads for manual Realtime Overlay triggers', () => {
     const host = new DemoMapHost({
       enableAmbientTicks: false,
       seedRealtimeDemoObject: false,
@@ -1348,7 +1348,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       ).toBe(true);
       expect(afterAmbientHud.demandLabel).not.toBe(initialDemand);
 
-      runtime.sendCommand('stage5-visible-funds-1', {
+      runtime.sendCommand('hud-visible-funds-1', {
         kind: 'tool',
         tool: 'road',
         x: 8,
@@ -1357,14 +1357,14 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       // Road tool cost is 10 in `CostOf[]` (`w_tool.c`).
       expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,990');
 
-      runtime.sendCommand('stage5-visible-speed-pause-1', {
+      runtime.sendCommand('hud-visible-speed-pause-1', {
         kind: 'sim-control',
         control: 'pause',
       });
       // `setSpeed` displays 0 while paused (`sim_paused ? 0 : SimMetaSpeed`) in `w_util.c`.
       expect(runtime.getState().hudState.speed).toBe(0);
 
-      runtime.sendCommand('stage5-visible-speed-play-1', {
+      runtime.sendCommand('hud-visible-speed-play-1', {
         kind: 'sim-control',
         control: 'play',
       });

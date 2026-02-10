@@ -1,19 +1,23 @@
-import type { ClientCommandEnvelope, CoreHostEnvelope, Stage1CoreHost } from '@city/core-bridge';
+import type {
+  ClientCommandEnvelope,
+  CoreBridgeCoreHost,
+  CoreHostEnvelope,
+} from '@city/core-bridge';
 
 import type { HelloPayload } from './handshake';
 
 /**
- * Stage 0 canonical bridge host contract alias for web migration work.
- * Maps this web-local host contract surface to `Stage1CoreHost` in
+ * Bridge V1 canonical bridge host contract alias for web migration work.
+ * Maps this web-local host contract surface to `CoreBridgeCoreHost` in
  * `packages/core-bridge/src/core-host.ts`.
  * Parity note: this is a TypeScript contract-convergence alias only; Micropolis C
  * transport/runtime entrypoints remain in `ref/micropolis/src/sim/w_sim.c` and
  * `ref/micropolis/src/sim/w_net.c`.
  */
-export type CanonicalBridgeCoreHost = Stage1CoreHost;
+export type CanonicalBridgeCoreHost = CoreBridgeCoreHost;
 
 /**
- * Stage 0 canonical bridge envelope union alias for web migration work.
+ * Bridge V1 canonical bridge envelope union alias for web migration work.
  * Maps web host event flow to `CoreHostEnvelope` in `packages/core-bridge/src/types.ts`.
  * Parity note: typed envelopes are intentionally higher-level than Micropolis
  * Tcl/stdin/UDP integration messages described in `ref/micropolis/spec/integration/SPEC.md`.
@@ -21,7 +25,7 @@ export type CanonicalBridgeCoreHost = Stage1CoreHost;
 export type CanonicalBridgeCoreHostEnvelope = CoreHostEnvelope;
 
 /**
- * Stage 0 canonical bridge command envelope alias for web migration work.
+ * Bridge V1 canonical bridge command envelope alias for web migration work.
  * Maps web command ingress to `ClientCommandEnvelope` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: this explicit envelope model is intentionally not a 1:1 C command
@@ -85,7 +89,7 @@ export interface CoreHostErrorEvent {
 }
 
 /**
- * Tool names accepted by the Stage 4 host command bridge.
+ * Tool names accepted by the Authoritative Runtime host command bridge.
  * Mirrors Micropolis tool entrypoints in `ref/micropolis/src/sim/w_tool.c`
  * (`road_tool`, `rail_tool`, `wire_tool`, `bulldozer_tool`, `*_tool` zoning).
  * Parity note: these string literals are a TypeScript command envelope surface,
@@ -177,7 +181,7 @@ export interface CoreHostPlacement {
  * Mirrors expected failure paths in `ref/micropolis/src/sim/w_tool.c` where
  * invalid placements return failure codes instead of mutating map state.
  * Parity note: `TILE_OCCUPIED` remains as a legacy bridge-compatibility code,
- * while current Stage 4 authority paths map C-style tool return codes to
+ * while current Authoritative Runtime authority paths map C-style tool return codes to
  * `OUT_OF_BOUNDS`/`NO_FUNDS`/`INVALID_PLACEMENT`.
  */
 export type CoreHostRejectCode =
@@ -236,7 +240,7 @@ export interface CoreHostPatchEvent {
  * Mirrors reconnect/recovery baseline requirements from
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: command-correlated placement payloads are a TypeScript bridge
- * fixture for Stage 4 runtime recovery tests.
+ * fixture for Authoritative Runtime runtime recovery tests.
  */
 export interface CoreHostSnapshotPlacement extends CoreHostPlacement {
   commandId: string;

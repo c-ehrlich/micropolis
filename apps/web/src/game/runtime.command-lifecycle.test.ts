@@ -45,7 +45,7 @@ interface SuccessRejectLifecycleArtifacts {
 
 /**
  * Flush one queued host-command microtask.
- * Mirrors deferred host event delivery in Stage 4 runtime tests, while preserving
+ * Mirrors deferred host event delivery in Authoritative Runtime runtime tests, while preserving
  * Micropolis ordering intent where tool success/failure is processed before commit UI
  * callbacks in `ref/micropolis/src/sim/w_tool.c`.
  */
@@ -75,7 +75,7 @@ function createReadyRuntime(mode: HostMode): GameRuntime {
 
 /**
  * Read sim-core authority internals from one host runtime in tests.
- * Mirrors Stage 3 authority ownership where one host process owns
+ * Mirrors Multi-host Compatibility authority ownership where one host process owns
  * `SimState + SimContext + ToolContext` in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this introspection helper is test-only and not part of host runtime API.
  */

@@ -1,10 +1,10 @@
 import type { CoreHost, CoreHostCommand, CoreHostEvent, CoreHostEventListener } from './core-host';
 import { createHelloPayload, type HelloPayload, type HelloVersions } from './handshake';
 import {
-  createStage4CommandAuthority,
+  type AuthorityMode,
+  type CommandAuthority,
+  createCommandAuthority,
   type SimCoreAuthorityTickScheduler,
-  type Stage4AuthorityMode,
-  type Stage4CommandAuthority,
 } from './sim-core-command-authority';
 
 /**
@@ -17,7 +17,7 @@ export interface DoHostOptions {
   readonly roomId?: string;
   readonly clientId?: string;
   readonly helloVersions?: Partial<HelloVersions>;
-  readonly authorityMode?: Stage4AuthorityMode;
+  readonly authorityMode?: AuthorityMode;
   readonly allowDeterministicFallback?: boolean;
   readonly authorityTickIntervalMs?: number;
   readonly authorityTickScheduler?: SimCoreAuthorityTickScheduler;
@@ -28,13 +28,13 @@ export interface DoHostOptions {
  * Mirrors Micropolis NET-enabled runtime command transport intent in
  * `ref/micropolis/src/sim/w_sim.c` (`SimCmdListenTo`/`SimCmdHearFrom`).
  * Parity note: this class emits the same lifecycle + hello sequence as `LocalHost`
- * so bootstrap UX stays host-agnostic in Stage 4 glue.
+ * so bootstrap UX stays host-agnostic in Authoritative Runtime glue.
  */
 export class DoHost implements CoreHost {
   public readonly mode = 'do' as const;
   private readonly listeners = new Set<CoreHostEventListener>();
   private readonly helloPayload: HelloPayload;
-  private readonly commandAuthority: Stage4CommandAuthority;
+  private readonly commandAuthority: CommandAuthority;
   private connected = false;
 
   public constructor(private readonly options: DoHostOptions = {}) {
@@ -45,7 +45,7 @@ export class DoHost implements CoreHost {
       },
       this.options.helloVersions,
     );
-    this.commandAuthority = createStage4CommandAuthority({
+    this.commandAuthority = createCommandAuthority({
       mode: this.mode,
       authorityMode: this.options.authorityMode,
       allowDeterministicFallback: this.options.allowDeterministicFallback,

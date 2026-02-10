@@ -1,20 +1,20 @@
 /**
- * Manual sound-preview button spec for the Stage 4 browser UI.
+ * Manual sound-preview button spec for the Authoritative Runtime browser UI.
  * Mirrors playable sound IDs used by `UIMakeSound` and `EchoPlaySound` in
  * `ref/micropolis/res/micropolis.tcl`, surfaced here as explicit test buttons.
  */
-export interface Stage4SoundPreviewSpec {
+export interface SoundPreviewSpec {
   readonly label: string;
   readonly token: string;
 }
 
 /**
- * Small curated Stage 4 sound set for manual browser verification.
+ * Small curated Authoritative Runtime sound set for manual browser verification.
  * Mirrors common Micropolis sound tokens emitted through
  * `ref/micropolis/res/micropolis.tcl` and consumed by
  * `ref/micropolis/micropolisactivity.py`.
  */
-export const STAGE4_SOUND_PREVIEW_SPECS = [
+export const SOUND_PREVIEW_SPECS = [
   { label: 'Bulldozer', token: 'Bulldozer' },
   { label: 'Siren', token: 'Siren' },
   { label: 'Explosion (High)', token: 'Explosion-High' },
@@ -22,7 +22,7 @@ export const STAGE4_SOUND_PREVIEW_SPECS = [
   { label: 'Monster', token: 'Monster -speed 120' },
   { label: 'No Funds', token: 'Sorry' },
   { label: 'Invalid Tool', token: 'UhUh' },
-] as const satisfies readonly Stage4SoundPreviewSpec[];
+] as const satisfies readonly SoundPreviewSpec[];
 
 /**
  * Convert one Micropolis sound token to the Sugar WAV file stem.

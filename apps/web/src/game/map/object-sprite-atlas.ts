@@ -4,8 +4,8 @@ import {
   toCanonicalImageIdentityKey,
 } from '../../../../../packages/sim-assets/src/derived-images.ts';
 
-const STAGE8_OBJECT_SPRITE_FRAME_MODULE_PATH_PATTERN = /\/obj(\d+)-(\d+)\.png$/;
-const STAGE8_OBJECT_SPRITE_FRAME_MODULES = import.meta.glob(
+const OBJECT_SPRITE_FRAME_MODULE_PATH_PATTERN = /\/obj(\d+)-(\d+)\.png$/;
+const OBJECT_SPRITE_FRAME_MODULES = import.meta.glob(
   '../../../../../packages/sim-assets/generated-images/images/obj*-*.png',
   {
     eager: true,
@@ -20,7 +20,7 @@ const STAGE8_OBJECT_SPRITE_FRAME_MODULES = import.meta.glob(
  * Difference: TypeScript renders PNG overlays exported from canonical
  * `obj*-*.xpm` sources instead of X11 pixmap/mask handles.
  */
-export interface Stage8ObjectSpriteFrameLookup {
+export interface ObjectSpriteFrameLookup {
   readonly spriteType: number;
   readonly runtimeFrame: number;
   readonly sourceFrame: number;
@@ -36,13 +36,13 @@ export interface Stage8ObjectSpriteFrameLookup {
  * Difference: missing browser assets return `undefined` so callers can fall
  * back deterministically (for example, debug labels) rather than crash.
  */
-export function lookupStage8ObjectSpriteFrame({
+export function lookupObjectSpriteFrame({
   spriteType,
   runtimeFrame,
 }: Readonly<{
   spriteType: number;
   runtimeFrame: number;
-}>): Stage8ObjectSpriteFrameLookup | undefined {
+}>): ObjectSpriteFrameLookup | undefined {
   if (!Number.isFinite(spriteType) || !Number.isFinite(runtimeFrame)) {
     return undefined;
   }
@@ -54,8 +54,8 @@ export function lookupStage8ObjectSpriteFrame({
   }
 
   const sourceFrame = normalizedRuntimeFrame - 1;
-  const spriteFrameUrl = STAGE8_OBJECT_SPRITE_FRAME_URL_BY_KEY.get(
-    toStage8ObjectSpriteFrameKey(normalizedSpriteType, sourceFrame),
+  const spriteFrameUrl = OBJECT_SPRITE_FRAME_URL_BY_KEY.get(
+    toObjectSpriteFrameKey(normalizedSpriteType, sourceFrame),
   );
   if (spriteFrameUrl === undefined) {
     return undefined;
@@ -79,7 +79,7 @@ export function lookupStage8ObjectSpriteFrame({
  * Mirrors object sprite identity loaded by `GetObjectXpms` in
  * `ref/micropolis/src/sim/g_setup.c` (`obj<ID>-<frame>.xpm`).
  */
-function toStage8ObjectSpriteFrameKey(spriteType: number, sourceFrame: number): string {
+function toObjectSpriteFrameKey(spriteType: number, sourceFrame: number): string {
   return `${spriteType}:${sourceFrame}`;
 }
 
@@ -88,10 +88,10 @@ function toStage8ObjectSpriteFrameKey(spriteType: number, sourceFrame: number): 
  * Mirrors the canonical object basename pattern loaded by `GetObjectXpms` in
  * `ref/micropolis/src/sim/g_setup.c` (`obj<ID>-<frame>.xpm`).
  */
-function parseStage8ObjectSpriteFrameModulePath(
+function parseObjectSpriteFrameModulePath(
   modulePath: string,
 ): Readonly<{ spriteType: number; sourceFrame: number }> | undefined {
-  const match = STAGE8_OBJECT_SPRITE_FRAME_MODULE_PATH_PATTERN.exec(modulePath);
+  const match = OBJECT_SPRITE_FRAME_MODULE_PATH_PATTERN.exec(modulePath);
   if (match === null) {
     return undefined;
   }
@@ -113,19 +113,16 @@ function parseStage8ObjectSpriteFrameModulePath(
  * Mirrors `GetObjectXpms` object-frame discovery in
  * `ref/micropolis/src/sim/g_setup.c`, adapted to Vite static asset URLs.
  */
-function createStage8ObjectSpriteFrameUrlByKey(): ReadonlyMap<string, string> {
+function createObjectSpriteFrameUrlByKey(): ReadonlyMap<string, string> {
   const urlsByKey = new Map<string, string>();
-  for (const [modulePath, spriteFrameUrl] of Object.entries(STAGE8_OBJECT_SPRITE_FRAME_MODULES)) {
-    const parsed = parseStage8ObjectSpriteFrameModulePath(modulePath);
+  for (const [modulePath, spriteFrameUrl] of Object.entries(OBJECT_SPRITE_FRAME_MODULES)) {
+    const parsed = parseObjectSpriteFrameModulePath(modulePath);
     if (parsed === undefined) {
       continue;
     }
-    urlsByKey.set(
-      toStage8ObjectSpriteFrameKey(parsed.spriteType, parsed.sourceFrame),
-      spriteFrameUrl,
-    );
+    urlsByKey.set(toObjectSpriteFrameKey(parsed.spriteType, parsed.sourceFrame), spriteFrameUrl);
   }
   return urlsByKey;
 }
 
-const STAGE8_OBJECT_SPRITE_FRAME_URL_BY_KEY = createStage8ObjectSpriteFrameUrlByKey();
+const OBJECT_SPRITE_FRAME_URL_BY_KEY = createObjectSpriteFrameUrlByKey();

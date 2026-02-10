@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
+import { createPlayableRuntimeHost, readCityExportPayload } from './playable-runtime-host.ts';
 import type {
   ClientEnvelope,
   HostAckEnvelope,
@@ -7,10 +8,6 @@ import type {
   HostPatchEnvelope,
   HostSnapshotEnvelope,
 } from './protocol.ts';
-import {
-  createStage4PrimaryPlayableHost,
-  readStage4CityExportPayload,
-} from './stage4-primary-playable-host.ts';
 
 /**
  * Wait for one host envelope that matches the provided predicate.
@@ -57,7 +54,7 @@ function readLatestServerSeq(hostEnvelopes: readonly HostEnvelope[]): number {
   return latestServerSeq;
 }
 
-interface Stage4SmokeSummary {
+interface PlayableRuntimeSmokeSummary {
   envelopeKinds: HostEnvelope['kind'][];
   finalServerSeq: number;
   ackCount: number;
@@ -67,13 +64,13 @@ interface Stage4SmokeSummary {
 }
 
 /**
- * Runs one Stage 4 default-host smoke flow and returns deterministic envelope summary data.
+ * Runs one Authoritative Runtime default-host smoke flow and returns deterministic envelope summary data.
  * Mirrors `SimCmd`/`LoadScenario`/save-load command completion flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: this is a test harness wrapper over bridge envelopes; runtime behavior is unchanged.
  */
-async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4SmokeSummary> {
-  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRuntimeSmokeSummary> {
+  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -174,21 +171,21 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
       command: {
         kind: 'city-io',
         action: 'save-city',
-        fileName: 'stage4-smoke.cty',
+        fileName: 'playable-runtime-smoke.cty',
       },
     });
 
     const savePatch = await waitForHostEnvelope(
       hostEnvelopes,
       (envelope): envelope is HostPatchEnvelope =>
-        envelope.kind === 'patch' && readStage4CityExportPayload(envelope.payload) !== null,
+        envelope.kind === 'patch' && readCityExportPayload(envelope.payload) !== null,
       `${runId} save-city patch payload`,
     );
 
-    const savePayload = readStage4CityExportPayload(savePatch.payload);
+    const savePayload = readCityExportPayload(savePatch.payload);
     expect(savePayload).not.toBeNull();
     if (savePayload === null) {
-      throw new Error('Expected Stage 4 save payload');
+      throw new Error('Expected Authoritative Runtime save payload');
     }
 
     // Magic number source: `.cty` city payload byte count in `s_fileio.c`.
@@ -202,7 +199,7 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
       command: {
         kind: 'city-io',
         action: 'load-city',
-        fileName: 'stage4-smoke.cty',
+        fileName: 'playable-runtime-smoke.cty',
         cityBytes: savePayload.cityBytes,
       },
     });
@@ -302,21 +299,21 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
 }
 
 /**
- * Command-surface smoke for the Stage 4 default host factory.
+ * Command-surface smoke for the Authoritative Runtime default host factory.
  * Mirrors `SimCmd` table routing intent in `ref/micropolis/src/sim/w_sim.c`,
  * where tool/sim/lifecycle/io subcommands all flow through one command surface.
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
-describe('createStage4PrimaryPlayableHost', () => {
-  test('covers Stage 4 smoke flow for boot, tools+funds, save/load, scenario, and resync', async () => {
-    const summary = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-main');
+describe('createPlayableRuntimeHost', () => {
+  test('covers Authoritative Runtime smoke flow for boot, tools+funds, save/load, scenario, and resync', async () => {
+    const summary = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-main');
     expect(summary.rejectReasons).toEqual(['invalid-command']);
   });
 
-  test('remains deterministic across repeated Stage 4 smoke runs', async () => {
-    const run1 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-1');
-    const run2 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-2');
-    const run3 = await runStage4PrimaryPlayableSmokeFlow('stage4-smoke-repeat-3');
+  test('remains deterministic across repeated Authoritative Runtime smoke runs', async () => {
+    const run1 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-1');
+    const run2 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-2');
+    const run3 = await runPlayableRuntimeSmokeFlow('playable-runtime-smoke-repeat-3');
 
     expect(run2).toStrictEqual(run1);
     expect(run3).toStrictEqual(run1);
@@ -324,15 +321,15 @@ describe('createStage4PrimaryPlayableHost', () => {
 });
 
 /**
- * Stage 4 save-payload parser checks.
+ * Authoritative Runtime save-payload parser checks.
  * Mirrors `SaveCityAs` payload ownership in `ref/micropolis/src/sim/s_fileio.c`,
  * while preserving strict envelope-shape checks in TypeScript.
  */
-describe('readStage4CityExportPayload', () => {
+describe('readCityExportPayload', () => {
   test('accepts valid save payloads and rejects malformed payloads', () => {
     const validBytes = new Uint8Array([1, 2, 3, 4]);
     expect(
-      readStage4CityExportPayload({
+      readCityExportPayload({
         cityIo: {
           save: {
             fileName: 'city.cty',
@@ -347,10 +344,10 @@ describe('readStage4CityExportPayload', () => {
       cityBytes: validBytes,
     });
 
-    expect(readStage4CityExportPayload(null)).toBeNull();
-    expect(readStage4CityExportPayload({ cityIo: {} })).toBeNull();
+    expect(readCityExportPayload(null)).toBeNull();
+    expect(readCityExportPayload({ cityIo: {} })).toBeNull();
     expect(
-      readStage4CityExportPayload({
+      readCityExportPayload({
         cityIo: {
           save: {
             fileName: 'city.cty',

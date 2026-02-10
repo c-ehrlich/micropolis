@@ -18,11 +18,11 @@ interface LocalHostSmokeSummary {
 }
 
 /**
- * Runs one Stage 2 LocalHost playable smoke flow through runtime + host envelopes.
+ * Runs one Playable Runtime LocalHost playable smoke flow through runtime + host envelopes.
  * Mirrors user-facing command/tick/update/save-load behavior across
  * `ref/micropolis/src/sim/sim.c`, `ref/micropolis/src/sim/w_tool.c`,
  * `ref/micropolis/src/sim/w_update.c`, and `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: Stage 2 uses the scripted `DemoMapHost` adapter instead of full sim-core ticking.
+ * Difference: Playable Runtime uses the scripted `DemoMapHost` adapter instead of full sim-core ticking.
  */
 function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
   const runtime = createWebHostRuntime({
@@ -53,7 +53,7 @@ function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
     expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $20,000');
 
     const mapWidth = runtime.getState().mapState.width;
-    // Stage 2 map uses classic Micropolis world dimensions (`WORLD_X=120`, `WORLD_Y=100`)
+    // Playable Runtime map uses classic Micropolis world dimensions (`WORLD_X=120`, `WORLD_Y=100`)
     // from city/map IO and simulation globals (`ref/micropolis/src/sim/s_fileio.c`).
     expect(mapWidth).toBe(120);
     expect(runtime.getState().mapState.height).toBe(100);
@@ -160,7 +160,7 @@ function runLocalHostPlayableSmokeFlow(runId: string): LocalHostSmokeSummary {
   }
 }
 
-describe('Stage 2 LocalHost playable smoke flows', () => {
+describe('Playable Runtime LocalHost playable smoke flows', () => {
   afterEach(() => {
     vi.useRealTimers();
   });

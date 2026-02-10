@@ -3,12 +3,12 @@ import type { SequencedHostEnvelope } from './protocol.ts';
 const EMPTY_RUNTIME_REALTIME_OBJECTS: readonly RuntimeRealtimeObject[] = [];
 
 /**
- * One realtime object projected into Stage 2 runtime state.
+ * One realtime object projected into Playable Runtime runtime state.
  * Mirrors sprite/object fields from `SimSprite` in
  * `packages/sim-core/src/sim/realtime.ts`, which ports moving object behavior
  * from `ref/micropolis/src/sim/w_sprite.c`.
- * Parity note: Stage 2 intentionally carries only a minimal field subset until
- * Stage 7 overlay rendering lands.
+ * Parity note: Playable Runtime intentionally carries only a minimal field subset until
+ * Realtime Overlay overlay rendering lands.
  */
 export interface RuntimeRealtimeObject {
   id?: string;
@@ -23,7 +23,7 @@ export interface RuntimeRealtimeObject {
  * Runtime realtime-object projection state.
  * Mirrors sprite snapshot ownership from `ref/micropolis/src/sim/w_sprite.c`
  * through the TypeScript realtime port in `packages/sim-core/src/sim/realtime.ts`.
- * Parity note: Stage 2 keeps this as an additive payload placeholder with no
+ * Parity note: Playable Runtime keeps this as an additive payload placeholder with no
  * rendering side effects yet.
  */
 export interface RuntimeRealtimeState {
@@ -45,7 +45,7 @@ export function createInitialRuntimeRealtimeState(): RuntimeRealtimeState {
  * Projects optional realtime-object payloads from snapshot/patch envelopes.
  * Mirrors staged sprite stream projection intent from
  * `packages/sim-core/src/sim/realtime.ts` and `ref/micropolis/src/sim/w_sprite.c`.
- * Parity note: when snapshot payload omits realtime data, Stage 2 clears to an
+ * Parity note: when snapshot payload omits realtime data, Playable Runtime clears to an
  * empty set so recovery snapshots cannot retain stale overlay objects.
  */
 export function projectRuntimeRealtimeState(

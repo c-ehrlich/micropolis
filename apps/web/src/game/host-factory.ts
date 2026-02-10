@@ -1,7 +1,7 @@
 import type { CoreHost, HostMode } from './core-host';
 import { DoHost } from './do-host';
 import { LocalHost } from './local-host';
-import type { Stage4AuthorityMode } from './sim-core-command-authority';
+import type { AuthorityMode } from './sim-core-command-authority';
 
 /**
  * Default host mode for `apps/web`.
@@ -11,12 +11,12 @@ import type { Stage4AuthorityMode } from './sim-core-command-authority';
  */
 export const DEFAULT_HOST_MODE: HostMode = 'local';
 /**
- * Default Stage 4 authority engine for web runtime host wiring.
- * Mirrors Stage 1 migration intent to make sim-core the authoritative owner of
+ * Default Authoritative Runtime authority engine for web runtime host wiring.
+ * Mirrors Sim-Core Authority migration intent to make sim-core the authoritative owner of
  * simulation state/ticking, aligned with `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: deterministic fallback remains available only as an explicit opt-in.
  */
-export const DEFAULT_STAGE4_AUTHORITY_MODE: Stage4AuthorityMode = 'sim-core';
+export const DEFAULT_AUTHORITY_MODE: AuthorityMode = 'sim-core';
 
 /**
  * Minimal environment input used for host mode resolution.
@@ -26,8 +26,8 @@ export const DEFAULT_STAGE4_AUTHORITY_MODE: Stage4AuthorityMode = 'sim-core';
  */
 export interface HostFactoryEnv {
   readonly VITE_CORE_HOST_MODE?: string;
-  // Stage 1 dev/runtime opt-in flag for sim-core authority ownership.
-  readonly VITE_STAGE4_REAL_AUTHORITY?: string;
+  // Sim-Core Authority dev/runtime opt-in flag for sim-core authority ownership.
+  readonly VITE_REAL_AUTHORITY?: string;
 }
 
 /**
@@ -37,7 +37,7 @@ export interface HostFactoryEnv {
  */
 export interface CreateCoreHostOptions {
   readonly mode?: HostMode;
-  readonly authorityMode?: Stage4AuthorityMode;
+  readonly authorityMode?: AuthorityMode;
   readonly allowDeterministicFallback?: boolean;
   readonly env?: HostFactoryEnv;
   readonly createLocalHost?: () => CoreHost;
@@ -65,30 +65,28 @@ export function resolveHostMode(options: CreateCoreHostOptions = {}): HostMode {
 }
 
 /**
- * Resolve Stage 4 authority mode from explicit options, then legacy opt-in validation.
- * Mirrors Stage 1 host-authority migration intent rooted in `ref/micropolis/src/sim/w_sim.c`
+ * Resolve Authoritative Runtime authority mode from explicit options, then legacy opt-in validation.
+ * Mirrors Sim-Core Authority host-authority migration intent rooted in `ref/micropolis/src/sim/w_sim.c`
  * and simulation ownership in `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: deterministic fallback remains explicit test wiring only and is not
  * selected from browser env flags on the shipping path.
  */
-export function resolveStage4AuthorityMode(
-  options: CreateCoreHostOptions = {},
-): Stage4AuthorityMode {
+export function resolveAuthorityMode(options: CreateCoreHostOptions = {}): AuthorityMode {
   if (options.authorityMode !== undefined) {
     return options.authorityMode;
   }
 
   const realAuthorityOptIn =
-    options.env?.VITE_STAGE4_REAL_AUTHORITY ?? import.meta.env.VITE_STAGE4_REAL_AUTHORITY;
+    options.env?.VITE_REAL_AUTHORITY ?? import.meta.env.VITE_REAL_AUTHORITY;
   if (realAuthorityOptIn !== undefined && realAuthorityOptIn !== '') {
     if (isEnabledFlag(realAuthorityOptIn)) {
       return 'sim-core';
     }
     if (!isDisabledFlag(realAuthorityOptIn)) {
-      throw new Error(`Unsupported stage4 real authority flag: ${realAuthorityOptIn}`);
+      throw new Error(`Unsupported runtime real authority flag: ${realAuthorityOptIn}`);
     }
   }
-  return DEFAULT_STAGE4_AUTHORITY_MODE;
+  return DEFAULT_AUTHORITY_MODE;
 }
 
 /**
@@ -99,7 +97,7 @@ export function resolveStage4AuthorityMode(
  */
 export function createCoreHost(options: CreateCoreHostOptions = {}): CoreHost {
   const mode = resolveHostMode(options);
-  const authorityMode = resolveStage4AuthorityMode(options);
+  const authorityMode = resolveAuthorityMode(options);
   const createLocalHost =
     options.createLocalHost ??
     (() =>

@@ -16,7 +16,7 @@ import { createWebHostRuntime } from './runtime.ts';
 /**
  * In-memory test host that captures outbound envelopes and emits host events.
  * Mirrors local deterministic command/update orchestration intent from
- * `ref/micropolis/src/sim/w_sim.c`, adapted for Stage 2 runtime tests.
+ * `ref/micropolis/src/sim/w_sim.c`, adapted for Playable Runtime runtime tests.
  */
 class FakeLocalHost implements CoreHost {
   public readonly sent: ClientEnvelope[] = [];
@@ -106,7 +106,7 @@ describe('createWebHostRuntime', () => {
       clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 4,
       // Sequence jump intentionally mirrors out-of-order/drop conditions that
-      // must resync in Stage 2 ordering rules mapped to `w_sim.c`/`w_update.c`.
+      // must resync in Playable Runtime ordering rules mapped to `w_sim.c`/`w_update.c`.
       serverSeq: 3,
       payload: { funds: 5100 },
     });

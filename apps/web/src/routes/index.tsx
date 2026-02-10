@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  STAGE4_SOUND_PREVIEW_SPECS,
+  SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from '../game/audio/micropolis-soundboard.ts';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
@@ -11,22 +11,22 @@ import {
   coalesceQueuedRuntimeMapState,
   createWebHostRuntime,
   PLAYABLE_TOOL_SPECS,
+  type PlayableSimSpeed,
+  type PlayableToolName,
   type RuntimeHudMessageEvent,
-  type Stage2SimSpeed,
-  type Stage2ToolName,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
 import {
-  createStage4PrimaryPlayableHost,
-  readStage4CityExportPayload,
-  STAGE4_SCENARIO_CHOICES,
-} from '../game/runtime/stage4-primary-playable-host.ts';
+  createPlayableRuntimeHost,
+  PLAYABLE_SCENARIO_CHOICES,
+  readCityExportPayload,
+} from '../game/runtime/playable-runtime-host.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
-const STAGE4_MAP_TILE_SIZE = 6;
+const MAP_TILE_SIZE = 6;
 const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
 const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
   'apps/web/src/game/core-host.ts',
@@ -34,10 +34,10 @@ const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
 ] as const;
 
 /**
- * Primary Stage 4 gameplay route rendered at `/`.
+ * Primary Authoritative Runtime gameplay route rendered at `/`.
  * Mirrors the single command-surface gameplay intent from `w_sim.c` in
  * `ref/micropolis/src/sim/w_sim.c`.
- * Parity note: route wiring imports a Stage 4 primary-host surface so users do
+ * Parity note: route wiring imports a Authoritative Runtime primary-host surface so users do
  * not depend on demo-only host controls in the default gameplay path.
  */
 function HomePage() {
@@ -51,25 +51,25 @@ function HomePage() {
     >
       <h1 style={{ fontSize: 20, margin: 0 }}>City Runtime</h1>
       <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>
-        Stage 0 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`. Delete
-        duplicate protocol surfaces after bridge-contract port:{' '}
+        Bridge V1 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`.
+        Delete duplicate protocol surfaces after bridge-contract port:{' '}
         {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
       </div>
-      <Stage4RuntimePanel />
+      <RuntimePanel />
     </main>
   );
 }
 
 /**
- * Stage 4 route panel that renders map, HUD, controls, and message feed from host envelopes.
+ * Authoritative Runtime route panel that renders map, HUD, controls, and message feed from host envelopes.
  * Mirrors map/tool/heads flows in `ref/micropolis/src/sim/w_map.c`,
  * `ref/micropolis/src/sim/w_tool.c`, `ref/micropolis/src/sim/w_update.c`, and
  * `ref/micropolis/src/sim/s_msg.c`, adapted to React + typed bridge state.
- * Parity note: this replaces the earlier Stage 4 placement-only primary panel
+ * Parity note: this replaces the earlier Authoritative Runtime placement-only primary panel
  * with the full authoritative map/HUD/control projection path.
  */
-function Stage4RuntimePanel() {
-  const host = useMemo(() => createStage4PrimaryPlayableHost(), []);
+function RuntimePanel() {
+  const host = useMemo(() => createPlayableRuntimeHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   /**
@@ -95,9 +95,9 @@ function Stage4RuntimePanel() {
       }),
     [],
   );
-  const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
+  const [activeTool, setActiveTool] = useState<PlayableToolName>('road');
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
-    STAGE4_SCENARIO_CHOICES[0]?.id ?? 1,
+    PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
   );
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
@@ -115,7 +115,7 @@ function Stage4RuntimePanel() {
         return;
       }
 
-      const savePayload = readStage4CityExportPayload(event.envelope.payload);
+      const savePayload = readCityExportPayload(event.envelope.payload);
       if (savePayload === null) {
         return;
       }
@@ -162,7 +162,9 @@ function Stage4RuntimePanel() {
         gap: 12,
       }}
     >
-      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
+      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>
+        Authoritative Runtime Runtime
+      </h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
         phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
       </div>
@@ -253,7 +255,7 @@ function Stage4RuntimePanel() {
             }}
             pendingTools={state.pendingTools}
             realtimeObjects={state.realtimeState.objects}
-            tileSize={STAGE4_MAP_TILE_SIZE}
+            tileSize={MAP_TILE_SIZE}
           />
         </div>
 
@@ -311,7 +313,7 @@ function Stage4RuntimePanel() {
                     runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
                       kind: 'sim-control',
                       control: 'set-speed',
-                      speed: speed as Stage2SimSpeed,
+                      speed: speed as PlayableSimSpeed,
                     });
                   }}
                   style={{
@@ -416,7 +418,7 @@ function Stage4RuntimePanel() {
                 }}
                 value={selectedScenarioId}
               >
-                {STAGE4_SCENARIO_CHOICES.map((scenario) => (
+                {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
                   <option key={scenario.id} value={scenario.id}>
                     {scenario.id}. {scenario.name} ({scenario.startYear})
                   </option>
@@ -425,7 +427,7 @@ function Stage4RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
-                  const scenario = STAGE4_SCENARIO_CHOICES.find(
+                  const scenario = PLAYABLE_SCENARIO_CHOICES.find(
                     (entry) => entry.id === selectedScenarioId,
                   );
                   if (scenario !== undefined) {
@@ -466,7 +468,7 @@ function Stage4RuntimePanel() {
           Manual Micropolis sound preview (`/sounds/*.wav`) from the Sugar-style token route.
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {STAGE4_SOUND_PREVIEW_SPECS.map((soundSpec) => (
+          {SOUND_PREVIEW_SPECS.map((soundSpec) => (
             <button
               key={soundSpec.token}
               onClick={() => {
@@ -558,7 +560,7 @@ async function playMicropolisSoundPreview({
 }
 
 /**
- * Runtime phase status text shown above Stage 4 reconnect/resync controls.
+ * Runtime phase status text shown above Authoritative Runtime reconnect/resync controls.
  * Mirrors reconnect/resync lifecycle intent from
  * `ref/micropolis/spec/integration/SPEC.md`.
  */
@@ -585,7 +587,7 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
 }
 
 /**
- * Stage 4 message feed view.
+ * Authoritative Runtime message feed view.
  * Mirrors user-visible message surface from `UISetMessage` in
  * `ref/micropolis/src/sim/s_msg.c`, with a bounded reverse-chronological list.
  */

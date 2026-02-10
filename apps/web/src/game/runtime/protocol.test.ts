@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import {
   fromCanonicalBridgeToolName,
+  getPlayableBridgeCommandType,
   getPlayableToolSpec,
-  getStage0PlayableBridgeCommandType,
-  isStage0PlayableBridgeCommandType,
-  isStage2ScenarioCommand,
+  isPlayableBridgeCommandType,
+  isPlayableScenarioCommand,
+  PLAYABLE_BRIDGE_COMMAND_TYPES,
   PLAYABLE_TOOL_SPECS,
-  STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
-  type Stage2ToolName,
+  type PlayableToolName,
   toCanonicalBridgeToolName,
 } from './protocol.ts';
 
-describe('runtime protocol Stage 0 convergence helpers', () => {
+describe('runtime protocol Bridge V1 convergence helpers', () => {
   it('locks playable bridge command inventory to canonical command types', () => {
-    expect(STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES).toEqual([
+    expect(PLAYABLE_BRIDGE_COMMAND_TYPES).toEqual([
       'tool_apply',
       'sim_pause',
       'sim_resume',
@@ -28,7 +28,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
 
   it('maps playable runtime commands to canonical bridge command type ids', () => {
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'tool',
         tool: 'road',
         x: 10,
@@ -36,32 +36,32 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       }),
     ).toBe('tool_apply');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'sim-control',
         control: 'pause',
       }),
     ).toBe('sim_pause');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'sim-control',
         control: 'play',
       }),
     ).toBe('sim_resume');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'sim-control',
         control: 'set-speed',
         speed: 2,
       }),
     ).toBe('sim_set_speed');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'city-lifecycle',
         action: 'new-city',
       }),
     ).toBe('city_new');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'city-io',
         action: 'load-city',
         fileName: 'city.cty',
@@ -69,14 +69,14 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
       }),
     ).toBe('city_load');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'city-io',
         action: 'save-city',
         fileName: 'city.cty',
       }),
     ).toBe('city_save');
     expect(
-      getStage0PlayableBridgeCommandType({
+      getPlayableBridgeCommandType({
         kind: 'scenario',
         action: 'load-scenario',
         scenarioId: 1,
@@ -85,7 +85,7 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
   });
 
   it('maps playable tool ids to canonical bridge tool ids and back', () => {
-    const tools: readonly Stage2ToolName[] = [
+    const tools: readonly PlayableToolName[] = [
       'road',
       'rail',
       'wire',
@@ -126,26 +126,26 @@ describe('runtime protocol Stage 0 convergence helpers', () => {
     expect(getPlayableToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
   });
 
-  it('accepts only frozen Stage 0 playable command discriminants', () => {
-    for (const type of STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES) {
-      expect(isStage0PlayableBridgeCommandType(type)).toBe(true);
+  it('accepts only frozen Bridge V1 playable command discriminants', () => {
+    for (const type of PLAYABLE_BRIDGE_COMMAND_TYPES) {
+      expect(isPlayableBridgeCommandType(type)).toBe(true);
     }
 
-    expect(isStage0PlayableBridgeCommandType('unknown_command_type' as never)).toBe(false);
+    expect(isPlayableBridgeCommandType('unknown_command_type' as never)).toBe(false);
   });
 
   it('accepts only integral scenario ids at the command gate', () => {
     // `LoadScenario(short s)` consumes integer ids in `s_fileio.c`; C then clamps
     // out-of-range integers with `if ((s < 1) || (s > 8)) s = 1;`.
     expect(
-      isStage2ScenarioCommand({
+      isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
         scenarioId: 9,
       }),
     ).toBe(true);
     expect(
-      isStage2ScenarioCommand({
+      isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
         scenarioId: 1.5,

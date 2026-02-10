@@ -1,64 +1,63 @@
 import {
   DemoMapHost,
   type DemoMapHostOptions,
-  STAGE2_SCENARIO_CHOICES,
-  type Stage2ScenarioChoice,
+  PLAYABLE_SCENARIO_CHOICES as DEMO_PLAYABLE_SCENARIO_CHOICES,
+  type PlayableScenarioChoice as DemoPlayableScenarioChoice,
 } from './demo-map-host.ts';
 import type { CoreHost } from './protocol.ts';
 
 /**
- * Stage 4 scenario choice metadata used by the default playable route.
+ * Authoritative Runtime scenario choice metadata used by the default playable route.
  * Mirrors `LoadScenario` table rows in `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: this is a naming/ownership wrapper over existing scenario metadata.
  */
-export type Stage4ScenarioChoice = Stage2ScenarioChoice;
+export type PlayableScenarioChoice = DemoPlayableScenarioChoice;
 
 /**
- * Scenario choices for the primary Stage 4 gameplay route.
+ * Scenario choices for the primary Authoritative Runtime gameplay route.
  * Mirrors `LoadScenario` metadata surfaced from `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this keeps route imports off legacy Stage 2 naming without changing behavior.
+ * Parity note: this keeps route imports off legacy Playable Runtime naming without changing behavior.
  */
-export const STAGE4_SCENARIO_CHOICES: readonly Stage4ScenarioChoice[] = STAGE2_SCENARIO_CHOICES;
+export const PLAYABLE_SCENARIO_CHOICES: readonly PlayableScenarioChoice[] =
+  DEMO_PLAYABLE_SCENARIO_CHOICES;
 
 /**
- * Browser `.cty` export payload emitted by Stage 4 save-city patch updates.
+ * Browser `.cty` export payload emitted by Authoritative Runtime save-city patch updates.
  * Mirrors `SaveCityAs` output ownership in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this is a 1:1 shape port of Stage 2 save payload fields, renamed
- * for Stage 4 route ownership.
+ * Parity note: this is a 1:1 shape port of Playable Runtime save payload fields, renamed
+ * for Authoritative Runtime route ownership.
  */
-export interface Stage4CityExportPayload {
+export interface CityExportPayload {
   fileName: string;
   cityName: string;
   cityBytes: Uint8Array;
 }
 
 /**
- * Stage 4 default-host configuration for the primary playable route.
+ * Authoritative Runtime default-host configuration for the primary playable route.
  * Mirrors startup/runtime option intent in `ref/micropolis/src/sim/w_sim.c`,
  * where one command surface can be wired to different runtime conditions.
  * Parity note: this is a direct TypeScript alias of `DemoMapHost` options.
  */
-export type Stage4PrimaryPlayableHostOptions = DemoMapHostOptions;
+export type PlayableRuntimeHostOptions = DemoMapHostOptions;
 
 /**
- * Build the default Stage 4 playable route host.
+ * Build the default Authoritative Runtime playable route host.
  * Mirrors single command-surface ownership in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this still uses `DemoMapHost` as the authority adapter, but now
- * exposes options so default-path wiring and tests share one Stage 4 factory.
+ * exposes options so default-path wiring and tests share one Authoritative Runtime factory.
  */
-export function createStage4PrimaryPlayableHost(
-  options: Stage4PrimaryPlayableHostOptions = {},
-): CoreHost {
+export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = {}): CoreHost {
   return new DemoMapHost(options);
 }
 
 /**
- * Read Stage 4 `save-city` browser export bytes from a patch payload.
+ * Read Authoritative Runtime `save-city` browser export bytes from a patch payload.
  * Mirrors `SaveCityAs` export delivery in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this keeps Stage 2 parser behavior 1:1 while removing direct
+ * Parity note: this keeps Playable Runtime parser behavior 1:1 while removing direct
  * route dependence on legacy `Demo*` parser naming.
  */
-export function readStage4CityExportPayload(payload: unknown): Stage4CityExportPayload | null {
+export function readCityExportPayload(payload: unknown): CityExportPayload | null {
   if (payload === null || typeof payload !== 'object') {
     return null;
   }
@@ -73,7 +72,7 @@ export function readStage4CityExportPayload(payload: unknown): Stage4CityExportP
     return null;
   }
 
-  const candidate = save as Partial<Stage4CityExportPayload>;
+  const candidate = save as Partial<CityExportPayload>;
   if (
     typeof candidate.fileName !== 'string' ||
     typeof candidate.cityName !== 'string' ||

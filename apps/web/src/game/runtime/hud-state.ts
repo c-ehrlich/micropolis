@@ -23,7 +23,7 @@ const HUD_MONTH_LABELS = [
 export type RuntimeHudMessageDispatch = 'sendMes' | 'sendMesAt';
 
 /**
- * One HUD message event shown in the Stage 2 message feed.
+ * One HUD message event shown in the Playable Runtime message feed.
  * Mirrors `SendMes` / `SendMesAt` dispatch intent in
  * `ref/micropolis/src/sim/s_msg.c`.
  */
@@ -38,7 +38,7 @@ export interface RuntimeHudMessageEvent {
 }
 
 /**
- * Runtime HUD options heads projection consumed by Stage 2 UI components.
+ * Runtime HUD options heads projection consumed by Playable Runtime UI components.
  * Mirrors `updateOptions` / `UISetOptions` output in
  * `ref/micropolis/src/sim/w_update.c`.
  * Difference: values are represented as explicit booleans instead of one packed bitfield.
@@ -55,12 +55,12 @@ export interface RuntimeHudOptionsState {
 }
 
 /**
- * Runtime HUD projection consumed by Stage 2 UI components.
+ * Runtime HUD projection consumed by Playable Runtime UI components.
  * Mirrors scalar head updates from `DoUpdateHeads`/`updateDate`/`SetDemand`
  * in `ref/micropolis/src/sim/w_update.c`, speed updates from
  * `ref/micropolis/src/sim/w_util.c`, and message delivery from
  * `ref/micropolis/src/sim/s_msg.c`.
- * Difference: Stage 2 stores a bounded message feed instead of a single
+ * Difference: Playable Runtime stores a bounded message feed instead of a single
  * mutable UI label.
  */
 export interface RuntimeHudState {
@@ -117,7 +117,7 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
 }
 
 /**
- * Projects snapshot/patch envelopes into the Stage 2 HUD state.
+ * Projects snapshot/patch envelopes into the Playable Runtime HUD state.
  * Mirrors ordered scalar/message projection from `DoUpdateHeads` and
  * `doMessage` flows in `ref/micropolis/src/sim/w_update.c` and
  * `ref/micropolis/src/sim/s_msg.c`.
@@ -313,7 +313,7 @@ function parseHudPayload(
 
 /**
  * Reads one optional message-entry array from host HUD payloads.
- * Mirrors Stage 2 bridge migration between legacy and canonical message lists
+ * Mirrors Playable Runtime bridge migration between legacy and canonical message lists
  * layered above Micropolis `SendMes`/`SendMesAt` delivery in
  * `ref/micropolis/src/sim/s_msg.c`.
  */
@@ -472,7 +472,7 @@ function readRangeInteger(value: unknown, min: number, max: number): number | nu
  * Reads one optional non-negative integer used for replay ordering metadata.
  * Mirrors monotonic tick/sequence progression constraints from
  * `ref/micropolis/src/sim/s_sim.c` and `ref/micropolis/spec/integration/SPEC.md`.
- * Difference: this parser accepts omitted values to keep Stage 2 compatibility
+ * Difference: this parser accepts omitted values to keep Playable Runtime compatibility
  * with older message payloads that only carry id/text/coordinates.
  */
 function readReplayOrderInteger(value: unknown): number | null | undefined {
@@ -584,7 +584,7 @@ function formatDemandLabel(demandR: number, demandC: number, demandI: number): s
 }
 
 /**
- * Formats the visible simulation speed text consumed by the Stage 4 HUD.
+ * Formats the visible simulation speed text consumed by the Authoritative Runtime HUD.
  * Mirrors paused-speed display intent from `UISetSpeed` in
  * `ref/micropolis/src/sim/w_util.c`.
  */

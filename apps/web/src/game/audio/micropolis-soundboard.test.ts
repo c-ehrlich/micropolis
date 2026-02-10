@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   normalizeMicropolisSoundTokenForWav,
-  STAGE4_SOUND_PREVIEW_SPECS,
+  SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from './micropolis-soundboard.ts';
 
@@ -20,9 +20,9 @@ describe('micropolis soundboard helper parity', () => {
     expect(toMicropolisSoundPreviewWavPath('Siren')).toBe('/sounds/siren.wav');
   });
 
-  it('keeps stage4 preview specs mapped to valid wav stems', () => {
-    expect(STAGE4_SOUND_PREVIEW_SPECS.length).toBeGreaterThanOrEqual(3);
-    for (const spec of STAGE4_SOUND_PREVIEW_SPECS) {
+  it('keeps runtime preview specs mapped to valid wav stems', () => {
+    expect(SOUND_PREVIEW_SPECS.length).toBeGreaterThanOrEqual(3);
+    for (const spec of SOUND_PREVIEW_SPECS) {
       expect(spec.label.length).toBeGreaterThan(0);
       expect(toMicropolisSoundPreviewWavPath(spec.token).endsWith('.wav')).toBe(true);
     }

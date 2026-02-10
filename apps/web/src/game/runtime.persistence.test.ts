@@ -35,13 +35,13 @@ const FIXTURE_CITY = path.join(
 const FIXTURE_SCENARIO = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'res', 'snro.222');
 const HOST_MODES: readonly HostMode[] = ['local', 'do'];
 
-interface Stage4AuthorityHostProbe {
+interface AuthorityHostProbe {
   commandAuthority: unknown;
 }
 
 /**
  * Read a binary city/scenario fixture from workspace paths.
- * Mirrors Stage 2 persistence smoke fixture usage anchored to
+ * Mirrors Playable Runtime persistence smoke fixture usage anchored to
  * `ref/micropolis/src/sim/s_fileio.c`.
  */
 function readFixture(filePath: string): Uint8Array {
@@ -124,33 +124,33 @@ function seedStableCity(state: SimState, context: SimContext): void {
 }
 
 /**
- * Read the Stage 4 authority implementation from the selected host.
- * Mirrors Stage 1 host-owned sim-core authority wiring mapped from
+ * Read the Authoritative Runtime authority implementation from the selected host.
+ * Mirrors Sim-Core Authority host-owned sim-core authority wiring mapped from
  * `ref/micropolis/src/sim/w_sim.c` + `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: this white-box probe is a TypeScript-only test seam.
  */
-function readStage4AuthorityForPersistence(host: unknown): unknown {
+function readAuthorityForPersistence(host: unknown): unknown {
   if (
     typeof host !== 'object' ||
     host === null ||
     !('commandAuthority' in host) ||
     !('mode' in host)
   ) {
-    throw new Error('Expected LocalHost/DoHost host with Stage 4 authority wiring');
+    throw new Error('Expected LocalHost/DoHost host with Authoritative Runtime authority wiring');
   }
-  return (host as Stage4AuthorityHostProbe).commandAuthority;
+  return (host as AuthorityHostProbe).commandAuthority;
 }
 
 /**
  * Run a persistence check while one runtime host mode is connected.
- * Mirrors Stage 4 host-agnostic runtime intent mapped from
+ * Mirrors Authoritative Runtime host-agnostic runtime intent mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: persistence currently runs through shared `sim-io` orchestration;
- * Stage 4 host shims do not yet persist host event history across sessions.
+ * Authoritative Runtime host shims do not yet persist host event history across sessions.
  */
 function runWithReadyRuntime<T>(mode: HostMode, run: () => T): T {
   const host = createCoreHost({ mode });
-  const authority = readStage4AuthorityForPersistence(host);
+  const authority = readAuthorityForPersistence(host);
   expect(authority).toBeInstanceOf(SimCoreCommandAuthority);
   expect(authority).not.toBeInstanceOf(DeterministicCommandAuthority);
 
@@ -168,7 +168,7 @@ function runWithReadyRuntime<T>(mode: HostMode, run: () => T): T {
   }
 }
 
-describe('Stage 4.5 integrated runtime save/load/scenario smoke checks', () => {
+describe('Integrated Runtime integrated runtime save/load/scenario smoke checks', () => {
   test('keeps deterministic save/load bytes stable across local -> do host switch', () => {
     const { state: localState, context: localContext } = createPersistenceRuntimePair();
     seedStableCity(localState, localContext);

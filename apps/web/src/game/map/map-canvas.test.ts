@@ -19,19 +19,19 @@ import {
   zoomMapCanvasCameraOffsetAtAnchor,
 } from './map-canvas.tsx';
 import {
-  lookupStage8TileSprite,
-  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-} from './stage8-tile-sprite-atlas.ts';
+  DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  lookupTileSprite,
+} from './tile-sprite-atlas.ts';
 
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
 }
 
-function toStage8TileVisualToken(tileWord: number): string {
+function toTileVisualToken(tileWord: number): string {
   // `MemDrawBeegMapRect` in `g_bigmap.c` resolves one sprite row from
-  // `(tile & LOMASK)` (+ `TILE_COUNT` wrapping), which is ported by lookupStage8TileSprite.
-  const sprite = lookupStage8TileSprite(tileWord, {
-    atlasCanonicalIdentityKey: STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  // `(tile & LOMASK)` (+ `TILE_COUNT` wrapping), which is ported by lookupTileSprite.
+  const sprite = lookupTileSprite(tileWord, {
+    atlasCanonicalIdentityKey: DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   });
   return `${sprite.atlasCanonicalIdentityKey}:${sprite.tileId}:${sprite.sourceX}:${sprite.sourceY}:${sprite.sourceWidth}:${sprite.sourceHeight}`;
 }
@@ -51,7 +51,7 @@ function applyPatchTileVisualTokens({
   dirtyRects: readonly Readonly<{ x: number; y: number; width: number; height: number }>[];
   dirtyTileIndexes: Uint32Array;
 }): string[] {
-  const patchVisuals = Array.from(beforeTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+  const patchVisuals = Array.from(beforeTiles, (tileWord) => toTileVisualToken(tileWord));
   forEachMapCanvasPatchTileIndex(
     {
       width,
@@ -60,7 +60,7 @@ function applyPatchTileVisualTokens({
       dirtyTileIndexes,
     },
     (tileIndex) => {
-      patchVisuals[tileIndex] = toStage8TileVisualToken(afterTiles[tileIndex] ?? 0);
+      patchVisuals[tileIndex] = toTileVisualToken(afterTiles[tileIndex] ?? 0);
     },
   );
   return patchVisuals;
@@ -113,7 +113,7 @@ describe('map canvas draw-mode selection', () => {
   });
 
   it('keeps patch redraw when runtime skipped intermediate map epochs', () => {
-    // Stage 9 coalesces queued map dirty coverage across skipped epochs, so
+    // Dirty-Rect Coalescing coalesces queued map dirty coverage across skipped epochs, so
     // patch repaint remains sufficient without forcing full-canvas redraw.
     expect(
       selectMapCanvasDrawMode({
@@ -279,7 +279,7 @@ describe('map canvas draw-mode selection', () => {
     const forward = projectRealtimeOverlaySprites({
       objects: [
         // Bridge realtime ids map to stable in-process sprite identities from
-        // `w_sprite.c`; Stage 7 sorts by id for deterministic replay ordering.
+        // `w_sprite.c`; Realtime Overlay sorts by id for deterministic replay ordering.
         { id: 'rt-3', name: 'TOR', type: 6, x: 128, y: 144, frame: 2 },
         { id: 'rt-1', name: 'TRA', type: 1, x: 96, y: 96, frame: 3 },
         { id: 'rt-2', name: 'AIR', type: 3, x: 160, y: 96, frame: 5 },
@@ -389,9 +389,9 @@ describe('map canvas pan parity', () => {
     expect(scaleMapPanDeltaToWorldPixels(-2)).toBe(-10);
   });
 
-  it('converts Micropolis world-pixel pan deltas into Stage 4 canvas pixels', () => {
+  it('converts Micropolis world-pixel pan deltas into Authoritative Runtime canvas pixels', () => {
     // Micropolis editor panning uses 16 world pixels per tile (`w_x.c`); with
-    // Stage 4 `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
+    // Authoritative Runtime `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
     expect(scaleWorldPanDeltaToCanvasPixels(16, 6)).toBe(6);
     expect(scaleWorldPanDeltaToCanvasPixels(10, 6)).toBe(3);
     expect(scaleWorldPanDeltaToCanvasPixels(-16, 6)).toBe(-6);
@@ -601,7 +601,7 @@ describe('map canvas snapshot/patch visual parity', () => {
       { x: -1, y: -1, width: 2, height: 2 },
       { x: 2, y: 1, width: 2, height: 2 },
     ] as const;
-    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toTileVisualToken(tileWord));
     const patchVisuals = applyPatchTileVisualTokens({
       beforeTiles,
       afterTiles,
@@ -629,7 +629,7 @@ describe('map canvas snapshot/patch visual parity', () => {
     afterTiles[1] = Tile.ROADBASE + 7 + TileFlag.BULLBIT;
     afterTiles[4] = Tile.RESBASE + 3;
 
-    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toTileVisualToken(tileWord));
     const patchVisuals = applyPatchTileVisualTokens({
       beforeTiles,
       afterTiles,

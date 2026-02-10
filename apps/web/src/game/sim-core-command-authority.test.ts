@@ -7,7 +7,7 @@ import {
   type ToolContext,
 } from '../../../../packages/sim-core/src/index.ts';
 import {
-  createStage4CommandAuthority,
+  createCommandAuthority,
   type SimCoreAuthorityTickScheduler,
   SimCoreCommandAuthority,
 } from './sim-core-command-authority';
@@ -515,10 +515,10 @@ describe('SimCoreCommandAuthority', () => {
   });
 });
 
-describe('createStage4CommandAuthority', () => {
+describe('createCommandAuthority', () => {
   test('rejects deterministic authority without isolated fallback opt-in', () => {
     expect(() =>
-      createStage4CommandAuthority({
+      createCommandAuthority({
         mode: 'local',
         authorityMode: 'deterministic',
       }),
@@ -528,7 +528,7 @@ describe('createStage4CommandAuthority', () => {
   });
 
   test('keeps deterministic authority available for isolated fallback usage', () => {
-    const authority = createStage4CommandAuthority({
+    const authority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
@@ -554,7 +554,7 @@ describe('createStage4CommandAuthority', () => {
   });
 
   test('routes deterministic fallback tool rejects through sim-core tool result mapping', () => {
-    const outOfBoundsAuthority = createStage4CommandAuthority({
+    const outOfBoundsAuthority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
@@ -574,7 +574,7 @@ describe('createStage4CommandAuthority', () => {
     expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
     expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
 
-    const noFundsAuthority = createStage4CommandAuthority({
+    const noFundsAuthority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
