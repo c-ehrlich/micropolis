@@ -2,7 +2,13 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { decodeCityFileForMap, Tile, World } from '../../../../../packages/sim-core/src/index.ts';
+import {
+  decodeCityFileForMap,
+  Tile,
+  TileFlag,
+  TileMask,
+  World,
+} from '../../../../../packages/sim-core/src/index.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
@@ -929,6 +935,165 @@ describe('SimCoreEnvelopeHost', () => {
       expect(settlement.reason).not.toBe('invalid-command');
       expect(toolRejectReasons.has(settlement.reason)).toBe(true);
     }
+  });
+
+  it('acks wire placement on straight road tiles and applies the C crossing tile', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const x = 22;
+    const y = 22;
+    const tileIndex = x * World.WORLD_Y + y;
+    const hostInternals = host as unknown as {
+      authorityState: {
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+          snapshot(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[tileIndex] = Tile.ROADS | TileFlag.BULLBIT | TileFlag.BURNBIT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-wire-on-road',
+      clientId: 'client-wire-on-road',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-wire-on-road',
+      clientId: 'client-wire-on-road',
+      commandId: 'cmd-wire-on-road',
+      command: {
+        kind: 'tool',
+        tool: 'wire',
+        x,
+        y,
+      },
+    });
+
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-wire-on-road',
+      clientId: 'client-wire-on-road',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-wire-on-road',
+    });
+    expect(captured.envelopes[3]).toEqual({
+      kind: 'patch',
+      roomId: 'room-wire-on-road',
+      clientId: 'client-wire-on-road',
+      tick: 1,
+      serverSeq: 3,
+      payload: {},
+    });
+
+    const mapAfter = hostInternals.authorityState.store.snapshot('map');
+    if (!(mapAfter instanceof Uint16Array)) {
+      throw new Error('expected authoritative map layer snapshot to be Uint16Array');
+    }
+    const tileAfter = mapAfter[tileIndex];
+    if (tileAfter === undefined) {
+      throw new Error(`expected map tile at index ${tileIndex}`);
+    }
+    // `_LayWire` in `ref/micropolis/src/sim/w_con.c` maps road tile 66 (`ROADS`)
+    // to 77 (`HROADPOWER`) for wire-on-road placement.
+    expect(tileAfter & TileMask.LOMASK).toBe(Tile.HROADPOWER);
+    expect(tileAfter & TileFlag.CONDBIT).not.toBe(0);
+  });
+
+  it('rejects wire placement on unsupported road shapes while preserving funds', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const x = 24;
+    const y = 24;
+    const tileIndex = x * World.WORLD_Y + y;
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+          snapshot(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[tileIndex] = Tile.INTERSECTION | TileFlag.BULLBIT | TileFlag.BURNBIT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    const fundsBefore = hostInternals.authorityState.simState.TotalFunds;
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-wire-road-reject',
+      clientId: 'client-wire-road-reject',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-wire-road-reject',
+      clientId: 'client-wire-road-reject',
+      commandId: 'cmd-wire-road-reject',
+      command: {
+        kind: 'tool',
+        tool: 'wire',
+        x,
+        y,
+      },
+    });
+
+    // `_LayWire` in `ref/micropolis/src/sim/w_con.c` accepts only road base
+    // tiles 66/67 for wire-on-road; other road shapes return 0, and `DoTool`
+    // in `ref/micropolis/src/sim/w_tool.c` treats that as non-success.
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-wire-road-reject',
+      clientId: 'client-wire-road-reject',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-wire-road-reject',
+      reason: 'invalid-placement',
+    });
+
+    const mapAfter = hostInternals.authorityState.store.snapshot('map');
+    if (!(mapAfter instanceof Uint16Array)) {
+      throw new Error('expected authoritative map layer snapshot to be Uint16Array');
+    }
+    const tileAfter = mapAfter[tileIndex];
+    if (tileAfter === undefined) {
+      throw new Error(`expected map tile at index ${tileIndex}`);
+    }
+    // `ConnecTile` in `ref/micropolis/src/sim/w_con.c` still calls `_FixZone`
+    // after `_LayWire` returns 0; for an isolated unsupported road shape this
+    // normalizes via `_RoadTable[0]` to base road tile 66 (`ROADS`).
+    expect(tileAfter & TileMask.LOMASK).toBe(Tile.ROADS);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(fundsBefore);
   });
 
   it('treats SimState.TotalFunds as canonical before tool evaluation', () => {

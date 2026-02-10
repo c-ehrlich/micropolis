@@ -93,7 +93,7 @@ Sequence/tick decision:
 
 Acceptance checks:
 
-- [ ] Tool placement/reject semantics align with C parity references (`w_tool.c`, `w_con.c`).
+- [x] Tool placement/reject semantics align with C parity references (`w_tool.c`, `w_con.c`).
 - [ ] Save/load/scenario command flows round-trip deterministically.
 - [ ] Command settlement ordering remains reducer-compatible and deterministic.
 
