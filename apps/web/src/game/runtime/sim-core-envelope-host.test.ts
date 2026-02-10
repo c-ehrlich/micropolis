@@ -671,7 +671,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(host.triggerManualRealtimeEvent('earthquake')).toBe(false);
   });
 
-  it('routes manual disaster triggers through sim-core disaster and realtime handlers', () => {
+  it('keeps manual disaster message/realtime payload sequencing aligned with Micropolis C disaster paths', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
     const roomId = 'room-manual-disaster-path';
@@ -685,43 +685,126 @@ describe('SimCoreEnvelopeHost', () => {
       coreVersion: 'test-core',
     });
 
-    const envelopeCountAfterHello = captured.envelopes.length;
-
     expect(host.triggerManualRealtimeEvent('earthquake')).toBe(true);
     const earthquakePatch = captured.envelopes.at(-1);
     if (earthquakePatch === undefined || earthquakePatch.kind !== 'patch') {
       throw new Error('expected earthquake manual-disaster patch envelope');
     }
+    const earthquakeMessages = readMessageDeltasFromEnvelope(earthquakePatch) ?? [];
     // Message id `-23` comes from `makeEarthquake` -> `sendMesAt` in
     // `packages/sim-core/src/systems/disasters.ts`, mirroring `MakeEarthquake`
     // in `ref/micropolis/src/sim/s_disast.c`.
-    expect(earthquakePatch.payload.messageDeltas?.some((message) => message.id === -23)).toBe(true);
+    expect(earthquakeMessages.some((message) => message.id === -23)).toBe(true);
+    // `doMessage` in `s_msg.c` requeues the positive text id for the next
+    // heads cycle; the same cycle should only dispatch the picture id.
+    expect(earthquakeMessages.some((message) => message.id === 23)).toBe(false);
+    expect(readRealtimePayloadFromEnvelope(earthquakePatch)).toBeNull();
 
     expect(host.triggerManualRealtimeEvent('tornado')).toBe(true);
     const tornadoPatch = captured.envelopes.at(-1);
     if (tornadoPatch === undefined || tornadoPatch.kind !== 'patch') {
       throw new Error('expected tornado manual-disaster patch envelope');
     }
+    const tornadoMessages = readMessageDeltasFromEnvelope(tornadoPatch) ?? [];
     // Message id `-22` comes from `makeTornado` -> `sendMessage` in
     // `packages/sim-core/src/sim/realtime.ts`, mirroring `MakeTornado`
     // in `ref/micropolis/src/sim/w_sprite.c`.
-    expect(tornadoPatch.payload.messageDeltas?.some((message) => message.id === -22)).toBe(true);
+    const tornadoPictureMessage = tornadoMessages.find((message) => message.id === -22);
+    if (
+      tornadoPictureMessage === undefined ||
+      tornadoPictureMessage.x === undefined ||
+      tornadoPictureMessage.y === undefined
+    ) {
+      throw new Error('expected tornado picture message with map coordinates');
+    }
+    expect(tornadoMessages.some((message) => message.id === 22)).toBe(false);
 
     const tornadoRealtime = readRealtimePayloadFromEnvelope(tornadoPatch);
     if (tornadoRealtime === null) {
       throw new Error('expected realtime payload after tornado manual-disaster trigger');
+    }
+    const tornadoObject = tornadoRealtime.objects?.find((object) => object.type === 6);
+    if (tornadoObject === undefined) {
+      throw new Error('expected tornado realtime object in payload');
     }
     // Sprite type `6` is tornado (`TOR`) in `sim.h` and `w_sprite.c`, exposed
     // by `SPRITE_TYPE.TOR` in `packages/sim-core/src/sim/realtime.ts`.
     expect(
       tornadoRealtime.deltas?.some((delta) => delta.kind === 'upsert' && delta.object.type === 6),
     ).toBe(true);
+    // w_sprite.c `MakeTornado` sends `SendMesAt(-22, (x >> 4) + 3, (y >> 4) + 2)`.
+    expect(tornadoPictureMessage.x).toBe((tornadoObject.x >> 4) + 3);
+    expect(tornadoPictureMessage.y).toBe((tornadoObject.y >> 4) + 2);
 
+    expect(host.triggerManualRealtimeEvent('tornado')).toBe(true);
+    const repeatedTornadoPatch = captured.envelopes.at(-1);
+    if (repeatedTornadoPatch === undefined || repeatedTornadoPatch.kind !== 'patch') {
+      throw new Error('expected repeated tornado manual-disaster patch envelope');
+    }
+    const repeatedTornadoMessages = readMessageDeltasFromEnvelope(repeatedTornadoPatch) ?? [];
+    // On the next heads cycle, `doMessage` flips the queued picture id to text id.
+    expect(repeatedTornadoMessages.some((message) => message.id === -22)).toBe(false);
+    expect(repeatedTornadoMessages.some((message) => message.id === 22)).toBe(true);
+    const repeatedTornadoRealtime = readRealtimePayloadFromEnvelope(repeatedTornadoPatch);
+    if (repeatedTornadoRealtime === null) {
+      throw new Error('expected realtime payload after repeated tornado trigger');
+    }
     expect(
-      captured.envelopes
-        .slice(envelopeCountAfterHello)
-        .every((envelope) => envelope.kind === 'patch'),
+      repeatedTornadoRealtime.deltas?.some(
+        (delta) => delta.kind === 'upsert' && delta.object.type === 6,
+      ),
+    ).toBe(false);
+
+    expect(host.triggerManualRealtimeEvent('monster')).toBe(true);
+    const monsterPatch = captured.envelopes.at(-1);
+    if (monsterPatch === undefined || monsterPatch.kind !== 'patch') {
+      throw new Error('expected monster manual-disaster patch envelope');
+    }
+    const monsterMessages = readMessageDeltasFromEnvelope(monsterPatch) ?? [];
+    const monsterPictureMessage = monsterMessages.find((message) => message.id === -21);
+    if (
+      monsterPictureMessage === undefined ||
+      monsterPictureMessage.x === undefined ||
+      monsterPictureMessage.y === undefined
+    ) {
+      throw new Error('expected monster picture message with map coordinates');
+    }
+    expect(monsterMessages.some((message) => message.id === 21)).toBe(false);
+    const monsterRealtime = readRealtimePayloadFromEnvelope(monsterPatch);
+    if (monsterRealtime === null) {
+      throw new Error('expected realtime payload after monster manual-disaster trigger');
+    }
+    const monsterObject = monsterRealtime.objects?.find((object) => object.type === 5);
+    if (monsterObject === undefined) {
+      throw new Error('expected monster realtime object in payload');
+    }
+    // Sprite type `5` is monster (`GOD`) in `packages/sim-core/src/sim/realtime.ts`,
+    // mirroring monster sprite dispatch from `w_sprite.c`.
+    expect(
+      monsterRealtime.deltas?.some((delta) => delta.kind === 'upsert' && delta.object.type === 5),
     ).toBe(true);
+    // w_sprite.c `MonsterHere` sends `SendMesAt(-21, x + 5, y)` after creating
+    // sprite position `(x << 4) + 48, (y << 4)`.
+    expect(monsterPictureMessage.x).toBe((monsterObject.x >> 4) + 2);
+    expect(monsterPictureMessage.y).toBe(monsterObject.y >> 4);
+
+    expect(host.triggerManualRealtimeEvent('monster')).toBe(true);
+    const repeatedMonsterPatch = captured.envelopes.at(-1);
+    if (repeatedMonsterPatch === undefined || repeatedMonsterPatch.kind !== 'patch') {
+      throw new Error('expected repeated monster manual-disaster patch envelope');
+    }
+    const repeatedMonsterMessages = readMessageDeltasFromEnvelope(repeatedMonsterPatch) ?? [];
+    expect(repeatedMonsterMessages.some((message) => message.id === -21)).toBe(false);
+    expect(repeatedMonsterMessages.some((message) => message.id === 21)).toBe(true);
+    const repeatedMonsterRealtime = readRealtimePayloadFromEnvelope(repeatedMonsterPatch);
+    if (repeatedMonsterRealtime === null) {
+      throw new Error('expected realtime payload after repeated monster trigger');
+    }
+    expect(
+      repeatedMonsterRealtime.deltas?.some(
+        (delta) => delta.kind === 'upsert' && delta.object.type === 5,
+      ),
+    ).toBe(false);
   });
 
   it('accepts every playable disaster choice id and emits one patch per trigger', () => {

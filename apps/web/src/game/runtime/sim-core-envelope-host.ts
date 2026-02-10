@@ -302,7 +302,6 @@ export class SimCoreEnvelopeHost implements CoreHost {
     try {
       this.syncRealtimeContextFromSimState();
       this.applyManualRealtimeEvent(eventId);
-      runUiUpdate(this.authorityState.simState, this.authorityState.simContext);
     } finally {
       const tickResult = this.authorityState.simContext.store.commitTick();
       mapPatch = readMapPatchFromTickResult(tickResult.patches);
