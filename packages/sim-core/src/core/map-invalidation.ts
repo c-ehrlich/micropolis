@@ -1,5 +1,10 @@
 import { World } from './constants.ts';
-import { MAP_FLAG_COUNT, MAP_FLAGS, type MapFlagId } from './map-flags.ts';
+import {
+  getMapStateDrawModeEntry,
+  MAP_FLAG_COUNT,
+  MAP_FLAGS,
+  type MapFlagId,
+} from './map-flags.ts';
 import type { Patch } from './map-store.ts';
 
 const DEFAULT_MAX_DIRTY_TILES_BEFORE_FULL_REDRAW = 2048;
@@ -48,7 +53,16 @@ export interface MapRedrawPlan {
  * Parity note: optional patch thresholds are browser-oriented tuning knobs.
  */
 export interface PlanMapRedrawOptions {
-  readonly activeMapFlag: MapFlagId;
+  /**
+   * Active C map mode as one explicit NewMapFlags slot id.
+   * Mirrors callers that already track symbolic `ALMAP`..`DYMAP`.
+   */
+  readonly activeMapFlag?: MapFlagId;
+  /**
+   * Active C `map_state` index (optional numeric form of `activeMapFlag`).
+   * Mirrors `view->map_state` in `ref/micropolis/src/sim/g_map.c`.
+   */
+  readonly activeMapState?: number;
   readonly newMap: number;
   readonly newMapFlags: Uint8Array;
   readonly shakeNow?: number;
@@ -124,6 +138,17 @@ export function markCrimeScanMapFlags(state: MapInvalidationFlagState): void {
 }
 
 /**
+ * Resolve the active map-flag slot for one map-state index.
+ * Mirrors `mapProcs[view->map_state]` lookup in `MemDrawMap` from
+ * `ref/micropolis/src/sim/g_map.c` and map-state bounds validation in
+ * `MapCmdMapState` from `ref/micropolis/src/sim/w_map.c`.
+ */
+export function resolveMapFlagForMapState(mapState: number): MapFlagId | null {
+  const entry = getMapStateDrawModeEntry(mapState);
+  return entry?.mapFlag ?? null;
+}
+
+/**
  * Build one redraw plan from C-compatible invalidation signals plus an optional
  * map patch.
  * Mirrors map invalidation gating in `DoUpdateMap` (`ref/micropolis/src/sim/w_map.c`).
@@ -131,7 +156,8 @@ export function markCrimeScanMapFlags(state: MapInvalidationFlagState): void {
  * for browser rendering while preserving C invalidation priority order.
  */
 export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
-  const activeFlagIndex = MAP_FLAGS[options.activeMapFlag];
+  const activeMapFlag = resolveActiveMapFlag(options);
+  const activeFlagIndex = MAP_FLAGS[activeMapFlag];
   const maxDirtyTiles =
     options.maxDirtyTilesBeforeFullRedraw ?? DEFAULT_MAX_DIRTY_TILES_BEFORE_FULL_REDRAW;
   const maxDirtyRects =
@@ -142,7 +168,7 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
       reason: 'new-map',
       fullRedraw: true,
       dirtyRects: [],
-      consumedFlags: [options.activeMapFlag],
+      consumedFlags: [activeMapFlag],
     };
   }
 
@@ -151,7 +177,7 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
       reason: 'map-flag',
       fullRedraw: true,
       dirtyRects: [],
-      consumedFlags: [options.activeMapFlag],
+      consumedFlags: [activeMapFlag],
     };
   }
 
@@ -199,6 +225,23 @@ export function planMapRedraw(options: PlanMapRedrawOptions): MapRedrawPlan {
     dirtyRects,
     consumedFlags: [],
   };
+}
+
+/**
+ * Resolve one redraw planning map flag from either symbolic or numeric map mode.
+ * Mirrors the C pairing of `MapCmdMapState` input bounds in `w_map.c` with
+ * `mapProcs[view->map_state]` lookup in `g_map.c`.
+ */
+function resolveActiveMapFlag(options: PlanMapRedrawOptions): MapFlagId {
+  const activeMapState = options.activeMapState;
+  if (typeof activeMapState === 'number') {
+    const fromMapState = resolveMapFlagForMapState(activeMapState);
+    if (fromMapState !== null) {
+      return fromMapState;
+    }
+  }
+
+  return options.activeMapFlag ?? 'ALMAP';
 }
 
 /**

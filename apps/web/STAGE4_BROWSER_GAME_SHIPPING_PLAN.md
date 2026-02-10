@@ -464,18 +464,19 @@ Deletion execution notes:
 
 - [x] Make Stage 4 responsive and stable during extended play.
 - Stage 9 update (2026-02-10): restored `DoSimInit` bootstrap parity for `ref/micropolis/src/sim/s_scan.c` `NewMapFlags` producers (`PTLScan`, `CrimeScan`, `PopDenScan`, `FireAnalysis`) on the default sim-core path.
+- Stage 9 update (2026-02-10): wired redraw planning to resolve active map mode from the `g_map.c` draw-mode table (`map_state` -> `NewMapFlags` slot) for `planMapRedraw` parity.
 
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps`, flag clearing)
 - [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
 - [x] `ref/micropolis/src/sim/w_map.c` (pan/map interaction behaviors)
-- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table)
+- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table, checked for Stage 9 parity)
 
 ### TS references to review
 
-- [ ] `packages/sim-core/src/core/map-invalidation.ts`
-- [ ] `packages/sim-core/src/core/map-invalidation.test.ts`
+- [x] `packages/sim-core/src/core/map-invalidation.ts`
+- [x] `packages/sim-core/src/core/map-invalidation.test.ts`
 - [ ] `apps/web/src/game/map/map-canvas.tsx`
 - [ ] `apps/web/src/routes/index.tsx`
 - [ ] `packages/sim-ui/IMPORTANT.md`

@@ -10,6 +10,7 @@ import {
   markPopDenScanMapFlags,
   markPTLScanMapFlags,
   planMapRedraw,
+  resolveMapFlagForMapState,
 } from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
 
@@ -64,6 +65,26 @@ describe('planMapRedraw', () => {
       newMap: 0,
       newMapFlags,
       mapPatch: createMapPatch([mapIndex(10, 10)]),
+    });
+
+    expect(plan).toEqual({
+      reason: 'map-flag',
+      fullRedraw: true,
+      dirtyRects: [],
+      consumedFlags: ['PDMAP'],
+    });
+  });
+
+  it('resolves active map flag from map_state using the g_map.c draw-mode table', () => {
+    const newMapFlags = new Uint8Array(15);
+    // `PDMAP` is map_state 6 in `sim.h`/`g_map.c` (`setUpMapProcs` table order).
+    newMapFlags[MAP_FLAGS.PDMAP] = 1;
+
+    const plan = planMapRedraw({
+      activeMapState: 6,
+      newMap: 0,
+      newMapFlags,
+      mapPatch: createMapPatch([mapIndex(4, 4)]),
     });
 
     expect(plan).toEqual({
@@ -179,6 +200,21 @@ describe('planMapRedraw', () => {
       dirtyRects: [],
       consumedFlags: [],
     });
+  });
+});
+
+describe('resolveMapFlagForMapState', () => {
+  it('maps valid C map_state indexes to their NewMapFlags slot ids', () => {
+    // `ALMAP=0`, `PLMAP=9`, and `DYMAP=14` are defined in `sim.h` for map modes.
+    expect(resolveMapFlagForMapState(0)).toBe('ALMAP');
+    expect(resolveMapFlagForMapState(9)).toBe('PLMAP');
+    expect(resolveMapFlagForMapState(14)).toBe('DYMAP');
+  });
+
+  it('returns null for out-of-range map_state indexes', () => {
+    // `MapCmdMapState` bounds in `w_map.c`: `state < 0 || state >= NMAPS`.
+    expect(resolveMapFlagForMapState(-1)).toBeNull();
+    expect(resolveMapFlagForMapState(MAP_FLAG_COUNT)).toBeNull();
   });
 });
 
