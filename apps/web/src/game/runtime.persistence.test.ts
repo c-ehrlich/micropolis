@@ -8,15 +8,18 @@ import { describe, expect, test, vi } from 'vitest';
 
 import {
   CITY_HISTORY_LENGTH,
+  cityDimensionsForMap,
   createClassicMapStore,
   createRng,
   createSimContext,
   createSimState,
   type SimContext,
   type SimState,
+  World,
 } from '../../../../packages/sim-core/src/index.ts';
 import { loadFileLikeC, loadScenarioLikeC } from '../../../../packages/sim-io/src/load.ts';
 import { saveFileLikeC } from '../../../../packages/sim-io/src/save.ts';
+import { getScenarioDefinition } from '../../../../packages/sim-io/src/scenarios.ts';
 import type { HostMode } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
 import { createCoreHost } from './host-factory';
@@ -34,6 +37,15 @@ const FIXTURE_CITY = path.join(
 );
 const FIXTURE_SCENARIO = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'res', 'snro.222');
 const HOST_MODES: readonly HostMode[] = ['local', 'do'];
+// C `saveFile`/`_load_file` classic city dimensions in `ref/micropolis/src/sim/s_fileio.c`.
+const CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(World.WORLD_X, World.WORLD_Y).byteLength;
+// C `LoadScenario` case-2 constants in `ref/micropolis/src/sim/s_fileio.c`.
+const SAN_FRANCISCO_SCENARIO = getScenarioDefinition(2);
+// C `LoadScenario` always applies `CityTax = 7` and `setSpeed(3)` in `s_fileio.c`.
+const LOAD_SCENARIO_CITY_TAX = 7;
+const LOAD_SCENARIO_SIM_SPEED = 3;
+// C `loadFile` clears scenario mode before `DoSimInit` in `s_fileio.c`.
+const LOAD_FILE_SCENARIO_ID_CLEARED = 0;
 
 interface AuthorityHostProbe {
   commandAuthority: unknown;
@@ -217,7 +229,7 @@ describe('Integrated Runtime integrated runtime save/load/scenario smoke checks'
         const saved = saveFileLikeC(state, context);
         // `_load_file` accepts and `saveFile` emits classic city payloads at 27120 bytes.
         // Source: `ref/micropolis/src/sim/s_fileio.c`.
-        expect(saved.cityBytes.byteLength).toBe(27120);
+        expect(saved.cityBytes.byteLength).toBe(CLASSIC_CITY_FILE_BYTE_LENGTH);
 
         const { state: reloadedState, context: reloadedContext } = createPersistenceRuntimePair();
         loadFileLikeC(reloadedState, reloadedContext, saved.cityBytes);
@@ -235,16 +247,21 @@ describe('Integrated Runtime integrated runtime save/load/scenario smoke checks'
       runWithReadyRuntime(mode, () => {
         const scenarioBytes = readFixture(FIXTURE_SCENARIO);
         const { state, context } = createPersistenceRuntimePair();
-        const loadedScenario = loadScenarioLikeC(state, context, 2, scenarioBytes);
+        const loadedScenario = loadScenarioLikeC(
+          state,
+          context,
+          SAN_FRANCISCO_SCENARIO.id,
+          scenarioBytes,
+        );
 
-        expect(loadedScenario.scenario.id).toBe(2);
+        expect(loadedScenario.scenario.id).toBe(SAN_FRANCISCO_SCENARIO.id);
         // Magic numbers from `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c`:
         // CityTime for scenario 2 is `((1906 - 1900) * 48) + 2 = 290`, funds are 20000,
         // speed is 3, and tax is 7.
-        expect(state.CityTime).toBe(290);
-        expect(state.TotalFunds).toBe(20000);
-        expect(state.SimSpeed).toBe(3);
-        expect(state.CityTax).toBe(7);
+        expect(state.CityTime).toBe(SAN_FRANCISCO_SCENARIO.startCityTime);
+        expect(state.TotalFunds).toBe(SAN_FRANCISCO_SCENARIO.startFunds);
+        expect(state.SimSpeed).toBe(LOAD_SCENARIO_SIM_SPEED);
+        expect(state.CityTax).toBe(LOAD_SCENARIO_CITY_TAX);
 
         const saved = saveFileLikeC(state, context);
         const { state: reloadedState, context: reloadedContext } = createPersistenceRuntimePair();
@@ -252,9 +269,9 @@ describe('Integrated Runtime integrated runtime save/load/scenario smoke checks'
 
         // `loadFile` explicitly clears scenario mode (`ScenarioID = 0`) before `DoSimInit`.
         // Source: `ref/micropolis/src/sim/s_fileio.c`.
-        expect(reloadedState.ScenarioID).toBe(0);
-        expect(reloadedState.CityTime).toBe(290);
-        expect(reloadedState.TotalFunds).toBe(20000);
+        expect(reloadedState.ScenarioID).toBe(LOAD_FILE_SCENARIO_ID_CLEARED);
+        expect(reloadedState.CityTime).toBe(SAN_FRANCISCO_SCENARIO.startCityTime);
+        expect(reloadedState.TotalFunds).toBe(SAN_FRANCISCO_SCENARIO.startFunds);
       });
     },
   );

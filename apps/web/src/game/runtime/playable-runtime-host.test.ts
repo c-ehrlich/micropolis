@@ -1,6 +1,12 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { Tile, TileMask } from '../../../../../packages/sim-core/src/index.ts';
+import {
+  cityDimensionsForMap,
+  Tile,
+  TileMask,
+  World,
+} from '../../../../../packages/sim-core/src/index.ts';
+import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
@@ -149,12 +155,26 @@ const PLAYABLE_CERT_HEADS_MESSAGES_OBSERVE_DURATION_MS =
   PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 8;
 const PLAYABLE_CERT_REALTIME_VISUAL_OBSERVE_DURATION_MS =
   PLAYABLE_CERT_CADENCE_PATCH_INTERVAL_MS * 12;
+// C `saveFile`/`_load_file` classic city dimensions in `ref/micropolis/src/sim/s_fileio.c`.
+const PLAYABLE_CERT_CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(
+  World.WORLD_X,
+  World.WORLD_Y,
+).byteLength;
+// C `InitFunds()` initial city funds in `ref/micropolis/src/sim/s_init.c`.
+const PLAYABLE_CERT_NEW_CITY_STARTING_FUNDS = 20_000;
+const PLAYABLE_CERT_FUNDS_AFTER_ROAD_PLACEMENT =
+  PLAYABLE_CERT_NEW_CITY_STARTING_FUNDS - PLAYABLE_CERT_PLAYABLE_TOOL_COSTS.road;
+const PLAYABLE_CERT_FUNDS_AFTER_ROAD_AND_BULLDOZE =
+  PLAYABLE_CERT_FUNDS_AFTER_ROAD_PLACEMENT - PLAYABLE_CERT_PLAYABLE_TOOL_COSTS.bulldoze;
+// C `LoadScenario` applies `setSpeed(3)` in `ref/micropolis/src/sim/s_fileio.c`.
+const PLAYABLE_CERT_LOAD_SCENARIO_DEFAULT_SPEED = 3;
+const PLAYABLE_CERT_DULLSVILLE_SCENARIO = getScenarioDefinition(1);
 // Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
 // `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
 const PLAYABLE_CERT_SCENARIO_START_CERTIFICATION = {
-  scenarioId: 1,
-  startYear: 1900,
-  startFunds: 5_000,
+  scenarioId: PLAYABLE_CERT_DULLSVILLE_SCENARIO.id,
+  startYear: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startYear,
+  startFunds: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startFunds,
 } as const;
 // Magic-number source: Playable Certification manual release-gate checklist requirement in
 // `apps/web/STAGE4_BROWSER_GAME_SHIPPING_PLAN.md` ("at least 15 minutes").
@@ -1424,7 +1444,7 @@ async function certifyPlayableCertificationCityRoundTripRestorationOnHost(
     }
     // Magic-number source: classic `.cty` city payload byte count in `saveFile`
     // from `ref/micropolis/src/sim/s_fileio.c`.
-    expect(savePayload.cityBytes.byteLength).toBe(27120);
+    expect(savePayload.cityBytes.byteLength).toBe(PLAYABLE_CERT_CLASSIC_CITY_FILE_BYTE_LENGTH);
 
     connection.send({
       kind: 'command',
@@ -1618,7 +1638,7 @@ async function certifyPlayableCertificationCityRoundTripRestorationOnRuntime(
     if (savePayload === null) {
       throw new Error(`${runId} expected save payload`);
     }
-    expect(savePayload.cityBytes.byteLength).toBe(27120);
+    expect(savePayload.cityBytes.byteLength).toBe(PLAYABLE_CERT_CLASSIC_CITY_FILE_BYTE_LENGTH);
 
     runtime.sendCommand(commandIds.bulldoze, {
       kind: 'tool',
@@ -2091,7 +2111,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     );
     // Magic number source: road cost `10` from `CostOf[]` in
     // `ref/micropolis/src/sim/w_tool.c`.
-    expect(roadFundsPatch.payload.hud?.funds).toBe(19_990);
+    expect(roadFundsPatch.payload.hud?.funds).toBe(PLAYABLE_CERT_FUNDS_AFTER_ROAD_PLACEMENT);
     expect(roadFundsPatch.payload.hud?.date).toBeDefined();
 
     connection.send({
@@ -2230,7 +2250,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     );
 
     // Magic number source: `.cty` city payload byte count in `s_fileio.c`.
-    expect(savePayload.cityBytes.byteLength).toBe(27120);
+    expect(savePayload.cityBytes.byteLength).toBe(PLAYABLE_CERT_CLASSIC_CITY_FILE_BYTE_LENGTH);
 
     connection.send({
       kind: 'command',
@@ -2260,7 +2280,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     );
     // Magic number source: bulldozer cost `1` from `CostOf[]` in
     // `ref/micropolis/src/sim/w_tool.c`.
-    expect(bulldozeFundsPatch.payload.hud?.funds).toBe(19_989);
+    expect(bulldozeFundsPatch.payload.hud?.funds).toBe(PLAYABLE_CERT_FUNDS_AFTER_ROAD_AND_BULLDOZE);
 
     connection.send({
       kind: 'command',
@@ -2288,7 +2308,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     );
     // Magic number source: restore returns to the saved post-road funds value
     // (`20000 - 10`) using `SaveCityAs`/`loadFile` parity in `s_fileio.c`.
-    expect(loadSnapshot.payload.hud?.funds).toBe(19_990);
+    expect(loadSnapshot.payload.hud?.funds).toBe(PLAYABLE_CERT_FUNDS_AFTER_ROAD_PLACEMENT);
     expect(loadSnapshot.payload.messages?.[0]?.text).toContain('Loaded');
 
     connection.send({
@@ -2299,7 +2319,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 1,
+        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
       },
     });
     const scenarioAck = await waitForHostEnvelope(
@@ -2316,11 +2336,15 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     );
     // Magic numbers source: scenario 1 (`Dullsville`) metadata constants in
     // `LoadScenario` (`ref/micropolis/src/sim/s_fileio.c`): funds=5000, year=1900.
-    expect(scenarioSnapshot.payload.hud?.funds).toBe(5_000);
-    expect(scenarioSnapshot.payload.hud?.date?.year).toBe(1900);
+    expect(scenarioSnapshot.payload.hud?.funds).toBe(
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startFunds,
+    );
+    expect(scenarioSnapshot.payload.hud?.date?.year).toBe(
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startYear,
+    );
     // Magic number source: `LoadScenario` applies visible speed `3` after init
     // in `ref/micropolis/src/sim/s_fileio.c`.
-    expect(scenarioSnapshot.payload.hud?.speed).toBe(3);
+    expect(scenarioSnapshot.payload.hud?.speed).toBe(PLAYABLE_CERT_LOAD_SCENARIO_DEFAULT_SPEED);
     expect(scenarioSnapshot.payload.realtime?.objects?.length ?? 0).toBeGreaterThan(0);
 
     const lastServerSeq = readLatestServerSeq(hostEnvelopes);
@@ -2338,7 +2362,9 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
       `${runId} resync snapshot`,
     );
     expect(resyncSnapshot.serverSeq).toBeGreaterThan(lastServerSeq);
-    expect(resyncSnapshot.payload.hud?.funds).toBe(5_000);
+    expect(resyncSnapshot.payload.hud?.funds).toBe(
+      PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.startFunds,
+    );
 
     connection.send({
       kind: 'command',

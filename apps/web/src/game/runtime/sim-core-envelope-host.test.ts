@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  cityDimensionsForMap,
   decodeCityFileForMap,
   Tile,
   TileFlag,
@@ -28,6 +29,11 @@ import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
+// C `saveFile`/`_load_file` classic city dimensions in `ref/micropolis/src/sim/s_fileio.c`.
+const CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(World.WORLD_X, World.WORLD_Y).byteLength;
+// C `LoadScenario` always applies `CityTax = 7` and `setSpeed(3)` in `s_fileio.c`.
+const LOAD_SCENARIO_CITY_TAX = 7;
+const LOAD_SCENARIO_SIM_SPEED = 3;
 
 /**
  * Captures host envelopes from one connected runtime host instance.
@@ -1272,7 +1278,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(savePayload.cityName).toBe('sim-core-envelope-roundtrip');
     // Magic-number source: classic `.cty` byte size packed by `saveFile` in
     // `ref/micropolis/src/sim/s_fileio.c`.
-    expect(savePayload.cityBytes.byteLength).toBe(27120);
+    expect(savePayload.cityBytes.byteLength).toBe(CLASSIC_CITY_FILE_BYTE_LENGTH);
 
     const savedCity = decodeCityFileForMap(savePayload.cityBytes, {
       width: World.WORLD_X,
@@ -1430,7 +1436,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     // Magic-number source: `.cty` byte size produced by `saveFile` in
     // `ref/micropolis/src/sim/s_fileio.c`.
-    expect(savePayload.cityBytes.byteLength).toBe(27120);
+    expect(savePayload.cityBytes.byteLength).toBe(CLASSIC_CITY_FILE_BYTE_LENGTH);
 
     const savedCity = decodeCityFileForMap(savePayload.cityBytes, {
       width: World.WORLD_X,
@@ -1685,9 +1691,9 @@ describe('SimCoreEnvelopeHost', () => {
     expect(hostInternals.authorityState.simState.TotalFunds).toBe(scenario.startFunds);
     // Magic numbers source: `LoadScenario` assigns `CityTax = 7` and calls
     // `setSpeed(3)` in `ref/micropolis/src/sim/s_fileio.c`.
-    expect(hostInternals.authorityState.simState.CityTax).toBe(7);
-    expect(hostInternals.authorityState.simState.SimSpeed).toBe(3);
-    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
+    expect(hostInternals.authorityState.simState.CityTax).toBe(LOAD_SCENARIO_CITY_TAX);
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(LOAD_SCENARIO_SIM_SPEED);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(LOAD_SCENARIO_SIM_SPEED);
     expect(hostInternals.cityName).toBe(scenario.name);
     expect(hostInternals.cityFileName).toBe(`${scenario.fileName}.cty`);
   });
