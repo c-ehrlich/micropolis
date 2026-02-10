@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 
+import { TileMask } from '../../../../../packages/sim-core/src/index.ts';
 import type {
   ClientEnvelope,
   HostAckEnvelope,
@@ -7,7 +8,7 @@ import type {
   HostPatchEnvelope,
   HostSnapshotEnvelope,
 } from './protocol.ts';
-import { createWebHostRuntime, type WebRuntimeEvent } from './runtime.ts';
+import { createWebHostRuntime, type WebRuntimeEvent, type WebRuntimeState } from './runtime.ts';
 import {
   createStage4PrimaryPlayableHost,
   readStage4CityExportPayload,
@@ -165,6 +166,99 @@ function readFundsFromLabel(label: string): number {
     return 0;
   }
   return Number.parseInt(digits, 10);
+}
+
+interface Stage11HostHudRestorationSignature {
+  funds: number | undefined;
+  dateMonth: number | undefined;
+  dateYear: number | undefined;
+  demandR: number | undefined;
+  demandC: number | undefined;
+  demandI: number | undefined;
+  speed: number | undefined;
+  autoBudget: boolean | undefined;
+  autoGo: boolean | undefined;
+  autoBulldoze: boolean | undefined;
+  userSoundOn: boolean | undefined;
+}
+
+interface Stage11RuntimeHudRestorationSignature {
+  fundsLabel: string;
+  dateLabel: string;
+  demandR: number;
+  demandC: number;
+  demandI: number;
+  speed: number;
+}
+
+/**
+ * Reads authoritative snapshot map tile words for Stage 11 save/load assertions.
+ * Mirrors classic city map payload ownership in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: accepts both canonical `tileWords` and legacy `tiles` snapshot fields.
+ */
+function readStage11SnapshotTileWords(
+  snapshot: HostSnapshotEnvelope,
+  label: string,
+): readonly number[] | Uint16Array {
+  const map = snapshot.payload.map;
+  if (map === undefined) {
+    throw new Error(`${label} snapshot missing map payload`);
+  }
+  if ('tileWords' in map) {
+    return map.tileWords;
+  }
+  if ('tiles' in map) {
+    return map.tiles;
+  }
+  throw new Error(`${label} snapshot missing tile words`);
+}
+
+/**
+ * Masks map words to Micropolis identity bits for load restoration parity checks.
+ * Mirrors `LOMASK` tile identity usage in `ref/micropolis/src/sim/g_bigmap.c`.
+ * Parity note: `DoSimInit` can rewrite non-identity flag bits after `loadFile`.
+ */
+function maskStage11TileIdentities(tileWords: readonly number[] | Uint16Array): number[] {
+  return Array.from(tileWords, (tileWord) => tileWord & TileMask.LOMASK);
+}
+
+/**
+ * Captures host HUD heads used to certify save/load round-trip restoration.
+ * Mirrors `DoUpdateHeads` scalar projections in `ref/micropolis/src/sim/w_update.c`.
+ */
+function readStage11HostHudRestorationSignature(
+  snapshot: HostSnapshotEnvelope,
+): Stage11HostHudRestorationSignature {
+  return {
+    funds: snapshot.payload.hud?.funds,
+    dateMonth: snapshot.payload.hud?.date?.month,
+    dateYear: snapshot.payload.hud?.date?.year,
+    demandR: snapshot.payload.hud?.demand?.r,
+    demandC: snapshot.payload.hud?.demand?.c,
+    demandI: snapshot.payload.hud?.demand?.i,
+    speed: snapshot.payload.hud?.speed,
+    autoBudget: snapshot.payload.hud?.options?.autoBudget,
+    autoGo: snapshot.payload.hud?.options?.autoGo,
+    autoBulldoze: snapshot.payload.hud?.options?.autoBulldoze,
+    userSoundOn: snapshot.payload.hud?.options?.userSoundOn,
+  };
+}
+
+/**
+ * Captures shipped runtime HUD heads used to certify save/load restoration.
+ * Mirrors projected `UISet*` heads flow from `ref/micropolis/src/sim/w_update.c`.
+ */
+function readStage11RuntimeHudRestorationSignature(
+  state: WebRuntimeState,
+): Stage11RuntimeHudRestorationSignature {
+  return {
+    fundsLabel: state.hudState.fundsLabel,
+    dateLabel: state.hudState.dateLabel,
+    demandR: state.hudState.demandR,
+    demandC: state.hudState.demandC,
+    demandI: state.hudState.demandI,
+    speed: state.hudState.speed,
+  };
 }
 
 interface Stage4SmokeSummary {
@@ -819,6 +913,383 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
 }
 
 /**
+ * Certifies Stage 11 `.cty` save->mutate->load full restoration on host envelopes.
+ * Mirrors `SaveCityAs`/`loadFile` round-trip semantics in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ */
+async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Promise<void> {
+  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const commandIds = {
+    road: `${runId}-cmd-road`,
+    wire: `${runId}-cmd-wire`,
+    save: `${runId}-cmd-save`,
+    bulldoze: `${runId}-cmd-bulldoze`,
+    load: `${runId}-cmd-load`,
+  } as const;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.road,
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 10,
+        y: 10,
+      },
+    });
+    const roadAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.road,
+      `${runId} road ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > roadAck.serverSeq &&
+        envelope.payload.hud?.funds !== undefined,
+      `${runId} road funds patch`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.wire,
+      command: {
+        kind: 'tool',
+        tool: 'wire',
+        x: 11,
+        y: 10,
+      },
+    });
+    const wireAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.wire,
+      `${runId} wire ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > wireAck.serverSeq &&
+        envelope.payload.hud?.funds !== undefined,
+      `${runId} wire funds patch`,
+    );
+
+    const preSaveServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: preSaveServerSeq,
+      reason: 'manual',
+    });
+    const preSaveSnapshot = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > preSaveServerSeq,
+      `${runId} pre-save snapshot`,
+    );
+    const preSaveMaskedTiles = maskStage11TileIdentities(
+      readStage11SnapshotTileWords(preSaveSnapshot, `${runId} pre-save`),
+    );
+    const preSaveHud = readStage11HostHudRestorationSignature(preSaveSnapshot);
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.save,
+      command: {
+        kind: 'city-io',
+        action: 'save-city',
+        fileName: 'stage11-roundtrip.cty',
+      },
+    });
+    const saveAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.save,
+      `${runId} save ack`,
+    );
+    const savePatch = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > saveAck.serverSeq &&
+        readStage4CityExportPayload(envelope.payload) !== null,
+      `${runId} save patch`,
+    );
+    const savePayload = readStage4CityExportPayload(savePatch.payload);
+    if (savePayload === null) {
+      throw new Error(`${runId} expected save payload`);
+    }
+    // Magic-number source: classic `.cty` city payload byte count in `saveFile`
+    // from `ref/micropolis/src/sim/s_fileio.c`.
+    expect(savePayload.cityBytes.byteLength).toBe(27120);
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.bulldoze,
+      command: {
+        kind: 'tool',
+        tool: 'bulldoze',
+        x: 10,
+        y: 10,
+      },
+    });
+    const bulldozeAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.bulldoze,
+      `${runId} mutate-city bulldoze ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostPatchEnvelope =>
+        envelope.kind === 'patch' &&
+        envelope.serverSeq > bulldozeAck.serverSeq &&
+        envelope.payload.hud?.funds !== undefined,
+      `${runId} mutate-city bulldoze funds patch`,
+    );
+    const mutatedServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: mutatedServerSeq,
+      reason: 'manual',
+    });
+    const mutatedSnapshot = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > mutatedServerSeq,
+      `${runId} mutated snapshot`,
+    );
+    expect(
+      maskStage11TileIdentities(readStage11SnapshotTileWords(mutatedSnapshot, `${runId} mutated`)),
+    ).not.toEqual(preSaveMaskedTiles);
+    expect(readStage11HostHudRestorationSignature(mutatedSnapshot)).not.toEqual(preSaveHud);
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: commandIds.load,
+      command: {
+        kind: 'city-io',
+        action: 'load-city',
+        fileName: 'stage11-roundtrip.cty',
+        cityBytes: savePayload.cityBytes,
+      },
+    });
+    const loadAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandIds.load,
+      `${runId} load ack`,
+    );
+    const restoredSnapshot = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > loadAck.serverSeq,
+      `${runId} restored snapshot`,
+    );
+
+    expect(
+      maskStage11TileIdentities(readStage11SnapshotTileWords(restoredSnapshot, `${runId} load`)),
+    ).toEqual(preSaveMaskedTiles);
+    expect(readStage11HostHudRestorationSignature(restoredSnapshot)).toEqual(preSaveHud);
+  } finally {
+    connection.disconnect();
+  }
+}
+
+/**
+ * Certifies Stage 11 `.cty` save->mutate->load full restoration on the shipped runtime path.
+ * Mirrors browser-command save/load flow mapped from `SaveCityAs`/`loadFile` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ */
+async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): Promise<void> {
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const commandIds = {
+    road: `${runId}-cmd-road`,
+    wire: `${runId}-cmd-wire`,
+    save: `${runId}-cmd-save`,
+    bulldoze: `${runId}-cmd-bulldoze`,
+    load: `${runId}-cmd-load`,
+  } as const;
+  const runtimeEvents: WebRuntimeEvent[] = [];
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    roomId,
+    clientId,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    runtimeEvents.push(event);
+  });
+
+  try {
+    runtime.connect();
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    runtime.sendCommand(commandIds.road, {
+      kind: 'tool',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    const roadAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandIds.road,
+      `${runId} road ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
+        event.envelope?.kind === 'patch' &&
+        event.envelope.serverSeq > roadAck.envelope.serverSeq &&
+        event.envelope.payload.hud?.funds !== undefined,
+      `${runId} road funds patch`,
+    );
+
+    runtime.sendCommand(commandIds.wire, {
+      kind: 'tool',
+      tool: 'wire',
+      x: 11,
+      y: 10,
+    });
+    const wireAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandIds.wire,
+      `${runId} wire ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
+        event.envelope?.kind === 'patch' &&
+        event.envelope.serverSeq > wireAck.envelope.serverSeq &&
+        event.envelope.payload.hud?.funds !== undefined,
+      `${runId} wire funds patch`,
+    );
+
+    const preSaveState = runtime.getState();
+    const preSaveMaskedTiles = maskStage11TileIdentities(preSaveState.mapState.tiles);
+    const preSaveHud = readStage11RuntimeHudRestorationSignature(preSaveState);
+
+    runtime.sendCommand(commandIds.save, {
+      kind: 'city-io',
+      action: 'save-city',
+      fileName: 'stage11-roundtrip.cty',
+    });
+    const saveAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandIds.save,
+      `${runId} save ack`,
+    );
+    const savePatch = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
+        event.envelope?.kind === 'patch' &&
+        event.envelope.serverSeq > saveAck.envelope.serverSeq &&
+        readStage4CityExportPayload(event.envelope.payload) !== null,
+      `${runId} save patch`,
+    );
+    const savePayload = readStage4CityExportPayload(savePatch.envelope.payload);
+    if (savePayload === null) {
+      throw new Error(`${runId} expected save payload`);
+    }
+    expect(savePayload.cityBytes.byteLength).toBe(27120);
+
+    runtime.sendCommand(commandIds.bulldoze, {
+      kind: 'tool',
+      tool: 'bulldoze',
+      x: 10,
+      y: 10,
+    });
+    const bulldozeAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandIds.bulldoze,
+      `${runId} mutate-city bulldoze ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
+        event.envelope?.kind === 'patch' &&
+        event.envelope.serverSeq > bulldozeAck.envelope.serverSeq &&
+        event.envelope.payload.hud?.funds !== undefined,
+      `${runId} mutate-city bulldoze funds patch`,
+    );
+    const mutatedState = runtime.getState();
+    expect(maskStage11TileIdentities(mutatedState.mapState.tiles)).not.toEqual(preSaveMaskedTiles);
+    expect(readStage11RuntimeHudRestorationSignature(mutatedState)).not.toEqual(preSaveHud);
+
+    runtime.sendCommand(commandIds.load, {
+      kind: 'city-io',
+      action: 'load-city',
+      fileName: 'stage11-roundtrip.cty',
+      cityBytes: savePayload.cityBytes,
+    });
+    const loadAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandIds.load,
+      `${runId} load ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot' &&
+        event.envelope.serverSeq > loadAck.envelope.serverSeq,
+      `${runId} restored snapshot`,
+    );
+    const restoredState = runtime.getState();
+    expect(maskStage11TileIdentities(restoredState.mapState.tiles)).toEqual(preSaveMaskedTiles);
+    expect(readStage11RuntimeHudRestorationSignature(restoredState)).toEqual(preSaveHud);
+  } finally {
+    unsubscribe();
+    runtime.disconnect();
+  }
+}
+
+/**
  * Runs one Stage 4 default-host smoke flow and returns deterministic envelope summary data.
  * Mirrors `SimCmd`/`LoadScenario`/save-load command completion flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/s_fileio.c`.
@@ -1369,6 +1840,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime heads + message feed updates during normal simulation on Stage 4 route', () => {
     certifyStage11HeadsAndMessagesOnRuntime('stage11-heads-messages-runtime');
+  });
+
+  test('certifies host save `.cty` -> mutate city -> load `.cty` fully restores map + HUD', async () => {
+    await certifyStage11CityRoundTripRestorationOnHost('stage11-save-load-restore-host');
+  });
+
+  test('certifies runtime save `.cty` -> mutate city -> load `.cty` fully restores map + HUD on Stage 4 route', async () => {
+    await certifyStage11CityRoundTripRestorationOnRuntime('stage11-save-load-restore-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
