@@ -18,8 +18,10 @@ import {
 import { loadFileLikeC, loadScenarioLikeC } from '../../../../packages/sim-io/src/load.ts';
 import { saveFileLikeC } from '../../../../packages/sim-io/src/save.ts';
 import type { HostMode } from './core-host';
+import { DeterministicCommandAuthority } from './deterministic-command-authority';
 import { createCoreHost } from './host-factory';
 import { createGameRuntime } from './runtime';
+import { SimCoreCommandAuthority } from './sim-core-command-authority';
 
 const WORKSPACE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../');
 const FIXTURE_CITY = path.join(
@@ -32,6 +34,10 @@ const FIXTURE_CITY = path.join(
 );
 const FIXTURE_SCENARIO = path.join(WORKSPACE_ROOT, 'ref', 'micropolis', 'res', 'snro.222');
 const HOST_MODES: readonly HostMode[] = ['local', 'do'];
+
+interface Stage4AuthorityHostProbe {
+  commandAuthority: unknown;
+}
 
 /**
  * Read a binary city/scenario fixture from workspace paths.
@@ -118,6 +124,24 @@ function seedStableCity(state: SimState, context: SimContext): void {
 }
 
 /**
+ * Read the Stage 4 authority implementation from the selected host.
+ * Mirrors Stage 1 host-owned sim-core authority wiring mapped from
+ * `ref/micropolis/src/sim/w_sim.c` + `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: this white-box probe is a TypeScript-only test seam.
+ */
+function readStage4AuthorityForPersistence(host: unknown): unknown {
+  if (
+    typeof host !== 'object' ||
+    host === null ||
+    !('commandAuthority' in host) ||
+    !('mode' in host)
+  ) {
+    throw new Error('Expected LocalHost/DoHost host with Stage 4 authority wiring');
+  }
+  return (host as Stage4AuthorityHostProbe).commandAuthority;
+}
+
+/**
  * Run a persistence check while one runtime host mode is connected.
  * Mirrors Stage 4 host-agnostic runtime intent mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
@@ -125,7 +149,12 @@ function seedStableCity(state: SimState, context: SimContext): void {
  * Stage 4 host shims do not yet persist host event history across sessions.
  */
 function runWithReadyRuntime<T>(mode: HostMode, run: () => T): T {
-  const runtime = createGameRuntime(createCoreHost({ mode }));
+  const host = createCoreHost({ mode });
+  const authority = readStage4AuthorityForPersistence(host);
+  expect(authority).toBeInstanceOf(SimCoreCommandAuthority);
+  expect(authority).not.toBeInstanceOf(DeterministicCommandAuthority);
+
+  const runtime = createGameRuntime(host);
   runtime.start();
   expect(runtime.getState().status).toBe('ready');
 
