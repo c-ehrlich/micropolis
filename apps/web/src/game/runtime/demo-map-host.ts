@@ -894,6 +894,7 @@ export class DemoMapHost implements CoreHost {
     const payload: DemoPatchPayload = {};
 
     this.syncRealtimeContextFromSimState();
+    this.ensureRealtimeDemoObject();
     if (options.includeHud) {
       payload.hud = this.getHudHeadsPayload();
     }
@@ -991,11 +992,12 @@ export class DemoMapHost implements CoreHost {
 
   /**
    * Ensures Stage 7 overlay payloads always have at least one moving object
-   * while ambient simulation is running.
+   * while simulation is running.
    * Mirrors realtime copter movement from `GenerateCopter`/`DoCopterSprite` in
    * `ref/micropolis/src/sim/w_sprite.c`.
    * Difference: this host-only bootstrap seam is intentionally additive so
-   * manual browser verification does not depend on rare city/disaster triggers.
+   * manual browser verification does not depend on rare city/disaster triggers,
+   * including command-driven resume/set-speed patches before ambient ticks.
    * Parity note: this only seeds while effective sim speed is non-zero, matching
    * C timer-driven realtime updates that stop when simulation speed is zero.
    */

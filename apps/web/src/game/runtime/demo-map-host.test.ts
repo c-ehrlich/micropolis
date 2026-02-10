@@ -162,6 +162,39 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('seeds realtime overlays on resume/set-speed patches before ambient ticks', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    runtime.sendCommand('stage7-seed-pause-1', {
+      kind: 'sim-control',
+      control: 'pause',
+    });
+
+    const authority = host as unknown as {
+      realtimeContext: {
+        globalSprites: Array<{ frame: number } | null>;
+      };
+    };
+    const copterSprite = authority.realtimeContext.globalSprites[2];
+    if (copterSprite == null) {
+      throw new Error('expected active copter sprite after snapshot seeding');
+    }
+    copterSprite.frame = 0;
+
+    runtime.sendCommand('stage7-seed-play-1', {
+      kind: 'sim-control',
+      control: 'play',
+    });
+
+    // Magic-number source: type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`.
+    expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(true);
+    // Magic-number source: `Resume()` restores the remembered playable speed in
+    // `ref/micropolis/src/sim/w_util.c` (`setSpeed(sim_paused_speed)` branch).
+    expect(runtime.getState().hudState.speed).toBe(3);
+  });
+
   it('emits realtime object payload updates on ambient ticks', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
