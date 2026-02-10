@@ -132,6 +132,13 @@ const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
 
 const STAGE11_CADENCE_PATCH_INTERVAL_MS = 10;
 const STAGE11_HEADS_MESSAGES_OBSERVE_DURATION_MS = STAGE11_CADENCE_PATCH_INTERVAL_MS * 8;
+// Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
+// `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
+const STAGE11_SCENARIO_START_CERTIFICATION = {
+  scenarioId: 1,
+  startYear: 1900,
+  startFunds: 5_000,
+} as const;
 
 interface Stage11AmbientMessageAuthority {
   simState: {
@@ -1290,6 +1297,128 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
 }
 
 /**
+ * Certifies Stage 11 scenario start year/funds on host envelopes.
+ * Mirrors `LoadScenario` scenario metadata initialization in
+ * `ref/micropolis/src/sim/s_fileio.c` (`CityTime` year + `TotalFunds`).
+ */
+async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
+  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const commandId = `${runId}-cmd-scenario-start`;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId,
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: STAGE11_SCENARIO_START_CERTIFICATION.scenarioId,
+      },
+    });
+    const scenarioAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === commandId,
+      `${runId} scenario ack`,
+    );
+    const scenarioSnapshot = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > scenarioAck.serverSeq,
+      `${runId} scenario snapshot`,
+    );
+
+    expect(scenarioSnapshot.payload.hud?.funds).toBe(
+      STAGE11_SCENARIO_START_CERTIFICATION.startFunds,
+    );
+    expect(scenarioSnapshot.payload.hud?.date?.year).toBe(
+      STAGE11_SCENARIO_START_CERTIFICATION.startYear,
+    );
+  } finally {
+    connection.disconnect();
+  }
+}
+
+/**
+ * Certifies Stage 11 scenario start year/funds on the shipped runtime path.
+ * Mirrors `LoadScenario` start-year/funds projection in
+ * `ref/micropolis/src/sim/s_fileio.c` through Stage 4 HUD runtime state.
+ */
+async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void> {
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const commandId = `${runId}-cmd-scenario-start`;
+  const runtimeEvents: WebRuntimeEvent[] = [];
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    roomId,
+    clientId,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    runtimeEvents.push(event);
+  });
+
+  try {
+    runtime.connect();
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    runtime.sendCommand(commandId, {
+      kind: 'scenario',
+      action: 'load-scenario',
+      scenarioId: STAGE11_SCENARIO_START_CERTIFICATION.scenarioId,
+    });
+    const scenarioAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === commandId,
+      `${runId} scenario ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot' &&
+        event.envelope.serverSeq > scenarioAck.envelope.serverSeq,
+      `${runId} scenario snapshot`,
+    );
+
+    const state = runtime.getState();
+    expect(readFundsFromLabel(state.hudState.fundsLabel)).toBe(
+      STAGE11_SCENARIO_START_CERTIFICATION.startFunds,
+    );
+    expect(state.hudState.dateYear).toBe(STAGE11_SCENARIO_START_CERTIFICATION.startYear);
+  } finally {
+    unsubscribe();
+    runtime.disconnect();
+  }
+}
+
+/**
  * Runs one Stage 4 default-host smoke flow and returns deterministic envelope summary data.
  * Mirrors `SimCmd`/`LoadScenario`/save-load command completion flow in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/s_fileio.c`.
@@ -1848,6 +1977,14 @@ describe('createStage4PrimaryPlayableHost', () => {
 
   test('certifies runtime save `.cty` -> mutate city -> load `.cty` fully restores map + HUD on Stage 4 route', async () => {
     await certifyStage11CityRoundTripRestorationOnRuntime('stage11-save-load-restore-runtime');
+  });
+
+  test('certifies host scenario start sets expected year/funds', async () => {
+    await certifyStage11ScenarioStartOnHost('stage11-scenario-start-host');
+  });
+
+  test('certifies runtime scenario start sets expected year/funds on Stage 4 route', async () => {
+    await certifyStage11ScenarioStartOnRuntime('stage11-scenario-start-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
