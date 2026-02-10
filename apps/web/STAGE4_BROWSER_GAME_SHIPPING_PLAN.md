@@ -522,7 +522,7 @@ Deletion execution notes:
 - [x] `apps/web/src/game/runtime/runtime.ts`
 - [x] `apps/web/src/__tests__/basic.test.ts`
 - [x] `apps/web/src/game/runtime.ordering-resync.test.ts`
-- [ ] `apps/web/src/game/runtime.command-lifecycle.test.ts`
+- [x] `apps/web/src/game/runtime.command-lifecycle.test.ts`
 
 ### Implementation checklist
 
@@ -581,6 +581,7 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
+
 
 
 
