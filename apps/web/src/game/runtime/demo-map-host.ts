@@ -1,21 +1,17 @@
+import type { readFile as nodeReadFile } from 'node:fs/promises';
+
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  resetForNewCityFromSeed,
   runUiUpdate,
   sendMessages,
   setValves,
   type SimContext,
   type SimState,
 } from '../../../../../packages/sim-core/src/index.ts';
-import {
-  applyLoadNormalization,
-  createCityFile,
-  decodeCityFileForMap,
-  encodeCityFile,
-  readCityMeta,
-  writeCityMeta,
-} from '../../../../../packages/sim-core/src/io/cty.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
-import { deriveCityNameFromPath } from '../../../../../packages/sim-io/src/load.ts';
+import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
+import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
   getScenarioDefinition,
   SCENARIO_TABLE,
@@ -41,7 +37,6 @@ import {
   type Stage2LoadScenarioCommand,
   type Stage2SaveCityCommand,
   type Stage2SimControlCommand,
-  type Stage2SimSpeed,
   type Stage2ToolCommand,
   type Stage2ToolName,
 } from './protocol.ts';
@@ -61,6 +56,14 @@ const DEMO_DEFAULT_DO_ANIMATION = true;
 const DEMO_DEFAULT_DO_MESSAGES = true;
 const DEMO_DEFAULT_DO_NOTICES = true;
 const DEMO_DEFAULT_DISASTERS = true;
+const DEMO_NEW_CITY_TREE_LEVEL = -1;
+const DEMO_NEW_CITY_LAKE_LEVEL = -1;
+const DEMO_NEW_CITY_CURVE_LEVEL = -1;
+const DEMO_NEW_CITY_CREATE_ISLAND = -1;
+const DEMO_SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
+type NodeFsPromisesModule = {
+  readFile: typeof nodeReadFile;
+};
 
 const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
   road: 66,
@@ -118,8 +121,8 @@ export interface Stage2ScenarioChoice {
 /**
  * Stage 2 browser scenario option table.
  * Mirrors `LoadScenario` switch-table labels/file ids from
- * `ref/micropolis/src/sim/s_fileio.c` (1:1 metadata), while map payloads stay
- * scripted in this LocalHost demo.
+ * `ref/micropolis/src/sim/s_fileio.c` (1:1 metadata). Runtime scenario starts
+ * load canonical `snro.*` payloads from `ref/micropolis/res`.
  */
 export const STAGE2_SCENARIO_CHOICES: readonly Stage2ScenarioChoice[] = SCENARIO_TABLE.map(
   (scenario: ScenarioDefinition) => ({
@@ -202,6 +205,13 @@ export function readDemoCityExportPayload(payload: unknown): DemoCityExportPaylo
 export interface DemoMapHostOptions {
   enableAmbientTicks?: boolean;
   patchIntervalMs?: number;
+  /**
+   * Optional scenario byte loader for `snro.*` resources.
+   * Mirrors `_load_file(fname, ResourceDir)` in `LoadScenario` from
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: function injection is a TypeScript test seam.
+   */
+  scenarioResourceLoader?: (fileName: string) => Uint8Array | Promise<Uint8Array>;
 }
 
 /**
@@ -235,6 +245,8 @@ export class DemoMapHost implements CoreHost {
   private readonly hookHudState: HookDrivenHudState = createInitialHookDrivenHudState();
   private pendingHookMessages: DemoHudMessagePayload[] = [];
   private readonly mapTiles = buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
+  private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
+  private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly messageLog: DemoHudMessagePayload[] = [
     {
       id: 0,
@@ -249,6 +261,11 @@ export class DemoMapHost implements CoreHost {
   constructor(options: DemoMapHostOptions = {}) {
     this.enableAmbientTicks = options.enableAmbientTicks ?? true;
     this.patchIntervalMs = options.patchIntervalMs ?? DEMO_PATCH_INTERVAL_MS;
+    const scenarioResourceLoader = options.scenarioResourceLoader;
+    this.scenarioResourceLoader =
+      scenarioResourceLoader === undefined
+        ? (fileName) => this.loadScenarioResourceBytes(fileName)
+        : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
     const authorityState = new Stage4SimCoreAuthorityState({
       hooks: {
         tickCount: () => this.readMessageTickCount(),
@@ -344,9 +361,25 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
+    if (this.routeLifecycleIoCommand(envelope)) {
+      return;
+    }
+
+    const reason = 'invalid-command';
+    this.commandOutcomes.set(envelope.commandId, { kind: 'reject', reason });
+    this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, reason);
+  }
+
+  /**
+   * Routes lifecycle + IO command classes through one command surface.
+   * Mirrors `SimCmd` command-table dispatch in `ref/micropolis/src/sim/w_sim.c`
+   * for `GenerateNewCity`, `LoadCity`, `SaveCity`/`SaveCityAs`, and `LoadScenario`.
+   * Parity note: command keys are Stage 2 discriminated unions rather than Tcl strings.
+   */
+  private routeLifecycleIoCommand(envelope: Extract<ClientEnvelope, { kind: 'command' }>): boolean {
     if (isStage2CityLifecycleCommand(envelope.command)) {
       this.handleCityLifecycleCommand(envelope.roomId, envelope.clientId, envelope.commandId);
-      return;
+      return true;
     }
 
     if (isStage2CityIoCommand(envelope.command)) {
@@ -356,7 +389,7 @@ export class DemoMapHost implements CoreHost {
         envelope.commandId,
         envelope.command,
       );
-      return;
+      return true;
     }
 
     if (isStage2ScenarioCommand(envelope.command)) {
@@ -366,12 +399,10 @@ export class DemoMapHost implements CoreHost {
         envelope.commandId,
         envelope.command,
       );
-      return;
+      return true;
     }
 
-    const reason = 'invalid-command';
-    this.commandOutcomes.set(envelope.commandId, { kind: 'reject', reason });
-    this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, reason);
+    return false;
   }
 
   /**
@@ -481,19 +512,19 @@ export class DemoMapHost implements CoreHost {
     command: Stage2SaveCityCommand,
   ): void {
     const fileName = sanitizeCityFileName(command.fileName);
-    this.cityFileName = fileName;
-    this.cityName = deriveCityNameFromPath(fileName);
-
-    const cityBytes = this.encodeCurrentCityFile();
+    this.syncRuntimeTilesToClassicMapLayerForSave();
+    const saveResult = saveCityAsLikeC(this.simState, this.simContext, fileName);
+    this.cityFileName = saveResult.cityFileName;
+    this.cityName = saveResult.cityName;
 
     this.commandOutcomes.set(commandId, { kind: 'ack' });
     this.emitAck(roomId, clientId, commandId);
     this.emitPatch(roomId, clientId, {
       cityIo: {
         save: {
-          fileName,
+          fileName: saveResult.cityFileName,
           cityName: this.cityName,
-          cityBytes,
+          cityBytes: saveResult.cityBytes,
         },
       },
       messageDeltas: [
@@ -511,21 +542,24 @@ export class DemoMapHost implements CoreHost {
     commandId: string,
     command: Stage2LoadCityCommand,
   ): void {
-    const loaded = tryDecodeImportedCity(command.cityBytes);
-    if (loaded === null) {
+    const fileName = sanitizeCityFileName(command.fileName);
+
+    let loadResult: ReturnType<typeof loadCityLikeC>;
+    try {
+      loadResult = loadCityLikeC(this.simState, this.simContext, fileName, command.cityBytes);
+    } catch {
       const reason = 'invalid-city-file';
       this.commandOutcomes.set(commandId, { kind: 'reject', reason });
       this.emitReject(roomId, clientId, commandId, reason);
       return;
     }
 
-    const fileName = sanitizeCityFileName(command.fileName);
-    this.cityFileName = fileName;
-    this.cityName = deriveCityNameFromPath(fileName);
+    this.cityFileName = loadResult.cityFileName;
+    this.cityName = loadResult.cityName;
     this.currentScenarioId = 0;
 
-    this.mapTiles.set(loaded.mapTiles);
-    this.applyLoadedSimulationMeta(loaded);
+    this.syncRuntimeTilesFromClassicMapLayer();
+    this.syncHostLoadStateFromSimState();
 
     this.resetMessageLog(`Loaded ${this.cityName}.`);
 
@@ -536,9 +570,10 @@ export class DemoMapHost implements CoreHost {
 
   /**
    * Applies scenario start through host authority.
-   * Mirrors `LoadScenario` constants in `ref/micropolis/src/sim/s_fileio.c`.
-   * Difference: this Stage 2 demo uses deterministic synthetic map seeding
-   * instead of loading `snro.*` map resources.
+   * Mirrors `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c` by applying
+   * scenario metadata constants and loading the corresponding `snro.*` bytes.
+   * Parity note: async resource reads replace C's synchronous file API, but the
+   * resulting state/order of `loadScenarioLikeC` effects remains aligned.
    */
   private handleScenarioCommand(
     roomId: string,
@@ -547,41 +582,82 @@ export class DemoMapHost implements CoreHost {
     command: Stage2LoadScenarioCommand,
   ): void {
     const scenario = getScenarioDefinition(command.scenarioId);
-    this.currentScenarioId = scenario.id;
-    this.cityName = scenario.name;
-    this.cityFileName = `${scenario.fileName}.cty`;
-    this.applyScenarioSimulationMeta(scenario.startCityTime, scenario.startFunds);
+    const commandTick = this.tick;
+    void this.handleScenarioCommandAsync(roomId, clientId, commandId, scenario.id, commandTick);
+  }
 
-    const scenarioMap = buildScenarioDemoMapTiles(scenario.id, DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
-    this.mapTiles.set(scenarioMap);
-    this.resetMessageLog(`Scenario: ${scenario.name} (${scenario.startYear})`);
+  /**
+   * Async `LoadScenario` orchestration with `snro.*` payload bytes.
+   * Mirrors `LoadScenario` resource read + init ordering in
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: `loadScenarioLikeC` owns the C-equivalent scalar/map lifecycle;
+   * this host wrapper translates completion into bridge `ack`/`snapshot` envelopes.
+   */
+  private async handleScenarioCommandAsync(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    scenarioId: number,
+    commandTick: number,
+  ): Promise<void> {
+    const scenario = getScenarioDefinition(scenarioId);
+
+    let scenarioBytes: Uint8Array;
+    try {
+      scenarioBytes = await this.scenarioResourceLoader(scenario.fileName);
+    } catch {
+      const reason = 'invalid-scenario-file';
+      this.commandOutcomes.set(commandId, { kind: 'reject', reason });
+      this.emitReject(roomId, clientId, commandId, reason, commandTick);
+      return;
+    }
+
+    let loadResult: ReturnType<typeof loadScenarioLikeC>;
+    try {
+      loadResult = loadScenarioLikeC(this.simState, this.simContext, scenario.id, scenarioBytes);
+    } catch {
+      const reason = 'invalid-scenario-file';
+      this.commandOutcomes.set(commandId, { kind: 'reject', reason });
+      this.emitReject(roomId, clientId, commandId, reason, commandTick);
+      return;
+    }
+
+    this.currentScenarioId = loadResult.scenario.id;
+    this.cityName = loadResult.scenario.name;
+    this.cityFileName = `${loadResult.scenario.fileName}.cty`;
+    this.syncRuntimeTilesFromClassicMapLayer();
+    this.syncHostLoadStateFromSimState();
+    this.resetMessageLog(
+      `Scenario: ${loadResult.scenario.name} (${loadResult.scenario.startYear})`,
+    );
 
     this.commandOutcomes.set(commandId, { kind: 'ack' });
-    this.emitAck(roomId, clientId, commandId);
-    this.emitSnapshot(roomId, clientId);
+    this.emitAck(roomId, clientId, commandId, commandTick);
+    this.emitSnapshot(roomId, clientId, commandTick);
   }
 
   /**
    * Emits an authoritative snapshot baseline with map + HUD + message feed.
    * Mirrors full refresh intent in `ref/micropolis/src/sim/w_update.c`.
    */
-  private emitSnapshot(roomId: string, clientId: string): void {
+  private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
     if (this.onEnvelope === undefined) {
       return;
     }
 
     const snapshotServerSeq = this.serverSeq + 1;
+    const snapshotTick = tickOverride;
     const pendingMessages = this.drainPendingHookMessages();
     if (pendingMessages.length > 0) {
-      this.recordMessages(pendingMessages, this.tick, snapshotServerSeq);
+      this.recordMessages(pendingMessages, snapshotTick, snapshotServerSeq);
     }
-    this.ensureMessageLogReplayMetadata(this.tick, snapshotServerSeq);
+    this.ensureMessageLogReplayMetadata(snapshotTick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
       kind: 'snapshot',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: snapshotTick,
       serverSeq: snapshotServerSeq,
       payload: {
         map: {
@@ -609,7 +685,12 @@ export class DemoMapHost implements CoreHost {
    * Mirrors successful command completion signaling in
    * `ref/micropolis/src/sim/w_sim.c`.
    */
-  private emitAck(roomId: string, clientId: string, commandId: string): void {
+  private emitAck(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -619,7 +700,7 @@ export class DemoMapHost implements CoreHost {
       kind: 'ack',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
     });
@@ -629,7 +710,13 @@ export class DemoMapHost implements CoreHost {
    * Emits a command `reject` envelope.
    * Mirrors expected-denial command results in `ref/micropolis/src/sim/w_sim.c`.
    */
-  private emitReject(roomId: string, clientId: string, commandId: string, reason: string): void {
+  private emitReject(
+    roomId: string,
+    clientId: string,
+    commandId: string,
+    reason: string,
+    tickOverride = this.tick,
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -639,7 +726,7 @@ export class DemoMapHost implements CoreHost {
       kind: 'reject',
       roomId,
       clientId,
-      tick: this.tick,
+      tick: tickOverride,
       serverSeq: this.serverSeq,
       commandId,
       reason,
@@ -1118,41 +1205,37 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Applies decoded `.cty` scalar state into authoritative sim-core HUD controls.
-   * Mirrors `loadFile` scalar restoration in `ref/micropolis/src/sim/s_fileio.c`,
-   * then refreshes heads via the `DoUpdateHeads` pathway.
-   * Parity note: map tile restoration still follows Stage 2 demo map ownership.
+   * Applies host-side pause/timer/HUD sync after `loadCityLikeC`.
+   * Mirrors `loadFile` + `setSpeed` + `DoSimInit` ownership in
+   * `ref/micropolis/src/sim/s_fileio.c`, while preserving TypeScript-only host
+   * pause bookkeeping.
    */
-  private applyLoadedSimulationMeta(loaded: DecodedDemoCity): void {
-    this.simState.CityTime = loaded.cityTime;
-    setFunds(this.simState, loaded.totalFunds);
-    this.simState.CityTax = loaded.cityTax;
-    this.simState.autoBudget = loaded.autoBudget;
-    this.simState.autoGo = loaded.autoGo;
-    this.simState.autoBulldoze = loaded.autoBulldoze;
-    this.simState.userSoundOn = loaded.userSoundOn;
-    this.simState.doAnimation = DEMO_DEFAULT_DO_ANIMATION;
-    this.simState.doMessages = DEMO_DEFAULT_DO_MESSAGES;
-    this.simState.doNotices = DEMO_DEFAULT_DO_NOTICES;
-    this.simState.NoDisasters = !DEMO_DEFAULT_DISASTERS;
-    this.simState.MustUpdateOptions = 1;
-    this.simState.ValveFlag = 1;
-    this.simState.MessagePort = 0;
-    this.simState.MesNum = 0;
-    this.simState.MesX = 0;
-    this.simState.MesY = 0;
-    this.simState.LastPicNum = 0;
-    this.simState.LastMesTime = 0;
-
+  private syncHostLoadStateFromSimState(): void {
     this.simPaused = false;
-    this.setSimulationSpeed(loaded.simMetaSpeed);
-    if (loaded.paused) {
-      this.pauseSimulation();
-    }
-
+    this.simPausedSpeed = normalizePlayableSpeed(this.simState.SimMetaSpeed);
     this.pendingHookMessages = [];
     this.refreshAmbientInterval();
     this.refreshHookDrivenHud();
+  }
+
+  /**
+   * Runs core new-city map generation + lifecycle initialization in Micropolis order.
+   * Mirrors `GenerateSomeCity` in `ref/micropolis/src/sim/s_gen.c`:
+   * `GenerateMap(Rand16())` followed by core reset lifecycle init (`InitWillStuff`,
+   * `DoSimInit`) and the same default terrain globals (`TreeLevel/LakeLevel/CurveLevel/
+   * CreateIsland` all `-1`).
+   * Parity note: editor/map invalidation UI calls in C stay outside this host helper.
+   */
+  private runNewCityLifecycleReset(): void {
+    const terrainSeed = this.simContext.rng.next16();
+    resetForNewCityFromSeed(this.simState, this.simContext, {
+      seed: terrainSeed,
+      treeLevel: DEMO_NEW_CITY_TREE_LEVEL,
+      lakeLevel: DEMO_NEW_CITY_LAKE_LEVEL,
+      curveLevel: DEMO_NEW_CITY_CURVE_LEVEL,
+      createIsland: DEMO_NEW_CITY_CREATE_ISLAND,
+    });
+    this.syncRuntimeTilesFromClassicMapLayer();
   }
 
   /**
@@ -1197,69 +1280,86 @@ export class DemoMapHost implements CoreHost {
    */
   private resetToNewCity(): void {
     this.currentScenarioId = 0;
+    this.runNewCityLifecycleReset();
     this.applyScenarioSimulationMeta(0, DEMO_INITIAL_FUNDS);
     this.cityFileName = DEMO_DEFAULT_CITY_FILE_NAME;
     this.cityName = DEMO_DEFAULT_CITY_NAME;
-    this.mapTiles.set(buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT));
     this.resetMessageLog('Started a new city.');
   }
 
-  private encodeCurrentCityFile(): Uint8Array {
-    const city = createCityFile({ width: DEMO_WORLD_WIDTH, height: DEMO_WORLD_HEIGHT });
-    city.map.set(this.mapTiles);
-    writeCityMeta(city.misc, {
-      cityTime: Math.max(0, Math.trunc(this.simState.CityTime)),
-      totalFunds: Math.max(0, Math.trunc(this.simState.TotalFunds)),
-      autoBulldoze: this.simState.autoBulldoze,
-      autoBudget: this.simState.autoBudget,
-      autoGo: this.simState.autoGo,
-      userSoundOn: this.simState.userSoundOn,
-      cityTax: this.simState.CityTax,
-      simSpeed: this.getVisibleSpeed(),
-      policePercent: 1,
-      firePercent: 1,
-      roadPercent: 1,
-    });
-    return encodeCityFile(city);
+  /**
+   * Sync row-major runtime map tiles into the classic x-major map layer before save.
+   * Mirrors `saveFile` map persistence in `ref/micropolis/src/sim/s_fileio.c`
+   * where `_save_short((&Map[0][0]), WORLD_X * WORLD_Y, f)` writes contiguous
+   * `Map[x][y]` storage.
+   * Parity note: Stage 2 host mutates row-major `mapTiles` for rendering and only
+   * mirrors into sim-core classic storage at save boundaries.
+   */
+  private syncRuntimeTilesToClassicMapLayerForSave(): void {
+    this.simContext.store.beginTick();
+    try {
+      const mapLayer = this.simContext.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error(`expected Uint16Array map layer; got ${mapLayer.constructor.name}`);
+      }
+      if (mapLayer.length < this.mapTiles.length) {
+        throw new Error(
+          `expected map layer length >= ${this.mapTiles.length}; got ${mapLayer.length}`,
+        );
+      }
+
+      copyRuntimeRowMajorTilesToClassicXMajorMap(
+        this.mapTiles,
+        mapLayer,
+        DEMO_WORLD_WIDTH,
+        DEMO_WORLD_HEIGHT,
+      );
+    } finally {
+      this.simContext.store.commitTick();
+    }
   }
-}
 
-type DecodedDemoCity = {
-  mapTiles: Uint16Array;
-  cityTime: number;
-  totalFunds: number;
-  cityTax: number;
-  paused: boolean;
-  simMetaSpeed: Stage2SimSpeed;
-  autoBudget: boolean;
-  autoGo: boolean;
-  autoBulldoze: boolean;
-  userSoundOn: boolean;
-};
+  /**
+   * Mirrors one authoritative classic map snapshot into runtime row-major tiles.
+   * Mirrors `Map[x][y]` ownership in `ref/micropolis/src/sim/s_alloc.c` and
+   * load/new-city map copy boundaries in `ref/micropolis/src/sim/s_fileio.c`
+   * and `ref/micropolis/src/sim/s_gen.c`.
+   */
+  private syncRuntimeTilesFromClassicMapLayer(): void {
+    const mapLayer = this.simContext.store.snapshot('map');
+    if (!(mapLayer instanceof Uint16Array)) {
+      throw new Error(
+        `expected Uint16Array map layer for runtime tile sync; got ${mapLayer.constructor.name}`,
+      );
+    }
 
-function tryDecodeImportedCity(cityBytes: Uint8Array): DecodedDemoCity | null {
-  try {
-    const city = decodeCityFileForMap(cityBytes, {
-      width: DEMO_WORLD_WIDTH,
-      height: DEMO_WORLD_HEIGHT,
+    copyClassicXMajorMapToRuntimeTiles(
+      mapLayer,
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+    );
+  }
+
+  /**
+   * Resolve and cache one scenario resource payload from canonical `snro.*` files.
+   * Mirrors `_load_file(fname, ResourceDir)` lookup identity from `LoadScenario`
+   * in `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: cache lifetime is host-process scoped, matching C resource reuse intent.
+   */
+  private loadScenarioResourceBytes(fileName: string): Promise<Uint8Array> {
+    const cached = this.scenarioResourceBytesCache.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const resourceUrl = getScenarioResourceUrl(fileName);
+    const pendingLoad = readBinaryResourceFromUrl(resourceUrl).catch(() => {
+      this.scenarioResourceBytesCache.delete(fileName);
+      throw new Error(`failed to load scenario resource ${fileName}`);
     });
-    const normalized = applyLoadNormalization(readCityMeta(city.misc));
-    const speed = normalized.simSpeed < 1 ? 3 : clampPlayableSpeed(normalized.simSpeed);
-
-    return {
-      mapTiles: city.map.slice(),
-      cityTime: normalized.cityTime,
-      totalFunds: normalized.totalFunds,
-      cityTax: normalized.cityTax,
-      paused: normalized.simSpeed <= 0,
-      simMetaSpeed: speed,
-      autoBudget: normalized.autoBudget,
-      autoGo: normalized.autoGo,
-      autoBulldoze: normalized.autoBulldoze,
-      userSoundOn: normalized.userSoundOn,
-    };
-  } catch {
-    return null;
+    this.scenarioResourceBytesCache.set(fileName, pendingLoad);
+    return pendingLoad;
   }
 }
 
@@ -1314,16 +1414,6 @@ function normalizePlayableSpeed(value: number): number {
     return 3;
   }
   return speed;
-}
-
-function clampPlayableSpeed(value: number): Stage2SimSpeed {
-  if (value <= 1) {
-    return 1;
-  }
-  if (value >= 3) {
-    return 3;
-  }
-  return 2;
 }
 
 /**
@@ -1463,6 +1553,49 @@ function buildSnapshotTileWordsFromRuntimeMap(
 }
 
 /**
+ * Copies classic Micropolis x-major map storage (`Map[x][y]`) into runtime row-major
+ * tile order for the browser projection buffer.
+ * Mirrors x-major ownership in `ref/micropolis/src/sim/s_alloc.c` and terrain writes in
+ * `ref/micropolis/src/sim/s_gen.c`.
+ * Difference: the runtime buffer stays row-major for canvas-friendly indexing.
+ */
+function copyClassicXMajorMapToRuntimeTiles(
+  sourceTileWords: Uint16Array,
+  runtimeTiles: Uint16Array,
+  width: number,
+  height: number,
+): void {
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const sourceIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      const runtimeIndex = y * width + x;
+      runtimeTiles[runtimeIndex] = sourceTileWords[sourceIndex] ?? 0;
+    }
+  }
+}
+
+/**
+ * Copies runtime row-major tile order into classic Micropolis x-major map storage.
+ * Mirrors contiguous `Map[x][y]` map ownership consumed by `saveFile` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: Stage 2 host runtime map is row-major for canvas convenience.
+ */
+function copyRuntimeRowMajorTilesToClassicXMajorMap(
+  runtimeTiles: Uint16Array,
+  destinationTileWords: Uint16Array,
+  width: number,
+  height: number,
+): void {
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const runtimeIndex = y * width + x;
+      const destinationIndex = getCoreBridgeV1SnapshotTileIndex(x, y, height);
+      destinationTileWords[destinationIndex] = runtimeTiles[runtimeIndex] ?? 0;
+    }
+  }
+}
+
+/**
  * Builds an initial deterministic tile baseline for the Stage 2 debug map view.
  * Mirrors map-buffer baseline setup intent from `ref/micropolis/src/sim/g_map.c`.
  * Difference: values are synthetic so UI work can proceed before full art parity.
@@ -1480,26 +1613,45 @@ function buildInitialDemoMapTiles(width: number, height: number): Uint16Array {
   return tiles;
 }
 
-/**
- * Builds a deterministic per-scenario map seed for the Stage 2 demo host.
- * Mirrors `LoadScenario` city reset intent in `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: map bytes are synthetic in this Stage 2 scripted host and do not
- * match Micropolis `snro.*` payloads 1:1.
- */
-function buildScenarioDemoMapTiles(scenarioId: number, width: number, height: number): Uint16Array {
-  const tiles = new Uint16Array(width * height);
-  const salt = (scenarioId & 0xff) << 8;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = y * width + x;
-      const band = ((x + scenarioId * 5) >> 2) & 63;
-      const stripe = ((y + scenarioId * 7) >> 1) & 63;
-      tiles[index] = (salt | (band << 3) | stripe) & 0xffff;
-    }
-  }
-  return tiles;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
+}
+
+function getScenarioResourceUrl(fileName: string): URL {
+  const resourceUrl = DEMO_SCENARIO_RESOURCE_URLS.get(fileName);
+  if (resourceUrl !== undefined) {
+    return resourceUrl;
+  }
+
+  throw new Error(`unsupported scenario file: ${fileName}`);
+}
+
+/**
+ * Build scenario resource URLs from canonical scenario metadata constants.
+ * Mirrors `LoadScenario` filename selection in `ref/micropolis/src/sim/s_fileio.c`,
+ * while resolving each `snro.*` payload to local `ref/micropolis/res`.
+ */
+function createScenarioResourceUrlTable(): ReadonlyMap<string, URL> {
+  return new Map(
+    SCENARIO_TABLE.map(({ fileName }) => [
+      fileName,
+      new URL(`../../../../../ref/micropolis/res/${fileName}`, import.meta.url),
+    ]),
+  );
+}
+
+async function readBinaryResourceFromUrl(resourceUrl: URL): Promise<Uint8Array> {
+  if (resourceUrl.protocol === 'file:') {
+    const fsPromisesSpecifier = 'node:fs/promises';
+    const fsPromises = (await import(
+      /* @vite-ignore */ fsPromisesSpecifier
+    )) as NodeFsPromisesModule;
+    return new Uint8Array(await fsPromises.readFile(resourceUrl));
+  }
+
+  const response = await fetch(resourceUrl);
+  if (!response.ok) {
+    throw new Error(`failed to fetch scenario resource ${resourceUrl}: ${response.status}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
 }

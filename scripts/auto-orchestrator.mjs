@@ -766,10 +766,23 @@ function readState(statePath) {
       failures: {},
       blocked: {},
       prUrls: {},
+      pendingRemote: {},
     };
   }
 
-  return JSON.parse(readFileSync(statePath, 'utf8'));
+  const parsed = JSON.parse(readFileSync(statePath, 'utf8'));
+  return {
+    cursor: 0,
+    failures: {},
+    blocked: {},
+    prUrls: {},
+    pendingRemote: {},
+    ...parsed,
+    failures: parsed.failures ?? {},
+    blocked: parsed.blocked ?? {},
+    prUrls: parsed.prUrls ?? {},
+    pendingRemote: parsed.pendingRemote ?? {},
+  };
 }
 
 /**
@@ -948,6 +961,70 @@ async function pushBranch(repoRoot, pkg, dryRun) {
 }
 
 /**
+ * Normalizes GitHub sync failures into concise, operator-readable warnings.
+ *
+ * Not from Micropolis C; this is orchestration error-reporting for remote operations.
+ */
+function formatGitHubSyncError(pkg, operation, error) {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const compactMessage = rawMessage
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 2)
+    .join(' | ');
+  const detail = compactMessage.length > 0 ? compactMessage : 'No additional details.';
+  return `${pkg.id} ${operation} failed; deferring remote sync. ${detail}`;
+}
+
+/**
+ * Runs best-effort branch push and PR update for one completed task.
+ *
+ * Not from Micropolis C; this allows task progression to continue during GitHub outages.
+ */
+async function syncGitHubForTask(mainRepoRoot, worktreeRoot, pkg, task, args) {
+  /** @type {string[]} */
+  const remoteSyncErrors = [];
+  let prUrl = null;
+  let pushSucceeded = args.skipPush;
+
+  if (!args.skipPush) {
+    try {
+      await pushBranch(worktreeRoot, pkg, args.dryRun);
+      pushSucceeded = true;
+    } catch (error) {
+      remoteSyncErrors.push(formatGitHubSyncError(pkg, 'push', error));
+    }
+  }
+
+  if (!args.skipPr) {
+    if (!pushSucceeded && !args.skipPush) {
+      remoteSyncErrors.push(
+        `${pkg.id} pr skipped because push did not succeed; will retry in a later sync pass.`,
+      );
+    } else {
+      try {
+        prUrl = await ensurePullRequest(
+          mainRepoRoot,
+          pkg,
+          task,
+          args.checks,
+          args.dryRun,
+          args.baseRef,
+        );
+      } catch (error) {
+        remoteSyncErrors.push(formatGitHubSyncError(pkg, 'pr', error));
+      }
+    }
+  }
+
+  return {
+    prUrl,
+    remoteSyncErrors,
+  };
+}
+
+/**
  * Executes one task iteration for a selected package.
  *
  * Not from Micropolis C; this coordinates Codex + checks + git/PR lifecycle.
@@ -975,6 +1052,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
           success: false,
           commitMessage: null,
           prUrl: null,
+          remoteSyncErrors: [],
         };
       }
 
@@ -984,6 +1062,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
           success: false,
           commitMessage: null,
           prUrl: null,
+          remoteSyncErrors: [],
         };
       }
 
@@ -993,29 +1072,17 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
           success: false,
           commitMessage: null,
           prUrl: null,
+          remoteSyncErrors: [],
         };
       }
 
-      if (!args.skipPush) {
-        await pushBranch(worktreeRoot, pkg, args.dryRun);
-      }
-
-      let prUrl = null;
-      if (!args.skipPr) {
-        prUrl = await ensurePullRequest(
-          mainRepoRoot,
-          pkg,
-          task,
-          args.checks,
-          args.dryRun,
-          args.baseRef,
-        );
-      }
+      const syncResult = await syncGitHubForTask(mainRepoRoot, worktreeRoot, pkg, task, args);
 
       return {
         success: true,
         commitMessage,
-        prUrl,
+        prUrl: syncResult.prUrl,
+        remoteSyncErrors: syncResult.remoteSyncErrors,
       };
     }
   }
@@ -1117,28 +1184,14 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       continue;
     }
 
-    if (!args.skipPush) {
-      // eslint-disable-next-line no-await-in-loop
-      await pushBranch(worktreeRoot, pkg, args.dryRun);
-    }
-
-    let prUrl = null;
-    if (!args.skipPr) {
-      // eslint-disable-next-line no-await-in-loop
-      prUrl = await ensurePullRequest(
-        mainRepoRoot,
-        pkg,
-        task,
-        args.checks,
-        args.dryRun,
-        args.baseRef,
-      );
-    }
+    // eslint-disable-next-line no-await-in-loop
+    const syncResult = await syncGitHubForTask(mainRepoRoot, worktreeRoot, pkg, task, args);
 
     return {
       success: true,
       commitMessage,
-      prUrl,
+      prUrl: syncResult.prUrl,
+      remoteSyncErrors: syncResult.remoteSyncErrors,
     };
   }
 
@@ -1146,7 +1199,74 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
     success: false,
     commitMessage: null,
     prUrl: null,
+    remoteSyncErrors: [],
   };
+}
+
+/**
+ * Retries pending push/PR operations after queue processing completes.
+ *
+ * Not from Micropolis C; this performs deferred GitHub synchronization for outage recovery.
+ */
+async function syncPendingRemote(mainRepoRoot, packages, args, state) {
+  if (args.dryRun || (args.skipPush && args.skipPr)) {
+    return;
+  }
+
+  const pendingEntries = Object.entries(state.pendingRemote ?? {});
+  if (pendingEntries.length === 0) {
+    return;
+  }
+
+  process.stdout.write(
+    `\n[remote-sync] Retrying ${pendingEntries.length} pending remote sync item(s).\n`,
+  );
+
+  const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
+
+  for (const [pkgId, pendingRecord] of pendingEntries) {
+    const pkg = packageById.get(pkgId);
+    if (!pkg) {
+      delete state.pendingRemote[pkgId];
+      continue;
+    }
+
+    // eslint-disable-next-line no-await-in-loop
+    const worktreeRoot = await ensureWorktree(mainRepoRoot, pkg, args.baseRef, args.dryRun);
+    const task = {
+      id: pendingRecord.taskId ?? null,
+      text: pendingRecord.taskText ?? 'deferred remote sync',
+    };
+
+    // eslint-disable-next-line no-await-in-loop
+    const syncResult = await syncGitHubForTask(mainRepoRoot, worktreeRoot, pkg, task, args);
+
+    if (syncResult.prUrl) {
+      state.prUrls[pkg.id] = syncResult.prUrl;
+    }
+
+    if (syncResult.remoteSyncErrors.length === 0) {
+      delete state.pendingRemote[pkg.id];
+      process.stdout.write(`[remote-sync] ${pkg.id} synchronized.\n`);
+      continue;
+    }
+
+    state.pendingRemote[pkg.id] = {
+      ...pendingRecord,
+      package: pkg.id,
+      branch: pkg.branch,
+      taskId: task.id,
+      taskText: task.text,
+      updatedAt: new Date().toISOString(),
+      errors: syncResult.remoteSyncErrors,
+    };
+    process.stdout.write(
+      `[remote-sync] ${pkg.id} still pending (${syncResult.remoteSyncErrors.length} issue(s)).\n`,
+    );
+    for (const warning of syncResult.remoteSyncErrors) {
+      process.stdout.write(`[warn] ${warning}\n`);
+    }
+  }
 }
 
 /**
@@ -1225,11 +1345,27 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       if (result.prUrl) {
         state.prUrls[selected.pkg.id] = result.prUrl;
       }
+
+      if (result.remoteSyncErrors.length > 0) {
+        state.pendingRemote[selected.pkg.id] = {
+          package: selected.pkg.id,
+          branch: selected.pkg.branch,
+          taskId: selected.status.nextTask.id ?? null,
+          taskText: selected.status.nextTask.text,
+          updatedAt: new Date().toISOString(),
+          errors: result.remoteSyncErrors,
+        };
+      } else {
+        delete state.pendingRemote[selected.pkg.id];
+      }
       process.stdout.write(
         `[done] ${selected.pkg.id} ${selected.status.nextTask.id ?? 'task'} committed${
           result.prUrl ? ` | PR: ${result.prUrl}` : ''
         }\n`,
       );
+      for (const warning of result.remoteSyncErrors) {
+        process.stdout.write(`[warn] ${warning}\n`);
+      }
 
       if (args.once) {
         writeState(statePath, state);
@@ -1256,12 +1392,27 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
     iterations += 1;
   }
 
+  await syncPendingRemote(mainRepoRoot, packages, args, state);
   writeState(statePath, state);
 
   process.stdout.write('\nOrchestrator summary:\n');
   for (const pkg of packages) {
     const prUrl = state.prUrls[pkg.id] ?? null;
     process.stdout.write(`- ${pkg.id}: ${prUrl ? `PR ${prUrl}` : 'no PR recorded yet'}\n`);
+  }
+
+  const pendingRemoteEntries = Object.values(state.pendingRemote ?? {});
+  if (pendingRemoteEntries.length > 0) {
+    process.stdout.write('\nPending remote sync:\n');
+    for (const entry of pendingRemoteEntries) {
+      const lastError =
+        Array.isArray(entry.errors) && entry.errors.length > 0 ? entry.errors[0] : null;
+      process.stdout.write(
+        `- ${entry.package}: branch=${entry.branch} updated=${entry.updatedAt}${
+          lastError ? ` | lastError=${lastError}` : ''
+        }\n`,
+      );
+    }
   }
 }
 

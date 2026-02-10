@@ -62,6 +62,7 @@ describe('load orchestration', () => {
     expect(state.CityTime).toBe(normalized.cityTime);
     expect(state.CityTax).toBe(normalized.cityTax);
     expect(state.SimSpeed).toBe(normalized.simSpeed);
+    expect(state.SimMetaSpeed).toBe(normalized.simSpeed);
     expect(state.TotalFunds).toBe(normalized.totalFunds);
     expect(state.policePercent).toBe(1);
     expect(state.firePercent).toBe(1);
@@ -113,6 +114,7 @@ describe('load orchestration', () => {
     expect(state.CityTime).toBe(290);
     expect(state.TotalFunds).toBe(20000);
     expect(state.SimSpeed).toBe(3);
+    expect(state.SimMetaSpeed).toBe(3);
     expect(state.CityTax).toBe(7);
 
     // `simLoadInit` in `packages/sim-core/src/systems/init.ts` assigns scenario timers.

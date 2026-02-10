@@ -22,12 +22,19 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Lint
-        run: pnpm lint
+        run: pnpm lint:check
+      - name: Format
+        run: pnpm format:check
       - name: Build Web (Generate Routes)
         run: pnpm --filter @city/web build
       - name: Typecheck
         run: pnpm typecheck
-      - name: Test
+      - name: Test (Non-Parity)
         run: pnpm test
+      - name: Test (Parity + Heavy Replay)
+        env:
+          CITY_TEST_PARITY: 1
+          CITY_TEST_PARITY_REPLAY_HEAVY: 1
+        run: pnpm test-parity
       - name: Build
         run: pnpm build

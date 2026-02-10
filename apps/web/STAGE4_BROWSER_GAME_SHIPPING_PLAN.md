@@ -347,38 +347,38 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make lifecycle and persistence fully functional from Stage 4 controls.
+- [x] Make lifecycle and persistence fully functional from Stage 4 controls.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/s_init.c` (new-city/reset lifecycle)
-- [ ] `ref/micropolis/src/sim/s_gen.c` (map generation/reset behaviors)
-- [ ] `ref/micropolis/src/sim/s_fileio.c` (`loadFile`, `saveFile`, `LoadCity`, `LoadScenario`)
-- [ ] `ref/micropolis/src/sim/w_sim.c` (command routing for lifecycle/io)
+- [x] `ref/micropolis/src/sim/s_init.c` (new-city/reset lifecycle)
+- [x] `ref/micropolis/src/sim/s_gen.c` (map generation/reset behaviors)
+- [x] `ref/micropolis/src/sim/s_fileio.c` (`loadFile`, `saveFile`, `LoadCity`, `LoadScenario`)
+- [x] `ref/micropolis/src/sim/w_sim.c` (command routing for lifecycle/io)
 
 ### TS references to review
 
-- [ ] `packages/sim-io/src/load.ts`
-- [ ] `packages/sim-io/src/save.ts`
-- [ ] `packages/sim-io/src/scenarios.ts`
-- [ ] `apps/web/src/game/runtime.persistence.test.ts`
-- [ ] `apps/web/src/routes/index.tsx`
+- [x] `packages/sim-io/src/load.ts`
+- [x] `packages/sim-io/src/save.ts`
+- [x] `packages/sim-io/src/scenarios.ts`
+- [x] `apps/web/src/game/runtime.persistence.test.ts`
+- [x] `apps/web/src/routes/index.tsx`
 
 ### Implementation checklist
 
-- [ ] Implement Stage 4 `new-city` command path using real sim init + terrain reset flow.
-- [ ] Implement Stage 4 save command path using `sim-io` C-style save packing.
-- [ ] Implement Stage 4 load command path using `sim-io` C-style load orchestration.
-- [ ] Implement scenario start path using `snro.*` data and scenario metadata constants.
-- [ ] Ensure save/load round-trip restores map and scalar game state.
+- [x] Implement Stage 4 `new-city` command path using real sim init + terrain reset flow.
+- [x] Implement Stage 4 save command path using `sim-io` C-style save packing.
+- [x] Implement Stage 4 load command path using `sim-io` C-style load orchestration.
+- [x] Implement scenario start path using `snro.*` data and scenario metadata constants.
+- [x] Ensure save/load round-trip restores map and scalar game state.
 
 ### Verification checklist
 
-- [ ] `apps/web/src/game/runtime.persistence.test.ts` passes with Stage 4 authority.
-- [ ] `packages/sim-io/src/load.test.ts` and `packages/sim-io/src/save.test.ts` pass.
-- [ ] `packages/sim-io/src/scenarios.test.ts` passes.
-- [ ] Manual: save city, mutate state, load city, confirm restored state.
-- [ ] Manual: each scenario starts with expected year/funds/speed.
+- [x] `apps/web/src/game/runtime.persistence.test.ts` passes with Stage 4 authority.
+- [x] `packages/sim-io/src/load.test.ts` and `packages/sim-io/src/save.test.ts` pass.
+- [x] `packages/sim-io/src/scenarios.test.ts` passes.
+- [x] Manual: save city, mutate state, load city, confirm restored state.
+- [x] Manual: each scenario starts with expected year/funds/speed.
 
 ---
 
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
