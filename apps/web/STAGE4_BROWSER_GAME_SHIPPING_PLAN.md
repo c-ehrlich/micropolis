@@ -467,7 +467,7 @@ Deletion execution notes:
 ### C references to review
 
 - [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps`, flag clearing)
-- [ ] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
+- [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
 - [ ] `ref/micropolis/src/sim/w_map.c` (pan/map interaction behaviors)
 - [ ] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table)
 
@@ -572,4 +572,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-

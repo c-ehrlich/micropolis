@@ -69,6 +69,64 @@ export interface MapInvalidationState {
 }
 
 /**
+ * Minimal mutable state required by `s_scan.c`-mapped `NewMapFlags` producers.
+ * Mirrors the `NewMapFlags[NMAPS]` storage contract in
+ * `ref/micropolis/src/sim/s_scan.c`.
+ */
+export interface MapInvalidationFlagState {
+  NewMapFlags: Uint8Array;
+}
+
+const markMapFlags = (
+  state: MapInvalidationFlagState,
+  flags: ReadonlyArray<MapFlagId>,
+): void => {
+  for (const flag of flags) {
+    state.NewMapFlags[MAP_FLAGS[flag]] = 1;
+  }
+};
+
+/**
+ * Mark dynamic and fire coverage map modes dirty after fire-station analysis.
+ * Mirrors `FireAnalysis` in `ref/micropolis/src/sim/s_scan.c`.
+ * Parity note: this is a 1:1 port of `NewMapFlags[DYMAP] = NewMapFlags[FIMAP] = 1`.
+ */
+export function markFireAnalysisMapFlags(state: MapInvalidationFlagState): void {
+  markMapFlags(state, ['DYMAP', 'FIMAP']);
+}
+
+/**
+ * Mark dynamic, population density, and growth-rate map modes dirty after
+ * population density scan.
+ * Mirrors `PopDenScan` in `ref/micropolis/src/sim/s_scan.c`.
+ * Parity note: this is a 1:1 port of
+ * `NewMapFlags[DYMAP] = NewMapFlags[PDMAP] = NewMapFlags[RGMAP] = 1`.
+ */
+export function markPopDenScanMapFlags(state: MapInvalidationFlagState): void {
+  markMapFlags(state, ['DYMAP', 'PDMAP', 'RGMAP']);
+}
+
+/**
+ * Mark dynamic, pollution, and land-value map modes dirty after PTL scan.
+ * Mirrors `PTLScan` in `ref/micropolis/src/sim/s_scan.c`.
+ * Parity note: this is a 1:1 port of
+ * `NewMapFlags[DYMAP] = NewMapFlags[PLMAP] = NewMapFlags[LVMAP] = 1`.
+ */
+export function markPTLScanMapFlags(state: MapInvalidationFlagState): void {
+  markMapFlags(state, ['DYMAP', 'PLMAP', 'LVMAP']);
+}
+
+/**
+ * Mark dynamic, crime, and police map modes dirty after crime scan.
+ * Mirrors `CrimeScan` in `ref/micropolis/src/sim/s_scan.c`.
+ * Parity note: this is a 1:1 port of
+ * `NewMapFlags[DYMAP] = NewMapFlags[CRMAP] = NewMapFlags[POMAP] = 1`.
+ */
+export function markCrimeScanMapFlags(state: MapInvalidationFlagState): void {
+  markMapFlags(state, ['DYMAP', 'CRMAP', 'POMAP']);
+}
+
+/**
  * Build one redraw plan from C-compatible invalidation signals plus an optional
  * map patch.
  * Mirrors map invalidation gating in `DoUpdateMap` (`ref/micropolis/src/sim/w_map.c`).

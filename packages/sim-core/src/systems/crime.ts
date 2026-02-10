@@ -1,5 +1,5 @@
 import { World } from '../core/constants.ts';
-import { MAP_FLAGS } from '../core/map-flags.ts';
+import { markCrimeScanMapFlags } from '../core/map-invalidation.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 
@@ -110,7 +110,5 @@ export function crimeScan(state: SimState, context: SimContext): void {
     }
   }
 
-  state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.CRMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.POMAP] = 1;
+  markCrimeScanMapFlags(state);
 }

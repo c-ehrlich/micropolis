@@ -5,6 +5,10 @@ import { MAP_FLAG_COUNT, MAP_FLAGS } from './map-flags.ts';
 import {
   consumeMapInvalidationCycle,
   consumeMapRedrawPlan,
+  markCrimeScanMapFlags,
+  markFireAnalysisMapFlags,
+  markPTLScanMapFlags,
+  markPopDenScanMapFlags,
   planMapRedraw,
 } from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
@@ -232,6 +236,55 @@ describe('consumeMapRedrawPlan', () => {
 
     expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
     expect(state.NewMapFlags[extensionSlot]).toBe(9);
+  });
+});
+
+describe('scan map-flag producers', () => {
+  it('matches FireAnalysis NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markFireAnalysisMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.FIMAP]).toBe(1);
+  });
+
+  it('matches PopDenScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markPopDenScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.RGMAP]).toBe(1);
+  });
+
+  it('matches PTLScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markPTLScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.LVMAP]).toBe(1);
+  });
+
+  it('matches CrimeScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markCrimeScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.CRMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.POMAP]).toBe(1);
   });
 });
 
