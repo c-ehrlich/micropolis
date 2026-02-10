@@ -1,5 +1,5 @@
 import { World } from '../core/constants.ts';
-import { MAP_FLAGS } from '../core/map-flags.ts';
+import { markFireAnalysisMapFlags } from '../core/map-invalidation.ts';
 import type { MapStore } from '../core/map-store.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
@@ -57,6 +57,5 @@ export function fireAnalysis(state: SimState, context: SimContext): void {
     }
   }
 
-  state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.FIMAP] = 1;
+  markFireAnalysisMapFlags(state);
 }

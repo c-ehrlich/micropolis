@@ -5,7 +5,12 @@ import { MAP_FLAG_COUNT, MAP_FLAGS } from './map-flags.ts';
 import {
   consumeMapInvalidationCycle,
   consumeMapRedrawPlan,
+  markCrimeScanMapFlags,
+  markFireAnalysisMapFlags,
+  markPopDenScanMapFlags,
+  markPTLScanMapFlags,
   planMapRedraw,
+  resolveMapFlagForMapState,
 } from './map-invalidation.ts';
 import type { Patch } from './map-store.ts';
 
@@ -60,6 +65,26 @@ describe('planMapRedraw', () => {
       newMap: 0,
       newMapFlags,
       mapPatch: createMapPatch([mapIndex(10, 10)]),
+    });
+
+    expect(plan).toEqual({
+      reason: 'map-flag',
+      fullRedraw: true,
+      dirtyRects: [],
+      consumedFlags: ['PDMAP'],
+    });
+  });
+
+  it('resolves active map flag from map_state using the g_map.c draw-mode table', () => {
+    const newMapFlags = new Uint8Array(15);
+    // `PDMAP` is map_state 6 in `sim.h`/`g_map.c` (`setUpMapProcs` table order).
+    newMapFlags[MAP_FLAGS.PDMAP] = 1;
+
+    const plan = planMapRedraw({
+      activeMapState: 6,
+      newMap: 0,
+      newMapFlags,
+      mapPatch: createMapPatch([mapIndex(4, 4)]),
     });
 
     expect(plan).toEqual({
@@ -178,6 +203,21 @@ describe('planMapRedraw', () => {
   });
 });
 
+describe('resolveMapFlagForMapState', () => {
+  it('maps valid C map_state indexes to their NewMapFlags slot ids', () => {
+    // `ALMAP=0`, `PLMAP=9`, and `DYMAP=14` are defined in `sim.h` for map modes.
+    expect(resolveMapFlagForMapState(0)).toBe('ALMAP');
+    expect(resolveMapFlagForMapState(9)).toBe('PLMAP');
+    expect(resolveMapFlagForMapState(14)).toBe('DYMAP');
+  });
+
+  it('returns null for out-of-range map_state indexes', () => {
+    // `MapCmdMapState` bounds in `w_map.c`: `state < 0 || state >= NMAPS`.
+    expect(resolveMapFlagForMapState(-1)).toBeNull();
+    expect(resolveMapFlagForMapState(MAP_FLAG_COUNT)).toBeNull();
+  });
+});
+
 describe('consumeMapRedrawPlan', () => {
   it('clears NewMap and all C map-flag slots for the update cycle', () => {
     const state = {
@@ -196,6 +236,26 @@ describe('consumeMapRedrawPlan', () => {
     expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(0);
   });
 
+  it('clears C map invalidation slots even when no per-view metadata is provided', () => {
+    const extensionSlot = MAP_FLAG_COUNT;
+    const state = {
+      NewMap: 1,
+      // C `sim_update_maps` clears `NewMapFlags[0..NMAPS-1]` only.
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT + 1),
+    };
+    state.NewMapFlags[MAP_FLAGS.ALMAP] = 1;
+    state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
+    state.NewMapFlags[extensionSlot] = 6;
+
+    // C has no per-view consumed flag list; clear happens once after map-view loop.
+    consumeMapRedrawPlan(state);
+
+    expect(state.NewMap).toBe(0);
+    expect(state.NewMapFlags[MAP_FLAGS.ALMAP]).toBe(0);
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
+    expect(state.NewMapFlags[extensionSlot]).toBe(6);
+  });
+
   it('only clears the C NMAPS flag range', () => {
     const extensionSlot = MAP_FLAG_COUNT;
     const state = {
@@ -212,6 +272,55 @@ describe('consumeMapRedrawPlan', () => {
 
     expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(0);
     expect(state.NewMapFlags[extensionSlot]).toBe(9);
+  });
+});
+
+describe('scan map-flag producers', () => {
+  it('matches FireAnalysis NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markFireAnalysisMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.FIMAP]).toBe(1);
+  });
+
+  it('matches PopDenScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markPopDenScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.RGMAP]).toBe(1);
+  });
+
+  it('matches PTLScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markPTLScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.LVMAP]).toBe(1);
+  });
+
+  it('matches CrimeScan NewMapFlags writes from s_scan.c', () => {
+    const state = {
+      NewMapFlags: new Uint8Array(MAP_FLAG_COUNT),
+    };
+
+    markCrimeScanMapFlags(state);
+
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.CRMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.POMAP]).toBe(1);
   });
 });
 

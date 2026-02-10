@@ -8,6 +8,7 @@ import {
   createRng,
   createSimContext,
   createSimState,
+  MAP_FLAGS,
   resetForNewCityFromSeed,
   type SimContext,
   type SimState,
@@ -71,6 +72,67 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       runtime.disconnect();
       vi.useRealTimers();
     }
+  });
+
+  it('consumes redraw plans on both patch and full-redraw authority paths', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    const mapRedrawReasons: string[] = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope?.kind !== 'patch') {
+        return;
+      }
+
+      const mapPayload = event.envelope.payload.map;
+      if (mapPayload === undefined || !('redrawPlan' in mapPayload)) {
+        return;
+      }
+
+      const redrawPlan = mapPayload.redrawPlan;
+      if (redrawPlan !== undefined) {
+        mapRedrawReasons.push(redrawPlan.reason);
+      }
+    });
+
+    runtime.connect();
+
+    const authority = host as unknown as {
+      simState: {
+        NewMap: number;
+        NewMapFlags: Uint8Array;
+      };
+    };
+    // `DoUpdateMap` in `w_map.c` keys full redraw from the active draw mode only
+    // (`ALMAP` for Stage 4), while `sim_update_maps` in `sim.c` clears all C
+    // `NewMapFlags[0..NMAPS-1]` slots each cycle.
+    authority.simState.NewMapFlags[MAP_FLAGS.PDMAP] = 1;
+
+    runtime.sendCommand('stage9-redraw-base', {
+      kind: 'tool',
+      tool: 'road',
+      x: 10,
+      y: 10,
+    });
+    expect(mapRedrawReasons.at(-1)).toBe('patch-rects');
+    expect(runtime.getState().mapState.drawMode).toBe('patch');
+    expect(authority.simState.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(0);
+
+    authority.simState.NewMap = 1;
+
+    runtime.sendCommand('stage9-redraw-new-map', {
+      kind: 'tool',
+      tool: 'road',
+      x: 11,
+      y: 10,
+    });
+
+    expect(mapRedrawReasons.at(-1)).toBe('new-map');
+    expect(runtime.getState().mapState.drawMode).toBe('snapshot');
+    expect(authority.simState.NewMap).toBe(0);
+    expect(Array.from(authority.simState.NewMapFlags).every((flag) => flag === 0)).toBe(true);
+
+    runtime.disconnect();
   });
 
   it('advances ANIMBIT tiles only when DoAnimation is enabled', () => {

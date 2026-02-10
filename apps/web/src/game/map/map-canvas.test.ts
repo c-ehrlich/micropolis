@@ -2,11 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
+  computeMapCanvasZoomFromWheel,
+  consumeQueuedMapCanvasFrame,
+  continueMapCanvasPanDrag,
   forEachMapCanvasPatchTileIndex,
+  getMapCanvasCameraMetrics,
   getMapCanvasLayerZIndex,
+  isMapCanvasZoomWheelGesture,
+  normalizeMapCanvasWheelDeltaToPixels,
   projectRealtimeOverlaySprites,
+  scaleMapPanDeltaToWorldPixels,
+  scaleWorldPanDeltaToCanvasPixels,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
+  startMapCanvasPanDrag,
+  zoomMapCanvasCameraOffsetAtAnchor,
 } from './map-canvas.tsx';
 import {
   lookupStage8TileSprite,
@@ -57,6 +67,18 @@ function applyPatchTileVisualTokens({
 }
 
 describe('map canvas draw-mode selection', () => {
+  it('consumes queued frames as single-use entries to avoid stale redraw coalescing', () => {
+    const queuedFrameRef: { current: { epoch: number } | null } = {
+      current: { epoch: 7 },
+    };
+
+    const first = consumeQueuedMapCanvasFrame(queuedFrameRef);
+    const second = consumeQueuedMapCanvasFrame(queuedFrameRef);
+
+    expect(first).toEqual({ epoch: 7 });
+    expect(second).toBeNull();
+  });
+
   it('keeps full redraw ownership for authoritative snapshot frames', () => {
     expect(
       selectMapCanvasDrawMode({
@@ -90,9 +112,9 @@ describe('map canvas draw-mode selection', () => {
     ).toBe('snapshot');
   });
 
-  it('forces full redraw when runtime skipped intermediate map epochs', () => {
-    // Stage 4 runtime envelopes can be batched by React state updates; when
-    // more than one map epoch is skipped, redraw from full authoritative tiles.
+  it('keeps patch redraw when runtime skipped intermediate map epochs', () => {
+    // Stage 9 coalesces queued map dirty coverage across skipped epochs, so
+    // patch repaint remains sufficient without forcing full-canvas redraw.
     expect(
       selectMapCanvasDrawMode({
         mapDrawMode: 'patch',
@@ -100,7 +122,7 @@ describe('map canvas draw-mode selection', () => {
         lastRenderedEpoch: 6,
         resized: false,
       }),
-    ).toBe('snapshot');
+    ).toBe('patch');
   });
 
   it('keeps patch redraw when epochs are contiguous', () => {
@@ -299,6 +321,200 @@ describe('map canvas draw-mode selection', () => {
   });
 });
 
+describe('map canvas pan parity', () => {
+  it('matches MapCmdPanTo 16/3 map-to-world pan scaling with truncation toward zero', () => {
+    // `MapCmdPanTo` in `w_map.c` applies `dx = dx * 16 / 3` using C integer math.
+    expect(scaleMapPanDeltaToWorldPixels(3)).toBe(16);
+    expect(scaleMapPanDeltaToWorldPixels(2)).toBe(10);
+    expect(scaleMapPanDeltaToWorldPixels(-3)).toBe(-16);
+    expect(scaleMapPanDeltaToWorldPixels(-2)).toBe(-10);
+  });
+
+  it('converts Micropolis world-pixel pan deltas into Stage 4 canvas pixels', () => {
+    // Micropolis editor panning uses 16 world pixels per tile (`w_x.c`); with
+    // Stage 4 `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
+    expect(scaleWorldPanDeltaToCanvasPixels(16, 6)).toBe(6);
+    expect(scaleWorldPanDeltaToCanvasPixels(10, 6)).toBe(3);
+    expect(scaleWorldPanDeltaToCanvasPixels(-16, 6)).toBe(-6);
+  });
+
+  it('keeps drag pan deltas aligned with MapCmdPanStart and MapCmdPanTo sampling', () => {
+    const dragStart = startMapCanvasPanDrag(40, 50);
+    const dragStep = continueMapCanvasPanDrag({
+      dragState: dragStart,
+      x: 43,
+      y: 47,
+      tileSize: 6,
+    });
+
+    // C path: `dx=3 -> 3*16/3=16`, `dy=-3 -> -3*16/3=-16` in `w_map.c`.
+    expect(dragStep.deltaCanvasX).toBe(6);
+    expect(dragStep.deltaCanvasY).toBe(-6);
+    expect(dragStep.nextDragState).toEqual({
+      lastX: 43,
+      lastY: 47,
+    });
+  });
+
+  it('returns zero deltas when pointer sample does not move', () => {
+    const dragStep = continueMapCanvasPanDrag({
+      dragState: startMapCanvasPanDrag(12, 20),
+      x: 12,
+      y: 20,
+      tileSize: 6,
+    });
+
+    expect(dragStep.deltaCanvasX).toBe(0);
+    expect(dragStep.deltaCanvasY).toBe(0);
+  });
+});
+
+describe('map canvas camera metrics', () => {
+  it('applies zoom scaling before viewport clipping and pan-bounds resolution', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 120,
+      mapHeight: 100,
+      tileSize: 6,
+      zoom: 2,
+    });
+
+    expect(metrics.mapWidthPx).toBe(720);
+    expect(metrics.mapHeightPx).toBe(600);
+    expect(metrics.scaledMapWidthPx).toBe(1440);
+    expect(metrics.scaledMapHeightPx).toBe(1200);
+    expect(metrics.viewportWidthPx).toBe(640);
+    expect(metrics.viewportHeightPx).toBe(480);
+    expect(metrics.maxCameraOffsetX).toBe(800);
+    expect(metrics.maxCameraOffsetY).toBe(720);
+  });
+
+  it('keeps pan bounds at zero when scaled map already fits viewport', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 40,
+      mapHeight: 30,
+      tileSize: 4,
+      zoom: 0.5,
+    });
+
+    expect(metrics.maxCameraOffsetX).toBe(0);
+    expect(metrics.maxCameraOffsetY).toBe(0);
+  });
+});
+
+describe('map canvas wheel and zoom controls', () => {
+  it('normalizes wheel deltas from line/page modes into pixel units', () => {
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 2,
+        deltaY: -3,
+        deltaMode: 0,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 2,
+      deltaY: -3,
+    });
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 2,
+        deltaY: -3,
+        deltaMode: 1,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 32,
+      deltaY: -48,
+    });
+    expect(
+      normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: 1,
+        deltaY: -1,
+        deltaMode: 2,
+        viewportWidthPx: 640,
+        viewportHeightPx: 480,
+      }),
+    ).toEqual({
+      deltaX: 640,
+      deltaY: -480,
+    });
+  });
+
+  it('uses ctrl/meta wheel gestures as zoom input', () => {
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: true,
+        metaKey: false,
+      }),
+    ).toBe(true);
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: false,
+        metaKey: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMapCanvasZoomWheelGesture({
+        ctrlKey: false,
+        metaKey: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('grows and shrinks zoom from wheel delta while clamping supported bounds', () => {
+    const zoomedIn = computeMapCanvasZoomFromWheel({
+      currentZoom: 1,
+      wheelDeltaYPx: -120,
+    });
+    const zoomedOut = computeMapCanvasZoomFromWheel({
+      currentZoom: 1,
+      wheelDeltaYPx: 120,
+    });
+    expect(zoomedIn).toBeGreaterThan(1);
+    expect(zoomedOut).toBeLessThan(1);
+
+    expect(
+      computeMapCanvasZoomFromWheel({
+        currentZoom: 3.9,
+        wheelDeltaYPx: -1000,
+      }),
+    ).toBe(4);
+    expect(
+      computeMapCanvasZoomFromWheel({
+        currentZoom: 0.6,
+        wheelDeltaYPx: 1000,
+      }),
+    ).toBe(0.5);
+  });
+
+  it('keeps the same map point under the zoom anchor during zoom transitions', () => {
+    // Browser-only zoom divergence: C map controls in `w_map.c` are pan-only.
+    expect(
+      zoomMapCanvasCameraOffsetAtAnchor({
+        currentOffset: { x: 100, y: 50 },
+        anchor: { x: 200, y: 100 },
+        currentZoom: 1,
+        nextZoom: 2,
+      }),
+    ).toEqual({
+      x: 400,
+      y: 200,
+    });
+    expect(
+      zoomMapCanvasCameraOffsetAtAnchor({
+        currentOffset: { x: 123, y: 456 },
+        anchor: { x: 320, y: 240 },
+        currentZoom: 1.5,
+        nextZoom: 1.5,
+      }),
+    ).toEqual({
+      x: 123,
+      y: 456,
+    });
+  });
+});
+
 describe('map canvas snapshot/patch visual parity', () => {
   it('keeps final tile visuals identical between snapshot redraw and dirty-rect patch redraw', () => {
     const width = 4;
@@ -365,6 +581,33 @@ describe('map canvas snapshot/patch visual parity', () => {
     });
 
     expect(patchVisuals).toEqual(snapshotVisuals);
+  });
+});
+
+describe('map canvas patch index iteration', () => {
+  it('unions dirty rect and dirty index coverage without duplicate tile visits', () => {
+    const visited: number[] = [];
+    forEachMapCanvasPatchTileIndex(
+      {
+        // Runtime patch redraw uses row-major indexing (`y * width + x`) from
+        // `apps/web/src/game/runtime/map-state.ts` snapshot/patch projection.
+        width: 4,
+        height: 3,
+        // Rects intentionally overlap at index 6 to assert de-dup behavior.
+        dirtyRects: [
+          { x: 1, y: 0, width: 2, height: 2 },
+          { x: 2, y: 1, width: 2, height: 2 },
+        ],
+        // Includes one out-of-bounds slot (`99`) and two already-covered tiles.
+        dirtyTileIndexes: Uint32Array.from([0, 5, 11, 99]),
+      },
+      (tileIndex) => {
+        visited.push(tileIndex);
+      },
+    );
+
+    expect(visited).toEqual([1, 2, 5, 6, 7, 10, 11, 0]);
+    expect(new Set(visited).size).toBe(visited.length);
   });
 });
 

@@ -1,5 +1,5 @@
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
-import { MAP_FLAGS } from '../core/map-flags.ts';
+import { markPopDenScanMapFlags } from '../core/map-invalidation.ts';
 import type { MapStore } from '../core/map-store.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
@@ -215,7 +215,5 @@ export function popDenScan(state: SimState, context: SimContext): void {
   state.CCx2 = state.CCx >> 1;
   state.CCy2 = state.CCy >> 1;
 
-  state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.PDMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.RGMAP] = 1;
+  markPopDenScanMapFlags(state);
 }

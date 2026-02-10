@@ -8,7 +8,9 @@ import {
   STAGE2_SCENARIO_CHOICES,
   STAGE7_MANUAL_REALTIME_EVENT_CHOICES,
 } from '../game/runtime/demo-map-host.ts';
+import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
+  coalesceQueuedRuntimeMapState,
   createWebHostRuntime,
   PLAYABLE_TOOL_SPECS,
   type RuntimeHudMessageEvent,
@@ -67,6 +69,29 @@ function Stage4RuntimePanel() {
   const host = useMemo(() => new DemoMapHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
+  /**
+   * Coalesces host-driven runtime projections to one browser paint commit.
+   * Mirrors Micropolis cadence where map/head updates are consumed on UI update
+   * boundaries (`sim_update_maps` / `DoUpdateHeads`) rather than every internal
+   * simulation mutation (`ref/micropolis/src/sim/sim.c`, `w_update.c`).
+   */
+  const stateCommitDispatcher = useMemo(
+    () =>
+      createCoalescedStateDispatcher<WebRuntimeState>({
+        scheduleFrame: (flush) => requestAnimationFrame(flush),
+        cancelFrame: (frameHandle) => cancelAnimationFrame(frameHandle),
+        commitState: (nextState) => {
+          setState(nextState);
+        },
+        coalesceQueuedState: (queuedState, nextState) => {
+          return {
+            ...nextState,
+            mapState: coalesceQueuedRuntimeMapState(queuedState.mapState, nextState.mapState),
+          };
+        },
+      }),
+    [],
+  );
   const [activeTool, setActiveTool] = useState<Stage2ToolName>('road');
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
     STAGE2_SCENARIO_CHOICES[0]?.id ?? 1,
@@ -80,7 +105,7 @@ function Stage4RuntimePanel() {
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe((event) => {
-      setState(event.state);
+      stateCommitDispatcher.queue(event.state);
 
       if (event.envelope?.kind !== 'patch') {
         return;
@@ -100,9 +125,10 @@ function Stage4RuntimePanel() {
     runtime.connect();
     return () => {
       unsubscribe();
+      stateCommitDispatcher.dispose();
       runtime.disconnect();
     };
-  }, [runtime]);
+  }, [runtime, stateCommitDispatcher]);
 
   const controlsDisabled = state.phase !== 'ready';
   const reconnectDisabled =

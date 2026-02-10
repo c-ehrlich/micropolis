@@ -462,35 +462,40 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make Stage 4 responsive and stable during extended play.
+- [x] Make Stage 4 responsive and stable during extended play.
+- Stage 9 update (2026-02-10): restored `DoSimInit` bootstrap parity for `ref/micropolis/src/sim/s_scan.c` `NewMapFlags` producers (`PTLScan`, `CrimeScan`, `PopDenScan`, `FireAnalysis`) on the default sim-core path.
+- Stage 9 update (2026-02-10): wired redraw planning to resolve active map mode from the `g_map.c` draw-mode table (`map_state` -> `NewMapFlags` slot) for `planMapRedraw` parity.
+- Stage 9 update (2026-02-10): completed a 10+ minute browser play session (continuous sim ticks with pan/zoom/tool use/resync checks) with no runaway latency growth or full-canvas redraw artifact regressions.
+- Stage 9 update (2026-02-10): fixed Stage 4 map-frame queue consumption so rendered patch frames are cleared after each paint; this prevents stale dirty-region carryover from degrading long-session redraw latency.
+- Stage 9 update (2026-02-10): hardened patch redraw tile iteration to union + dedupe dirty-rect and dirty-index coverage, preventing missed tile refreshes and redundant redraw work during long mixed invalidation sessions.
 
 ### C references to review
 
-- [ ] `ref/micropolis/src/sim/sim.c` (`sim_update_maps`, flag clearing)
-- [ ] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
-- [ ] `ref/micropolis/src/sim/w_map.c` (pan/map interaction behaviors)
-- [ ] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table)
+- [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps`, flag clearing)
+- [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
+- [x] `ref/micropolis/src/sim/w_map.c` (pan/map interaction behaviors)
+- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table, checked for Stage 9 parity)
 
 ### TS references to review
 
-- [ ] `packages/sim-core/src/core/map-invalidation.ts`
-- [ ] `packages/sim-core/src/core/map-invalidation.test.ts`
-- [ ] `apps/web/src/game/map/map-canvas.tsx`
-- [ ] `apps/web/src/routes/index.tsx`
-- [ ] `packages/sim-ui/IMPORTANT.md`
+- [x] `packages/sim-core/src/core/map-invalidation.ts`
+- [x] `packages/sim-core/src/core/map-invalidation.test.ts`
+- [x] `apps/web/src/game/map/map-canvas.tsx`
+- [x] `apps/web/src/routes/index.tsx`
+- [x] `packages/sim-ui/IMPORTANT.md`
 
 ### Implementation checklist
 
-- [ ] Use `planMapRedraw` + `consumeMapRedrawPlan` end-to-end from authority output to renderer.
-- [ ] Add pan/zoom controls suitable for desktop and laptop touchpads.
-- [ ] Ensure base tiles + overlays + HUD remain responsive under continuous ticks.
-- [ ] Prevent full-canvas flashing when patch/dirty redraw is sufficient.
+- [x] Use `planMapRedraw` + `consumeMapRedrawPlan` end-to-end from authority output to renderer.
+- [x] Add pan/zoom controls suitable for desktop and laptop touchpads.
+- [x] Ensure base tiles + overlays + HUD remain responsive under continuous ticks.
+- [x] Prevent full-canvas flashing when patch/dirty redraw is sufficient.
 
 ### Verification checklist
 
-- [ ] `packages/sim-core/src/core/map-invalidation.test.ts` passes.
-- [ ] Add web-level tests for redraw-plan consumption on patch vs full redraw paths.
-- [ ] Manual: 10+ minute session without runaway latency or redraw artifacts.
+- [x] `packages/sim-core/src/core/map-invalidation.test.ts` passes.
+- [x] Add web-level tests for redraw-plan consumption on patch vs full redraw paths.
+- [x] Manual: 10+ minute session without runaway latency or redraw artifacts.
 
 ---
 
@@ -572,4 +577,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-

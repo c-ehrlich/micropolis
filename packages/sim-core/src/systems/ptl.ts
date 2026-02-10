@@ -1,5 +1,5 @@
 import { Tile, TileMask, World } from '../core/constants.ts';
-import { MAP_FLAGS } from '../core/map-flags.ts';
+import { markPTLScanMapFlags } from '../core/map-invalidation.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import { doSmooth, doSmooth2, getDisCC } from './pop-density.ts';
@@ -204,7 +204,5 @@ export function ptlScan(state: SimState, context: SimContext): void {
 
   smoothTerrain(state, terrainMem, qtem);
 
-  state.NewMapFlags[MAP_FLAGS.DYMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.PLMAP] = 1;
-  state.NewMapFlags[MAP_FLAGS.LVMAP] = 1;
+  markPTLScanMapFlags(state);
 }
