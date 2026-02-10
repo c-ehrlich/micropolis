@@ -4,9 +4,13 @@ import { CLASSIC_LAYER_DEFS } from '../core/map-store.ts';
 import { randomSeedFromTime } from '../core/rng.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import { crimeScan as runCrimeScan } from './crime.ts';
 import { resetHeadsCachesForInit, runUiUpdate } from './date-time.ts';
+import { fireAnalysis as runFireAnalysis } from './fire-coverage.ts';
 import { mapScanSlice } from './map-scan.ts';
+import { popDenScan as runPopDenScan } from './pop-density.ts';
 import { setZPowerAt } from './power.ts';
+import { ptlScan as runPTLScan } from './ptl.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 const { ZONEBIT } = TileFlag;
@@ -160,10 +164,10 @@ export function doSimInit(
     const clearCensus = systems.clearCensus ?? noop;
     const mapScan = systems.mapScan ?? ((x1, x2) => mapScanSlice(state, context, x1, x2));
     const doPowerScan = systems.doPowerScan ?? noop;
-    const ptlScan = systems.ptlScan ?? noop;
-    const crimeScan = systems.crimeScan ?? noop;
-    const popDenScan = systems.popDenScan ?? noop;
-    const fireAnalysis = systems.fireAnalysis ?? noop;
+    const ptlScan = systems.ptlScan ?? (() => runPTLScan(state, context));
+    const crimeScan = systems.crimeScan ?? (() => runCrimeScan(state, context));
+    const popDenScan = systems.popDenScan ?? (() => runPopDenScan(state, context));
+    const fireAnalysis = systems.fireAnalysis ?? (() => runFireAnalysis(state, context));
 
     setValves();
     clearCensus();

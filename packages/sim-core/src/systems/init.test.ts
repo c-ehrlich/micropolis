@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { PowerMap, Tile, TileFlag, World } from '../core/constants.ts';
+import { MAP_FLAGS } from '../core/map-flags.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { createRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
@@ -548,5 +549,31 @@ describe('doSimInit', () => {
     expect(calls.filter((value) => value === 'evalInit')).toHaveLength(1);
     expect(calls.filter((value) => value === 'power')).toHaveLength(2);
     expect(calls.filter((value) => value === 'scan')).toHaveLength(1);
+  });
+
+  it('runs s_scan.c map-flag producers on the default init path', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+    state.InitSimLoad = 0;
+
+    doSimInit(context, state);
+
+    // `PTLScan` in `ref/micropolis/src/sim/s_scan.c`:
+    // NewMapFlags[DYMAP] = NewMapFlags[PLMAP] = NewMapFlags[LVMAP] = 1;
+    expect(state.NewMapFlags[MAP_FLAGS.DYMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.PLMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.LVMAP]).toBe(1);
+    // `CrimeScan` in `ref/micropolis/src/sim/s_scan.c`:
+    // NewMapFlags[DYMAP] = NewMapFlags[CRMAP] = NewMapFlags[POMAP] = 1;
+    expect(state.NewMapFlags[MAP_FLAGS.CRMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.POMAP]).toBe(1);
+    // `PopDenScan` in `ref/micropolis/src/sim/s_scan.c`:
+    // NewMapFlags[DYMAP] = NewMapFlags[PDMAP] = NewMapFlags[RGMAP] = 1;
+    expect(state.NewMapFlags[MAP_FLAGS.PDMAP]).toBe(1);
+    expect(state.NewMapFlags[MAP_FLAGS.RGMAP]).toBe(1);
+    // `FireAnalysis` in `ref/micropolis/src/sim/s_scan.c`:
+    // NewMapFlags[DYMAP] = NewMapFlags[FIMAP] = 1;
+    expect(state.NewMapFlags[MAP_FLAGS.FIMAP]).toBe(1);
   });
 });

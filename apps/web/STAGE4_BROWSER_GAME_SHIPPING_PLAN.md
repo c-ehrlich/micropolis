@@ -463,6 +463,7 @@ Deletion execution notes:
 ### Goal
 
 - [x] Make Stage 4 responsive and stable during extended play.
+- Stage 9 update (2026-02-10): restored `DoSimInit` bootstrap parity for `ref/micropolis/src/sim/s_scan.c` `NewMapFlags` producers (`PTLScan`, `CrimeScan`, `PopDenScan`, `FireAnalysis`) on the default sim-core path.
 
 ### C references to review
 
