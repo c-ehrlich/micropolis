@@ -156,7 +156,7 @@ Required automated gates before handoff:
 
 - [x] `pnpm typecheck`
 - [x] `pnpm lint`
-- [ ] `pnpm format`
+- [x] `pnpm format`
 - [ ] `pnpm --filter @city/web test -- src/game/runtime/playable-runtime-host.test.ts`
 - [ ] Route runtime sequencing/persistence suites relevant to `/` gameplay path
 
