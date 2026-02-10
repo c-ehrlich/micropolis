@@ -174,4 +174,4 @@ Required automated gates before handoff:
 - [x] Route `/` uses only sim-core-authoritative envelope host logic.
 - [x] `DemoMapHost` is fully removed from repository gameplay code.
 - [x] Tool/map/HUD/message/realtime behavior is covered by parity-oriented tests.
-- [ ] Required checks and route runtime tests pass.
+- [x] Required checks and route runtime tests pass. (Route runtime suites revalidated on 2026-02-10 via `pnpm --filter @city/web test -- src/game/runtime/playable-runtime-host.test.ts src/game/runtime.ordering-resync.test.ts src/game/runtime.persistence.test.ts`; repository-wide required checks run by orchestrator.)
