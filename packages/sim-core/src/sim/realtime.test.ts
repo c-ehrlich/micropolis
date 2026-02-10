@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createToolContext } from '../actions/tool-actions.ts';
 import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import { createClassicMapStore } from '../core/map-store.ts';
 import { MicropolisRng } from '../core/rng.ts';
+import { createSimContext } from '../core/sim-context.ts';
+import { createSimState } from '../core/sim-state.ts';
+import { doMessage } from '../systems/messages.ts';
 import {
   ANI_TILE,
   animateTiles,
@@ -183,6 +186,91 @@ describe('Realtime systems', () => {
 
     expect(updated & TileMask.LOMASK).toBe(ANI_TILE[Tile.FIRE]);
     expect(updated & TileMask.ALLBITS).toBe(TileFlag.ANIMBIT);
+
+    store.commitTick();
+  });
+
+  it('couples realtime messages through SendMesAt queueing when message coupling is configured', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const rng = new MicropolisRng(1);
+    const sendMes = vi.fn();
+    const sendMesAtHook = vi.fn();
+    const simContext = createSimContext({
+      store,
+      rng,
+      hooks: {
+        sendMes,
+        sendMesAt: sendMesAtHook,
+        tickCount: () => 100,
+      },
+    });
+    const simState = createSimState();
+    const directOnMessage = vi.fn();
+    const toolContext = createToolContext({ store, rng, funds: 0 });
+    const context = createRealtimeContext({
+      store,
+      rng,
+      toolContext,
+      messageCoupling: { state: simState, context: simContext },
+      onMessage: directOnMessage,
+    });
+
+    // w_sprite.c doExplosionSprite emits message id 32 via SendMesAt once frame advances to 2.
+    makeExplosionAt(context, (WORLD_X >> 1) * 16, (WORLD_Y >> 1) * 16);
+    runRealtimeTicks(context, 2);
+
+    expect(simState.MessagePort).toBe(32);
+    const queuedX = simState.MesX;
+    const queuedY = simState.MesY;
+    expect(directOnMessage).not.toHaveBeenCalled();
+    expect(sendMes).not.toHaveBeenCalled();
+    expect(sendMesAtHook).not.toHaveBeenCalled();
+
+    // s_msg.c doMessage dispatches queued MesX/MesY through the message hook.
+    doMessage(simState, simContext);
+    expect(sendMesAtHook).toHaveBeenCalledTimes(1);
+    expect(sendMesAtHook).toHaveBeenCalledWith(32, queuedX, queuedY);
+
+    store.commitTick();
+  });
+
+  it('respects SendMesAt queue gating when realtime coupling is configured', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const rng = new MicropolisRng(1);
+    const sendMes = vi.fn();
+    const sendMesAtHook = vi.fn();
+    const simContext = createSimContext({
+      store,
+      rng,
+      hooks: {
+        sendMes,
+        sendMesAt: sendMesAtHook,
+        tickCount: () => 100,
+      },
+    });
+    const simState = createSimState();
+    simState.MessagePort = 7;
+    const toolContext = createToolContext({ store, rng, funds: 0 });
+    const context = createRealtimeContext({
+      store,
+      rng,
+      toolContext,
+      messageCoupling: { state: simState, context: simContext },
+      onMessage: vi.fn(),
+    });
+
+    makeExplosionAt(context, (WORLD_X >> 1) * 16, (WORLD_Y >> 1) * 16);
+    runRealtimeTicks(context, 2);
+
+    // s_msg.c SendMesAt delegates to SendMes: positive ids are dropped when MessagePort is occupied.
+    expect(simState.MessagePort).toBe(7);
+    doMessage(simState, simContext);
+    expect(sendMes).toHaveBeenCalledWith(7);
+    expect(sendMesAtHook).not.toHaveBeenCalled();
 
     store.commitTick();
   });

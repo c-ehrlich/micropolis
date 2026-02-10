@@ -4,6 +4,9 @@ import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { MapStore } from '../core/map-store.ts';
 import type { MicropolisRng } from '../core/rng.ts';
+import type { SimContext } from '../core/sim-context.ts';
+import type { SimState } from '../core/sim-state.ts';
+import { sendMesAt } from '../systems/messages.ts';
 
 const { WORLD_X, WORLD_Y, HWLDX, HWLDY, SmX, SmY } = World;
 const { ALLBITS, LOMASK } = TileMask;
@@ -131,6 +134,20 @@ export interface RealtimeCallbacks {
   onClearMessages?: () => void;
 }
 
+/**
+ * Optional realtime-to-message port bridge for sprite/event message dispatch.
+ * Mirrors `Do*Sprite` -> `SendMesAt` coupling from `ref/micropolis/src/sim/w_sprite.c`
+ * into `ref/micropolis/src/sim/s_msg.c`.
+ *
+ * Parity note: when configured, realtime events enqueue through `sendMesAt`
+ * (`MessagePort`/`MesX`/`MesY`) and are later delivered by `doMessage()`;
+ * without this bridge, sim-core keeps legacy direct callback dispatch.
+ */
+export interface RealtimeMessageCoupling {
+  state: SimState;
+  context: SimContext;
+}
+
 export interface RealtimeContext extends RealtimeCallbacks {
   store: MapStore;
   rng: MicropolisRng;
@@ -150,6 +167,7 @@ export interface RealtimeContext extends RealtimeCallbacks {
   sprites: SimSprite[];
   globalSprites: Array<SimSprite | null>;
   toolContext: ToolContext;
+  messageCoupling?: RealtimeMessageCoupling;
 }
 
 export interface RealtimeContextOptions extends RealtimeCallbacks {
@@ -163,6 +181,7 @@ export interface RealtimeContextOptions extends RealtimeCallbacks {
   polMaxX?: number;
   polMaxY?: number;
   toolContext: ToolContext;
+  messageCoupling?: RealtimeMessageCoupling;
 }
 
 export function createRealtimeContext(options: RealtimeContextOptions): RealtimeContext {
@@ -188,6 +207,7 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
     sprites: [],
     globalSprites: Array.from({ length: SPRITE_SLOT_COUNT }, () => null),
     toolContext: options.toolContext,
+    messageCoupling: options.messageCoupling,
     onMessage: options.onMessage,
     onSound: options.onSound,
     onClearMessages: options.onClearMessages,
@@ -408,6 +428,10 @@ function checkWet(tile: number): boolean {
 }
 
 function sendMessage(context: RealtimeContext, id: number, x: number, y: number) {
+  if (context.messageCoupling !== undefined) {
+    sendMesAt(context.messageCoupling.state, context.messageCoupling.context, id, x, y);
+    return;
+  }
   context.onMessage?.(id, x, y);
 }
 
