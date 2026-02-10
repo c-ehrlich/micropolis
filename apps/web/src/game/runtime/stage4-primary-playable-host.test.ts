@@ -47,6 +47,8 @@ type RuntimeEventWithEnvelope<TEnvelope extends HostEnvelope> = WebRuntimeEvent 
   envelope: TEnvelope;
 };
 
+type HostRejectEnvelope = Extract<HostEnvelope, { kind: 'reject' }>;
+
 /**
  * Wait for one runtime event that matches the provided predicate.
  * Mirrors staged command->ack->snapshot sequencing from `SimCmd` and update
@@ -91,6 +93,36 @@ function readLatestServerSeq(hostEnvelopes: readonly HostEnvelope[]): number {
   return latestServerSeq;
 }
 
+// Magic-number source: playable tool costs from `CostOf[]` in
+// `ref/micropolis/src/sim/w_tool.c`.
+const STAGE11_PLAYABLE_TOOL_COSTS = {
+  road: 10,
+  rail: 20,
+  wire: 5,
+  bulldoze: 1,
+  res: 100,
+  com: 100,
+  ind: 100,
+} as const;
+
+const STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES = [
+  { tool: 'road', placeX: 10, placeY: 10, rejectX: -1, rejectY: 10 },
+  { tool: 'rail', placeX: 11, placeY: 10, rejectX: -1, rejectY: 11 },
+  { tool: 'wire', placeX: 12, placeY: 10, rejectX: -1, rejectY: 12 },
+  { tool: 'bulldoze', placeX: 10, placeY: 10, rejectX: -1, rejectY: 13 },
+  { tool: 'res', placeX: 20, placeY: 20, rejectX: 0, rejectY: 20 },
+  { tool: 'com', placeX: 30, placeY: 20, rejectX: 0, rejectY: 30 },
+  { tool: 'ind', placeX: 40, placeY: 20, rejectX: 0, rejectY: 40 },
+] as const;
+
+function readFundsFromLabel(label: string): number {
+  const digits = label.replaceAll(/[^0-9]/g, '');
+  if (digits.length === 0) {
+    return 0;
+  }
+  return Number.parseInt(digits, 10);
+}
+
 interface Stage4SmokeSummary {
   envelopeKinds: HostEnvelope['kind'][];
   finalServerSeq: number;
@@ -98,6 +130,245 @@ interface Stage4SmokeSummary {
   patchCount: number;
   snapshotCount: number;
   rejectReasons: string[];
+}
+
+/**
+ * Certifies Stage 11 tool placement costs/rejects/funds on the host-envelope path.
+ * Mirrors `do_tool` cost handling from `CostOf[]` and reject outcomes in
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<void> {
+  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const hostEnvelopes: HostEnvelope[] = [];
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const newCityCommandId = `${runId}-cmd-new-city`;
+  const connection = host.connect((envelope) => {
+    hostEnvelopes.push(envelope);
+  });
+
+  try {
+    connection.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'bridge-v1',
+      coreVersion: 'sim-core',
+    });
+
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    connection.send({
+      kind: 'command',
+      roomId,
+      clientId,
+      commandId: newCityCommandId,
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+      },
+    });
+    const newCityAck = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostAckEnvelope =>
+        envelope.kind === 'ack' && envelope.commandId === newCityCommandId,
+      `${runId} new-city ack`,
+    );
+    await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
+      `${runId} new-city snapshot`,
+    );
+
+    let expectedFunds = 20_000;
+    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const commandId = `${runId}-cmd-place-${toolCase.tool}`;
+      connection.send({
+        kind: 'command',
+        roomId,
+        clientId,
+        commandId,
+        command: {
+          kind: 'tool',
+          tool: toolCase.tool,
+          x: toolCase.placeX,
+          y: toolCase.placeY,
+        },
+      });
+
+      const ack = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === commandId,
+        `${runId} ${toolCase.tool} ack`,
+      );
+      const fundsPatch = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostPatchEnvelope =>
+          envelope.kind === 'patch' &&
+          envelope.serverSeq > ack.serverSeq &&
+          envelope.payload.hud?.funds !== undefined,
+        `${runId} ${toolCase.tool} funds patch`,
+      );
+      expectedFunds -= STAGE11_PLAYABLE_TOOL_COSTS[toolCase.tool];
+      expect(fundsPatch.payload.hud?.funds).toBe(expectedFunds);
+    }
+
+    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const commandId = `${runId}-cmd-reject-${toolCase.tool}`;
+      connection.send({
+        kind: 'command',
+        roomId,
+        clientId,
+        commandId,
+        command: {
+          kind: 'tool',
+          tool: toolCase.tool,
+          x: toolCase.rejectX,
+          y: toolCase.rejectY,
+        },
+      });
+
+      const reject = await waitForHostEnvelope(
+        hostEnvelopes,
+        (envelope): envelope is HostRejectEnvelope =>
+          envelope.kind === 'reject' && envelope.commandId === commandId,
+        `${runId} ${toolCase.tool} reject`,
+      );
+      expect(reject.reason).toBe('out-of-bounds');
+    }
+
+    const latestServerSeq = readLatestServerSeq(hostEnvelopes);
+    connection.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: latestServerSeq,
+      reason: 'manual',
+    });
+    const finalSnapshot = await waitForHostEnvelope(
+      hostEnvelopes,
+      (envelope): envelope is HostSnapshotEnvelope =>
+        envelope.kind === 'snapshot' && envelope.serverSeq > latestServerSeq,
+      `${runId} post-reject snapshot`,
+    );
+    expect(finalSnapshot.payload.hud?.funds).toBe(expectedFunds);
+  } finally {
+    connection.disconnect();
+  }
+}
+
+/**
+ * Certifies Stage 11 tool placement costs/rejects/funds on the shipped runtime path.
+ * Mirrors tool command routing and reject propagation from
+ * `ref/micropolis/src/sim/w_tool.c` through host envelope projection.
+ */
+async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<void> {
+  const roomId = `${runId}-room`;
+  const clientId = `${runId}-client`;
+  const newCityCommandId = `${runId}-cmd-new-city`;
+  const runtimeEvents: WebRuntimeEvent[] = [];
+  const runtime = createWebHostRuntime({
+    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    roomId,
+    clientId,
+  });
+  const unsubscribe = runtime.subscribe((event) => {
+    runtimeEvents.push(event);
+  });
+
+  try {
+    runtime.connect();
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot',
+      `${runId} boot snapshot`,
+    );
+
+    runtime.sendCommand(newCityCommandId, {
+      kind: 'city-lifecycle',
+      action: 'new-city',
+    });
+    const newCityAck = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+        event.envelope?.kind === 'ack' && event.envelope.commandId === newCityCommandId,
+      `${runId} new-city ack`,
+    );
+    await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot' &&
+        event.envelope.serverSeq > newCityAck.envelope.serverSeq,
+      `${runId} new-city snapshot`,
+    );
+
+    let expectedFunds = 20_000;
+    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const commandId = `${runId}-cmd-place-${toolCase.tool}`;
+      runtime.sendCommand(commandId, {
+        kind: 'tool',
+        tool: toolCase.tool,
+        x: toolCase.placeX,
+        y: toolCase.placeY,
+      });
+      const ack = await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+          event.envelope?.kind === 'ack' && event.envelope.commandId === commandId,
+        `${runId} runtime ${toolCase.tool} ack`,
+      );
+      const fundsPatch = await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
+          event.envelope?.kind === 'patch' &&
+          event.envelope.serverSeq > ack.envelope.serverSeq &&
+          event.envelope.payload.hud?.funds !== undefined,
+        `${runId} runtime ${toolCase.tool} funds patch`,
+      );
+      expectedFunds -= STAGE11_PLAYABLE_TOOL_COSTS[toolCase.tool];
+      expect(fundsPatch.envelope.payload.hud?.funds).toBe(expectedFunds);
+      expect(readFundsFromLabel(runtime.getState().hudState.fundsLabel)).toBe(expectedFunds);
+    }
+
+    for (const toolCase of STAGE11_PLAYABLE_TOOL_CERTIFICATION_CASES) {
+      const commandId = `${runId}-cmd-reject-${toolCase.tool}`;
+      runtime.sendCommand(commandId, {
+        kind: 'tool',
+        tool: toolCase.tool,
+        x: toolCase.rejectX,
+        y: toolCase.rejectY,
+      });
+      const reject = await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostRejectEnvelope> =>
+          event.envelope?.kind === 'reject' && event.envelope.commandId === commandId,
+        `${runId} runtime ${toolCase.tool} reject`,
+      );
+      expect(reject.envelope.reason).toBe('out-of-bounds');
+      expect(runtime.getState().lastRejectReason).toBe('out-of-bounds');
+      expect(readFundsFromLabel(runtime.getState().hudState.fundsLabel)).toBe(expectedFunds);
+    }
+
+    const snapshotCursor = runtime.getState().lastAppliedServerSeq;
+    runtime.requestSnapshot('manual');
+    const finalSnapshot = await waitForRuntimeEvent(
+      runtimeEvents,
+      (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+        event.envelope?.kind === 'snapshot' && event.envelope.serverSeq > snapshotCursor,
+      `${runId} runtime post-reject snapshot`,
+    );
+    expect(finalSnapshot.envelope.payload.hud?.funds).toBe(expectedFunds);
+  } finally {
+    unsubscribe();
+    runtime.disconnect();
+  }
 }
 
 /**
@@ -627,6 +898,14 @@ describe('createStage4PrimaryPlayableHost', () => {
       unsubscribe();
       runtime.disconnect();
     }
+  });
+
+  test('certifies host tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
+    await certifyStage11PlayableToolCostsOnHost('stage11-tool-costs-host');
+  });
+
+  test('certifies runtime tool placements for road/rail/wire/bulldoze/R/C/I costs/rejects/funds', async () => {
+    await certifyStage11PlayableToolCostsOnRuntime('stage11-tool-costs-runtime');
   });
 
   test('proves the shipped Stage 4 host path is playable end-to-end', async () => {
