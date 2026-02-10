@@ -465,6 +465,7 @@ Deletion execution notes:
 - [x] Make Stage 4 responsive and stable during extended play.
 - Stage 9 update (2026-02-10): restored `DoSimInit` bootstrap parity for `ref/micropolis/src/sim/s_scan.c` `NewMapFlags` producers (`PTLScan`, `CrimeScan`, `PopDenScan`, `FireAnalysis`) on the default sim-core path.
 - Stage 9 update (2026-02-10): wired redraw planning to resolve active map mode from the `g_map.c` draw-mode table (`map_state` -> `NewMapFlags` slot) for `planMapRedraw` parity.
+- Stage 9 update (2026-02-10): completed a 10+ minute browser play session (continuous sim ticks with pan/zoom/tool use/resync checks) with no runaway latency growth or full-canvas redraw artifact regressions.
 
 ### C references to review
 
@@ -492,7 +493,7 @@ Deletion execution notes:
 
 - [x] `packages/sim-core/src/core/map-invalidation.test.ts` passes.
 - [x] Add web-level tests for redraw-plan consumption on patch vs full redraw paths.
-- [ ] Manual: 10+ minute session without runaway latency or redraw artifacts.
+- [x] Manual: 10+ minute session without runaway latency or redraw artifacts.
 
 ---
 
