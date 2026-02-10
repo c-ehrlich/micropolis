@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { World } from '../../../../../packages/sim-core/src/index.ts';
+import { Tile, World } from '../../../../../packages/sim-core/src/index.ts';
 import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
@@ -296,6 +296,137 @@ describe('SimCoreEnvelopeHost', () => {
       expect(settlement.reason).not.toBe('invalid-command');
       expect(toolRejectReasons.has(settlement.reason)).toBe(true);
     }
+  });
+
+  it('treats SimState.TotalFunds as canonical before tool evaluation', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+    const authorityState = hostInternals.authorityState;
+
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`;
+    // with canonical funds forced to 0 this must reject as no-funds.
+    authorityState.simState.TotalFunds = 0;
+    authorityState.toolContext.funds = 20_000;
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-funds-sync',
+      clientId: 'client-funds-sync',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-funds-sync',
+      clientId: 'client-funds-sync',
+      commandId: 'cmd-road-no-funds',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 12,
+        y: 12,
+      },
+    });
+
+    const reject = captured.envelopes[2];
+    expect(reject).toEqual({
+      kind: 'reject',
+      roomId: 'room-funds-sync',
+      clientId: 'client-funds-sync',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-road-no-funds',
+      reason: 'no-funds',
+    });
+    expect(authorityState.simState.TotalFunds).toBe(0);
+    expect(authorityState.toolContext.funds).toBe(0);
+  });
+
+  it('synchronizes tool-spend funds back into SimState.TotalFunds after evaluation', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+    const authorityState = hostInternals.authorityState;
+    const x = 20;
+    const y = 20;
+
+    authorityState.store.beginTick();
+    try {
+      const mapLayer = authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[x * World.WORLD_Y + y] = Tile.DIRT;
+    } finally {
+      authorityState.store.commitTick();
+    }
+
+    authorityState.simState.TotalFunds = 100;
+    authorityState.toolContext.funds = 0;
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-funds-spend',
+      clientId: 'client-funds-spend',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-funds-spend',
+      clientId: 'client-funds-spend',
+      commandId: 'cmd-road-spend',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x,
+        y,
+      },
+    });
+
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`.
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'ack',
+      roomId: 'room-funds-spend',
+      clientId: 'client-funds-spend',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-road-spend',
+    });
+    expect(captured.envelopes[3]).toEqual({
+      kind: 'patch',
+      roomId: 'room-funds-spend',
+      clientId: 'client-funds-spend',
+      tick: 1,
+      serverSeq: 3,
+      payload: {},
+    });
+    expect(authorityState.simState.TotalFunds).toBe(90);
+    expect(authorityState.toolContext.funds).toBe(90);
   });
 
   it('serves explicit snapshot requests and stops emitting after disconnect', () => {

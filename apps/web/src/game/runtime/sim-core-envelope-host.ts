@@ -1,4 +1,5 @@
 import { applyToolAction, type ToolResult } from '../../../../../packages/sim-core/src/index.ts';
+import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
@@ -260,6 +261,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return 'out-of-bounds';
     }
 
+    this.syncToolContextFundsFromState();
     this.authorityState.toolContext.store.beginTick();
     try {
       const toolResult = applyToolAction(this.authorityState.toolContext, {
@@ -273,8 +275,27 @@ export class SimCoreEnvelopeHost implements CoreHost {
       });
       return rejectReasonFromToolResult(toolResult.result);
     } finally {
+      this.syncStateFundsFromToolContext();
       this.authorityState.toolContext.store.commitTick();
     }
+  }
+
+  /**
+   * Synchronizes tool-evaluation funds from canonical authoritative sim state.
+   * Mirrors funds ownership in `Spend`/`SetFunds` call flow from
+   * `ref/micropolis/src/sim/w_stubs.c`, where `TotalFunds` is authoritative.
+   */
+  private syncToolContextFundsFromState(): void {
+    this.authorityState.toolContext.funds = this.authorityState.simState.TotalFunds;
+  }
+
+  /**
+   * Synchronizes canonical authoritative sim funds from tool evaluation results.
+   * Mirrors `Spend` -> `SetFunds` behavior in `ref/micropolis/src/sim/w_stubs.c`,
+   * including dirtying funds-head updates through `setFunds`.
+   */
+  private syncStateFundsFromToolContext(): void {
+    setFunds(this.authorityState.simState, this.authorityState.toolContext.funds);
   }
 
   private isSessionActive(sessionId: number): boolean {
