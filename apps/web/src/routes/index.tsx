@@ -147,8 +147,7 @@ function Stage4RuntimePanel() {
     >
       <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>Stage 4 Runtime</h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick} pending=
-        {state.pendingTools.length}
+        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
       </div>
       <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
         {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
@@ -235,7 +234,6 @@ function Stage4RuntimePanel() {
                 y,
               });
             }}
-            pendingTools={state.pendingTools}
             realtimeObjects={state.realtimeState.objects}
             tileSize={STAGE4_MAP_TILE_SIZE}
           />
