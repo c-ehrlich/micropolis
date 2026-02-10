@@ -119,9 +119,18 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
     const runtime = createWebHostRuntime({ host });
     const tornadoSnapshots: Array<{ x: number; y: number; frame: number }> = [];
+    let sawRealtimeSnapshot = false;
+    let sawRealtimeDelta = false;
 
     try {
       runtime.subscribe((event) => {
+        if (event.envelope?.kind === 'snapshot') {
+          if (event.envelope.payload.realtime?.snapshot !== undefined) {
+            sawRealtimeSnapshot = true;
+          }
+          return;
+        }
+
         if (event.envelope?.kind !== 'patch') {
           return;
         }
@@ -132,6 +141,11 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
         const tornado = objects.find((object) => object.type === 6);
         if (tornado !== undefined) {
           tornadoSnapshots.push({ x: tornado.x, y: tornado.y, frame: tornado.frame ?? 0 });
+        }
+
+        const deltas = event.envelope.payload.realtime?.deltas;
+        if (deltas !== undefined && deltas.length > 0) {
+          sawRealtimeDelta = true;
         }
       });
 
@@ -158,6 +172,8 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       expect(runtime.getState().realtimeState.objects.some((object) => object.type === 6)).toBe(
         true,
       );
+      expect(sawRealtimeSnapshot).toBe(true);
+      expect(sawRealtimeDelta).toBe(true);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();

@@ -64,6 +64,64 @@ describe('runtime realtime projection', () => {
     expect(afterPatch.objects).toEqual([{ name: 'SHI', type: 4, x: 40, y: 56, frame: 2 }]);
   });
 
+  it('applies Stage 7 realtime snapshot/delta payload fields', () => {
+    const afterSnapshot = projectRuntimeRealtimeState(
+      createInitialRuntimeRealtimeState(),
+      createSequencedEnvelope('snapshot', {
+        realtime: {
+          snapshot: [{ id: 'rt-1', name: 'TOR', type: 6, x: 96, y: 112, frame: 1 }],
+        },
+      }),
+    );
+
+    expect(afterSnapshot.objects).toEqual([
+      // Type `6` is tornado (`TOR`) from sprite constants in
+      // `ref/micropolis/src/sim/headers/sim.h` / `w_sprite.c`.
+      { id: 'rt-1', name: 'TOR', type: 6, x: 96, y: 112, frame: 1 },
+    ]);
+
+    const afterPatch = projectRuntimeRealtimeState(
+      afterSnapshot,
+      createSequencedEnvelope('patch', {
+        realtime: {
+          deltas: [
+            {
+              kind: 'upsert',
+              object: { id: 'rt-1', name: 'TOR', type: 6, x: 112, y: 128, frame: 2 },
+            },
+            {
+              kind: 'upsert',
+              object: { id: 'rt-2', name: 'EXP', type: 7, x: 120, y: 128, frame: 1 },
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(afterPatch.objects).toEqual([
+      { id: 'rt-1', name: 'TOR', type: 6, x: 112, y: 128, frame: 2 },
+      { id: 'rt-2', name: 'EXP', type: 7, x: 120, y: 128, frame: 1 },
+    ]);
+
+    const afterRemove = projectRuntimeRealtimeState(
+      afterPatch,
+      createSequencedEnvelope('patch', {
+        realtime: {
+          deltas: [
+            {
+              kind: 'remove',
+              id: 'rt-1',
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(afterRemove.objects).toEqual([
+      { id: 'rt-2', name: 'EXP', type: 7, x: 120, y: 128, frame: 1 },
+    ]);
+  });
+
   it('keeps existing realtime objects when patch payload omits realtime field', () => {
     const afterSnapshot = projectRuntimeRealtimeState(
       createInitialRuntimeRealtimeState(),

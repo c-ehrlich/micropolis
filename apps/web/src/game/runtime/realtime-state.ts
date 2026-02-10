@@ -11,6 +11,7 @@ const EMPTY_RUNTIME_REALTIME_OBJECTS: readonly RuntimeRealtimeObject[] = [];
  * Stage 7 overlay rendering lands.
  */
 export interface RuntimeRealtimeObject {
+  id?: string;
   name: string;
   type: number;
   x: number;
@@ -55,7 +56,7 @@ export function projectRuntimeRealtimeState(
     return state;
   }
 
-  const parsed = parseRealtimeObjectsFromPayload(envelope.payload);
+  const parsed = parseRealtimeObjectsFromPayload(state.objects, envelope.payload);
   if (parsed === undefined) {
     if (envelope.kind === 'snapshot') {
       return clearRealtimeObjects(state);
@@ -77,8 +78,27 @@ export function projectRuntimeRealtimeState(
 }
 
 type ParsedRealtimeObjects = RuntimeRealtimeObject[] | null | undefined;
+type ParsedRealtimeObjectDelta =
+  | {
+      kind: 'upsert';
+      object: RuntimeRealtimeObject & { id: string };
+    }
+  | {
+      kind: 'remove';
+      id: string;
+    };
 
-function parseRealtimeObjectsFromPayload(payload: unknown): ParsedRealtimeObjects {
+/**
+ * Parses one realtime payload section into the next object projection.
+ * Mirrors snapshot-baseline vs incremental update ordering from
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: explicit snapshot/delta parsing is a bridge transport addition
+ * on top of C in-memory sprite mutation.
+ */
+function parseRealtimeObjectsFromPayload(
+  currentObjects: readonly RuntimeRealtimeObject[],
+  payload: unknown,
+): ParsedRealtimeObjects {
   if (!isRecord(payload)) {
     return null;
   }
@@ -92,23 +112,118 @@ function parseRealtimeObjectsFromPayload(payload: unknown): ParsedRealtimeObject
     return null;
   }
 
-  if (!('objects' in realtimeRecord) || realtimeRecord.objects === undefined) {
-    return [];
+  const snapshotObjects = readRealtimeObjectArrayField(realtimeRecord, 'snapshot');
+  if (snapshotObjects === null) {
+    return null;
   }
 
-  if (!Array.isArray(realtimeRecord.objects)) {
+  const legacyObjects = readRealtimeObjectArrayField(realtimeRecord, 'objects');
+  if (legacyObjects === null) {
+    return null;
+  }
+
+  const deltas = readRealtimeObjectDeltasField(realtimeRecord, 'deltas');
+  if (deltas === null) {
+    return null;
+  }
+
+  let nextObjects =
+    snapshotObjects ??
+    legacyObjects ??
+    (deltas !== undefined ? (currentObjects.length === 0 ? [] : [...currentObjects]) : []);
+
+  if (deltas !== undefined) {
+    nextObjects = applyRealtimeObjectDeltas(nextObjects, deltas);
+  }
+
+  return nextObjects;
+}
+
+/**
+ * Reads one optional realtime object array field from the payload.
+ * Mirrors full sprite-list baseline intent from `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: invalid entries are ignored for runtime resilience.
+ */
+function readRealtimeObjectArrayField(
+  record: Record<string, unknown>,
+  key: 'snapshot' | 'objects',
+): RuntimeRealtimeObject[] | null | undefined {
+  if (!(key in record) || record[key] === undefined) {
+    return undefined;
+  }
+
+  const raw = record[key];
+  if (!Array.isArray(raw)) {
     return null;
   }
 
   const objects: RuntimeRealtimeObject[] = [];
-  for (const rawObject of realtimeRecord.objects) {
+  for (const rawObject of raw) {
     const object = parseRealtimeObject(rawObject);
     if (object !== null) {
       objects.push(object);
     }
   }
-
   return objects;
+}
+
+/**
+ * Reads one optional realtime delta array field from the payload.
+ * Mirrors ordered sprite lifecycle progression in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: explicit `upsert`/`remove` records are bridge payload metadata.
+ */
+function readRealtimeObjectDeltasField(
+  record: Record<string, unknown>,
+  key: 'deltas',
+): ParsedRealtimeObjectDelta[] | null | undefined {
+  if (!(key in record) || record[key] === undefined) {
+    return undefined;
+  }
+
+  const raw = record[key];
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+
+  const deltas: ParsedRealtimeObjectDelta[] = [];
+  for (const rawDelta of raw) {
+    const delta = parseRealtimeObjectDelta(rawDelta);
+    if (delta !== null) {
+      deltas.push(delta);
+    }
+  }
+  return deltas;
+}
+
+/**
+ * Applies parsed realtime deltas onto a baseline object list.
+ * Mirrors per-tick sprite mutate/remove behavior in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: stable-id keyed merges are a TypeScript transport projection aid.
+ */
+function applyRealtimeObjectDeltas(
+  baseObjects: readonly RuntimeRealtimeObject[],
+  deltas: readonly ParsedRealtimeObjectDelta[],
+): RuntimeRealtimeObject[] {
+  const indexedObjects = new Map<string, RuntimeRealtimeObject>();
+  const unindexedObjects: RuntimeRealtimeObject[] = [];
+
+  for (const object of baseObjects) {
+    if (object.id === undefined) {
+      unindexedObjects.push(object);
+      continue;
+    }
+    indexedObjects.set(object.id, object);
+  }
+
+  for (const delta of deltas) {
+    if (delta.kind === 'remove') {
+      indexedObjects.delete(delta.id);
+      continue;
+    }
+    indexedObjects.set(delta.object.id, delta.object);
+  }
+
+  return [...indexedObjects.values(), ...unindexedObjects];
 }
 
 function parseRealtimeObject(value: unknown): RuntimeRealtimeObject | null {
@@ -129,12 +244,54 @@ function parseRealtimeObject(value: unknown): RuntimeRealtimeObject | null {
   }
 
   const frame = readInteger(record.frame) ?? 0;
+  const id = readNonEmptyString(record.id);
   return {
+    id,
     name: record.name,
     type,
     x,
     y,
     frame,
+  };
+}
+
+/**
+ * Parses one realtime delta entry.
+ * Mirrors sprite add/update/remove transitions in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: explicit discriminated unions are transport-only.
+ */
+function parseRealtimeObjectDelta(value: unknown): ParsedRealtimeObjectDelta | null {
+  const record = readRecord(value);
+  if (record === null) {
+    return null;
+  }
+
+  if (record.kind === 'remove') {
+    const id = readNonEmptyString(record.id);
+    if (id === undefined) {
+      return null;
+    }
+    return {
+      kind: 'remove',
+      id,
+    };
+  }
+
+  if (record.kind !== 'upsert') {
+    return null;
+  }
+
+  const object = parseRealtimeObject(record.object);
+  if (object === null || object.id === undefined) {
+    return null;
+  }
+
+  return {
+    kind: 'upsert',
+    object: {
+      ...object,
+      id: object.id,
+    },
   };
 }
 
@@ -160,6 +317,7 @@ function areRealtimeObjectsEqual(
     const leftObject = left[index];
     const rightObject = right[index];
     if (
+      leftObject?.id !== rightObject?.id ||
       leftObject?.name !== rightObject?.name ||
       leftObject?.type !== rightObject?.type ||
       leftObject?.x !== rightObject?.x ||
@@ -187,4 +345,12 @@ function readInteger(value: unknown): number | null {
   }
 
   return Math.trunc(value);
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+
+  return value;
 }

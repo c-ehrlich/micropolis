@@ -20,6 +20,7 @@ import {
   sendMessages,
   setValves,
   type SimContext,
+  type SimSprite,
   type SimState,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -40,6 +41,8 @@ import {
   type HostHudMessagePayload,
   type HostHudOptionsPayload,
   type HostPatchPayload,
+  type HostRealtimeObjectDeltaPayload,
+  type HostRealtimeObjectPayload,
   isStage2CityIoCommand,
   isStage2CityLifecycleCommand,
   isStage2ScenarioCommand,
@@ -166,6 +169,10 @@ interface DemoPatchPayload extends HostPatchPayload {
   };
 }
 
+interface HostRealtimeObjectWithIdPayload extends HostRealtimeObjectPayload {
+  id: string;
+}
+
 interface HookDrivenHudState {
   fundsLabel: string;
   dateLabel: string;
@@ -258,6 +265,9 @@ export class DemoMapHost implements CoreHost {
   private currentScenarioId = 0;
   private readonly hookHudState: HookDrivenHudState = createInitialHookDrivenHudState();
   private pendingHookMessages: DemoHudMessagePayload[] = [];
+  private readonly realtimeObjectIds = new WeakMap<SimSprite, string>();
+  private nextRealtimeObjectId = 1;
+  private lastRealtimeObjectsById = new Map<string, HostRealtimeObjectWithIdPayload>();
   private readonly mapTiles = buildInitialDemoMapTiles(DEMO_WORLD_WIDTH, DEMO_WORLD_HEIGHT);
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
@@ -683,6 +693,7 @@ export class DemoMapHost implements CoreHost {
     if (pendingMessages.length > 0) {
       this.recordMessages(pendingMessages, snapshotTick, snapshotServerSeq);
     }
+    const realtimePayload = this.buildRealtimeSnapshotPayload();
     this.ensureMessageLogReplayMetadata(snapshotTick, snapshotServerSeq);
     this.serverSeq = snapshotServerSeq;
     this.onEnvelope({
@@ -704,7 +715,7 @@ export class DemoMapHost implements CoreHost {
         hud: {
           ...this.getHudHeadsPayload(),
         },
-        realtime: this.buildRealtimePayload(),
+        realtime: realtimePayload,
         messages: this.messageLog,
       },
     });
@@ -886,7 +897,7 @@ export class DemoMapHost implements CoreHost {
       payload.messageDeltas = hookMessages;
     }
 
-    payload.realtime = this.buildRealtimePayload();
+    payload.realtime = this.buildRealtimeDeltaPayload();
 
     return payload;
   }
@@ -967,24 +978,90 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Builds Stage 7 realtime overlay payload objects from active sprite state.
-   * Mirrors drawable sprite selection (`frame != 0`) in `DrawObjects` /
-   * `DrawSprite` from `ref/micropolis/src/sim/w_sprite.c`.
-   * Parity note: payload uses a compact projection subset (`name/type/x/y/frame`)
-   * consumed by the browser overlay layer.
+   * Builds one full realtime snapshot payload from active sprite state.
+   * Mirrors full sprite list ownership in `DrawObjects` (`ref/micropolis/src/sim/w_sprite.c`).
+   * Parity note: adds bridge `id` keys for deterministic delta application.
    */
-  private buildRealtimePayload(): NonNullable<DemoPatchPayload['realtime']> {
+  private buildRealtimeSnapshotPayload(): NonNullable<DemoPatchPayload['realtime']> {
+    const objects = this.collectRealtimeObjectsWithIds();
+    this.lastRealtimeObjectsById = indexRealtimeObjectsById(objects);
     return {
-      objects: this.realtimeContext.sprites
-        .filter((sprite) => sprite.frame > 0)
-        .map((sprite) => ({
-          name: sprite.name,
-          type: sprite.type,
-          x: sprite.x,
-          y: sprite.y,
-          frame: sprite.frame,
-        })),
+      snapshot: objects,
+      objects,
     };
+  }
+
+  /**
+   * Builds one incremental realtime delta payload for the current authority tick.
+   * Mirrors per-tick sprite move/create/destroy progression in
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: explicit bridge deltas are transport metadata and keep legacy
+   * `objects` compatibility while Stage 7 overlay projection migrates.
+   */
+  private buildRealtimeDeltaPayload(): NonNullable<DemoPatchPayload['realtime']> {
+    const objects = this.collectRealtimeObjectsWithIds();
+    const nextRealtimeObjectsById = indexRealtimeObjectsById(objects);
+    const deltas: HostRealtimeObjectDeltaPayload[] = [];
+
+    for (const object of objects) {
+      const previous = this.lastRealtimeObjectsById.get(object.id);
+      if (previous === undefined || !areRealtimeObjectsEqual(previous, object)) {
+        deltas.push({
+          kind: 'upsert',
+          object,
+        });
+      }
+    }
+
+    for (const [id] of this.lastRealtimeObjectsById) {
+      if (!nextRealtimeObjectsById.has(id)) {
+        deltas.push({
+          kind: 'remove',
+          id,
+        });
+      }
+    }
+
+    this.lastRealtimeObjectsById = nextRealtimeObjectsById;
+    return {
+      objects,
+      deltas,
+    };
+  }
+
+  /**
+   * Collects active realtime sprites as transport payload objects.
+   * Mirrors active sprite filtering (`frame != 0`) in `DrawObjects` from
+   * `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: bridge `id` values are deterministic per-host-process ids.
+   */
+  private collectRealtimeObjectsWithIds(): HostRealtimeObjectWithIdPayload[] {
+    return this.realtimeContext.sprites
+      .filter((sprite) => sprite.frame > 0)
+      .map((sprite) => ({
+        id: this.readRealtimeObjectId(sprite),
+        name: sprite.name,
+        type: sprite.type,
+        x: sprite.x,
+        y: sprite.y,
+        frame: sprite.frame,
+      }));
+  }
+
+  /**
+   * Reads or assigns one deterministic bridge realtime object id.
+   * Mirrors stable in-process sprite identity intent in `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: C identity uses pointers/slots; bridge payloads need explicit ids.
+   */
+  private readRealtimeObjectId(sprite: SimSprite): string {
+    const existingId = this.realtimeObjectIds.get(sprite);
+    if (existingId !== undefined) {
+      return existingId;
+    }
+    const nextId = `rt-${this.nextRealtimeObjectId}`;
+    this.nextRealtimeObjectId += 1;
+    this.realtimeObjectIds.set(sprite, nextId);
+    return nextId;
   }
 
   /**
@@ -1741,6 +1818,41 @@ function buildInitialDemoMapTiles(width: number, height: number): Uint16Array {
     }
   }
   return tiles;
+}
+
+/**
+ * Builds id-indexed lookup table for one realtime payload object array.
+ * Mirrors keyed sprite ownership intent behind per-sprite mutation in
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: explicit id indexing is bridge payload metadata.
+ */
+function indexRealtimeObjectsById(
+  objects: readonly HostRealtimeObjectWithIdPayload[],
+): Map<string, HostRealtimeObjectWithIdPayload> {
+  const byId = new Map<string, HostRealtimeObjectWithIdPayload>();
+  for (const object of objects) {
+    byId.set(object.id, object);
+  }
+  return byId;
+}
+
+/**
+ * Compares two realtime payload objects for transport delta generation.
+ * Mirrors sprite field mutation checks in `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: comparison is on payload fields only, not object identity.
+ */
+function areRealtimeObjectsEqual(
+  left: HostRealtimeObjectWithIdPayload,
+  right: HostRealtimeObjectWithIdPayload,
+): boolean {
+  return (
+    left.id === right.id &&
+    left.name === right.name &&
+    left.type === right.type &&
+    left.x === right.x &&
+    left.y === right.y &&
+    (left.frame ?? 0) === (right.frame ?? 0)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
