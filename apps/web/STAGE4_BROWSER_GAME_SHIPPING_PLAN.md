@@ -375,7 +375,7 @@ Deletion execution notes:
 ### Verification checklist
 
 - [x] `apps/web/src/game/runtime.persistence.test.ts` passes with Stage 4 authority.
-- [ ] `packages/sim-io/src/load.test.ts` and `packages/sim-io/src/save.test.ts` pass.
+- [x] `packages/sim-io/src/load.test.ts` and `packages/sim-io/src/save.test.ts` pass.
 - [ ] `packages/sim-io/src/scenarios.test.ts` passes.
 - [ ] Manual: save city, mutate state, load city, confirm restored state.
 - [ ] Manual: each scenario starts with expected year/funds/speed.
@@ -567,4 +567,3 @@ Deletion execution notes:
 - [ ] All high-priority parity behaviors are traced back to C references in code/JSDoc.
 - [ ] Tests and manual certification steps are complete and reproducible.
 - [ ] Legacy/demo-only paths are no longer blocking or masking real gameplay behavior.
-
