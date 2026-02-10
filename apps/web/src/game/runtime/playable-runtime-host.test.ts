@@ -1,5 +1,8 @@
+import { runInNewContext } from 'node:vm';
+
 import { describe, expect, test, vi } from 'vitest';
 
+import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   cityDimensionsForMap,
   Tile,
@@ -191,7 +194,8 @@ function isPlayableCertificationCostNeutralTile(tileWord: number): boolean {
  * Finds deterministic single-tile placements for road/rail/wire/bulldoze cost checks.
  * Mirrors single-tile `do_tool` placement in `ref/micropolis/src/sim/w_tool.c`.
  * Parity note: selects dirt tiles only so assertions validate base `CostOf[]`
- * entries without incidental terrain-clear surcharges.
+ * entries without incidental terrain-clear surcharges, and reads snapshot tiles
+ * using bridge canonical index math (`x * height + y`).
  */
 function readPlayableCertificationSingleTileToolPlacementsFromSnapshot(
   snapshot: HostSnapshotEnvelope,
@@ -212,7 +216,7 @@ function readPlayableCertificationSingleTileToolPlacementsFromSnapshot(
 
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
-      const tileWord = tileWords[y * width + x] ?? 0;
+      const tileWord = tileWords[getCoreBridgeV1SnapshotTileIndex(x, y, height)] ?? 0;
       if (!isPlayableCertificationCostNeutralTile(tileWord)) {
         continue;
       }
@@ -1465,5 +1469,26 @@ describe('readCityExportPayload', () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test('accepts cross-realm Uint8Array save payload bytes', () => {
+    const crossRealmBytes = runInNewContext('new Uint8Array([7, 8, 9])') as Uint8Array;
+    expect(crossRealmBytes instanceof Uint8Array).toBe(false);
+
+    expect(
+      readCityExportPayload({
+        cityIo: {
+          save: {
+            fileName: 'cross-realm.cty',
+            cityName: 'Cross Realm',
+            cityBytes: crossRealmBytes,
+          },
+        },
+      }),
+    ).toEqual({
+      fileName: 'cross-realm.cty',
+      cityName: 'Cross Realm',
+      cityBytes: crossRealmBytes,
+    });
   });
 });

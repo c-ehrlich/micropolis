@@ -41,6 +41,24 @@ export interface CityExportPayload {
 }
 
 /**
+ * Validates `.cty` byte buffers from runtime patch payloads.
+ * Mirrors `SaveCityAs` byte-array ownership in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: accepts both same-realm and cross-realm `Uint8Array` objects,
+ * while continuing to reject non-`Uint8Array` typed arrays.
+ */
+function isCityExportByteArray(value: unknown): value is Uint8Array {
+  if (value instanceof Uint8Array) {
+    return true;
+  }
+
+  if (value === null || typeof value !== 'object' || !ArrayBuffer.isView(value)) {
+    return false;
+  }
+
+  return Object.prototype.toString.call(value) === '[object Uint8Array]';
+}
+
+/**
  * Build the default Authoritative Runtime playable route host.
  * Mirrors single command-surface ownership in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this returns `SimCoreEnvelopeHost` as the authoritative host;
@@ -121,7 +139,7 @@ export function readCityExportPayload(payload: unknown): CityExportPayload | nul
   if (
     typeof candidate.fileName !== 'string' ||
     typeof candidate.cityName !== 'string' ||
-    !(candidate.cityBytes instanceof Uint8Array)
+    !isCityExportByteArray(candidate.cityBytes)
   ) {
     return null;
   }

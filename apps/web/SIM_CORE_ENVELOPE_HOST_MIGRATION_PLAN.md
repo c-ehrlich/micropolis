@@ -157,8 +157,8 @@ Required automated gates before handoff:
 - [x] `pnpm typecheck`
 - [x] `pnpm lint`
 - [x] `pnpm format`
-- [x] `pnpm --filter @city/web test -- src/game/runtime/playable-runtime-host.test.ts` (Revalidated on 2026-02-10.)
-- [ ] Route runtime sequencing/persistence suites relevant to `/` gameplay path
+- [x] `pnpm --filter @city/web test -- src/game/runtime/playable-runtime-host.test.ts` (Revalidated on 2026-02-10 after `readCityExportPayload` cross-realm `Uint8Array` payload hardening.)
+- [x] Route runtime sequencing/persistence suites relevant to `/` gameplay path (Verified 2026-02-10 via `pnpm --filter @city/web test -- src/game/runtime.ordering-resync.test.ts src/game/runtime.persistence.test.ts`.)
 
 ## Risks and Mitigations
 
