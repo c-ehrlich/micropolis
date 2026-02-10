@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { World } from '../../../../../packages/sim-core/src/index.ts';
-import { type HostEnvelope } from './protocol.ts';
+import { type HostEnvelope, PLAYABLE_TOOL_SPECS } from './protocol.ts';
 import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 const SIM_CORE_ENVELOPE_HOST_SOURCE_URL = new URL('./sim-core-envelope-host.ts', import.meta.url);
@@ -235,6 +235,67 @@ describe('SimCoreEnvelopeHost', () => {
       commandId: 'cmd-pause',
       reason: 'invalid-command',
     });
+  });
+
+  it('supports every playable tool currently exposed by route "/"', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-tools',
+      clientId: 'client-tools',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const toolRejectReasons = new Set(['out-of-bounds', 'no-funds', 'invalid-placement']);
+    for (const [index, spec] of PLAYABLE_TOOL_SPECS.entries()) {
+      const commandId = `cmd-tool-${spec.tool}`;
+      const startEnvelopeCount = captured.envelopes.length;
+      captured.send({
+        kind: 'command',
+        roomId: 'room-tools',
+        clientId: 'client-tools',
+        commandId,
+        command: {
+          kind: 'tool',
+          tool: spec.tool,
+          x: 10 + index * 6,
+          y: 10 + Math.trunc(index / 4) * 6,
+        },
+      });
+
+      const newEnvelopes = captured.envelopes.slice(startEnvelopeCount);
+      expect(newEnvelopes.length).toBeGreaterThan(0);
+
+      const settlement = newEnvelopes[0];
+      if (settlement === undefined) {
+        throw new Error(`missing settlement for ${spec.tool}`);
+      }
+
+      if (settlement.kind === 'ack') {
+        expect(settlement.commandId).toBe(commandId);
+        expect(newEnvelopes[1]).toMatchObject({
+          kind: 'patch',
+          roomId: 'room-tools',
+          clientId: 'client-tools',
+          tick: settlement.tick,
+          serverSeq: settlement.serverSeq + 1,
+          payload: {},
+        });
+        continue;
+      }
+
+      expect(settlement.kind).toBe('reject');
+      if (settlement.kind !== 'reject') {
+        continue;
+      }
+
+      expect(settlement.commandId).toBe(commandId);
+      expect(settlement.reason).not.toBe('invalid-command');
+      expect(toolRejectReasons.has(settlement.reason)).toBe(true);
+    }
   });
 
   it('serves explicit snapshot requests and stops emitting after disconnect', () => {

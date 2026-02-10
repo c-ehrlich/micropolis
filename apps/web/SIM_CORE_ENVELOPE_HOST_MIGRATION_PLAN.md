@@ -68,7 +68,7 @@ Acceptance checks:
 ### Phase 2: Command Semantics with C-Parity Decisions
 
 - [x] Implement tool commands via sim-core `applyToolAction` (no demo tile stamping).
-- [ ] Support the full playable tool set currently exposed by route `/`.
+- [x] Support the full playable tool set currently exposed by route `/`.
 - [ ] Keep canonical funds coupling: `SimState.TotalFunds` authoritative, `ToolContext.funds` synchronized before/after tool evaluation.
 - [ ] Implement sim-control commands (`pause`, `play`, `set-speed`) with C-equivalent `setSpeed`/pause/resume behavior.
 - [ ] Implement city lifecycle + IO commands (`new-city`, `save-city`, `load-city`) through `sim-io` helpers.
