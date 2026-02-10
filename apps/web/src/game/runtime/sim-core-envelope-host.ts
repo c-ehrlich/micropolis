@@ -11,8 +11,12 @@ import {
   generateShip as generateRealtimeShip,
   generateTrain as generateRealtimeTrain,
   getSprite as getRealtimeSprite,
+  makeEarthquake,
   makeExplosion as makeRealtimeExplosion,
   makeExplosionAt as makeRealtimeExplosionAt,
+  makeFire,
+  makeFlood,
+  makeMeltdown,
   makeMonster as makeRealtimeMonster,
   makeTornado as makeRealtimeTornado,
   type MapRedrawPlan,
@@ -59,6 +63,7 @@ type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-ci
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
 type CommandClientEnvelope = Extract<ClientEnvelope, { kind: 'command' }>;
 type SequencedHostEnvelope = Exclude<HostEnvelope, { kind: 'hello' }>;
+type ManualRealtimeEventId = 'tornado' | 'monster' | 'fire' | 'flood' | 'meltdown' | 'earthquake';
 type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
   ? Omit<TValue, TKey>
   : never;
@@ -274,6 +279,40 @@ export class SimCoreEnvelopeHost implements CoreHost {
         this.routeDisconnect(sessionId);
       },
     };
+  }
+
+  /**
+   * Triggers one manual disaster event from playable route disaster controls.
+   * Mirrors Disasters menu entrypoints in `ref/micropolis/res/whead.tcl` with
+   * disaster handlers in `ref/micropolis/src/sim/s_disast.c` and sprite
+   * handlers in `ref/micropolis/src/sim/w_sprite.c`.
+   * Parity note: this settles as one sequenced patch tick (no command ack),
+   * using sim-core disaster/realtime hooks plus standard map/HUD/message/realtime
+   * payload emission for route reducer compatibility.
+   */
+  public triggerManualRealtimeEvent(eventId: ManualRealtimeEventId): boolean {
+    if (this.onEnvelope === undefined || this.lifecycle.phase !== 'ready') {
+      return false;
+    }
+
+    this.advanceCommandTick();
+    let mapPatch: Patch | null = null;
+    this.authorityState.simContext.store.beginTick();
+    try {
+      this.syncRealtimeContextFromSimState();
+      this.applyManualRealtimeEvent(eventId);
+      runUiUpdate(this.authorityState.simState, this.authorityState.simContext);
+    } finally {
+      const tickResult = this.authorityState.simContext.store.commitTick();
+      mapPatch = readMapPatchFromTickResult(tickResult.patches);
+    }
+
+    this.emitPatch(
+      this.lifecycle.roomId,
+      this.lifecycle.clientId,
+      this.buildPatchPayload(mapPatch),
+    );
+    return true;
   }
 
   /**
@@ -748,6 +787,36 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.setSimulationSpeed(command.speed);
+  }
+
+  /**
+   * Applies one manual disaster event into authoritative sim/realtime state.
+   * Mirrors disaster handlers in `ref/micropolis/src/sim/s_disast.c`
+   * (`MakeFire`, `MakeFlood`, `MakeMeltdown`, `MakeEarthquake`) and realtime
+   * disaster handlers in `ref/micropolis/src/sim/w_sprite.c`
+   * (`MakeTornado`, `MakeMonster`).
+   */
+  private applyManualRealtimeEvent(eventId: ManualRealtimeEventId): void {
+    switch (eventId) {
+      case 'tornado':
+        makeRealtimeTornado(this.realtimeContext);
+        return;
+      case 'monster':
+        makeRealtimeMonster(this.realtimeContext);
+        return;
+      case 'fire':
+        makeFire(this.authorityState.simState, this.authorityState.simContext);
+        return;
+      case 'flood':
+        makeFlood(this.authorityState.simState, this.authorityState.simContext);
+        return;
+      case 'meltdown':
+        makeMeltdown(this.authorityState.simState, this.authorityState.simContext);
+        return;
+      case 'earthquake':
+        makeEarthquake(this.authorityState.simState, this.authorityState.simContext);
+        return;
+    }
   }
 
   /**

@@ -648,6 +648,81 @@ describe('SimCoreEnvelopeHost', () => {
     expect(reducedState.realtimeState.objects).toEqual([]);
   });
 
+  it('only enables manual disaster triggers after the host session is ready', () => {
+    const host = new SimCoreEnvelopeHost();
+    expect(host.triggerManualRealtimeEvent('earthquake')).toBe(false);
+
+    const captured = connectAndCapture(host);
+    expect(host.triggerManualRealtimeEvent('earthquake')).toBe(false);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-manual-disaster-ready',
+      clientId: 'client-manual-disaster-ready',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    expect(host.triggerManualRealtimeEvent('earthquake')).toBe(true);
+    expect(captured.envelopes.at(-1)?.kind).toBe('patch');
+
+    captured.disconnect();
+    expect(host.triggerManualRealtimeEvent('earthquake')).toBe(false);
+  });
+
+  it('routes manual disaster triggers through sim-core disaster and realtime handlers', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const roomId = 'room-manual-disaster-path';
+    const clientId = 'client-manual-disaster-path';
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const envelopeCountAfterHello = captured.envelopes.length;
+
+    expect(host.triggerManualRealtimeEvent('earthquake')).toBe(true);
+    const earthquakePatch = captured.envelopes.at(-1);
+    if (earthquakePatch === undefined || earthquakePatch.kind !== 'patch') {
+      throw new Error('expected earthquake manual-disaster patch envelope');
+    }
+    // Message id `-23` comes from `makeEarthquake` -> `sendMesAt` in
+    // `packages/sim-core/src/systems/disasters.ts`, mirroring `MakeEarthquake`
+    // in `ref/micropolis/src/sim/s_disast.c`.
+    expect(earthquakePatch.payload.messageDeltas?.some((message) => message.id === -23)).toBe(true);
+
+    expect(host.triggerManualRealtimeEvent('tornado')).toBe(true);
+    const tornadoPatch = captured.envelopes.at(-1);
+    if (tornadoPatch === undefined || tornadoPatch.kind !== 'patch') {
+      throw new Error('expected tornado manual-disaster patch envelope');
+    }
+    // Message id `-22` comes from `makeTornado` -> `sendMessage` in
+    // `packages/sim-core/src/sim/realtime.ts`, mirroring `MakeTornado`
+    // in `ref/micropolis/src/sim/w_sprite.c`.
+    expect(tornadoPatch.payload.messageDeltas?.some((message) => message.id === -22)).toBe(true);
+
+    const tornadoRealtime = readRealtimePayloadFromEnvelope(tornadoPatch);
+    if (tornadoRealtime === null) {
+      throw new Error('expected realtime payload after tornado manual-disaster trigger');
+    }
+    // Sprite type `6` is tornado (`TOR`) in `sim.h` and `w_sprite.c`, exposed
+    // by `SPRITE_TYPE.TOR` in `packages/sim-core/src/sim/realtime.ts`.
+    expect(
+      tornadoRealtime.deltas?.some((delta) => delta.kind === 'upsert' && delta.object.type === 6),
+    ).toBe(true);
+
+    expect(
+      captured.envelopes
+        .slice(envelopeCountAfterHello)
+        .every((envelope) => envelope.kind === 'patch'),
+    ).toBe(true);
+  });
+
   it('routes tool/sim-control/city-lifecycle commands through authoritative command semantics', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
