@@ -395,7 +395,7 @@ export function MapCanvas({
 
     pendingAnimationFrameRef.current = requestAnimationFrame(() => {
       pendingAnimationFrameRef.current = null;
-      const frame = queuedMapFrameRef.current;
+      const frame = consumeQueuedMapCanvasFrame(queuedMapFrameRef);
       if (frame === null) {
         return;
       }
@@ -789,6 +789,21 @@ interface MapCanvasRenderFrame {
   mapState: RuntimeMapState;
   tileSize: number;
   tileRenderer: MapCanvasTileRenderer;
+}
+
+/**
+ * Consumes one queued browser map frame and clears the queue slot.
+ * Mirrors one `DoUpdateMap` consumption pass in `ref/micropolis/src/sim/w_map.c`,
+ * where one invalidated view state is consumed for one paint update.
+ * Parity note: queue entries are single-use in Stage 4; clearing after dequeue
+ * prevents stale dirty coverage from being coalesced into later epochs.
+ */
+export function consumeQueuedMapCanvasFrame<Frame>(queuedFrameRef: {
+  current: Frame | null;
+}): Frame | null {
+  const frame = queuedFrameRef.current;
+  queuedFrameRef.current = null;
+  return frame;
 }
 
 /**

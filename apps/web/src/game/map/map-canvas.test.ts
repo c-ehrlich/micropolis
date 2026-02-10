@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
   computeMapCanvasZoomFromWheel,
+  consumeQueuedMapCanvasFrame,
   continueMapCanvasPanDrag,
   forEachMapCanvasPatchTileIndex,
   getMapCanvasCameraMetrics,
@@ -66,6 +67,18 @@ function applyPatchTileVisualTokens({
 }
 
 describe('map canvas draw-mode selection', () => {
+  it('consumes queued frames as single-use entries to avoid stale redraw coalescing', () => {
+    const queuedFrameRef: { current: { epoch: number } | null } = {
+      current: { epoch: 7 },
+    };
+
+    const first = consumeQueuedMapCanvasFrame(queuedFrameRef);
+    const second = consumeQueuedMapCanvasFrame(queuedFrameRef);
+
+    expect(first).toEqual({ epoch: 7 });
+    expect(second).toBeNull();
+  });
+
   it('keeps full redraw ownership for authoritative snapshot frames', () => {
     expect(
       selectMapCanvasDrawMode({
