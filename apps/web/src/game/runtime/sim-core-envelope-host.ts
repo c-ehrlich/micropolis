@@ -13,6 +13,7 @@ import type {
 } from './protocol.ts';
 
 type PlayableToolCommand = Extract<PlayableClientCommand, { kind: 'tool' }>;
+type PlayableSimControlCommand = Extract<PlayableClientCommand, { kind: 'sim-control' }>;
 
 /**
  * Sim-core-authoritative envelope host for the route `/` migration path.
@@ -45,12 +46,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly mapHeight: number;
   private serverSeq = 0;
   private tick = 0;
+  private simPaused = false;
+  private simPausedSpeed = 3;
 
   public constructor(_options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState();
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
     this.mapWidth = mapLayerInfo.width;
     this.mapHeight = mapLayerInfo.height;
+    this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
   }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
@@ -165,6 +169,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
         return;
       }
 
+      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
+      return;
+    }
+
+    if (envelope.command.kind === 'sim-control') {
+      this.applySimControlCommand(envelope.command);
       this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
       this.emitPatch(envelope.roomId, envelope.clientId, this.buildNoOpPatchPayload());
       return;
@@ -298,6 +309,73 @@ export class SimCoreEnvelopeHost implements CoreHost {
     setFunds(this.authorityState.simState, this.authorityState.toolContext.funds);
   }
 
+  /**
+   * Applies pause/play/set-speed commands through authoritative sim-core state.
+   * Mirrors `Pause`, `Resume`, and `setSpeed(short)` in
+   * `ref/micropolis/src/sim/w_util.c` and command ingress in
+   * `ref/micropolis/src/sim/w_sim.c` (`SimCmdPause`, `SimCmdResume`, `SimCmdSpeed`).
+   * Parity note: this stage ports state transitions only; HUD speed payload
+   * projection is added in later payload-port tasks.
+   */
+  private applySimControlCommand(command: PlayableSimControlCommand): void {
+    if (command.control === 'pause') {
+      this.pauseSimulation();
+      return;
+    }
+
+    if (command.control === 'play') {
+      this.resumeSimulation();
+      return;
+    }
+
+    this.setSimulationSpeed(command.speed);
+  }
+
+  /**
+   * Pause semantics for envelope-host sim controls.
+   * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private pauseSimulation(): void {
+    if (this.simPaused) {
+      return;
+    }
+
+    this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
+    this.setSimulationSpeed(0);
+    this.simPaused = true;
+  }
+
+  /**
+   * Resume semantics for envelope-host sim controls.
+   * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private resumeSimulation(): void {
+    if (!this.simPaused) {
+      return;
+    }
+
+    this.simPaused = false;
+    this.setSimulationSpeed(this.simPausedSpeed);
+  }
+
+  /**
+   * Speed semantics for envelope-host sim controls.
+   * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
+   * Parity note: values are explicitly truncated/clamped to `0..3` to preserve
+   * C integer and clamp behavior.
+   */
+  private setSimulationSpeed(candidate: number): void {
+    let speed = normalizePlayableSpeed(candidate);
+    this.authorityState.simState.SimMetaSpeed = speed;
+
+    if (this.simPaused) {
+      this.simPausedSpeed = this.authorityState.simState.SimMetaSpeed;
+      speed = 0;
+    }
+
+    this.authorityState.simState.SimSpeed = speed;
+  }
+
   private isSessionActive(sessionId: number): boolean {
     if (this.onEnvelope === undefined || this.lifecycle.phase === 'disconnected') {
       return false;
@@ -386,4 +464,19 @@ function rejectReasonFromToolResult(result: ToolResult): string | undefined {
  */
 function isPlacementCoordinate(x: number, y: number): boolean {
   return Number.isInteger(x) && Number.isInteger(y);
+}
+
+/**
+ * Clamps speed candidates to the Micropolis playable `setSpeed(short)` domain.
+ * Mirrors clamping in `ref/micropolis/src/sim/w_util.c`.
+ */
+function normalizePlayableSpeed(candidate: number): number {
+  const speed = Math.trunc(candidate);
+  if (speed < 0) {
+    return 0;
+  }
+  if (speed > 3) {
+    return 3;
+  }
+  return speed;
 }

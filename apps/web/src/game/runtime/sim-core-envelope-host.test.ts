@@ -149,7 +149,7 @@ describe('SimCoreEnvelopeHost', () => {
     expect(map.tileWords).toEqual(authoritativeMapLayer);
   });
 
-  it('routes tool commands through sim-core applyToolAction outcomes and rejects unsupported commands', () => {
+  it('routes tool commands and sim-control commands through authoritative command semantics', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
 
@@ -195,6 +195,37 @@ describe('SimCoreEnvelopeHost', () => {
         control: 'pause',
       },
     });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      commandId: 'cmd-set-speed-paused',
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 2,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      commandId: 'cmd-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      commandId: 'cmd-new-city',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+      },
+    });
 
     // Mirrors C command/update envelope ordering intent from `w_sim.c` + `w_update.c`:
     // command settlement is sequenced before same-tick update projection.
@@ -225,16 +256,139 @@ describe('SimCoreEnvelopeHost', () => {
       reason: 'out-of-bounds',
     });
 
-    const reject = captured.envelopes[5];
-    expect(reject).toEqual({
-      kind: 'reject',
+    expect(captured.envelopes[5]).toEqual({
+      kind: 'ack',
       roomId: 'room-a',
       clientId: 'client-a',
       tick: 3,
       serverSeq: 5,
       commandId: 'cmd-pause',
+    });
+    expect(captured.envelopes[6]).toEqual({
+      kind: 'patch',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 3,
+      serverSeq: 6,
+      payload: {},
+    });
+    expect(captured.envelopes[7]).toEqual({
+      kind: 'ack',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 4,
+      serverSeq: 7,
+      commandId: 'cmd-set-speed-paused',
+    });
+    expect(captured.envelopes[8]).toEqual({
+      kind: 'patch',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 4,
+      serverSeq: 8,
+      payload: {},
+    });
+    expect(captured.envelopes[9]).toEqual({
+      kind: 'ack',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 5,
+      serverSeq: 9,
+      commandId: 'cmd-play',
+    });
+    expect(captured.envelopes[10]).toEqual({
+      kind: 'patch',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 5,
+      serverSeq: 10,
+      payload: {},
+    });
+    expect(captured.envelopes[11]).toEqual({
+      kind: 'reject',
+      roomId: 'room-a',
+      clientId: 'client-a',
+      tick: 6,
+      serverSeq: 11,
+      commandId: 'cmd-new-city',
       reason: 'invalid-command',
     });
+  });
+
+  it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          SimSpeed: number;
+          SimMetaSpeed: number;
+        };
+      };
+      simPaused: boolean;
+      simPausedSpeed: number;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-speed-state',
+      clientId: 'client-speed-state',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Source of magic numbers:
+    // - `setSpeed(short)` clamps playable speed into `0..3` in `ref/micropolis/src/sim/w_util.c`.
+    // - default `SimSpeed` starts at `3` in sim-core (`createSimState` parity baseline).
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(3);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
+    expect(hostInternals.simPaused).toBe(false);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-speed-state',
+      clientId: 'client-speed-state',
+      commandId: 'cmd-speed-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(0);
+    expect(hostInternals.simPaused).toBe(true);
+    expect(hostInternals.simPausedSpeed).toBe(3);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-speed-state',
+      clientId: 'client-speed-state',
+      commandId: 'cmd-speed-set-while-paused',
+      command: {
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed: 2,
+      },
+    });
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(2);
+    expect(hostInternals.simPaused).toBe(true);
+    expect(hostInternals.simPausedSpeed).toBe(2);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-speed-state',
+      clientId: 'client-speed-state',
+      commandId: 'cmd-speed-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(2);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(2);
+    expect(hostInternals.simPaused).toBe(false);
+    expect(hostInternals.simPausedSpeed).toBe(2);
   });
 
   it('supports every playable tool currently exposed by route "/"', () => {
@@ -561,22 +715,29 @@ describe('SimCoreEnvelopeHost', () => {
       fromServerSeq: 3,
       reason: 'manual',
     });
-    expect(secondSessionEnvelopes).toHaveLength(4);
+    expect(secondSessionEnvelopes).toHaveLength(5);
     expect(secondSessionEnvelopes[2]).toEqual({
-      kind: 'reject',
+      kind: 'ack',
       roomId: 'room-second',
       clientId: 'client-second',
       tick: 1,
       serverSeq: 3,
       commandId: 'cmd-active',
-      reason: 'invalid-command',
     });
-    expect(secondSessionEnvelopes[3]).toMatchObject({
-      kind: 'snapshot',
+    expect(secondSessionEnvelopes[3]).toEqual({
+      kind: 'patch',
       roomId: 'room-second',
       clientId: 'client-second',
       tick: 1,
       serverSeq: 4,
+      payload: {},
+    });
+    expect(secondSessionEnvelopes[4]).toMatchObject({
+      kind: 'snapshot',
+      roomId: 'room-second',
+      clientId: 'client-second',
+      tick: 1,
+      serverSeq: 5,
     });
 
     secondSession.disconnect();
@@ -587,6 +748,6 @@ describe('SimCoreEnvelopeHost', () => {
       fromServerSeq: 4,
       reason: 'manual',
     });
-    expect(secondSessionEnvelopes).toHaveLength(4);
+    expect(secondSessionEnvelopes).toHaveLength(5);
   });
 });
