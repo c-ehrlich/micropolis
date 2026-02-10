@@ -470,7 +470,7 @@ Deletion execution notes:
 - [x] `ref/micropolis/src/sim/sim.c` (`sim_update_maps`, flag clearing)
 - [x] `ref/micropolis/src/sim/s_scan.c` (`NewMap`, `NewMapFlags` producers)
 - [x] `ref/micropolis/src/sim/w_map.c` (pan/map interaction behaviors)
-- [ ] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table)
+- [x] `ref/micropolis/src/sim/g_map.c` (map-state draw mode table)
 
 ### TS references to review
 
