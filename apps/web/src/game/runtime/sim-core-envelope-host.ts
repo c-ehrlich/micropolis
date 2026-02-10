@@ -40,6 +40,13 @@ interface SnapshotReplayCheckpoint {
   tick: number;
   payload: HostSnapshotPayload;
 }
+interface ReplayLogEntry {
+  envelope: SequencedHostEnvelope;
+  replayTailEligible: boolean;
+}
+interface EmitSequencedEnvelopeOptions {
+  replayTailEligible?: boolean;
+}
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
@@ -93,7 +100,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
   private cityName = DEFAULT_CITY_NAME;
-  private readonly sequencedReplayLog: SequencedHostEnvelope[] = [];
+  private readonly sequencedReplayLog: ReplayLogEntry[] = [];
   private readonly snapshotReplayCheckpoints = new Map<number, SnapshotReplayCheckpoint>();
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
@@ -193,7 +200,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
       coreVersion: envelope.coreVersion,
       accepted: true,
     });
-    this.emitSnapshot(envelope.roomId, envelope.clientId);
+    this.emitSnapshot(envelope.roomId, envelope.clientId, this.tick, {
+      replayTailEligible: false,
+    });
   }
 
   private handleSnapshotRequestEnvelope(
@@ -716,8 +725,19 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Emits one authoritative snapshot from sim-core map state.
    * Mirrors full update refresh behavior in `ref/micropolis/src/sim/w_update.c`.
    */
-  private emitSnapshot(roomId: string, clientId: string, tickOverride = this.tick): void {
-    this.emitSnapshotFromPayload(roomId, clientId, this.buildSnapshotPayload(), tickOverride);
+  private emitSnapshot(
+    roomId: string,
+    clientId: string,
+    tickOverride = this.tick,
+    options?: EmitSequencedEnvelopeOptions,
+  ): void {
+    this.emitSnapshotFromPayload(
+      roomId,
+      clientId,
+      this.buildSnapshotPayload(),
+      tickOverride,
+      options,
+    );
   }
 
   /**
@@ -730,9 +750,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private emitSnapshotReplay(roomId: string, clientId: string, replayCursor: number): void {
     const baseline = this.readSnapshotReplayBaseline(replayCursor);
     const replayTail = this.readSnapshotReplayTail(replayCursor);
-    this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick);
+    this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick, {
+      replayTailEligible: false,
+    });
     for (const envelope of replayTail) {
-      this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId));
+      this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
+        replayTailEligible: false,
+      });
     }
   }
 
@@ -746,14 +770,18 @@ export class SimCoreEnvelopeHost implements CoreHost {
     clientId: string,
     payload: HostSnapshotPayload,
     tickOverride: number,
+    options?: EmitSequencedEnvelopeOptions,
   ): void {
-    this.emitSequencedEnvelope({
-      kind: 'snapshot',
-      roomId,
-      clientId,
-      tick: tickOverride,
-      payload,
-    });
+    this.emitSequencedEnvelope(
+      {
+        kind: 'snapshot',
+        roomId,
+        clientId,
+        tick: tickOverride,
+        payload,
+      },
+      options,
+    );
   }
 
   /**
@@ -761,7 +789,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors ordered host update sequencing intent from `w_sim.c`/`w_update.c`
    * while adapting to typed bridge envelopes.
    */
-  private emitSequencedEnvelope(envelope: SequencedHostEnvelopeWithoutServerSeq): void {
+  private emitSequencedEnvelope(
+    envelope: SequencedHostEnvelopeWithoutServerSeq,
+    options: EmitSequencedEnvelopeOptions = {},
+  ): void {
     if (this.onEnvelope === undefined) {
       return;
     }
@@ -772,7 +803,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       serverSeq: this.nextServerSeq(),
     };
     this.onEnvelope(sequencedEnvelope);
-    this.recordReplayEnvelope(sequencedEnvelope);
+    this.recordReplayEnvelope(sequencedEnvelope, options);
   }
 
   /**
@@ -801,7 +832,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
    */
   private readSnapshotReplayTail(replayCursor: number): SequencedHostEnvelope[] {
     return this.sequencedReplayLog
-      .filter((envelope) => envelope.serverSeq > replayCursor && envelope.kind !== 'snapshot')
+      .filter((entry) => entry.replayTailEligible && entry.envelope.serverSeq > replayCursor)
+      .map((entry) => entry.envelope)
       .sort((left, right) => left.serverSeq - right.serverSeq);
   }
 
@@ -827,8 +859,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors deterministic replay checkpoint intent from
    * `ref/micropolis/spec/integration/SPEC.md`.
    */
-  private recordReplayEnvelope(envelope: SequencedHostEnvelope): void {
-    this.sequencedReplayLog.push(envelope);
+  private recordReplayEnvelope(
+    envelope: SequencedHostEnvelope,
+    options: EmitSequencedEnvelopeOptions,
+  ): void {
+    this.sequencedReplayLog.push({
+      envelope,
+      replayTailEligible: options.replayTailEligible ?? true,
+    });
     this.snapshotReplayCheckpoints.set(envelope.serverSeq, {
       tick: envelope.tick,
       payload: this.buildSnapshotPayload(),

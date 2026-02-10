@@ -538,6 +538,194 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('round-trips save/load/scenario commands deterministically through snapshot replay tail', async () => {
+    const scenario = getScenarioDefinition(2);
+    const scenarioBytes = new Uint8Array(
+      readFileSync(
+        new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+      ),
+    );
+    const host = new SimCoreEnvelopeHost({
+      scenarioResourceLoader: async (_fileName: string) => scenarioBytes,
+    });
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+          snapshot(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-io-scenario-roundtrip',
+      clientId: 'client-io-scenario-roundtrip',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io-scenario-roundtrip',
+      clientId: 'client-io-scenario-roundtrip',
+      commandId: 'cmd-save-roundtrip',
+      command: {
+        kind: 'city-io',
+        action: 'save-city',
+        fileName: 'roundtrip-save',
+      },
+    });
+
+    const savePatch = captured.envelopes.find(
+      (envelope): envelope is Extract<HostEnvelope, { kind: 'patch' }> =>
+        envelope.kind === 'patch' && readSaveCityPayload(envelope.payload) !== null,
+    );
+    if (savePatch === undefined) {
+      throw new Error('expected save-city patch envelope');
+    }
+    const savePayload = readSaveCityPayload(savePatch.payload);
+    if (savePayload === null) {
+      throw new Error('expected save-city patch payload');
+    }
+    // Magic-number source: `.cty` byte size produced by `saveFile` in
+    // `ref/micropolis/src/sim/s_fileio.c`.
+    expect(savePayload.cityBytes.byteLength).toBe(27120);
+
+    const savedCity = decodeCityFileForMap(savePayload.cityBytes, {
+      width: World.WORLD_X,
+      height: World.WORLD_Y,
+    });
+    const restoreX = 11;
+    const restoreY = 11;
+    const restoreIndex = restoreX * World.WORLD_Y + restoreY;
+    const savedTileWord = savedCity.map[restoreIndex];
+    if (savedTileWord === undefined) {
+      throw new Error(`expected saved map word at index ${restoreIndex}`);
+    }
+    const changedTileWord = savedTileWord === Tile.DIRT ? Tile.RIVER : Tile.DIRT;
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      mapLayer[restoreIndex] = changedTileWord;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+    hostInternals.authorityState.simState.TotalFunds = 1;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io-scenario-roundtrip',
+      clientId: 'client-io-scenario-roundtrip',
+      commandId: 'cmd-load-roundtrip',
+      command: {
+        kind: 'city-io',
+        action: 'load-city',
+        fileName: savePayload.fileName,
+        cityBytes: savePayload.cityBytes,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-io-scenario-roundtrip',
+      clientId: 'client-io-scenario-roundtrip',
+      commandId: 'cmd-scenario-roundtrip',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const scenarioMap = hostInternals.authorityState.store.snapshot('map');
+    if (!(scenarioMap instanceof Uint16Array)) {
+      throw new Error('expected scenario map snapshot');
+    }
+    const authoritativeScenarioMap = Uint16Array.from(scenarioMap);
+
+    const requestReplay = () => {
+      const startIndex = captured.envelopes.length;
+      captured.send({
+        kind: 'request_snapshot',
+        roomId: 'room-io-scenario-roundtrip',
+        clientId: 'client-io-scenario-roundtrip',
+        fromServerSeq: savePatch.serverSeq,
+        reason: 'manual',
+      });
+      return captured.envelopes.slice(startIndex);
+    };
+
+    const replayOne = requestReplay();
+    expect(replayOne).toHaveLength(5);
+    expect(replayOne[0]).toMatchObject({
+      kind: 'snapshot',
+    });
+    expect(replayOne[1]).toMatchObject({
+      kind: 'ack',
+      commandId: 'cmd-load-roundtrip',
+    });
+    expect(replayOne[2]).toMatchObject({
+      kind: 'snapshot',
+    });
+    expect(replayOne[3]).toMatchObject({
+      kind: 'ack',
+      commandId: 'cmd-scenario-roundtrip',
+    });
+    expect(replayOne[4]).toMatchObject({
+      kind: 'snapshot',
+    });
+    let previousReplayTick = 0;
+    for (const envelope of replayOne) {
+      if (envelope.kind === 'hello') {
+        throw new Error('replay response should not include hello envelopes');
+      }
+      expect(envelope.tick).toBeGreaterThanOrEqual(previousReplayTick);
+      previousReplayTick = envelope.tick;
+    }
+
+    const replayLoadSnapshot = replayOne[2];
+    if (replayLoadSnapshot === undefined || replayLoadSnapshot.kind !== 'snapshot') {
+      throw new Error('expected replay load snapshot');
+    }
+    const replayLoadMap = replayLoadSnapshot.payload.map;
+    if (replayLoadMap === undefined || !('tileWords' in replayLoadMap)) {
+      throw new Error('expected replay load map payload');
+    }
+    expect(replayLoadMap.tileWords[restoreIndex]).toBe(savedTileWord);
+
+    const replayScenarioSnapshot = replayOne[4];
+    if (replayScenarioSnapshot === undefined || replayScenarioSnapshot.kind !== 'snapshot') {
+      throw new Error('expected replay scenario snapshot');
+    }
+    const replayScenarioMap = replayScenarioSnapshot.payload.map;
+    if (replayScenarioMap === undefined || !('tileWords' in replayScenarioMap)) {
+      throw new Error('expected replay scenario map payload');
+    }
+    expect(replayScenarioMap.tileWords).toEqual(authoritativeScenarioMap);
+
+    const replayTwo = requestReplay();
+    expect(replayTwo).toHaveLength(5);
+    const dropServerSeq = (envelope: HostEnvelope) => {
+      if (envelope.kind === 'hello') {
+        throw new Error('replay response should not include hello envelopes');
+      }
+      const { serverSeq: _serverSeq, ...withoutServerSeq } = envelope;
+      return withoutServerSeq;
+    };
+    expect(replayTwo.map(dropServerSeq)).toEqual(replayOne.map(dropServerSeq));
+  });
+
   it('loads scenario bytes asynchronously through loadScenarioLikeC', async () => {
     const scenario = getScenarioDefinition(2);
     const scenarioBytes = new Uint8Array(
