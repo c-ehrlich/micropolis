@@ -462,7 +462,7 @@ Deletion execution notes:
 
 ### Goal
 
-- [ ] Make Stage 4 responsive and stable during extended play.
+- [x] Make Stage 4 responsive and stable during extended play.
 
 ### C references to review
 

@@ -43,6 +43,8 @@ export function MapCanvas({
   const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
     ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
   >(new Map());
+  const queuedMapFrameRef = useRef<MapCanvasRenderFrame | null>(null);
+  const pendingAnimationFrameRef = useRef<number | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
   const debugTileRendererEnabled = useMemo(() => isStage4DebugTileRendererEnabled(), []);
@@ -89,43 +91,52 @@ export function MapCanvas({
   }, [debugTileRendererEnabled]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas === null || !mapState.hasSnapshot) {
+    if (!mapState.hasSnapshot) {
+      queuedMapFrameRef.current = null;
+      if (pendingAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAnimationFrameRef.current);
+        pendingAnimationFrameRef.current = null;
+      }
       lastRenderedEpochRef.current = 0;
       return;
     }
 
-    const context = canvas.getContext('2d');
-    if (context === null) {
+    queuedMapFrameRef.current = {
+      mapState,
+      tileSize,
+      tileRenderer: {
+        debugTileRendererEnabled,
+        baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+        tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
+      },
+    };
+
+    if (pendingAnimationFrameRef.current !== null) {
       return;
     }
-    context.imageSmoothingEnabled = false;
 
-    const widthPx = mapState.width * tileSize;
-    const heightPx = mapState.height * tileSize;
-    let resized = false;
-    if (canvas.width !== widthPx) {
-      canvas.width = widthPx;
-      resized = true;
-    }
-    if (canvas.height !== heightPx) {
-      canvas.height = heightPx;
-      resized = true;
-    }
-
-    const drawMode = selectMapCanvasDrawMode({
-      mapDrawMode: mapState.drawMode,
-      renderEpoch: mapState.renderEpoch,
-      lastRenderedEpoch: lastRenderedEpochRef.current,
-      resized,
+    pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+      pendingAnimationFrameRef.current = null;
+      const frame = queuedMapFrameRef.current;
+      if (frame === null) {
+        return;
+      }
+      lastRenderedEpochRef.current = drawMapCanvasFrame({
+        canvas: canvasRef.current,
+        frame,
+        lastRenderedEpoch: lastRenderedEpochRef.current,
+      });
     });
-    MAP_CANVAS_DRAW_PROCS[drawMode](context, mapState, tileSize, {
-      debugTileRendererEnabled,
-      baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-      tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
-    });
-    lastRenderedEpochRef.current = mapState.renderEpoch;
   }, [debugTileRendererEnabled, mapState, tileAtlasRenderVersion, tileSize]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAnimationFrameRef.current);
+        pendingAnimationFrameRef.current = null;
+      }
+    };
+  }, []);
 
   const widthPx = mapState.width * tileSize;
   const heightPx = mapState.height * tileSize;
@@ -252,6 +263,68 @@ interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
   debugTileRendererEnabled: boolean;
   tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
+}
+
+/**
+ * Queued authoritative map frame consumed by one browser paint.
+ * Mirrors Micropolis map-view ownership where one `DoUpdateMap` pass paints
+ * from the latest invalidated map state in `ref/micropolis/src/sim/w_map.c`.
+ * Parity note: this payload exists only to coalesce browser paints and does
+ * not change authority ordering or map mutation semantics.
+ */
+interface MapCanvasRenderFrame {
+  mapState: RuntimeMapState;
+  tileSize: number;
+  tileRenderer: MapCanvasTileRenderer;
+}
+
+/**
+ * Draws one queued map frame using the latest authoritative map state.
+ * Mirrors C map-update cadence where `sim_update_maps` may process many sim
+ * ticks before a single on-screen `DoUpdateMap` paint (`ref/micropolis/src/sim/sim.c`,
+ * `ref/micropolis/src/sim/w_map.c`).
+ * Parity note: browser coalescing targets one paint per animation frame while
+ * preserving snapshot-vs-patch draw-mode selection from map payload metadata.
+ */
+function drawMapCanvasFrame({
+  canvas,
+  frame,
+  lastRenderedEpoch,
+}: {
+  canvas: HTMLCanvasElement | null;
+  frame: MapCanvasRenderFrame;
+  lastRenderedEpoch: number;
+}): number {
+  if (canvas === null || !frame.mapState.hasSnapshot) {
+    return 0;
+  }
+
+  const context = canvas.getContext('2d');
+  if (context === null) {
+    return lastRenderedEpoch;
+  }
+  context.imageSmoothingEnabled = false;
+
+  const widthPx = frame.mapState.width * frame.tileSize;
+  const heightPx = frame.mapState.height * frame.tileSize;
+  let resized = false;
+  if (canvas.width !== widthPx) {
+    canvas.width = widthPx;
+    resized = true;
+  }
+  if (canvas.height !== heightPx) {
+    canvas.height = heightPx;
+    resized = true;
+  }
+
+  const drawMode = selectMapCanvasDrawMode({
+    mapDrawMode: frame.mapState.drawMode,
+    renderEpoch: frame.mapState.renderEpoch,
+    lastRenderedEpoch,
+    resized,
+  });
+  MAP_CANVAS_DRAW_PROCS[drawMode](context, frame.mapState, frame.tileSize, frame.tileRenderer);
+  return frame.mapState.renderEpoch;
 }
 
 type MapCanvasTileRenderMode = 'atlas' | 'diagnostic-debug' | 'missing-atlas';
