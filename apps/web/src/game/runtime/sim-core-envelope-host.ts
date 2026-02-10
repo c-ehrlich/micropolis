@@ -1,4 +1,4 @@
-import { World } from '../../../../../packages/sim-core/src/index.ts';
+import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import type {
   ClientEnvelope,
   CoreHost,
@@ -19,11 +19,18 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private onEnvelope: ((envelope: HostEnvelope) => void) | undefined;
   private activeRoomId: string | undefined;
   private activeClientId: string | undefined;
-  private readonly mapWidth = World.WORLD_X;
-  private readonly mapHeight = World.WORLD_Y;
-  private readonly initialMapTileWords = new Uint16Array(this.mapWidth * this.mapHeight);
+  private readonly authorityState: SimCoreRuntimeState;
+  private readonly mapWidth: number;
+  private readonly mapHeight: number;
   private serverSeq = 0;
   private tick = 0;
+
+  public constructor() {
+    this.authorityState = new SimCoreRuntimeState();
+    const mapLayerInfo = this.authorityState.store.layerInfo('map');
+    this.mapWidth = mapLayerInfo.width;
+    this.mapHeight = mapLayerInfo.height;
+  }
 
   public connect(onEnvelope: (envelope: HostEnvelope) => void): CoreHostConnection {
     this.onEnvelope = onEnvelope;
@@ -117,12 +124,17 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors contiguous `Map[x][y]` ownership in
    * `ref/micropolis/src/sim/s_alloc.c` and map snapshot serialization shape from
    * `ref/micropolis/src/sim/s_fileio.c`.
-   * Parity note: this phase emits a protocol-valid baseline map payload with
-   * canonical Micropolis world dimensions; subsequent tasks migrate full
-   * authoritative tile backing from `SimCoreRuntimeState`.
+   * Parity note: snapshot tile words are copied directly from
+   * `SimCoreRuntimeState` `map` storage (`x * WORLD_Y + y` ordering), preserving
+   * Micropolis contiguous map semantics at the envelope boundary.
    */
   private buildSnapshotPayload(): HostSnapshotPayload {
-    const tileWords = Uint16Array.from(this.initialMapTileWords);
+    const mapLayer = this.authorityState.store.snapshot('map');
+    if (!(mapLayer instanceof Uint16Array)) {
+      throw new Error(`expected Uint16Array map layer; got ${mapLayer.constructor.name}`);
+    }
+
+    const tileWords = Uint16Array.from(mapLayer);
     return {
       map: {
         width: this.mapWidth,

@@ -31,7 +31,7 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
 }
 
 describe('SimCoreEnvelopeHost', () => {
-  it('accepts hello and emits a protocol-valid snapshot baseline', () => {
+  it('accepts hello and emits a protocol-valid snapshot backed by authoritative sim-core state', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
 
@@ -74,6 +74,26 @@ describe('SimCoreEnvelopeHost', () => {
     expect(map.width).toBe(World.WORLD_X);
     expect(map.height).toBe(World.WORLD_Y);
     expect(map.tileWords.length).toBe(World.WORLD_X * World.WORLD_Y);
+
+    const authorityState = (
+      host as unknown as {
+        authorityState: {
+          store: {
+            snapshot(layer: 'map'): Uint16Array | unknown;
+          };
+        };
+      }
+    ).authorityState;
+    const authoritativeMapLayer = authorityState.store.snapshot('map');
+    if (!(authoritativeMapLayer instanceof Uint16Array)) {
+      throw new Error('Expected authoritative map layer snapshot to be Uint16Array');
+    }
+    if (!(map.tileWords instanceof Uint16Array)) {
+      throw new Error('Expected snapshot map tileWords to be Uint16Array');
+    }
+
+    expect(map.tileWords).not.toBe(authoritativeMapLayer);
+    expect(map.tileWords).toEqual(authoritativeMapLayer);
   });
 
   it('rejects command envelopes and keeps sequencing monotonic', () => {
