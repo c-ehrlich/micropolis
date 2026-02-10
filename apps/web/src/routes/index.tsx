@@ -379,10 +379,6 @@ function RuntimePanel() {
 
           <section style={{ display: 'grid', gap: 6 }}>
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
-            <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
-              Mirrors the Micropolis Disasters menu (`Monster`, `Fire`, `Flood`, `Meltdown`,
-              `Tornado`, `Earthquake`) from `ref/micropolis/res/whead.tcl`.
-            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {PLAYABLE_DISASTER_CHOICES.map((choice) => (
                 <button
