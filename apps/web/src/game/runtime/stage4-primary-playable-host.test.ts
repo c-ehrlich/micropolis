@@ -7,6 +7,7 @@ import type {
   HostPatchEnvelope,
   HostSnapshotEnvelope,
 } from './protocol.ts';
+import { createWebHostRuntime, type WebRuntimeEvent } from './runtime.ts';
 import {
   createStage4PrimaryPlayableHost,
   readStage4CityExportPayload,
@@ -31,6 +32,39 @@ async function waitForHostEnvelope<TEnvelope extends HostEnvelope>(
       const envelope = hostEnvelopes[index];
       if (envelope !== undefined && predicate(envelope)) {
         return envelope;
+      }
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+type RuntimeEventWithEnvelope<TEnvelope extends HostEnvelope> = WebRuntimeEvent & {
+  envelope: TEnvelope;
+};
+
+/**
+ * Wait for one runtime event that matches the provided predicate.
+ * Mirrors staged command->ack->snapshot sequencing from `SimCmd` and update
+ * propagation in `ref/micropolis/src/sim/w_sim.c` / `ref/micropolis/src/sim/w_update.c`.
+ */
+async function waitForRuntimeEvent<TEvent extends WebRuntimeEvent>(
+  runtimeEvents: readonly WebRuntimeEvent[],
+  predicate: (event: WebRuntimeEvent) => event is TEvent,
+  label: string,
+): Promise<TEvent> {
+  const timeoutMs = 5_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    for (let index = runtimeEvents.length - 1; index >= 0; index -= 1) {
+      const event = runtimeEvents[index];
+      if (event !== undefined && predicate(event)) {
+        return event;
       }
     }
 
@@ -534,6 +568,64 @@ describe('createStage4PrimaryPlayableHost', () => {
       expect(newCitySnapshot.payload.hud?.date?.month).toBe(0);
     } finally {
       connection.disconnect();
+    }
+  });
+
+  test('certifies runtime new-city command hydrates map + HUD on the shipped Stage 4 route', async () => {
+    const runId = 'stage11-new-city-runtime-map-hud';
+    const roomId = `${runId}-room`;
+    const clientId = `${runId}-client`;
+    const commandId = `${runId}-cmd-new-city`;
+    const runtimeEvents: WebRuntimeEvent[] = [];
+    const runtime = createWebHostRuntime({
+      host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+      roomId,
+      clientId,
+    });
+    const unsubscribe = runtime.subscribe((event) => {
+      runtimeEvents.push(event);
+    });
+
+    try {
+      runtime.connect();
+      await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+          event.envelope?.kind === 'snapshot',
+        `${runId} boot snapshot`,
+      );
+
+      runtime.sendCommand(commandId, {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+      });
+      const newCityAck = await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostAckEnvelope> =>
+          event.envelope?.kind === 'ack' && event.envelope.commandId === commandId,
+        `${runId} new-city ack`,
+      );
+      await waitForRuntimeEvent(
+        runtimeEvents,
+        (event): event is RuntimeEventWithEnvelope<HostSnapshotEnvelope> =>
+          event.envelope?.kind === 'snapshot' &&
+          event.envelope.serverSeq > newCityAck.envelope.serverSeq,
+        `${runId} new-city snapshot`,
+      );
+
+      const state = runtime.getState();
+      // Magic number source: `WORLD_X=120`, `WORLD_Y=100`, and `DoNewCity` baseline
+      // (`TotalFunds=20000`, Jan 1900, speed 3) in `ref/micropolis/src/sim/s_init.c`.
+      expect(state.mapState.width).toBe(120);
+      expect(state.mapState.height).toBe(100);
+      expect(state.mapState.tiles).toHaveLength(120 * 100);
+      expect(state.hudState.fundsLabel).toBe('Funds: $20,000');
+      expect(state.hudState.dateYear).toBe(1900);
+      expect(state.hudState.dateMonth).toBe(0);
+      expect(state.hudState.speed).toBe(3);
+    } finally {
+      unsubscribe();
+      runtime.disconnect();
     }
   });
 

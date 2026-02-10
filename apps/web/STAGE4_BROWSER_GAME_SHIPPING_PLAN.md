@@ -556,6 +556,9 @@ Deletion execution notes:
 - [ ] Observe at least one realtime/disaster visual event in-map.
 - [ ] Run a continuous play session for at least 15 minutes with acceptable responsiveness.
 
+Implementation trace (2026-02-10):
+- Automated Stage 11 parity coverage for this checklist item is enforced in `apps/web/src/game/runtime/stage4-primary-playable-host.test.ts` with both host-envelope certification (`certifies new-city snapshot loads authoritative map and HUD heads`) and shipped runtime-path certification (`certifies runtime new-city command hydrates map + HUD on the shipped Stage 4 route`).
+
 ### Certification checklist (automated)
 
 - [ ] `pnpm test` passes.
