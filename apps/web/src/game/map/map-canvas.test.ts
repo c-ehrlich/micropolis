@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectRealtimeOverlaySprites, selectMapCanvasDrawMode } from './map-canvas.tsx';
+import {
+  projectRealtimeOverlaySprites,
+  selectMapCanvasDrawMode,
+  selectMapCanvasTileRenderMode,
+} from './map-canvas.tsx';
 
 describe('map canvas draw-mode selection', () => {
   it('keeps full redraw ownership for authoritative snapshot frames', () => {
@@ -242,5 +246,40 @@ describe('map canvas draw-mode selection', () => {
     expect(baseline[0]?.key).toBe('id:rt-7');
     expect(moved[0]?.key).toBe('id:rt-7');
     expect(baseline[0]?.left).not.toBe(moved[0]?.left);
+  });
+});
+
+describe('map canvas tile render mode selection', () => {
+  it('uses diagnostic debug renderer only when explicit debug flag is enabled', () => {
+    expect(
+      selectMapCanvasTileRenderMode({
+        debugTileRendererEnabled: true,
+        hasAtlasImage: true,
+      }),
+    ).toBe('diagnostic-debug');
+    expect(
+      selectMapCanvasTileRenderMode({
+        debugTileRendererEnabled: true,
+        hasAtlasImage: false,
+      }),
+    ).toBe('diagnostic-debug');
+  });
+
+  it('uses Micropolis sprite atlas when debug flag is disabled and atlas image exists', () => {
+    expect(
+      selectMapCanvasTileRenderMode({
+        debugTileRendererEnabled: false,
+        hasAtlasImage: true,
+      }),
+    ).toBe('atlas');
+  });
+
+  it('uses missing-atlas fallback when debug flag is disabled and atlas image is unavailable', () => {
+    expect(
+      selectMapCanvasTileRenderMode({
+        debugTileRendererEnabled: false,
+        hasAtlasImage: false,
+      }),
+    ).toBe('missing-atlas');
   });
 });

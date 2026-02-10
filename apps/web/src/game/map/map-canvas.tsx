@@ -246,6 +246,9 @@ interface MapCanvasTileRenderer {
   tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
 }
 
+type MapCanvasTileRenderMode = 'atlas' | 'diagnostic-debug' | 'missing-atlas';
+const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
+
 /**
  * Selects canvas redraw mode from authoritative map draw metadata.
  * Mirrors `DoUpdateMap` invalidation ownership in `ref/micropolis/src/sim/w_map.c`,
@@ -609,7 +612,15 @@ function drawMapCanvasTile(
   const atlasImage = tileRenderer.tileAtlasImagesByCanonicalIdentityKey.get(
     sprite.atlasCanonicalIdentityKey,
   );
-  if (!tileRenderer.debugTileRendererEnabled && atlasImage !== undefined) {
+  const tileRenderMode = selectMapCanvasTileRenderMode({
+    debugTileRendererEnabled: tileRenderer.debugTileRendererEnabled,
+    hasAtlasImage: atlasImage !== undefined,
+  });
+
+  if (tileRenderMode === 'atlas') {
+    if (atlasImage === undefined) {
+      throw new Error('Expected Stage 8 tile atlas image for atlas render mode');
+    }
     context.drawImage(
       atlasImage,
       sprite.sourceX,
@@ -624,8 +635,36 @@ function drawMapCanvasTile(
     return;
   }
 
-  context.fillStyle = sprite.debugFallbackColor;
+  if (tileRenderMode === 'diagnostic-debug') {
+    context.fillStyle = sprite.debugFallbackColor;
+    context.fillRect(targetX, targetY, tileSize, tileSize);
+    return;
+  }
+
+  context.fillStyle = MAP_CANVAS_MISSING_TILE_ATLAS_COLOR;
   context.fillRect(targetX, targetY, tileSize, tileSize);
+}
+
+/**
+ * Selects Stage 8 tile render mode for one map tile draw.
+ * Micropolis C draw flow assumes `GetViewTiles` art resources are available
+ * before `MemDrawBeegMapRect` draws tiles (`ref/micropolis/src/sim/g_setup.c`,
+ * `ref/micropolis/src/sim/g_bigmap.c`).
+ * Parity note: TypeScript adds an explicit diagnostics-only debug renderer flag
+ * and keeps missing-atlas fallback separate so debug colors are opt-in only.
+ */
+export function selectMapCanvasTileRenderMode({
+  debugTileRendererEnabled,
+  hasAtlasImage,
+}: {
+  debugTileRendererEnabled: boolean;
+  hasAtlasImage: boolean;
+}): MapCanvasTileRenderMode {
+  if (debugTileRendererEnabled) {
+    return 'diagnostic-debug';
+  }
+
+  return hasAtlasImage ? 'atlas' : 'missing-atlas';
 }
 
 /**
