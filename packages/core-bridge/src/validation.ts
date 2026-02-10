@@ -40,7 +40,7 @@ const COMMAND_PAYLOAD_TYPE_VALUES = [
 type UnknownRecord = Record<string, unknown>;
 
 /**
- * Validator families used by Stage 0 schema checks.
+ * Validator families used by Bridge V1 schema checks.
  * Mirrors command gate separation in `ref/micropolis/src/sim/w_sim.c` where
  * command parsing and command execution are distinct steps.
  * Parity note: intentionally different from C integer Tcl return codes by
@@ -49,7 +49,7 @@ type UnknownRecord = Record<string, unknown>;
 export type CoreBridgeV1ValidatorName = 'command_envelope' | 'hello_envelope' | 'hello_handshake';
 
 /**
- * Deterministic validation failure categories for Stage 0 contract checks.
+ * Deterministic validation failure categories for Bridge V1 contract checks.
  * Mirrors explicit argument rejection branches in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: intentionally different from C's generic `TCL_ERROR` by freezing
  * machine-readable failure classes for bridge clients and tests.
@@ -97,7 +97,7 @@ export interface CoreBridgeV1ValidationErrorPayload {
 }
 
 /**
- * Canonical result shape for Stage 0 runtime validators.
+ * Canonical result shape for Bridge V1 runtime validators.
  * Mirrors success/error branching from Tcl eval flows in
  * `ref/micropolis/src/sim/w_tk.c` (`TCL_OK` vs `TCL_ERROR`).
  * Parity note: intentionally different from integer return flags by carrying a
@@ -116,7 +116,7 @@ export type CoreBridgeV1ValidationResult<T> =
 
 /**
  * Expected local handshake versions for strict lockstep negotiation.
- * Mirrors Stage 0 lockstep requirements in
+ * Mirrors Bridge V1 lockstep requirements in
  * `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`.
  * Parity note: intentionally different from Micropolis startup flags by making
  * protocol/core compatibility explicit data.
@@ -333,7 +333,7 @@ export function isCoreBridgeV1HelloEnvelope(value: unknown): value is CoreBridge
 
 /**
  * Enforce strict lockstep protocol/city-payload/core versions for v1 hello.
- * Mirrors Stage 0 compatibility lock requirements and command rejection
+ * Mirrors Bridge V1 compatibility lock requirements and command rejection
  * strictness in `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: intentionally different from Micropolis, which does not carry a
  * typed version handshake envelope, by making mismatch rejection explicit.

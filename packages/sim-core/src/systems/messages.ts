@@ -23,7 +23,7 @@ function setLastDispatched(state: SimState, next: LastDispatched): void {
  *
  * Parity note: C de-duplicates by last rendered text (`SetMessageField` globals),
  * while sim-core de-duplicates hook dispatches by id/coords in this module. Clearing
- * this cache at `MesNum == 0` preserves expiry/requeue behavior for Stage 5 message feeds.
+ * this cache at `MesNum == 0` preserves expiry/requeue behavior for Message Feed message feeds.
  */
 function clearLastDispatched(state: SimState): void {
   setLastDispatched(state, { kind: 'none' });

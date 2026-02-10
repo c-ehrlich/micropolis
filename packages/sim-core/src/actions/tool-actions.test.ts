@@ -21,8 +21,10 @@ import {
 
 const {
   AIRPORTBASE,
+  CHANNEL,
   COALBASE,
   DIRT,
+  FIRSTRIVEDGE,
   FOUNTAIN,
   HBRIDGE,
   HRAIL,
@@ -34,6 +36,7 @@ const {
   POWERPLANT,
   RAILHPOWERV,
   RAILVPOWERH,
+  REDGE,
   RESBASE,
   RIVER,
   ROADS,
@@ -352,6 +355,54 @@ describe('Zone placement', () => {
 
     const map = store.getLayer('map') as Uint16Array;
     expect(getTile(map, 10, 8) & LOMASK).toBe(ROAD_TABLE[1]);
+  });
+
+  it('rejects zoning on deep-water tiles even with autoBulldoze enabled', () => {
+    const deepWaterTiles = [RIVER, REDGE, CHANNEL];
+
+    for (const deepWaterTile of deepWaterTiles) {
+      const store = createStore();
+      const context = createToolContext({
+        store,
+        rng: new MicropolisRng(1),
+        funds: 1000,
+        autoBulldoze: true,
+      });
+
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          setTile(store, 10 + dx, 10 + dy, deepWaterTile);
+        }
+      }
+
+      // Magic-number source: `tally()` in `ref/micropolis/src/sim/w_tool.c`
+      // only allows auto-bulldoze for tile ids >= `FIRSTRIVEDGE` (5), so
+      // `RIVER` (2), `REDGE` (3), and `CHANNEL` (4) must reject zone placement.
+      expect(runTool(context, 'res', 10, 10)).toBe(-1);
+      expect(context.funds).toBe(1000);
+    }
+  });
+
+  it('allows zoning on river-edge tiles when autoBulldoze is enabled', () => {
+    const store = createStore();
+    const context = createToolContext({
+      store,
+      rng: new MicropolisRng(1),
+      funds: 1000,
+      autoBulldoze: true,
+    });
+
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        setTile(store, 10 + dx, 10 + dy, FIRSTRIVEDGE);
+      }
+    }
+
+    const resCost = getOrThrow(TOOL_COST[TOOL_STATE.res]);
+    // Magic-number source: `tally()` in `ref/micropolis/src/sim/w_tool.c`
+    // allows auto-bulldoze for tile ids in [`FIRSTRIVEDGE`, `LASTRUBBLE`].
+    expect(runTool(context, 'res', 10, 10)).toBe(1);
+    expect(context.funds).toBe(1000 - resCost - 9);
   });
 });
 

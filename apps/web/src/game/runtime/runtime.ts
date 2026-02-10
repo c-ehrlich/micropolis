@@ -6,7 +6,7 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
-  type Stage2ClientCommand,
+  type PlayableClientCommand,
 } from './protocol.ts';
 import {
   createInitialWebRuntimeState,
@@ -30,7 +30,7 @@ export interface WebRuntimeEvent {
 }
 
 /**
- * Config for creating the Stage 2 web host-client runtime.
+ * Config for creating the Playable Runtime web host-client runtime.
  * Mirrors startup wiring intent in `ref/micropolis/src/sim/w_sim.c`; unlike C,
  * dependencies are injected explicitly through a host adapter.
  */
@@ -53,19 +53,19 @@ export interface WebHostRuntime {
    * Reconnects to host authority and requests an authoritative resync snapshot.
    * Mirrors reconnect recovery intent in `ref/micropolis/spec/integration/SPEC.md`
    * and `ref/micropolis/src/sim/w_update.c`.
-   * Difference: Stage 2 performs reconnect as an explicit runtime API action
+   * Difference: Playable Runtime performs reconnect as an explicit runtime API action
    * rather than socket-layer retry hidden behind Tcl event loops.
    */
   reconnect(): void;
   disconnect(): void;
-  sendCommand(commandId: string, command: Stage2ClientCommand): void;
+  sendCommand(commandId: string, command: PlayableClientCommand): void;
   requestSnapshot(reason?: 'manual' | 'resync'): void;
   getState(): WebRuntimeState;
   subscribe(listener: (event: WebRuntimeEvent) => void): () => void;
 }
 
 /**
- * Creates the Stage 2 web runtime that negotiates hello and routes envelopes.
+ * Creates the Playable Runtime web runtime that negotiates hello and routes envelopes.
  * Mirrors deterministic startup/update orchestration from
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_update.c`.
  * Difference from C: this is a pure TypeScript adapter around a `CoreHost`

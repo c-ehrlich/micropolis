@@ -17,8 +17,8 @@ function createSequencedEnvelope(
 ): SequencedHostEnvelope {
   return {
     kind,
-    roomId: 'room-stage2',
-    clientId: 'client-stage2',
+    roomId: 'room-playable',
+    clientId: 'client-playable',
     tick: 5,
     serverSeq: 10,
     payload,
@@ -32,7 +32,7 @@ describe('runtime realtime projection', () => {
       initial,
       createSequencedEnvelope('snapshot', {
         realtime: {
-          // Stage 2 payload mirrors `SimSprite` positional fields from
+          // Playable Runtime payload mirrors `SimSprite` positional fields from
           // `packages/sim-core/src/sim/realtime.ts` (`w_sprite.c` parity port).
           objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
         },
@@ -64,7 +64,7 @@ describe('runtime realtime projection', () => {
     expect(afterPatch.objects).toEqual([{ name: 'SHI', type: 4, x: 40, y: 56, frame: 2 }]);
   });
 
-  it('applies Stage 7 realtime snapshot/delta payload fields', () => {
+  it('applies Realtime Overlay realtime snapshot/delta payload fields', () => {
     const afterSnapshot = projectRuntimeRealtimeState(
       createInitialRuntimeRealtimeState(),
       createSequencedEnvelope('snapshot', {

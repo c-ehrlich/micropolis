@@ -74,6 +74,52 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
+  it('rebuilds wire corners from _WireTable adjacency instead of stamping horizontal wire tiles', () => {
+    const runtime = createWebHostRuntime({
+      host: new DemoMapHost({ enableAmbientTicks: false }),
+    });
+
+    runtime.connect();
+    runtime.sendCommand('wire-corner-1', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 20,
+      y: 20,
+    });
+    runtime.sendCommand('wire-corner-2', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 21,
+      y: 20,
+    });
+    runtime.sendCommand('wire-corner-3', {
+      kind: 'tool',
+      tool: 'wire',
+      x: 21,
+      y: 21,
+    });
+
+    const mapState = runtime.getState().mapState;
+    const cornerIndex = 21 + 20 * mapState.width;
+    const leftIndex = 20 + 20 * mapState.width;
+    const downIndex = 21 + 21 * mapState.width;
+    const cornerTileWord = mapState.tiles[cornerIndex];
+    const leftTileWord = mapState.tiles[leftIndex];
+    const downTileWord = mapState.tiles[downIndex];
+    if (cornerTileWord === undefined || leftTileWord === undefined || downTileWord === undefined) {
+      throw new Error('expected wire corner test tiles to be in bounds');
+    }
+
+    // Magic-number source: `_WireTable[0x000c] == 214`,
+    // `_WireTable[0x0002] == 210`, and `_WireTable[0x0001] == 211` in
+    // `ref/micropolis/src/sim/w_con.c`.
+    expect(cornerTileWord & TileMask.LOMASK).toBe(214);
+    expect(leftTileWord & TileMask.LOMASK).toBe(210);
+    expect(downTileWord & TileMask.LOMASK).toBe(211);
+
+    runtime.disconnect();
+  });
+
   it('consumes redraw plans on both patch and full-redraw authority paths', () => {
     const host = new DemoMapHost({ enableAmbientTicks: false });
     const runtime = createWebHostRuntime({ host });
@@ -104,11 +150,11 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       };
     };
     // `DoUpdateMap` in `w_map.c` keys full redraw from the active draw mode only
-    // (`ALMAP` for Stage 4), while `sim_update_maps` in `sim.c` clears all C
+    // (`ALMAP` for Authoritative Runtime), while `sim_update_maps` in `sim.c` clears all C
     // `NewMapFlags[0..NMAPS-1]` slots each cycle.
     authority.simState.NewMapFlags[MAP_FLAGS.PDMAP] = 1;
 
-    runtime.sendCommand('stage9-redraw-base', {
+    runtime.sendCommand('redraw-coalesce-base', {
       kind: 'tool',
       tool: 'road',
       x: 10,
@@ -120,7 +166,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
     authority.simState.NewMap = 1;
 
-    runtime.sendCommand('stage9-redraw-new-map', {
+    runtime.sendCommand('redraw-coalesce-new-map', {
       kind: 'tool',
       tool: 'road',
       x: 11,
@@ -139,30 +185,50 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     vi.useFakeTimers();
     const host = new DemoMapHost({ enableAmbientTicks: true, patchIntervalMs: 10 });
     const runtime = createWebHostRuntime({ host });
+    let sawAnimatedMapDelta = false;
 
     try {
-      runtime.connect();
-
       const authority = host as unknown as {
         simState: { doAnimation: boolean };
-        simContext: { store: ReturnType<typeof createClassicMapStore> };
+        mapTiles: Uint16Array;
       };
-
       const tileX = 10;
       const tileY = 10;
-      const tileIndex = tileX * World.WORLD_Y + tileY;
-      authority.simContext.store.beginTick();
-      try {
-        authority.simContext.store.write('map', tileIndex, Tile.FIRE | TileFlag.ANIMBIT);
-      } finally {
-        authority.simContext.store.commitTick();
+      const tileIndex = tileY * World.WORLD_X + tileX;
+      authority.mapTiles[tileIndex] = Tile.FIRE | TileFlag.ANIMBIT;
+
+      runtime.subscribe((event) => {
+        if (event.envelope?.kind !== 'patch') {
+          return;
+        }
+        const mapPayload = event.envelope.payload.map;
+        if (
+          mapPayload === undefined ||
+          !('tileWordDeltas' in mapPayload) ||
+          !Array.isArray(mapPayload.tileWordDeltas)
+        ) {
+          return;
+        }
+        if (
+          mapPayload.tileWordDeltas.some(
+            (delta: { x: number; y: number }) => delta.x === tileX && delta.y === tileY,
+          )
+        ) {
+          sawAnimatedMapDelta = true;
+        }
+      });
+
+      runtime.connect();
+      const initialTileWord = runtime.getState().mapState.tiles[tileIndex];
+      if (initialTileWord === undefined) {
+        throw new Error('expected initial animation tile to exist');
       }
+      expect(initialTileWord & TileMask.LOMASK).toBe(Tile.FIRE);
 
       authority.simState.doAnimation = false;
       vi.advanceTimersByTime(20);
 
-      const mapAfterDisabled = authority.simContext.store.snapshot('map') as Uint16Array;
-      const disabledTileWord = mapAfterDisabled[tileIndex];
+      const disabledTileWord = runtime.getState().mapState.tiles[tileIndex];
       if (disabledTileWord === undefined) {
         throw new Error('expected disabled animation tile to exist');
       }
@@ -173,13 +239,13 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       authority.simState.doAnimation = true;
       vi.advanceTimersByTime(10);
 
-      const mapAfterEnabled = authority.simContext.store.snapshot('map') as Uint16Array;
-      const enabledTileWord = mapAfterEnabled[tileIndex];
+      const enabledTileWord = runtime.getState().mapState.tiles[tileIndex];
       if (enabledTileWord === undefined) {
         throw new Error('expected enabled animation tile to exist');
       }
       // `g_ani.c` rewrites animated tiles via `aniTile[id]`, preserving high bits.
       expect(enabledTileWord & TileMask.LOMASK).toBe(ANI_TILE[Tile.FIRE]);
+      expect(sawAnimatedMapDelta).toBe(true);
     } finally {
       runtime.disconnect();
       vi.useRealTimers();
@@ -209,7 +275,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
 
       runtime.connect();
 
-      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Stage 7 host seeding
+      // Type `2` is copter (`COP`) from `sim.h`/`w_sprite.c`; Realtime Overlay host seeding
       // now primes snapshot payloads so overlay entities appear immediately when
       // the simulation is running.
       expect(runtime.getState().realtimeState.objects.some((object) => object.type === 2)).toBe(
@@ -239,7 +305,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     const runtime = createWebHostRuntime({ host });
     runtime.connect();
 
-    runtime.sendCommand('stage7-seed-pause-1', {
+    runtime.sendCommand('realtime-seed-pause-1', {
       kind: 'sim-control',
       control: 'pause',
     });
@@ -255,7 +321,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
     copterSprite.frame = 0;
 
-    runtime.sendCommand('stage7-seed-play-1', {
+    runtime.sendCommand('realtime-seed-play-1', {
       kind: 'sim-control',
       control: 'play',
     });
@@ -333,7 +399,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
     }
   });
 
-  it('emits coherent tornado overlay and message payloads for manual Stage 7 triggers', () => {
+  it('emits coherent tornado overlay and message payloads for manual Realtime Overlay triggers', () => {
     const host = new DemoMapHost({
       enableAmbientTicks: false,
       seedRealtimeDemoObject: false,
@@ -600,6 +666,42 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       runtime.disconnect();
       vi.useRealTimers();
     }
+  });
+
+  it('rejects zone placement on deep water tiles', () => {
+    const host = new DemoMapHost({ enableAmbientTicks: false });
+    const runtime = createWebHostRuntime({ host });
+    runtime.connect();
+
+    const authority = host as unknown as {
+      mapTiles: Uint16Array;
+    };
+    const x = 20;
+    const y = 20;
+    const width = World.WORLD_X;
+    const centerIndex = x + y * width;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        authority.mapTiles[x + dx + (y + dy) * width] = Tile.RIVER;
+      }
+    }
+    const beforeCenterTileWord = authority.mapTiles[centerIndex];
+    if (beforeCenterTileWord === undefined) {
+      throw new Error('expected center water tile before placement');
+    }
+
+    runtime.sendCommand('zone-on-water-1', {
+      kind: 'tool',
+      tool: 'res',
+      x,
+      y,
+    });
+
+    // Magic-number source: `tally()` in `ref/micropolis/src/sim/w_tool.c` only
+    // allows auto-bulldoze for tile ids >= `FIRSTRIVEDGE` (5), so `RIVER` (2)
+    // tiles reject zoning in `check3x3`.
+    expect(runtime.getState().lastRejectReason).toBe('invalid-placement');
+    expect(authority.mapTiles[centerIndex]).toBe(beforeCenterTileWord);
   });
 
   it('round-trips save/export bytes through load/import in the web runtime', () => {
@@ -1246,7 +1348,7 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       ).toBe(true);
       expect(afterAmbientHud.demandLabel).not.toBe(initialDemand);
 
-      runtime.sendCommand('stage5-visible-funds-1', {
+      runtime.sendCommand('hud-visible-funds-1', {
         kind: 'tool',
         tool: 'road',
         x: 8,
@@ -1255,14 +1357,14 @@ describe('DemoMapHost city lifecycle and persistence flows', () => {
       // Road tool cost is 10 in `CostOf[]` (`w_tool.c`).
       expect(runtime.getState().hudState.fundsLabel).toBe('Funds: $19,990');
 
-      runtime.sendCommand('stage5-visible-speed-pause-1', {
+      runtime.sendCommand('hud-visible-speed-pause-1', {
         kind: 'sim-control',
         control: 'pause',
       });
       // `setSpeed` displays 0 while paused (`sim_paused ? 0 : SimMetaSpeed`) in `w_util.c`.
       expect(runtime.getState().hudState.speed).toBe(0);
 
-      runtime.sendCommand('stage5-visible-speed-play-1', {
+      runtime.sendCommand('hud-visible-speed-play-1', {
         kind: 'sim-control',
         control: 'play',
       });

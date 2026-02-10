@@ -7,7 +7,7 @@ import {
   type ToolContext,
 } from '../../../../packages/sim-core/src/index.ts';
 import {
-  createStage4CommandAuthority,
+  createCommandAuthority,
   type SimCoreAuthorityTickScheduler,
   SimCoreCommandAuthority,
 } from './sim-core-command-authority';
@@ -93,6 +93,39 @@ describe('SimCoreCommandAuthority', () => {
       throw new Error('expected ack event');
     }
     expect(ackEvent.tick).toBeGreaterThan(0);
+
+    authority.disconnect();
+  });
+
+  test('runs map-scan zone handlers during authority ticks so zones are processed', () => {
+    const scheduler = new ManualTickScheduler();
+    const authority = new SimCoreCommandAuthority({
+      mode: 'local',
+      tickIntervalMs: 1,
+      tickScheduler: scheduler,
+      seed: 1234,
+    });
+    const internals = authority as unknown as {
+      simState: SimState;
+      simContext: SimContext;
+      toolContext: ToolContext;
+    };
+
+    authority.connect();
+    const placement = authority.processCommand({
+      type: 'tool-command',
+      commandId: 'cmd-zone-growth-scan',
+      tool: 'res',
+      // Magic-number source: `MapScan` phase 1 in `ref/micropolis/src/sim/s_sim.c`
+      // scans x in [0, WORLD_X/8); x=10 guarantees this zone is scanned on first tick.
+      x: 10,
+      y: 10,
+    });
+    expect(placement.map((event) => event.type)).toEqual(['ack', 'patch']);
+    expect(internals.simState.ResZPop).toBe(0);
+
+    scheduler.tick(1);
+    expect(internals.simState.ResZPop).toBeGreaterThan(0);
 
     authority.disconnect();
   });
@@ -482,10 +515,10 @@ describe('SimCoreCommandAuthority', () => {
   });
 });
 
-describe('createStage4CommandAuthority', () => {
+describe('createCommandAuthority', () => {
   test('rejects deterministic authority without isolated fallback opt-in', () => {
     expect(() =>
-      createStage4CommandAuthority({
+      createCommandAuthority({
         mode: 'local',
         authorityMode: 'deterministic',
       }),
@@ -495,7 +528,7 @@ describe('createStage4CommandAuthority', () => {
   });
 
   test('keeps deterministic authority available for isolated fallback usage', () => {
-    const authority = createStage4CommandAuthority({
+    const authority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
@@ -521,7 +554,7 @@ describe('createStage4CommandAuthority', () => {
   });
 
   test('routes deterministic fallback tool rejects through sim-core tool result mapping', () => {
-    const outOfBoundsAuthority = createStage4CommandAuthority({
+    const outOfBoundsAuthority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,
@@ -541,7 +574,7 @@ describe('createStage4CommandAuthority', () => {
     expect(outOfBoundsReject.code).toBe('OUT_OF_BOUNDS');
     expect(outOfBoundsReject.message).toBe('tool coordinates are out of bounds');
 
-    const noFundsAuthority = createStage4CommandAuthority({
+    const noFundsAuthority = createCommandAuthority({
       mode: 'local',
       authorityMode: 'deterministic',
       allowDeterministicFallback: true,

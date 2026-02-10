@@ -17,17 +17,17 @@ import {
 const DEFAULT_STARTING_FUNDS = 20_000;
 
 /**
- * Construction options for Stage 4 sim-core authority-owned state.
- * Mirrors Stage 1 bootstrap wiring expected by Micropolis initialization paths in
+ * Construction options for Authoritative Runtime sim-core authority-owned state.
+ * Mirrors Sim-Core Authority bootstrap wiring expected by Micropolis initialization paths in
  * `ref/micropolis/src/sim/s_init.c` and simulation boot flow in
  * `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: explicit `seed`/`startingFunds` options are TypeScript test seams.
  */
-export interface Stage4SimCoreAuthorityStateOptions {
+export interface SimCoreRuntimeStateOptions {
   readonly seed?: number;
   readonly startingFunds?: number;
   /**
-   * Optional hook overrides for Stage 4 host integrations.
+   * Optional hook overrides for Authoritative Runtime host integrations.
    * Mirrors `TickCount`/`SendMes`/`SendMesAt`/`UISet*` callback ownership across
    * `ref/micropolis/src/sim/w_stubs.c`, `ref/micropolis/src/sim/s_msg.c`, and
    * `ref/micropolis/src/sim/w_update.c`.
@@ -38,19 +38,19 @@ export interface Stage4SimCoreAuthorityStateOptions {
 }
 
 /**
- * Owns the authoritative Stage 4 sim-core runtime bundle.
+ * Owns the authoritative Authoritative Runtime sim-core runtime bundle.
  * Mirrors single-process ownership intent in `ref/micropolis/src/sim/w_sim.c` where
  * map data, simulation state, simulation context, and tool context are initialized
  * and advanced by one authority process.
  * Parity note: this is a composition helper for web host wiring, not a direct C type.
  */
-export class Stage4SimCoreAuthorityState {
+export class SimCoreRuntimeState {
   public readonly store: MapStore;
   public readonly simState: SimState;
   public readonly simContext: SimContext;
   public readonly toolContext: ToolContext;
 
-  public constructor(options: Stage4SimCoreAuthorityStateOptions = {}) {
+  public constructor(options: SimCoreRuntimeStateOptions = {}) {
     const store = createClassicMapStore();
     const simState = createSimState();
     const simContext = createSimContext({

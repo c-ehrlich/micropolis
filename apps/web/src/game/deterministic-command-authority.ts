@@ -16,7 +16,7 @@ import type {
   CoreHostSnapshotPlacement,
   HostMode,
 } from './core-host';
-import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import { SimCoreRuntimeState } from './sim-core-runtime-state';
 import {
   createOutOfBoundsHostRejectOutcome,
   type HostToolRejectOutcome,
@@ -34,7 +34,7 @@ type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
 
 /**
- * Construction options for the deterministic Stage 4 command authority shim.
+ * Construction options for the deterministic Authoritative Runtime command authority shim.
  * Mirrors transport-specific host identity branching around shared command logic in
  * `ref/micropolis/src/sim/w_tool.c`.
  * Parity note: `seed`/`startingFunds` mirror bootstrap seams from
@@ -64,7 +64,7 @@ export class DeterministicCommandAuthority {
   private readonly toolContext: ToolContext;
 
   public constructor(private readonly options: DeterministicCommandAuthorityOptions) {
-    const authorityState = new Stage4SimCoreAuthorityState({
+    const authorityState = new SimCoreRuntimeState({
       seed: this.options.seed,
       startingFunds: this.options.startingFunds,
     });
@@ -124,7 +124,7 @@ export class DeterministicCommandAuthority {
 
   /**
    * Deterministic fallback handling for sim control commands.
-   * Mirrors Stage 0/1 command-ingress acceptance intent from
+   * Mirrors Bridge V1/1 command-ingress acceptance intent from
    * `ref/micropolis/src/sim/w_sim.c` pause/resume/speed handlers.
    * Parity note: this shim acknowledges controls without sim-core speed state.
    */

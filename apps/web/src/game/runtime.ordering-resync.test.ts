@@ -12,14 +12,14 @@ import type {
 import { createHelloPayload } from './handshake';
 import { createGameRuntime } from './runtime';
 import {
-  type ClientEnvelope as Stage2ClientEnvelope,
-  type CoreHost as Stage2CoreHost,
-  type CoreHostConnection as Stage2CoreHostConnection,
-  DEFAULT_CORE_VERSION as STAGE2_DEFAULT_CORE_VERSION,
-  DEFAULT_LOCAL_CLIENT_ID as STAGE2_DEFAULT_LOCAL_CLIENT_ID,
-  DEFAULT_LOCAL_ROOM_ID as STAGE2_DEFAULT_LOCAL_ROOM_ID,
-  DEFAULT_PROTOCOL_VERSION as STAGE2_DEFAULT_PROTOCOL_VERSION,
-  type HostEnvelope as Stage2HostEnvelope,
+  type ClientEnvelope as PlayableClientEnvelope,
+  type CoreHost as PlayableCoreHost,
+  type CoreHostConnection as PlayableCoreHostConnection,
+  DEFAULT_CORE_VERSION as DEFAULT_CORE_VERSION,
+  DEFAULT_LOCAL_CLIENT_ID as DEFAULT_LOCAL_CLIENT_ID,
+  DEFAULT_LOCAL_ROOM_ID as DEFAULT_LOCAL_ROOM_ID,
+  DEFAULT_PROTOCOL_VERSION as DEFAULT_PROTOCOL_VERSION,
+  type HostEnvelope as PlayableHostEnvelope,
 } from './runtime/protocol.ts';
 import { createWebHostRuntime, type WebRuntimeState } from './runtime/runtime.ts';
 
@@ -33,7 +33,7 @@ interface ScriptedHostOptions {
 }
 
 /**
- * Deterministic scripted host used for Stage 4 ordering/resync runtime tests.
+ * Deterministic scripted host used for Authoritative Runtime ordering/resync runtime tests.
  * Mirrors bridge black-box sequencing/recovery coverage mapped from
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: this is a TypeScript-only test double, not a 1:1 Micropolis runtime.
@@ -93,7 +93,7 @@ class ScriptedHost implements CoreHost {
 
 /**
  * Build one synthetic patch envelope for runtime ordering tests.
- * Mirrors Stage 4 `tick + serverSeq` ordering invariants from
+ * Mirrors Authoritative Runtime `tick + serverSeq` ordering invariants from
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: numeric `serverSeq`/`tick` fixtures are bridge test vectors.
  */
@@ -136,24 +136,27 @@ function snapshotEvent(
   };
 }
 
-interface ScriptedStage2HostOptions {
-  readonly onClientEnvelope?: (host: ScriptedStage2Host, envelope: Stage2ClientEnvelope) => void;
+interface ScriptedPlayableHostOptions {
+  readonly onClientEnvelope?: (
+    host: ScriptedPlayableHost,
+    envelope: PlayableClientEnvelope,
+  ) => void;
 }
 
 /**
- * Deterministic Stage 2 host script harness for runtime ordering/resync tests.
+ * Deterministic Playable Runtime host script harness for runtime ordering/resync tests.
  * Mirrors ordered host/client envelope exchange requirements in
  * `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: this is a TypeScript test adapter and not a 1:1 Micropolis
  * socket/event loop implementation from `ref/micropolis/src/sim/w_sim.c`.
  */
-class ScriptedStage2Host implements Stage2CoreHost {
-  public readonly sent: Stage2ClientEnvelope[] = [];
-  private onEnvelope: ((envelope: Stage2HostEnvelope) => void) | undefined;
+class ScriptedPlayableHost implements PlayableCoreHost {
+  public readonly sent: PlayableClientEnvelope[] = [];
+  private onEnvelope: ((envelope: PlayableHostEnvelope) => void) | undefined;
 
-  public constructor(private readonly options: ScriptedStage2HostOptions = {}) {}
+  public constructor(private readonly options: ScriptedPlayableHostOptions = {}) {}
 
-  public connect(onEnvelope: (envelope: Stage2HostEnvelope) => void): Stage2CoreHostConnection {
+  public connect(onEnvelope: (envelope: PlayableHostEnvelope) => void): PlayableCoreHostConnection {
     this.onEnvelope = onEnvelope;
     return {
       send: (envelope) => {
@@ -166,9 +169,9 @@ class ScriptedStage2Host implements Stage2CoreHost {
     };
   }
 
-  public emit(envelope: Stage2HostEnvelope): void {
+  public emit(envelope: PlayableHostEnvelope): void {
     if (this.onEnvelope === undefined) {
-      throw new Error('ScriptedStage2Host.emit called before connect()');
+      throw new Error('ScriptedPlayableHost.emit called before connect()');
     }
 
     this.onEnvelope(envelope);
@@ -176,16 +179,16 @@ class ScriptedStage2Host implements Stage2CoreHost {
 }
 
 /**
- * Build a deterministic accepted Stage 2 hello envelope for ordering tests.
+ * Build a deterministic accepted Playable Runtime hello envelope for ordering tests.
  * Mirrors startup hello gating in `ref/micropolis/src/sim/w_sim.c`.
  */
-function createAcceptedStage2HelloEnvelope(): Stage2HostEnvelope {
+function createAcceptedPlayableHelloEnvelope(): PlayableHostEnvelope {
   return {
     kind: 'hello',
-    roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-    clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
-    protocolVersion: STAGE2_DEFAULT_PROTOCOL_VERSION,
-    coreVersion: STAGE2_DEFAULT_CORE_VERSION,
+    roomId: DEFAULT_LOCAL_ROOM_ID,
+    clientId: DEFAULT_LOCAL_CLIENT_ID,
+    protocolVersion: DEFAULT_PROTOCOL_VERSION,
+    coreVersion: DEFAULT_CORE_VERSION,
     accepted: true,
   };
 }
@@ -386,24 +389,24 @@ describe('runtime ordering/resync/reconnect invariants', () => {
   );
 });
 
-describe('stage2 ordering/resync with expanded payload projection', () => {
+describe('playable ordering/resync with expanded payload projection', () => {
   test('recovers map/hud/messages/realtime from sequence-gap resync snapshots plus ordered patch tail', () => {
-    const sentSnapshotRequests: Stage2ClientEnvelope[] = [];
-    const host = new ScriptedStage2Host({
+    const sentSnapshotRequests: PlayableClientEnvelope[] = [];
+    const host = new ScriptedPlayableHost({
       onClientEnvelope(scriptHost, envelope) {
         if (envelope.kind !== 'request_snapshot' || envelope.reason !== 'sequence-gap') {
           return;
         }
 
         sentSnapshotRequests.push(envelope);
-        expect(envelope.roomId).toBe(STAGE2_DEFAULT_LOCAL_ROOM_ID);
-        expect(envelope.clientId).toBe(STAGE2_DEFAULT_LOCAL_CLIENT_ID);
+        expect(envelope.roomId).toBe(DEFAULT_LOCAL_ROOM_ID);
+        expect(envelope.clientId).toBe(DEFAULT_LOCAL_CLIENT_ID);
         expect(envelope.fromServerSeq).toBe(3);
 
         scriptHost.emit({
           kind: 'snapshot',
-          roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-          clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+          roomId: DEFAULT_LOCAL_ROOM_ID,
+          clientId: DEFAULT_LOCAL_CLIENT_ID,
           // C simulation tick progression is monotonic (`CityTime` in `s_sim.c`),
           // so resync replay checkpoints and tails preserve non-decreasing ticks.
           tick: 102,
@@ -438,8 +441,8 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
         });
         scriptHost.emit({
           kind: 'patch',
-          roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-          clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+          roomId: DEFAULT_LOCAL_ROOM_ID,
+          clientId: DEFAULT_LOCAL_CLIENT_ID,
           tick: 103,
           serverSeq: 5,
           payload: {
@@ -456,7 +459,7 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
     const runtime = createWebHostRuntime({ host });
     const sequencedEvents: Array<{
       outcome: string;
-      kind: Stage2HostEnvelope['kind'];
+      kind: PlayableHostEnvelope['kind'];
       state: WebRuntimeState;
     }> = [];
     runtime.subscribe((event) => {
@@ -472,11 +475,11 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
     });
 
     runtime.connect();
-    host.emit(createAcceptedStage2HelloEnvelope());
+    host.emit(createAcceptedPlayableHelloEnvelope());
     host.emit({
       kind: 'snapshot',
-      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 100,
       serverSeq: 1,
       payload: {
@@ -495,8 +498,8 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
     });
     host.emit({
       kind: 'patch',
-      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 101,
       serverSeq: 2,
       payload: {
@@ -510,8 +513,8 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
     });
     host.emit({
       kind: 'patch',
-      roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-      clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
       tick: 102,
       // Intentional serverSeq gap (expected seq=3) must trigger snapshot recovery.
       serverSeq: 4,
@@ -598,8 +601,8 @@ describe('stage2 ordering/resync with expanded payload projection', () => {
     expect(sentSnapshotRequests).toEqual([
       {
         kind: 'request_snapshot',
-        roomId: STAGE2_DEFAULT_LOCAL_ROOM_ID,
-        clientId: STAGE2_DEFAULT_LOCAL_CLIENT_ID,
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
         reason: 'sequence-gap',
         fromServerSeq: 3,
       },

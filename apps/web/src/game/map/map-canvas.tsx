@@ -12,18 +12,19 @@ import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-asse
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
 import { coalesceQueuedRuntimeMapState, type RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
+import { lookupObjectSpriteFrame } from './object-sprite-atlas.ts';
 import {
-  getStage8TileAtlasSourceByCanonicalIdentityKey,
-  lookupStage8TileSprite,
-  resolveStage8MicropolisTileSheetCanonicalIdentityKey,
-  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-} from './stage8-tile-sprite-atlas.ts';
+  DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  getTileAtlasSourceByCanonicalIdentityKey,
+  lookupTileSprite,
+  resolveMicropolisTileSheetCanonicalIdentityKey,
+} from './tile-sprite-atlas.ts';
 
-const STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
-  resolveStage8MicropolisTileSheetCanonicalIdentityKey({
+const BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  resolveMicropolisTileSheetCanonicalIdentityKey({
     viewClass: 'editor',
     color: true,
-  }) ?? STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+  }) ?? DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
 
 const DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX = 640;
 const DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX = 480;
@@ -72,7 +73,7 @@ export function scaleMapPanDeltaToWorldPixels(deltaMapPixels: number): number {
 /**
  * Convert Micropolis editor-world pan pixels into rendered canvas pixels.
  * Mirrors world-pixel panning in `DoPanBy`/`DoPanTo` from
- * `ref/micropolis/src/sim/w_x.c`, adapted to Stage 4 tile-size scaling.
+ * `ref/micropolis/src/sim/w_x.c`, adapted to Authoritative Runtime tile-size scaling.
  */
 export function scaleWorldPanDeltaToCanvasPixels(
   worldPixelDelta: number,
@@ -85,7 +86,7 @@ export function scaleWorldPanDeltaToCanvasPixels(
  * Resolve one drag-pan step into canvas-space camera deltas.
  * Mirrors `MapCmdPanTo` in `ref/micropolis/src/sim/w_map.c`: compute `dx/dy`
  * from the previous pointer sample, scale by `16/3`, then apply `DoPanBy`.
- * Parity note: Stage 4 converts the resulting world-pixel deltas to canvas
+ * Parity note: Authoritative Runtime converts the resulting world-pixel deltas to canvas
  * pixels so browser camera movement tracks Micropolis pan ratios.
  */
 export function continueMapCanvasPanDrag({
@@ -122,7 +123,7 @@ export function continueMapCanvasPanDrag({
  * Camera layout metrics for one map-canvas zoom level.
  * Mirrors Micropolis `DoAdjustPan` viewport-clip ownership in
  * `ref/micropolis/src/sim/w_x.c`.
- * Parity note: Stage 4 keeps C-style bounded pan ownership but extends it with
+ * Parity note: Authoritative Runtime keeps C-style bounded pan ownership but extends it with
  * browser zoom scaling for desktop/touchpad controls.
  */
 export interface MapCanvasCameraMetrics {
@@ -139,7 +140,7 @@ export interface MapCanvasCameraMetrics {
 /**
  * Compute map viewport and pan bounds for one zoom level.
  * Mirrors `DoAdjustPan`-style viewport clipping in `ref/micropolis/src/sim/w_x.c`.
- * Difference: Stage 4 applies browser scale (`zoom`) before viewport clipping.
+ * Difference: Authoritative Runtime applies browser scale (`zoom`) before viewport clipping.
  */
 export function getMapCanvasCameraMetrics({
   mapWidth,
@@ -174,7 +175,7 @@ export function getMapCanvasCameraMetrics({
  * Normalize browser wheel deltas into pixel units.
  * Mirrors Micropolis map input using pixel-space pan deltas (`dx`, `dy`) in
  * `MapCmdPanTo` from `ref/micropolis/src/sim/w_map.c`.
- * Difference: browser wheel events may be in line/page units, so Stage 4
+ * Difference: browser wheel events may be in line/page units, so Authoritative Runtime
  * explicitly converts those units to pixels before camera updates.
  */
 export function normalizeMapCanvasWheelDeltaToPixels({
@@ -214,7 +215,7 @@ export function normalizeMapCanvasWheelDeltaToPixels({
 /**
  * Detect whether one wheel gesture should control zoom.
  * Micropolis C map input (`w_map.c`) has pan-only pointer gestures.
- * Difference: Stage 4 treats `ctrl`/`meta` wheel gestures as browser zoom so
+ * Difference: Authoritative Runtime treats `ctrl`/`meta` wheel gestures as browser zoom so
  * laptop touchpad pinch and desktop modifier-wheel zoom are supported.
  */
 export function isMapCanvasZoomWheelGesture({
@@ -230,7 +231,7 @@ export function isMapCanvasZoomWheelGesture({
 /**
  * Resolve next camera zoom from one wheel gesture sample.
  * Micropolis C has no map zoom mode in `w_map.c`/`w_x.c`.
- * Difference: Stage 4 adds clamped exponential zoom steps for browser wheel and
+ * Difference: Authoritative Runtime adds clamped exponential zoom steps for browser wheel and
  * touchpad pinch input while preserving bounded camera offsets.
  */
 export function computeMapCanvasZoomFromWheel({
@@ -247,7 +248,7 @@ export function computeMapCanvasZoomFromWheel({
 /**
  * Re-anchor camera offset when zoom level changes.
  * Micropolis `DoPanTo` in `ref/micropolis/src/sim/w_x.c` keeps pan in bounds.
- * Difference: Stage 4 keeps the same map point under the wheel/pinch anchor
+ * Difference: Authoritative Runtime keeps the same map point under the wheel/pinch anchor
  * during browser zoom, then applies C-style bounds clamping.
  */
 export function zoomMapCanvasCameraOffsetAtAnchor({
@@ -279,11 +280,11 @@ export function zoomMapCanvasCameraOffsetAtAnchor({
 }
 
 /**
- * Canvas renderer for authoritative Stage 4 map snapshots and tile patches.
+ * Canvas renderer for authoritative Authoritative Runtime map snapshots and tile patches.
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
  * `ref/micropolis/src/sim/g_bigmap.c`.
- * Parity note: Stage 8 uses Micropolis-derived tile sprites from canonical
+ * Parity note: Sprite Atlas uses Micropolis-derived tile sprites from canonical
  * `tiles.xpm` identity and treats missing atlas images as explicit fallback.
  */
 export function MapCanvas({
@@ -318,8 +319,8 @@ export function MapCanvas({
   });
 
   useEffect(() => {
-    const atlas = getStage8TileAtlasSourceByCanonicalIdentityKey(
-      STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    const atlas = getTileAtlasSourceByCanonicalIdentityKey(
+      BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     );
     if (atlas === undefined) {
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
@@ -368,7 +369,7 @@ export function MapCanvas({
       mapState,
       tileSize,
       tileRenderer: {
-        baseTileAtlasCanonicalIdentityKey: STAGE8_BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+        baseTileAtlasCanonicalIdentityKey: BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
@@ -462,7 +463,7 @@ export function MapCanvas({
   /**
    * Apply one anchored browser zoom update and keep camera offsets bounded.
    * Mirrors C pan-bound ownership in `DoPanTo` from `ref/micropolis/src/sim/w_x.c`.
-   * Difference: Stage 4 re-anchors offset at a wheel/pinch point during zoom.
+   * Difference: Authoritative Runtime re-anchors offset at a wheel/pinch point during zoom.
    */
   const applyCameraZoomAt = (nextZoom: number, anchor: { x: number; y: number }): void => {
     setCameraZoom((currentZoom) => {
@@ -720,35 +721,56 @@ export function MapCanvas({
               />
             );
           })}
-          {realtimeOverlaySprites.map((sprite) => (
-            <div
-              key={sprite.key}
-              style={{
-                alignItems: 'center',
-                background: `${sprite.color}59`,
-                border: `1px solid ${sprite.color}`,
-                borderRadius: 3,
-                boxSizing: 'border-box',
-                color: '#0f172a',
-                display: 'flex',
-                fontFamily: 'monospace',
-                fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
-                fontWeight: 700,
-                height: sprite.height,
-                justifyContent: 'center',
-                left: sprite.left,
-                lineHeight: 1,
-                pointerEvents: 'none',
-                position: 'absolute',
-                top: sprite.top,
-                width: sprite.width,
-                zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
-              }}
-              title={`${sprite.name} frame ${sprite.frame}`}
-            >
-              {sprite.label}
-            </div>
-          ))}
+          {realtimeOverlaySprites.map((sprite) =>
+            sprite.spriteFrameUrl !== undefined ? (
+              <img
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                key={sprite.key}
+                src={sprite.spriteFrameUrl}
+                style={{
+                  height: sprite.height,
+                  imageRendering: 'pixelated',
+                  left: sprite.left,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  top: sprite.top,
+                  width: sprite.width,
+                  zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
+                }}
+                title={`${sprite.name} frame ${sprite.frame}`}
+              />
+            ) : (
+              <div
+                key={sprite.key}
+                style={{
+                  alignItems: 'center',
+                  background: `${sprite.color}59`,
+                  border: `1px solid ${sprite.color}`,
+                  borderRadius: 3,
+                  boxSizing: 'border-box',
+                  color: '#0f172a',
+                  display: 'flex',
+                  fontFamily: 'monospace',
+                  fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
+                  fontWeight: 700,
+                  height: sprite.height,
+                  justifyContent: 'center',
+                  left: sprite.left,
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  top: sprite.top,
+                  width: sprite.width,
+                  zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
+                }}
+                title={`${sprite.name} frame ${sprite.frame}`}
+              >
+                {sprite.label}
+              </div>
+            ),
+          )}
         </div>
       </div>
     </div>
@@ -786,7 +808,7 @@ interface MapCanvasRenderFrame {
  * Consumes one queued browser map frame and clears the queue slot.
  * Mirrors one `DoUpdateMap` consumption pass in `ref/micropolis/src/sim/w_map.c`,
  * where one invalidated view state is consumed for one paint update.
- * Parity note: queue entries are single-use in Stage 4; clearing after dequeue
+ * Parity note: queue entries are single-use in Authoritative Runtime; clearing after dequeue
  * prevents stale dirty coverage from being coalesced into later epochs.
  */
 export function consumeQueuedMapCanvasFrame<Frame>(queuedFrameRef: {
@@ -850,7 +872,7 @@ type MapCanvasTileRenderMode = 'atlas' | 'missing-atlas';
 const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
 
 /**
- * Returns deterministic DOM stacking order for Stage 4 map layers.
+ * Returns deterministic DOM stacking order for Authoritative Runtime map layers.
  * Mirrors `DoUpdateEditor` draw order in `ref/micropolis/src/sim/w_editor.c`:
  * `MemDrawBeegMapRect` base map, then `DrawPending`, then `DrawObjects`.
  * Parity note: browser rendering uses CSS z-index instead of a single X11 pixmap.
@@ -900,9 +922,9 @@ export function selectMapCanvasDrawMode({
 }
 
 /**
- * Stage 4 map draw-proc table keyed by runtime map draw mode.
+ * Authoritative Runtime map draw-proc table keyed by runtime map draw mode.
  * Mirrors `mapProcs[]` + `MemDrawMap` dispatch in `ref/micropolis/src/sim/g_map.c`.
- * Parity note: Stage 4 currently carries only transport-level redraw modes
+ * Parity note: Authoritative Runtime currently carries only transport-level redraw modes
  * (`none`/`snapshot`/`patch`) rather than C thematic map overlays (`ALMAP`..`DYMAP`).
  */
 const MAP_CANVAS_DRAW_PROCS: Record<RuntimeMapState['drawMode'], MapCanvasDrawProc> = {
@@ -924,8 +946,10 @@ interface MapCanvasRealtimeSpriteSpec {
 /**
  * One projected realtime overlay sprite for browser map rendering.
  * Mirrors `DrawSprite` positioning in `ref/micropolis/src/sim/w_sprite.c`
- * (`x + x_offset`, `y + y_offset`, `width`, `height`) using Stage 7 payloads.
- * Parity note: this keeps debug-label rectangles instead of Micropolis sprite art.
+ * (`x + x_offset`, `y + y_offset`, `width`, `height`) using Realtime Overlay payloads.
+ * Parity note: object-frame artwork uses Micropolis-derived `obj*-*.xpm` image
+ * identity via exported PNG overlays, with deterministic label fallback when a
+ * frame image is unavailable.
  */
 export interface MapCanvasRealtimeOverlaySprite {
   key: string;
@@ -933,6 +957,7 @@ export interface MapCanvasRealtimeOverlaySprite {
   frame: number;
   label: string;
   color: string;
+  spriteFrameUrl?: string;
   left: number;
   top: number;
   width: number;
@@ -1031,7 +1056,7 @@ const MAP_CANVAS_FALLBACK_REALTIME_SPRITE_SPEC: MapCanvasRealtimeSpriteSpec = {
  * object coordinates are 1/16-tile world pixels with sprite-type offsets.
  * Parity note: browser projection clips off-screen sprites and skips `frame=0`
  * objects the same way C draw code treats inactive sprites.
- * Difference: Stage 7 sorts projected overlays by deterministic id/field order
+ * Difference: Realtime Overlay sorts projected overlays by deterministic id/field order
  * and uses stable id-first keys so React overlay updates remain replay-stable
  * while base-map redraw cadence continues to follow map patch draw mode only.
  */
@@ -1060,6 +1085,10 @@ export function projectRealtimeOverlaySprites({
     }
 
     const spec = getRealtimeSpriteSpec(object.type);
+    const spriteFrame = lookupObjectSpriteFrame({
+      spriteType: object.type,
+      runtimeFrame: object.frame,
+    });
     const left = (object.x + spec.xOffset) * pixelsPerWorldUnit;
     const top = (object.y + spec.yOffset) * pixelsPerWorldUnit;
     const width = spec.width * pixelsPerWorldUnit;
@@ -1075,6 +1104,7 @@ export function projectRealtimeOverlaySprites({
       frame: object.frame,
       label: spec.label,
       color: spec.color,
+      spriteFrameUrl: spriteFrame?.spriteFrameUrl,
       left,
       top,
       width,
@@ -1196,7 +1226,7 @@ function drawPatchTiles(
  * Mirrors dirty-region traversal ownership in `DoUpdateMap` from
  * `ref/micropolis/src/sim/w_map.c`, where invalid rects are clipped to map
  * bounds before tile redraw iteration proceeds.
- * Parity note: Stage 4 unions authority-provided dirty rects and dirty indexes
+ * Parity note: Authoritative Runtime unions authority-provided dirty rects and dirty indexes
  * before iteration so long-session browser redraw remains artifact-free even if
  * payload sources diverge during transport/coalescing; C view code owns one
  * invalidation source per cycle.
@@ -1245,7 +1275,7 @@ function drawMapCanvasTile(
   tileSize: number,
   tileRenderer: MapCanvasTileRenderer,
 ): void {
-  const sprite = lookupStage8TileSprite(tileWord, {
+  const sprite = lookupTileSprite(tileWord, {
     atlasCanonicalIdentityKey: tileRenderer.baseTileAtlasCanonicalIdentityKey,
   });
   const targetX = x * tileSize;
@@ -1259,7 +1289,7 @@ function drawMapCanvasTile(
 
   if (tileRenderMode === 'atlas') {
     if (atlasImage === undefined) {
-      throw new Error('Expected Stage 8 tile atlas image for atlas render mode');
+      throw new Error('Expected Sprite Atlas tile atlas image for atlas render mode');
     }
     context.drawImage(
       atlasImage,
@@ -1280,7 +1310,7 @@ function drawMapCanvasTile(
 }
 
 /**
- * Selects Stage 8 tile render mode for one map tile draw.
+ * Selects Sprite Atlas tile render mode for one map tile draw.
  * Micropolis C draw flow assumes `GetViewTiles` art resources are available
  * before `MemDrawBeegMapRect` draws tiles (`ref/micropolis/src/sim/g_setup.c`,
  * `ref/micropolis/src/sim/g_bigmap.c`).
@@ -1322,9 +1352,9 @@ function clampMapCanvasCoordinate(value: number, maxValue: number): number {
 }
 
 /**
- * Clamp Stage 4 browser zoom to supported bounds.
+ * Clamp Authoritative Runtime browser zoom to supported bounds.
  * Micropolis C editor map flow in `w_map.c`/`w_x.c` is pan-only.
- * Difference: Stage 4 adds bounded zoom while preserving C-style pan clamps.
+ * Difference: Authoritative Runtime adds bounded zoom while preserving C-style pan clamps.
  */
 function clampMapCanvasZoom(zoom: number): number {
   if (zoom <= MAP_CANVAS_MIN_ZOOM) {

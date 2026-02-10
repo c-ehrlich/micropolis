@@ -8,7 +8,7 @@ const EMPTY_DIRTY_RECTS: readonly RuntimeMapDirtyRect[] = Object.freeze([]);
  * Last map draw mode emitted by one authoritative envelope.
  * Mirrors `MemDrawMap` draw-proc dispatch intent in
  * `ref/micropolis/src/sim/g_map.c`.
- * Parity note: this Stage 4 transport-level mode (`none`/`snapshot`/`patch`)
+ * Parity note: this Authoritative Runtime transport-level mode (`none`/`snapshot`/`patch`)
  * intentionally differs from C thematic map states (`ALMAP`..`DYMAP`) and is
  * used only to route full vs dirty redraw behavior in the web canvas.
  */
@@ -29,7 +29,7 @@ export interface RuntimeMapDirtyRect {
 }
 
 /**
- * Runtime map projection consumed by the Stage 2 canvas renderer.
+ * Runtime map projection consumed by the Playable Runtime canvas renderer.
  * Mirrors `MemDrawMap` map-buffer ownership in `ref/micropolis/src/sim/g_map.c`.
  * Difference: this stores one explicit typed tile buffer instead of the C
  * global map memory macros.
@@ -407,7 +407,7 @@ function parseTileWordCoordinateDeltas(
 }
 
 /**
- * Parses legacy Stage 2 index-addressed deltas retained during protocol migration.
+ * Parses legacy Playable Runtime index-addressed deltas retained during protocol migration.
  * Mirrors old bridge payload fixtures predating coordinate-addressed map deltas.
  */
 function parseLegacyIndexDeltas(entries: readonly unknown[]): PatchTileDelta[] {
@@ -466,7 +466,7 @@ function convertSnapshotTileWordsToRuntimeTiles(
 
 /**
  * Computes the runtime row-major tile index used by the canvas projection buffer.
- * Mirrors Stage 2 renderer indexing in `apps/web/src/game/map/map-canvas.tsx`.
+ * Mirrors Playable Runtime renderer indexing in `apps/web/src/game/map/map-canvas.tsx`.
  */
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
@@ -682,7 +682,7 @@ function readTileValue(value: unknown): number | null {
   }
 
   // The C map buffers are 16-bit words (`short`/`unsigned short` paths in
-  // map rendering), so Stage 2 normalizes payload values to 16 bits.
+  // map rendering), so Playable Runtime normalizes payload values to 16 bits.
   return Math.trunc(value) & 0xffff;
 }
 

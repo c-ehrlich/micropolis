@@ -31,7 +31,7 @@ export type CoreBridgeV1SequenceStateSeed =
 
 /**
  * Minimal event ordering metadata required by sequencing helpers.
- * Mirrors Stage 0 bridge ordering invariants for `tick` + `serverSeq`.
+ * Mirrors Bridge V1 bridge ordering invariants for `tick` + `serverSeq`.
  * Parity note: intentionally different from Micropolis internal calls by
  * isolating wire-order fields from payload details.
  */
@@ -107,7 +107,7 @@ export function createCoreBridgeV1SequenceState(
 
 /**
  * Compute the next expected server sequence from current state.
- * Mirrors strict forward-only update progression expected by Stage 0 contracts.
+ * Mirrors strict forward-only update progression expected by Bridge V1 contracts.
  * Parity note: intentionally different from Micropolis C networking hooks by
  * formalizing sequence continuity as an explicit helper.
  */
@@ -144,7 +144,7 @@ export function advanceCoreBridgeV1SequenceState(
  * Mirrors `s_sim.c` / `sim.c` forward-only simulation loop assumptions:
  * no backward time movement and deterministic event ordering.
  * Parity note: intentionally different from Micropolis C transport, which has
- * no explicit `serverSeq`, by enforcing frozen Stage 0 bridge invariants:
+ * no explicit `serverSeq`, by enforcing frozen Bridge V1 bridge invariants:
  * strict monotonic `serverSeq`, non-decreasing `tick`, stale drop, and gap resync.
  */
 export function evaluateCoreBridgeV1SequenceDecision(

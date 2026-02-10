@@ -1,10 +1,10 @@
 import type { CoreHost, CoreHostCommand, CoreHostEvent, CoreHostEventListener } from './core-host';
 import { createHelloPayload, type HelloPayload, type HelloVersions } from './handshake';
 import {
-  createStage4CommandAuthority,
+  type AuthorityMode,
+  type CommandAuthority,
+  createCommandAuthority,
   type SimCoreAuthorityTickScheduler,
-  type Stage4AuthorityMode,
-  type Stage4CommandAuthority,
 } from './sim-core-command-authority';
 
 /**
@@ -17,7 +17,7 @@ export interface LocalHostOptions {
   readonly roomId?: string;
   readonly clientId?: string;
   readonly helloVersions?: Partial<HelloVersions>;
-  readonly authorityMode?: Stage4AuthorityMode;
+  readonly authorityMode?: AuthorityMode;
   readonly allowDeterministicFallback?: boolean;
   readonly authorityTickIntervalMs?: number;
   readonly authorityTickScheduler?: SimCoreAuthorityTickScheduler;
@@ -33,7 +33,7 @@ export class LocalHost implements CoreHost {
   public readonly mode = 'local' as const;
   private readonly listeners = new Set<CoreHostEventListener>();
   private readonly helloPayload: HelloPayload;
-  private readonly commandAuthority: Stage4CommandAuthority;
+  private readonly commandAuthority: CommandAuthority;
   private connected = false;
 
   public constructor(private readonly options: LocalHostOptions = {}) {
@@ -44,7 +44,7 @@ export class LocalHost implements CoreHost {
       },
       this.options.helloVersions,
     );
-    this.commandAuthority = createStage4CommandAuthority({
+    this.commandAuthority = createCommandAuthority({
       mode: this.mode,
       authorityMode: this.options.authorityMode,
       allowDeterministicFallback: this.options.allowDeterministicFallback,

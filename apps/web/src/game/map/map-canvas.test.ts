@@ -19,19 +19,19 @@ import {
   zoomMapCanvasCameraOffsetAtAnchor,
 } from './map-canvas.tsx';
 import {
-  lookupStage8TileSprite,
-  STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-} from './stage8-tile-sprite-atlas.ts';
+  DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  lookupTileSprite,
+} from './tile-sprite-atlas.ts';
 
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
 }
 
-function toStage8TileVisualToken(tileWord: number): string {
+function toTileVisualToken(tileWord: number): string {
   // `MemDrawBeegMapRect` in `g_bigmap.c` resolves one sprite row from
-  // `(tile & LOMASK)` (+ `TILE_COUNT` wrapping), which is ported by lookupStage8TileSprite.
-  const sprite = lookupStage8TileSprite(tileWord, {
-    atlasCanonicalIdentityKey: STAGE8_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  // `(tile & LOMASK)` (+ `TILE_COUNT` wrapping), which is ported by lookupTileSprite.
+  const sprite = lookupTileSprite(tileWord, {
+    atlasCanonicalIdentityKey: DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   });
   return `${sprite.atlasCanonicalIdentityKey}:${sprite.tileId}:${sprite.sourceX}:${sprite.sourceY}:${sprite.sourceWidth}:${sprite.sourceHeight}`;
 }
@@ -51,7 +51,7 @@ function applyPatchTileVisualTokens({
   dirtyRects: readonly Readonly<{ x: number; y: number; width: number; height: number }>[];
   dirtyTileIndexes: Uint32Array;
 }): string[] {
-  const patchVisuals = Array.from(beforeTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+  const patchVisuals = Array.from(beforeTiles, (tileWord) => toTileVisualToken(tileWord));
   forEachMapCanvasPatchTileIndex(
     {
       width,
@@ -60,7 +60,7 @@ function applyPatchTileVisualTokens({
       dirtyTileIndexes,
     },
     (tileIndex) => {
-      patchVisuals[tileIndex] = toStage8TileVisualToken(afterTiles[tileIndex] ?? 0);
+      patchVisuals[tileIndex] = toTileVisualToken(afterTiles[tileIndex] ?? 0);
     },
   );
   return patchVisuals;
@@ -113,7 +113,7 @@ describe('map canvas draw-mode selection', () => {
   });
 
   it('keeps patch redraw when runtime skipped intermediate map epochs', () => {
-    // Stage 9 coalesces queued map dirty coverage across skipped epochs, so
+    // Dirty-Rect Coalescing coalesces queued map dirty coverage across skipped epochs, so
     // patch repaint remains sufficient without forcing full-canvas redraw.
     expect(
       selectMapCanvasDrawMode({
@@ -157,6 +157,8 @@ describe('map canvas draw-mode selection', () => {
     expect(projected.width).toBe(8);
     expect(projected.height).toBe(8);
     expect(projected.label).toBe('TRN');
+    // `DrawObjects` in `w_sprite.c` uses `(frame - 1)`, so TRA frame `2` draws `obj1-1`.
+    expect(projected.spriteFrameUrl).toContain('obj1-1');
   });
 
   it('skips inactive and out-of-bounds realtime overlay objects', () => {
@@ -193,6 +195,7 @@ describe('map canvas draw-mode selection', () => {
       overlays.map((overlay) => ({
         name: overlay.name,
         label: overlay.label,
+        spriteFrameUrlToken: overlay.spriteFrameUrl?.match(/obj\d+-\d+/)?.[0],
         left: overlay.left,
         top: overlay.top,
         width: overlay.width,
@@ -200,19 +203,75 @@ describe('map canvas draw-mode selection', () => {
       })),
     ).toEqual([
       // `InitSprite` in `w_sprite.c` sets TRA to width/height=32 and x/y offsets 32/-16.
-      { name: 'train', label: 'TRN', left: 160, top: 112, width: 32, height: 32 },
+      {
+        name: 'train',
+        label: 'TRN',
+        spriteFrameUrlToken: 'obj1-0',
+        left: 160,
+        top: 112,
+        width: 32,
+        height: 32,
+      },
       // `InitSprite` in `w_sprite.c` sets COP to width/height=32 and x/y offsets 32/-16.
-      { name: 'copter', label: 'COP', left: 160, top: 112, width: 32, height: 32 },
+      {
+        name: 'copter',
+        label: 'COP',
+        spriteFrameUrlToken: 'obj2-0',
+        left: 160,
+        top: 112,
+        width: 32,
+        height: 32,
+      },
       // `InitSprite` in `w_sprite.c` sets AIR to width/height=48 and x/y offsets 24/0.
-      { name: 'plane', label: 'AIR', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'plane',
+        label: 'AIR',
+        spriteFrameUrlToken: 'obj3-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets SHI to width/height=48 and x/y offsets 32/-16.
-      { name: 'ship', label: 'SHP', left: 160, top: 112, width: 48, height: 48 },
+      {
+        name: 'ship',
+        label: 'SHP',
+        spriteFrameUrlToken: 'obj4-0',
+        left: 160,
+        top: 112,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets GOD to width/height=48 and x/y offsets 24/0.
-      { name: 'monster', label: 'MON', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'monster',
+        label: 'MON',
+        spriteFrameUrlToken: 'obj5-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets TOR to width/height=48 and x/y offsets 24/0.
-      { name: 'tornado', label: 'TOR', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'tornado',
+        label: 'TOR',
+        spriteFrameUrlToken: 'obj6-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
       // `InitSprite` in `w_sprite.c` sets EXP to width/height=48 and x/y offsets 24/0.
-      { name: 'explosion', label: 'EXP', left: 152, top: 128, width: 48, height: 48 },
+      {
+        name: 'explosion',
+        label: 'EXP',
+        spriteFrameUrlToken: 'obj7-0',
+        left: 152,
+        top: 128,
+        width: 48,
+        height: 48,
+      },
     ]);
   });
 
@@ -220,7 +279,7 @@ describe('map canvas draw-mode selection', () => {
     const forward = projectRealtimeOverlaySprites({
       objects: [
         // Bridge realtime ids map to stable in-process sprite identities from
-        // `w_sprite.c`; Stage 7 sorts by id for deterministic replay ordering.
+        // `w_sprite.c`; Realtime Overlay sorts by id for deterministic replay ordering.
         { id: 'rt-3', name: 'TOR', type: 6, x: 128, y: 144, frame: 2 },
         { id: 'rt-1', name: 'TRA', type: 1, x: 96, y: 96, frame: 3 },
         { id: 'rt-2', name: 'AIR', type: 3, x: 160, y: 96, frame: 5 },
@@ -330,9 +389,9 @@ describe('map canvas pan parity', () => {
     expect(scaleMapPanDeltaToWorldPixels(-2)).toBe(-10);
   });
 
-  it('converts Micropolis world-pixel pan deltas into Stage 4 canvas pixels', () => {
+  it('converts Micropolis world-pixel pan deltas into Authoritative Runtime canvas pixels', () => {
     // Micropolis editor panning uses 16 world pixels per tile (`w_x.c`); with
-    // Stage 4 `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
+    // Authoritative Runtime `tileSize=6`, one full Micropolis tile pan becomes 6 canvas pixels.
     expect(scaleWorldPanDeltaToCanvasPixels(16, 6)).toBe(6);
     expect(scaleWorldPanDeltaToCanvasPixels(10, 6)).toBe(3);
     expect(scaleWorldPanDeltaToCanvasPixels(-16, 6)).toBe(-6);
@@ -542,7 +601,7 @@ describe('map canvas snapshot/patch visual parity', () => {
       { x: -1, y: -1, width: 2, height: 2 },
       { x: 2, y: 1, width: 2, height: 2 },
     ] as const;
-    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toTileVisualToken(tileWord));
     const patchVisuals = applyPatchTileVisualTokens({
       beforeTiles,
       afterTiles,
@@ -570,7 +629,7 @@ describe('map canvas snapshot/patch visual parity', () => {
     afterTiles[1] = Tile.ROADBASE + 7 + TileFlag.BULLBIT;
     afterTiles[4] = Tile.RESBASE + 3;
 
-    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toStage8TileVisualToken(tileWord));
+    const snapshotVisuals = Array.from(afterTiles, (tileWord) => toTileVisualToken(tileWord));
     const patchVisuals = applyPatchTileVisualTokens({
       beforeTiles,
       afterTiles,

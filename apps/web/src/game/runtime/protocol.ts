@@ -16,7 +16,7 @@ import {
 } from '../../../../../packages/sim-core/src/actions/tool-actions.ts';
 
 /**
- * Stage 0 canonical client-envelope contract alias for web runtime migration.
+ * Bridge V1 canonical client-envelope contract alias for web runtime migration.
  * Maps this web-local protocol surface to `CoreClientEnvelope` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: bridge envelopes intentionally differ from Micropolis Tcl command
@@ -25,7 +25,7 @@ import {
 export type CanonicalBridgeClientEnvelopeContract = CoreBridgeClientEnvelopeContract;
 
 /**
- * Stage 0 canonical host-envelope contract alias for web runtime migration.
+ * Bridge V1 canonical host-envelope contract alias for web runtime migration.
  * Maps this web-local protocol surface to `CoreHostEnvelope` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: bridge envelopes intentionally differ from Micropolis update
@@ -34,8 +34,8 @@ export type CanonicalBridgeClientEnvelopeContract = CoreBridgeClientEnvelopeCont
 export type CanonicalBridgeHostEnvelopeContract = CoreBridgeHostEnvelopeContract;
 
 /**
- * Stage 0 canonical bridge local-room identity constant.
- * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_ROOM_ID` in
+ * Bridge V1 canonical bridge local-room identity constant.
+ * Maps Playable Runtime local defaults to `CORE_BRIDGE_V1_LOCAL_ROOM_ID` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: room ids are a TypeScript bridge concept; Micropolis C transport
  * does not expose a first-class room id field in `ref/micropolis/src/sim/w_net.c`.
@@ -43,8 +43,8 @@ export type CanonicalBridgeHostEnvelopeContract = CoreBridgeHostEnvelopeContract
 export const CANONICAL_BRIDGE_LOCAL_ROOM_ID = CORE_BRIDGE_V1_LOCAL_ROOM_ID;
 
 /**
- * Stage 0 canonical bridge local-client identity constant.
- * Maps Stage 2 local defaults to `CORE_BRIDGE_V1_LOCAL_CLIENT_ID` in
+ * Bridge V1 canonical bridge local-client identity constant.
+ * Maps Playable Runtime local defaults to `CORE_BRIDGE_V1_LOCAL_CLIENT_ID` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: client ids are a TypeScript bridge concept; Micropolis C
  * integration uses implicit process/socket identity.
@@ -52,7 +52,7 @@ export const CANONICAL_BRIDGE_LOCAL_ROOM_ID = CORE_BRIDGE_V1_LOCAL_ROOM_ID;
 export const CANONICAL_BRIDGE_LOCAL_CLIENT_ID = CORE_BRIDGE_V1_LOCAL_CLIENT_ID;
 
 /**
- * Stage 0 canonical bridge protocol token.
+ * Bridge V1 canonical bridge protocol token.
  * Maps web runtime protocol ownership to `CORE_BRIDGE_V1_PROTOCOL_VERSION` in
  * `packages/core-bridge/src/types.ts`.
  * Parity note: protocol tokens are a bridge abstraction rather than direct
@@ -61,22 +61,22 @@ export const CANONICAL_BRIDGE_LOCAL_CLIENT_ID = CORE_BRIDGE_V1_LOCAL_CLIENT_ID;
 export const CANONICAL_BRIDGE_PROTOCOL_VERSION = CORE_BRIDGE_V1_PROTOCOL_VERSION;
 
 /**
- * Default local room identity for the Stage 2 LocalHost path.
+ * Default local room identity for the Playable Runtime LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
- * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
+ * `MASTER_GAME_ALIGNMENT_PLAN.md`.
  */
 export const DEFAULT_LOCAL_ROOM_ID = CANONICAL_BRIDGE_LOCAL_ROOM_ID;
 
 /**
- * Default local client identity for the Stage 2 LocalHost path.
+ * Default local client identity for the Playable Runtime LocalHost path.
  * Mirrors the deterministic local-mode defaults documented in
- * `STAGE_2_SIMPLE_UI_PLAN.md` and `STAGE_1_MOCKED_BRIDGE_PLAN.md`.
+ * `MASTER_GAME_ALIGNMENT_PLAN.md`.
  */
 export const DEFAULT_LOCAL_CLIENT_ID = CANONICAL_BRIDGE_LOCAL_CLIENT_ID;
 
 /**
- * Default protocol version used by the Stage 2 web runtime handshake.
- * Maps Stage 2 runtime handshake defaults to
+ * Default protocol version used by the Playable Runtime web runtime handshake.
+ * Maps Playable Runtime runtime handshake defaults to
  * `CORE_BRIDGE_V1_PROTOCOL_VERSION` in `packages/core-bridge/src/types.ts`.
  * Parity note: protocol tokens are a bridge abstraction rather than direct
  * `SimCmdVersion` Tcl command strings in `ref/micropolis/src/sim/w_sim.c`.
@@ -84,8 +84,8 @@ export const DEFAULT_LOCAL_CLIENT_ID = CANONICAL_BRIDGE_LOCAL_CLIENT_ID;
 export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 
 /**
- * Default core version announced by the Stage 2 web runtime handshake.
- * Maps Stage 2 runtime handshake defaults to
+ * Default core version announced by the Playable Runtime web runtime handshake.
+ * Maps Playable Runtime runtime handshake defaults to
  * `LOCAL_HOST_DEFAULT_CORE_VERSION` in `packages/core-bridge/src/local-host.ts`.
  * Parity note: explicit version tokens are a bridge abstraction rather than
  * direct C Tcl `sim Version` return strings in `ref/micropolis/src/sim/w_sim.c`.
@@ -93,14 +93,14 @@ export const DEFAULT_PROTOCOL_VERSION = CANONICAL_BRIDGE_PROTOCOL_VERSION;
 export const DEFAULT_CORE_VERSION = LOCAL_HOST_DEFAULT_CORE_VERSION;
 
 /**
- * Stage 0 playable command inventory locked to canonical bridge payload types.
+ * Bridge V1 playable command inventory locked to canonical bridge payload types.
  * Mirrors command classes routed through `SimCmd` + tool handlers in
  * `ref/micropolis/src/sim/w_sim.c`, `ref/micropolis/src/sim/w_tool.c`,
  * and `ref/micropolis/src/sim/s_fileio.c`.
  * Difference: this inventory is an explicit TypeScript subset declaration
  * instead of C command-string dispatch tables.
  */
-export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
+export const PLAYABLE_BRIDGE_COMMAND_TYPES = [
   'tool_apply',
   'sim_pause',
   'sim_resume',
@@ -112,97 +112,95 @@ export const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES = [
 ] as const satisfies readonly CityCommandPayloadV1['type'][];
 
 /**
- * Canonical bridge command-type subset used by Stage 2 playable flows.
- * Mirrors the Stage 0 command inventory lock derived from
+ * Canonical bridge command-type subset used by Playable Runtime playable flows.
+ * Mirrors the Bridge V1 command inventory lock derived from
  * `CityCommandPayloadV1` in `packages/core-bridge/src/types.ts`.
  */
-export type Stage0PlayableBridgeCommandType = (typeof STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES)[number];
+export type PlayableBridgeCommandType = (typeof PLAYABLE_BRIDGE_COMMAND_TYPES)[number];
 
-type _Stage0MissingPlayableBridgeCommandTypes = Exclude<
+type _MissingPlayableBridgeCommandTypes = Exclude<
   CityCommandPayloadV1['type'],
-  Stage0PlayableBridgeCommandType
+  PlayableBridgeCommandType
 >;
 
-type _Stage0ExtraPlayableBridgeCommandTypes = Exclude<
-  Stage0PlayableBridgeCommandType,
+type _ExtraPlayableBridgeCommandTypes = Exclude<
+  PlayableBridgeCommandType,
   CityCommandPayloadV1['type']
 >;
 
-const _STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_EXHAUSTIVENESS_CHECK: Record<
-  _Stage0MissingPlayableBridgeCommandTypes | _Stage0ExtraPlayableBridgeCommandTypes,
+const _PLAYABLE_BRIDGE_COMMAND_TYPE_EXHAUSTIVENESS_CHECK: Record<
+  _MissingPlayableBridgeCommandTypes | _ExtraPlayableBridgeCommandTypes,
   never
 > = {};
 
 /**
- * Canonical bridge command payload subset for playable Stage 2 commands.
- * Mirrors the Stage 0 command inventory while keeping ownership in
+ * Canonical bridge command payload subset for playable Playable Runtime commands.
+ * Mirrors the Bridge V1 command inventory while keeping ownership in
  * `CityCommandPayloadV1` from `packages/core-bridge/src/types.ts`.
  */
-export type Stage0PlayableBridgeCommandPayload = Extract<
+export type PlayableBridgeCommandPayload = Extract<
   CityCommandPayloadV1,
   {
-    type: Stage0PlayableBridgeCommandType;
+    type: PlayableBridgeCommandType;
   }
 >;
 
-const STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET = new Set<Stage0PlayableBridgeCommandType>(
-  STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPES,
+const PLAYABLE_BRIDGE_COMMAND_TYPE_SET = new Set<PlayableBridgeCommandType>(
+  PLAYABLE_BRIDGE_COMMAND_TYPES,
 );
 
 /**
- * Returns true when a canonical bridge command type is in the Stage 0 playable
+ * Returns true when a canonical bridge command type is in the Bridge V1 playable
  * single-player inventory.
- * Mirrors Stage 0 command gating intent from `SimCmd` in
+ * Mirrors Bridge V1 command gating intent from `SimCmd` in
  * `ref/micropolis/src/sim/w_sim.c`.
  * Difference: this checks typed bridge command discriminants instead of Tcl
  * command names.
  */
-export function isStage0PlayableBridgeCommandType(
+export function isPlayableBridgeCommandType(
   commandType: CityCommandPayloadV1['type'],
-): commandType is Stage0PlayableBridgeCommandType {
-  return STAGE0_PLAYABLE_BRIDGE_COMMAND_TYPE_SET.has(
-    commandType as Stage0PlayableBridgeCommandType,
-  );
+): commandType is PlayableBridgeCommandType {
+  return PLAYABLE_BRIDGE_COMMAND_TYPE_SET.has(commandType as PlayableBridgeCommandType);
 }
 
 /**
- * Stage 2 canonical bridge tool identifiers used by the playable toolbar.
+ * Playable Runtime canonical bridge tool identifiers used by the playable toolbar.
  * Mirrors tool routing in `ref/micropolis/src/sim/w_tool.c`.
  */
-export type Stage2CanonicalToolName = Extract<
+export type PlayableCanonicalToolName = Extract<
   CityToolV1,
   'road' | 'rail' | 'wire' | 'bulldoze' | 'residential' | 'commercial' | 'industrial'
 >;
 
 /**
- * Stage 2 tool identifiers exposed in the simple playable toolbar.
+ * Playable Runtime tool identifiers exposed in the simple playable toolbar.
  * Mirrors tool state names from `ref/micropolis/src/sim/w_tool.c` (`roadState`,
  * `rrState`, `wireState`, `dozeState`, `residentialState`,
  * `commercialState`, `industrialState`).
  */
-export type Stage2ToolName = 'road' | 'rail' | 'wire' | 'bulldoze' | 'res' | 'com' | 'ind';
+export type PlayableToolName = 'road' | 'rail' | 'wire' | 'bulldoze' | 'res' | 'com' | 'ind';
 
 /**
- * High-level Stage 2 tool placement command sent through `command` envelopes.
+ * High-level Playable Runtime tool placement command sent through `command` envelopes.
  * Mirrors `DoTool`/`do_tool` command intent in `ref/micropolis/src/sim/w_tool.c`.
  * Difference: this is typed bridge payload data instead of Tcl command strings.
  */
-export interface Stage2ToolCommand {
+export interface PlayableToolCommand {
   kind: 'tool';
-  tool: Stage2ToolName;
+  tool: PlayableToolName;
   x: number;
   y: number;
 }
 
 /**
- * Stage 2 simulation speed values exposed in the simple UI controls.
+ * Playable Runtime simulation speed values exposed in the simple UI controls.
  * Mirrors `setSpeed` clamping behavior in `ref/micropolis/src/sim/w_util.c`
  * and `SimCmdSpeed` input behavior in `ref/micropolis/src/sim/w_sim.c`.
- * Difference: Stage 2 UI only exposes the playable range 1..3.
+ * Difference: Playable Runtime UI only exposes the playable range 1..3.
  */
-export type Stage2SimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
+export type PlayableSimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
 
-const STAGE2_TO_CANONICAL_TOOL_NAME: Record<Stage2ToolName, Stage2CanonicalToolName> = {
+const PLAYABLE_TO_CANONICAL_TOOL_NAME: Record<PlayableToolName, PlayableCanonicalToolName> = {
   road: 'road',
   rail: 'rail',
   wire: 'wire',
@@ -212,7 +210,7 @@ const STAGE2_TO_CANONICAL_TOOL_NAME: Record<Stage2ToolName, Stage2CanonicalToolN
   ind: 'industrial',
 };
 
-const CANONICAL_TO_STAGE2_TOOL_NAME: Record<Stage2CanonicalToolName, Stage2ToolName> = {
+const CANONICAL_TO_PLAYABLE_TOOL_NAME: Record<PlayableCanonicalToolName, PlayableToolName> = {
   road: 'road',
   rail: 'rail',
   wire: 'wire',
@@ -226,7 +224,7 @@ const CANONICAL_TO_STAGE2_TOOL_NAME: Record<Stage2CanonicalToolName, Stage2ToolN
  * Pause simulation command routed through host authority.
  * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
  */
-export interface Stage2PauseSimCommand {
+export interface PlayablePauseSimCommand {
   kind: 'sim-control';
   control: 'pause';
 }
@@ -235,7 +233,7 @@ export interface Stage2PauseSimCommand {
  * Resume simulation command routed through host authority.
  * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
  */
-export interface Stage2PlaySimCommand {
+export interface PlayableResumeSimCommand {
   kind: 'sim-control';
   control: 'play';
 }
@@ -245,38 +243,38 @@ export interface Stage2PlaySimCommand {
  * Mirrors `setSpeed` + `SimCmdSpeed` in
  * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
  */
-export interface Stage2SetSpeedSimCommand {
+export interface PlayableSetSpeedSimCommand {
   kind: 'sim-control';
   control: 'set-speed';
-  speed: Stage2SimSpeed;
+  speed: PlayableSimSpeed;
 }
 
 /**
- * Stage 2 simulation control command union.
+ * Playable Runtime simulation control command union.
  * Mirrors pause/resume/speed control paths in
  * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
  */
-export type Stage2SimControlCommand =
-  | Stage2PauseSimCommand
-  | Stage2PlaySimCommand
-  | Stage2SetSpeedSimCommand;
+export type PlayableSimControlCommand =
+  | PlayablePauseSimCommand
+  | PlayableResumeSimCommand
+  | PlayableSetSpeedSimCommand;
 
 /**
  * New-city lifecycle command routed through host authority.
  * Mirrors `DoNewCity` reset intent in `ref/micropolis/src/sim/s_init.c` and
  * lifecycle dispatch in `ref/micropolis/src/sim/w_sim.c`.
  */
-export interface Stage2NewCityCommand {
+export interface PlayableNewCityCommand {
   kind: 'city-lifecycle';
   action: 'new-city';
 }
 
 /**
- * Stage 2 city lifecycle command union.
+ * Playable Runtime city lifecycle command union.
  * Mirrors high-level city lifecycle command handling in
  * `ref/micropolis/src/sim/w_sim.c`.
  */
-export type Stage2CityLifecycleCommand = Stage2NewCityCommand;
+export type PlayableCityLifecycleCommand = PlayableNewCityCommand;
 
 /**
  * Save/export city command routed through host authority.
@@ -284,7 +282,7 @@ export type Stage2CityLifecycleCommand = Stage2NewCityCommand;
  * Difference: browser flow exports bytes to the user rather than writing
  * directly to a host filesystem path.
  */
-export interface Stage2SaveCityCommand {
+export interface PlayableSaveCityCommand {
   kind: 'city-io';
   action: 'save-city';
   fileName: string;
@@ -295,7 +293,7 @@ export interface Stage2SaveCityCommand {
  * Mirrors `LoadCity` in `ref/micropolis/src/sim/s_fileio.c`.
  * Difference: browser flow passes in-memory bytes instead of host-side file IO.
  */
-export interface Stage2LoadCityCommand {
+export interface PlayableLoadCityCommand {
   kind: 'city-io';
   action: 'load-city';
   fileName: string;
@@ -303,51 +301,51 @@ export interface Stage2LoadCityCommand {
 }
 
 /**
- * Stage 2 persistence command union.
+ * Playable Runtime persistence command union.
  * Mirrors save/load lifecycle intent in `ref/micropolis/src/sim/s_fileio.c`.
  */
-export type Stage2CityIoCommand = Stage2SaveCityCommand | Stage2LoadCityCommand;
+export type PlayableCityIoCommand = PlayableSaveCityCommand | PlayableLoadCityCommand;
 
 /**
  * Scenario-start command routed through host authority.
  * Mirrors `LoadScenario(short s)` entry in `ref/micropolis/src/sim/s_fileio.c`.
  */
-export interface Stage2LoadScenarioCommand {
+export interface PlayableLoadScenarioCommand {
   kind: 'scenario';
   action: 'load-scenario';
   scenarioId: number;
 }
 
 /**
- * Stage 2 scenario command union.
+ * Playable Runtime scenario command union.
  * Mirrors scenario entry handling in `ref/micropolis/src/sim/s_fileio.c`.
  */
-export type Stage2ScenarioCommand = Stage2LoadScenarioCommand;
+export type PlayableScenarioCommand = PlayableLoadScenarioCommand;
 
 /**
- * Stage 2 client command union for this UI milestone.
+ * Playable Runtime client command union for this UI milestone.
  * Mirrors Micropolis command dispatch in `ref/micropolis/src/sim/w_tool.c`
  * and `ref/micropolis/src/sim/w_sim.c`.
- * Difference: this keeps the Stage 2 subset only (tools, sim controls, and
+ * Difference: this keeps the Playable Runtime subset only (tools, sim controls, and
  * city lifecycle/persistence/scenario commands).
  */
-export type Stage2ClientCommand =
-  | Stage2ToolCommand
-  | Stage2SimControlCommand
-  | Stage2CityLifecycleCommand
-  | Stage2CityIoCommand
-  | Stage2ScenarioCommand;
+export type PlayableClientCommand =
+  | PlayableToolCommand
+  | PlayableSimControlCommand
+  | PlayableCityLifecycleCommand
+  | PlayableCityIoCommand
+  | PlayableScenarioCommand;
 
 /**
- * Returns the canonical bridge command type that corresponds to one Stage 2
+ * Returns the canonical bridge command type that corresponds to one Playable Runtime
  * runtime command.
  * Mirrors command routing classes in `ref/micropolis/src/sim/w_sim.c`.
- * Difference: this mapper only emits the playable Stage 0 subset from
+ * Difference: this mapper only emits the playable Bridge V1 subset from
  * `CityCommandPayloadV1['type']`.
  */
-export function getStage0PlayableBridgeCommandType(
-  command: Stage2ClientCommand,
-): Stage0PlayableBridgeCommandType {
+export function getPlayableBridgeCommandType(
+  command: PlayableClientCommand,
+): PlayableBridgeCommandType {
   if (command.kind === 'tool') {
     return 'tool_apply';
   }
@@ -376,21 +374,21 @@ export function getStage0PlayableBridgeCommandType(
 }
 
 /**
- * Maps a Stage 2 toolbar tool id to the canonical bridge tool id.
+ * Maps a Playable Runtime toolbar tool id to the canonical bridge tool id.
  * Mirrors tool-name routing intent around `setWandState` in
  * `ref/micropolis/src/sim/w_tool.c`.
  */
-export function toCanonicalBridgeToolName(tool: Stage2ToolName): Stage2CanonicalToolName {
-  return STAGE2_TO_CANONICAL_TOOL_NAME[tool];
+export function toCanonicalBridgeToolName(tool: PlayableToolName): PlayableCanonicalToolName {
+  return PLAYABLE_TO_CANONICAL_TOOL_NAME[tool];
 }
 
 /**
- * Maps a canonical bridge tool id back to the Stage 2 toolbar tool id.
+ * Maps a canonical bridge tool id back to the Playable Runtime toolbar tool id.
  * Mirrors toolbar-state projection intent around `setWandState` in
  * `ref/micropolis/src/sim/w_tool.c`.
  */
-export function fromCanonicalBridgeToolName(tool: Stage2CanonicalToolName): Stage2ToolName {
-  return CANONICAL_TO_STAGE2_TOOL_NAME[tool];
+export function fromCanonicalBridgeToolName(tool: PlayableCanonicalToolName): PlayableToolName {
+  return CANONICAL_TO_PLAYABLE_TOOL_NAME[tool];
 }
 
 /**
@@ -398,14 +396,14 @@ export function fromCanonicalBridgeToolName(tool: Stage2CanonicalToolName): Stag
  * Mirrors `toolSize[]` and `toolOffset[]` in `ref/micropolis/src/sim/w_tool.c`.
  */
 export interface PlayableToolSpec {
-  tool: Stage2ToolName;
+  tool: PlayableToolName;
   label: string;
   size: number;
   offset: number;
   pendingColor: string;
 }
 
-const PLAYABLE_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
+const PLAYABLE_TOOL_STATE_ID: Record<PlayableToolName, number> = {
   road: TOOL_STATE.road,
   rail: TOOL_STATE.rail,
   wire: TOOL_STATE.wire,
@@ -416,7 +414,7 @@ const PLAYABLE_TOOL_STATE_ID: Record<Stage2ToolName, number> = {
 };
 
 interface PlayableToolVisualSpec {
-  tool: Stage2ToolName;
+  tool: PlayableToolName;
   label: string;
   pendingColor: string;
 }
@@ -437,7 +435,7 @@ const PLAYABLE_TOOL_VISUAL_SPECS: readonly PlayableToolVisualSpec[] = [
  * `ref/micropolis/src/sim/w_tool.c` (1:1 state-id lookup).
  */
 function playableFootprintFromToolTables(
-  tool: Stage2ToolName,
+  tool: PlayableToolName,
 ): Pick<PlayableToolSpec, 'size' | 'offset'> {
   const stateId = PLAYABLE_TOOL_STATE_ID[tool];
   const size = TOOL_SIZE[stateId];
@@ -462,7 +460,7 @@ export const PLAYABLE_TOOL_SPECS: readonly PlayableToolSpec[] = PLAYABLE_TOOL_VI
   }),
 );
 
-const PLAYABLE_TOOL_NAME_SET = new Set<Stage2ToolName>(
+const PLAYABLE_TOOL_NAME_SET = new Set<PlayableToolName>(
   PLAYABLE_TOOL_SPECS.map((spec) => spec.tool),
 );
 
@@ -484,8 +482,8 @@ export interface HostHelloEnvelope {
    */
   message?: string;
   /**
-   * Legacy Stage 2 hello rejection detail field retained for local-host
-   * compatibility while Stage 0 convergence work is still in flight.
+   * Legacy Playable Runtime hello rejection detail field retained for local-host
+   * compatibility while Bridge V1 convergence work is still in flight.
    */
   reason?: string;
 }
@@ -525,7 +523,7 @@ export interface HostRejectEnvelope extends HostSequencingFields {
 }
 
 /**
- * Authoritative snapshot map payload carried by Stage 2 host envelopes.
+ * Authoritative snapshot map payload carried by Playable Runtime host envelopes.
  * Mirrors contiguous `Map[WORLD_X][WORLD_Y]` storage and serialization order in
  * `ref/micropolis/src/sim/s_alloc.c` and `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: `tileWords` follows classic Micropolis x-major order
@@ -586,7 +584,7 @@ export interface HostMapRedrawPlanPayload {
 }
 
 /**
- * Authoritative incremental map payload carried by Stage 2 patch envelopes.
+ * Authoritative incremental map payload carried by Playable Runtime patch envelopes.
  * Mirrors map mutation deltas consumed by `DoUpdateMap` in
  * `ref/micropolis/src/sim/w_map.c`.
  */
@@ -661,9 +659,9 @@ export interface HostHudMessagePayload {
 }
 
 /**
- * One incremental HUD message delta in Stage 2 patch payloads.
+ * One incremental HUD message delta in Playable Runtime patch payloads.
  * Mirrors incremental message dispatch in `ref/micropolis/src/sim/s_msg.c`.
- * Parity note: this is append-only for Stage 2 feed projection.
+ * Parity note: this is append-only for Playable Runtime feed projection.
  */
 export type HostMessageDeltaPayload = HostHudMessagePayload;
 
@@ -684,7 +682,7 @@ export interface HostRealtimeObjectPayload {
 }
 
 /**
- * One incremental realtime object delta entry for Stage 7 payloads.
+ * One incremental realtime object delta entry for Realtime Overlay payloads.
  * Mirrors ordered sprite lifecycle/mutation progression in
  * `ref/micropolis/src/sim/w_sprite.c` (`InitSprite`/move/destroy paths).
  * Parity note: explicit `upsert`/`remove` transport records are additive vs C,
@@ -701,10 +699,10 @@ export type HostRealtimeObjectDeltaPayload =
     }>;
 
 /**
- * Realtime payload section carried by Stage 2 snapshot/patch envelopes.
+ * Realtime payload section carried by Playable Runtime snapshot/patch envelopes.
  * Mirrors realtime object stream intent from `ref/micropolis/src/sim/w_sprite.c`.
  * Parity note: `objects` remains a compatibility full-object stream while
- * Stage 7 adds explicit `snapshot` and `deltas` fields for deterministic
+ * Realtime Overlay adds explicit `snapshot` and `deltas` fields for deterministic
  * realtime baseline + per-tick projection.
  */
 export interface HostRealtimePayload {
@@ -717,7 +715,7 @@ export interface HostRealtimePayload {
  * Authoritative HUD heads payload carried by snapshot/patch envelopes.
  * Mirrors `DoUpdateHeads` scalar UI updates in `ref/micropolis/src/sim/w_update.c`.
  * Parity note: `funds` carries the canonical scalar while `fundsLabel` is retained
- * as a temporary compatibility field during Stage 2 protocol migration.
+ * as a temporary compatibility field during Playable Runtime protocol migration.
  */
 export interface HostHudPayload {
   funds?: number;
@@ -747,9 +745,9 @@ interface LegacyHostMapPatchPayload {
 }
 
 /**
- * Stage 2 snapshot payload surface consumed by runtime projection reducers.
+ * Playable Runtime snapshot payload surface consumed by runtime projection reducers.
  * Mirrors map snapshot ownership in `ref/micropolis/src/sim/w_update.c`.
- * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * Parity note: legacy `map.tiles` support is retained temporarily while Playable Runtime
  * protocol migration is in flight.
  */
 export interface HostSnapshotPayload extends Record<string, unknown> {
@@ -768,15 +766,15 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
   messages?: readonly HostHudMessagePayload[];
   /**
    * Compatibility field: tolerated on snapshots so replay streams remain stable
-   * while Stage 2 payload producers are upgraded.
+   * while Playable Runtime payload producers are upgraded.
    */
   messageDeltas?: readonly HostMessageDeltaPayload[];
 }
 
 /**
- * Stage 2 patch payload surface consumed by runtime projection reducers.
+ * Playable Runtime patch payload surface consumed by runtime projection reducers.
  * Mirrors map patch ownership in `ref/micropolis/src/sim/w_update.c`.
- * Parity note: legacy `map.tiles` support is retained temporarily while Stage 2
+ * Parity note: legacy `map.tiles` support is retained temporarily while Playable Runtime
  * protocol migration is in flight.
  */
 export interface HostPatchPayload extends Record<string, unknown> {
@@ -793,7 +791,7 @@ export interface HostPatchPayload extends Record<string, unknown> {
    */
   messageDeltas?: readonly HostMessageDeltaPayload[];
   /**
-   * Legacy message delta field retained during Stage 2 migration.
+   * Legacy message delta field retained during Playable Runtime migration.
    * Runtime consumes this as append-only deltas.
    */
   messages?: readonly HostHudMessagePayload[];
@@ -802,7 +800,7 @@ export interface HostPatchPayload extends Record<string, unknown> {
 /**
  * Host incremental authoritative update envelope.
  * Mirrors post-command/update propagation intent from
- * `ref/micropolis/src/sim/w_update.c`, including Stage 2 map tile-word deltas.
+ * `ref/micropolis/src/sim/w_update.c`, including Playable Runtime map tile-word deltas.
  */
 export interface HostPatchEnvelope extends HostSequencingFields {
   kind: 'patch';
@@ -839,7 +837,7 @@ export interface HostErrorEnvelope extends HostSequencingFields {
 }
 
 /**
- * Union of all Stage 2 host envelopes consumed by the web runtime.
+ * Union of all Playable Runtime host envelopes consumed by the web runtime.
  * Mirrors legacy event/command dispatch in `ref/micropolis/src/sim/w_sim.c`
  * while intentionally using typed envelopes in TypeScript.
  */
@@ -881,7 +879,7 @@ export interface ClientCommandEnvelope {
   roomId: string;
   clientId: string;
   commandId: string;
-  command: Stage2ClientCommand;
+  command: PlayableClientCommand;
 }
 
 /**
@@ -898,7 +896,7 @@ export interface ClientRequestSnapshotEnvelope {
 }
 
 /**
- * Union of Stage 2 client envelopes emitted by the web runtime.
+ * Union of Playable Runtime client envelopes emitted by the web runtime.
  * Mirrors command/update intent from `ref/micropolis/src/sim/w_sim.c` while
  * intentionally using typed bridge envelopes.
  */
@@ -926,35 +924,37 @@ export interface CoreHostConnection {
 }
 
 /**
- * Returns true when a client payload is a Stage 2 tool command.
+ * Returns true when a client payload is a Playable Runtime tool command.
  * Mirrors tool command dispatch guards in `ref/micropolis/src/sim/w_tool.c`.
  */
-export function isStage2ToolCommand(command: unknown): command is Stage2ToolCommand {
+export function isPlayableToolCommand(command: unknown): command is PlayableToolCommand {
   if (command === null || typeof command !== 'object') {
     return false;
   }
 
-  const candidate = command as Partial<Stage2ToolCommand>;
+  const candidate = command as Partial<PlayableToolCommand>;
   return (
     candidate.kind === 'tool' &&
     typeof candidate.tool === 'string' &&
-    PLAYABLE_TOOL_NAME_SET.has(candidate.tool as Stage2ToolName) &&
+    PLAYABLE_TOOL_NAME_SET.has(candidate.tool as PlayableToolName) &&
     typeof candidate.x === 'number' &&
     typeof candidate.y === 'number'
   );
 }
 
 /**
- * Returns true when a client payload is a Stage 2 simulation control command.
+ * Returns true when a client payload is a Playable Runtime simulation control command.
  * Mirrors command dispatch guards for speed/pause/resume in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
  */
-export function isStage2SimControlCommand(command: unknown): command is Stage2SimControlCommand {
+export function isPlayableSimControlCommand(
+  command: unknown,
+): command is PlayableSimControlCommand {
   if (command === null || typeof command !== 'object') {
     return false;
   }
 
-  const candidate = command as Partial<Stage2SimControlCommand>;
+  const candidate = command as Partial<PlayableSimControlCommand>;
   if (candidate.kind !== 'sim-control' || typeof candidate.control !== 'string') {
     return false;
   }
@@ -971,30 +971,30 @@ export function isStage2SimControlCommand(command: unknown): command is Stage2Si
 }
 
 /**
- * Returns true when a client payload is a Stage 2 city lifecycle command.
+ * Returns true when a client payload is a Playable Runtime city lifecycle command.
  * Mirrors city lifecycle command gatekeeping in `ref/micropolis/src/sim/w_sim.c`.
  */
-export function isStage2CityLifecycleCommand(
+export function isPlayableCityLifecycleCommand(
   command: unknown,
-): command is Stage2CityLifecycleCommand {
+): command is PlayableCityLifecycleCommand {
   if (command === null || typeof command !== 'object') {
     return false;
   }
 
-  const candidate = command as Partial<Stage2CityLifecycleCommand>;
+  const candidate = command as Partial<PlayableCityLifecycleCommand>;
   return candidate.kind === 'city-lifecycle' && candidate.action === 'new-city';
 }
 
 /**
- * Returns true when a client payload is a Stage 2 city IO command.
+ * Returns true when a client payload is a Playable Runtime city IO command.
  * Mirrors save/load command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
  */
-export function isStage2CityIoCommand(command: unknown): command is Stage2CityIoCommand {
+export function isPlayableCityIoCommand(command: unknown): command is PlayableCityIoCommand {
   if (command === null || typeof command !== 'object') {
     return false;
   }
 
-  const candidate = command as Partial<Stage2CityIoCommand>;
+  const candidate = command as Partial<PlayableCityIoCommand>;
   if (candidate.kind !== 'city-io' || typeof candidate.action !== 'string') {
     return false;
   }
@@ -1011,17 +1011,17 @@ export function isStage2CityIoCommand(command: unknown): command is Stage2CityIo
 }
 
 /**
- * Returns true when a client payload is a Stage 2 scenario command.
+ * Returns true when a client payload is a Playable Runtime scenario command.
  * Mirrors `LoadScenario` command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
  * Parity note: this requires an integral id because `LoadScenario(short s)` consumes
  * integer scenario ids in C; fractional values are rejected before host routing.
  */
-export function isStage2ScenarioCommand(command: unknown): command is Stage2ScenarioCommand {
+export function isPlayableScenarioCommand(command: unknown): command is PlayableScenarioCommand {
   if (command === null || typeof command !== 'object') {
     return false;
   }
 
-  const candidate = command as Partial<Stage2ScenarioCommand>;
+  const candidate = command as Partial<PlayableScenarioCommand>;
   return (
     candidate.kind === 'scenario' &&
     candidate.action === 'load-scenario' &&
@@ -1036,7 +1036,7 @@ export function isStage2ScenarioCommand(command: unknown): command is Stage2Scen
  * Mirrors toolbar-to-tool-state lookup intent from `setWandState` in
  * `ref/micropolis/src/sim/w_tool.c`, adapted for typed web metadata.
  */
-export function getPlayableToolSpec(tool: Stage2ToolName): PlayableToolSpec {
+export function getPlayableToolSpec(tool: PlayableToolName): PlayableToolSpec {
   for (const spec of PLAYABLE_TOOL_SPECS) {
     if (spec.tool === tool) {
       return spec;

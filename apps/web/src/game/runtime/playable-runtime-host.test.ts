@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { TileMask } from '../../../../../packages/sim-core/src/index.ts';
+import { createPlayableRuntimeHost, readCityExportPayload } from './playable-runtime-host.ts';
 import type {
   ClientEnvelope,
   HostAckEnvelope,
@@ -9,10 +10,6 @@ import type {
   HostSnapshotEnvelope,
 } from './protocol.ts';
 import { createWebHostRuntime, type WebRuntimeEvent, type WebRuntimeState } from './runtime.ts';
-import {
-  createStage4PrimaryPlayableHost,
-  readStage4CityExportPayload,
-} from './stage4-primary-playable-host.ts';
 
 /**
  * Wait for one host envelope that matches the provided predicate.
@@ -349,7 +346,7 @@ interface Stage4SmokeSummary {
  * `ref/micropolis/src/sim/w_tool.c`.
  */
 async function certifyStage11PlayableToolCostsOnHost(runId: string): Promise<void> {
-  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -485,7 +482,7 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
   const newCityCommandId = `${runId}-cmd-new-city`;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
     roomId,
     clientId,
   });
@@ -589,7 +586,7 @@ async function certifyStage11PlayableToolCostsOnRuntime(runId: string): Promise<
  */
 function certifyStage11PlayableCadenceOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createStage4PrimaryPlayableHost({
+  const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
     patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
   });
@@ -727,7 +724,7 @@ function certifyStage11PlayableCadenceOnHost(runId: string): void {
 function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
   vi.useFakeTimers();
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({
+    host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
       patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
     }),
@@ -826,7 +823,7 @@ function certifyStage11PlayableCadenceOnRuntime(runId: string): void {
  */
 function certifyStage11HeadsAndMessagesOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createStage4PrimaryPlayableHost({
+  const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
     patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
   });
@@ -928,7 +925,7 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
   vi.useFakeTimers();
   let sawHudPatch = false;
   let sawMessageDeltaPatch = false;
-  const host = createStage4PrimaryPlayableHost({
+  const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
     patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
   });
@@ -993,7 +990,7 @@ function certifyStage11HeadsAndMessagesOnRuntime(runId: string): void {
  */
 function certifyStage11RealtimeVisualEventOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createStage4PrimaryPlayableHost({
+  const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
     patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
   });
@@ -1098,7 +1095,7 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
   let sawRealtimeMovement = false;
   const realtimeSignaturesById = new Map<string, string>();
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({
+    host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
       patchIntervalMs: STAGE11_CADENCE_PATCH_INTERVAL_MS,
     }),
@@ -1161,7 +1158,7 @@ function certifyStage11RealtimeVisualEventOnRuntime(runId: string): void {
  * `ref/micropolis/src/sim/s_fileio.c`.
  */
 async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Promise<void> {
-  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1285,10 +1282,10 @@ async function certifyStage11CityRoundTripRestorationOnHost(runId: string): Prom
       (envelope): envelope is HostPatchEnvelope =>
         envelope.kind === 'patch' &&
         envelope.serverSeq > saveAck.serverSeq &&
-        readStage4CityExportPayload(envelope.payload) !== null,
+        readCityExportPayload(envelope.payload) !== null,
       `${runId} save patch`,
     );
-    const savePayload = readStage4CityExportPayload(savePatch.payload);
+    const savePayload = readCityExportPayload(savePatch.payload);
     if (savePayload === null) {
       throw new Error(`${runId} expected save payload`);
     }
@@ -1392,7 +1389,7 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
   } as const;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
     roomId,
     clientId,
   });
@@ -1471,10 +1468,10 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
       (event): event is RuntimeEventWithEnvelope<HostPatchEnvelope> =>
         event.envelope?.kind === 'patch' &&
         event.envelope.serverSeq > saveAck.envelope.serverSeq &&
-        readStage4CityExportPayload(event.envelope.payload) !== null,
+        readCityExportPayload(event.envelope.payload) !== null,
       `${runId} save patch`,
     );
-    const savePayload = readStage4CityExportPayload(savePatch.envelope.payload);
+    const savePayload = readCityExportPayload(savePatch.envelope.payload);
     if (savePayload === null) {
       throw new Error(`${runId} expected save payload`);
     }
@@ -1538,7 +1535,7 @@ async function certifyStage11CityRoundTripRestorationOnRuntime(runId: string): P
  * `ref/micropolis/src/sim/s_fileio.c` (`CityTime` year + `TotalFunds`).
  */
 async function certifyStage11ScenarioStartOnHost(runId: string): Promise<void> {
-  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -1607,7 +1604,7 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
   const commandId = `${runId}-cmd-scenario-start`;
   const runtimeEvents: WebRuntimeEvent[] = [];
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+    host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
     roomId,
     clientId,
   });
@@ -1664,7 +1661,7 @@ async function certifyStage11ScenarioStartOnRuntime(runId: string): Promise<void
  */
 function certifyStage11ContinuousPlaySessionOnHost(runId: string): void {
   vi.useFakeTimers();
-  const host = createStage4PrimaryPlayableHost({
+  const host = createPlayableRuntimeHost({
     enableAmbientTicks: true,
     patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
   });
@@ -1759,7 +1756,7 @@ function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
   let lastEnvelopeServerSeq = 0;
   let lastEnvelopeTick = 0;
   const runtime = createWebHostRuntime({
-    host: createStage4PrimaryPlayableHost({
+    host: createPlayableRuntimeHost({
       enableAmbientTicks: true,
       patchIntervalMs: STAGE11_CONTINUOUS_PLAY_PATCH_INTERVAL_MS,
     }),
@@ -1840,7 +1837,7 @@ function certifyStage11ContinuousPlaySessionOnRuntime(runId: string): void {
  * Parity note: this is a test harness wrapper over bridge envelopes; runtime behavior is unchanged.
  */
 async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4SmokeSummary> {
-  const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+  const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
   const hostEnvelopes: HostEnvelope[] = [];
   const roomId = `${runId}-room`;
   const clientId = `${runId}-client`;
@@ -2062,11 +2059,11 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
     const savePatch = await waitForHostEnvelope(
       hostEnvelopes,
       (envelope): envelope is HostPatchEnvelope =>
-        envelope.kind === 'patch' && readStage4CityExportPayload(envelope.payload) !== null,
+        envelope.kind === 'patch' && readCityExportPayload(envelope.payload) !== null,
       `${runId} save-city patch payload`,
     );
 
-    const savePayload = readStage4CityExportPayload(savePatch.payload);
+    const savePayload = readCityExportPayload(savePatch.payload);
     expect(savePayload).not.toBeNull();
     if (savePayload === null) {
       throw new Error('Expected Stage 4 save payload');
@@ -2233,9 +2230,9 @@ async function runStage4PrimaryPlayableSmokeFlow(runId: string): Promise<Stage4S
  * where tool/sim/lifecycle/io subcommands all flow through one command surface.
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
-describe('createStage4PrimaryPlayableHost', () => {
+describe('createPlayableRuntimeHost', () => {
   test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
-    const host = createStage4PrimaryPlayableHost({ enableAmbientTicks: false });
+    const host = createPlayableRuntimeHost({ enableAmbientTicks: false });
     const hostEnvelopes: HostEnvelope[] = [];
     const runId = 'stage11-new-city-map-hud';
     const roomId = `${runId}-room`;
@@ -2311,7 +2308,7 @@ describe('createStage4PrimaryPlayableHost', () => {
     const commandId = `${runId}-cmd-new-city`;
     const runtimeEvents: WebRuntimeEvent[] = [];
     const runtime = createWebHostRuntime({
-      host: createStage4PrimaryPlayableHost({ enableAmbientTicks: false }),
+      host: createPlayableRuntimeHost({ enableAmbientTicks: false }),
       roomId,
       clientId,
     });
@@ -2438,11 +2435,11 @@ describe('createStage4PrimaryPlayableHost', () => {
  * Mirrors `SaveCityAs` payload ownership in `ref/micropolis/src/sim/s_fileio.c`,
  * while preserving strict envelope-shape checks in TypeScript.
  */
-describe('readStage4CityExportPayload', () => {
+describe('readCityExportPayload', () => {
   test('accepts valid save payloads and rejects malformed payloads', () => {
     const validBytes = new Uint8Array([1, 2, 3, 4]);
     expect(
-      readStage4CityExportPayload({
+      readCityExportPayload({
         cityIo: {
           save: {
             fileName: 'city.cty',
@@ -2457,10 +2454,10 @@ describe('readStage4CityExportPayload', () => {
       cityBytes: validBytes,
     });
 
-    expect(readStage4CityExportPayload(null)).toBeNull();
-    expect(readStage4CityExportPayload({ cityIo: {} })).toBeNull();
+    expect(readCityExportPayload(null)).toBeNull();
+    expect(readCityExportPayload({ cityIo: {} })).toBeNull();
     expect(
-      readStage4CityExportPayload({
+      readCityExportPayload({
         cityIo: {
           save: {
             fileName: 'city.cty',

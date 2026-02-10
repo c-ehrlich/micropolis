@@ -1,11 +1,38 @@
 import {
   applyToolAction,
+  cityEvaluation,
+  clearCensus,
+  collectTax,
+  createBridgeHandler,
+  createFireHandler,
+  createFloodHandler,
+  createRadHandler,
+  createRailHandler,
+  createRoadHandler,
+  createZoneHandler,
+  crimeScan,
+  decROGMem,
+  decTrafficMem,
+  doDisasters,
+  fireAnalysis,
+  MAP_FLAGS,
+  type MapScanHandlers,
+  popDenScan,
+  ptlScan,
+  runMapScanPhase,
   runSimLoop,
+  sendMessages,
+  setValves,
   type SimContext,
+  type SimMapFlag,
+  type SimPhaseSystems,
   type SimState,
+  take2Census,
+  takeCensus,
   type ToolContext,
 } from '../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../packages/sim-core/src/systems/funds.ts';
+import { doPowerScan } from '../../../../packages/sim-core/src/systems/power.ts';
 import type {
   CoreHostAckEvent,
   CoreHostCommand,
@@ -21,7 +48,7 @@ import type {
   HostMode,
 } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
-import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import { SimCoreRuntimeState } from './sim-core-runtime-state';
 import {
   createOutOfBoundsHostRejectOutcome,
   type HostToolRejectOutcome,
@@ -41,12 +68,12 @@ type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEven
 const DEFAULT_TICK_INTERVAL_MS = 100;
 
 /**
- * Authority engine selection for Stage 4 host wiring.
- * Mirrors Stage 1 authority-path convergence intent from
+ * Authority engine selection for Authoritative Runtime host wiring.
+ * Mirrors Sim-Core Authority authority-path convergence intent from
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/spec/integration/SPEC.md`.
  * Parity note: explicit mode selection is a TypeScript composition seam.
  */
-export type Stage4AuthorityMode = 'sim-core' | 'deterministic';
+export type AuthorityMode = 'sim-core' | 'deterministic';
 
 /**
  * Shared authority contract consumed by `LocalHost` and `DoHost`.
@@ -55,7 +82,7 @@ export type Stage4AuthorityMode = 'sim-core' | 'deterministic';
  * `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: explicit `connect`/`disconnect` hooks are TypeScript lifecycle wiring.
  */
-export interface Stage4CommandAuthority {
+export interface CommandAuthority {
   connect?(): void;
   disconnect?(): void;
   processCommand(command: CoreHostCommand): CoreHostEvent[];
@@ -84,7 +111,7 @@ const DEFAULT_TICK_SCHEDULER: SimCoreAuthorityTickScheduler = {
 
 /**
  * Construction options for `SimCoreCommandAuthority`.
- * Mirrors Stage 1 authority-loop bootstrapping and speed/tick ownership from
+ * Mirrors Sim-Core Authority authority-loop bootstrapping and speed/tick ownership from
  * `ref/micropolis/src/sim/s_init.c`, `ref/micropolis/src/sim/s_sim.c`, and
  * `ref/micropolis/src/sim/w_util.c`.
  * Parity note: explicit scheduler/interval injection is a TypeScript test seam.
@@ -93,7 +120,7 @@ export interface SimCoreCommandAuthorityOptions {
   readonly mode: HostMode;
   readonly seed?: number;
   /**
-   * Optional starting funds override for Stage 4 authority-owned `TotalFunds`.
+   * Optional starting funds override for Authoritative Runtime authority-owned `TotalFunds`.
    * Mirrors `TotalFunds` bootstrap ownership in `ref/micropolis/src/sim/w_stubs.c`
    * and init paths in `ref/micropolis/src/sim/s_init.c`.
    * Parity note: explicit injection is a TypeScript test seam.
@@ -104,25 +131,25 @@ export interface SimCoreCommandAuthorityOptions {
 }
 
 /**
- * Factory options for Stage 4 authority selection.
- * Mirrors Stage 1 authority-loop ownership in `ref/micropolis/src/sim/w_sim.c`
+ * Factory options for Authoritative Runtime authority selection.
+ * Mirrors Sim-Core Authority authority-loop ownership in `ref/micropolis/src/sim/w_sim.c`
  * and `ref/micropolis/src/sim/s_sim.c`.
  * Parity note: `allowDeterministicFallback` is a TypeScript-only guardrail to
  * keep deterministic authority isolated to tests/emergency fallback wiring.
  */
-export interface CreateStage4CommandAuthorityOptions extends SimCoreCommandAuthorityOptions {
-  readonly authorityMode?: Stage4AuthorityMode;
+export interface CreateCommandAuthorityOptions extends SimCoreCommandAuthorityOptions {
+  readonly authorityMode?: AuthorityMode;
   readonly allowDeterministicFallback?: boolean;
 }
 
 /**
- * Stage 1 sim-core-backed authority loop for Stage 4 hosts.
+ * Sim-Core Authority sim-core-backed authority loop for Authoritative Runtime hosts.
  * Mirrors Micropolis runtime ownership where simulation state/context and tool
  * application live in one authoritative process (`w_sim.c`, `s_sim.c`, `s_init.c`).
- * Parity note: command outcomes intentionally keep existing Stage 4 event surface
+ * Parity note: command outcomes intentionally keep existing Authoritative Runtime event surface
  * (`ack`/`reject`/`patch` placements) until later protocol-expansion stages.
  */
-export class SimCoreCommandAuthority implements Stage4CommandAuthority {
+export class SimCoreCommandAuthority implements CommandAuthority {
   private serverSeq = 0;
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
   private readonly sequencedEvents: SequencedEvent[] = [];
@@ -130,6 +157,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private readonly simState: SimState;
   private readonly simContext: SimContext;
   private readonly toolContext: ToolContext;
+  private readonly simPhaseSystems: SimPhaseSystems;
   private readonly tickIntervalMs: number | undefined;
   private readonly tickScheduler: SimCoreAuthorityTickScheduler;
   private tickHandle: unknown;
@@ -138,13 +166,14 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   private simPausedSpeed = 0;
 
   public constructor(private readonly options: SimCoreCommandAuthorityOptions) {
-    const authorityState = new Stage4SimCoreAuthorityState({
+    const authorityState = new SimCoreRuntimeState({
       seed: this.options.seed,
       startingFunds: this.options.startingFunds,
     });
     this.simState = authorityState.simState;
     this.simContext = authorityState.simContext;
     this.toolContext = authorityState.toolContext;
+    this.simPhaseSystems = createAuthoritySimPhaseSystems(this.simState, this.simContext);
     this.tickIntervalMs = normalizeTickIntervalMs(this.options.tickIntervalMs);
     this.tickScheduler = this.options.tickScheduler ?? DEFAULT_TICK_SCHEDULER;
     this.simPausedSpeed = this.simState.SimMetaSpeed;
@@ -181,7 +210,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
     this.tickHandle = this.tickScheduler.setInterval(() => {
       this.simContext.store.beginTick();
       try {
-        runSimLoop(this.simState, this.simContext);
+        runSimLoop(this.simState, this.simContext, this.simPhaseSystems);
         this.syncToolContextFromState();
       } finally {
         this.simContext.store.commitTick();
@@ -285,7 +314,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
    * Build one recovery stream as snapshot baseline plus sequenced tail replay.
    * Mirrors reconnect/resync snapshot intent from
    * `ref/micropolis/spec/integration/SPEC.md`.
-   * Parity note: this keeps existing Stage 4 placement-only replay shape for now.
+   * Parity note: this keeps existing Authoritative Runtime placement-only replay shape for now.
    */
   public createSnapshotReplay(lastAppliedServerSeq = 0): CoreHostEvent[] {
     const baseServerSeq = normalizeServerSeq(lastAppliedServerSeq, this.serverSeq);
@@ -298,7 +327,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
    * Processes host pause/resume/set-speed commands through authoritative state.
    * Mirrors `SimCmdPause`, `SimCmdResume`, and `SimCmdSpeed` in
    * `ref/micropolis/src/sim/w_sim.c`.
-   * Parity note: this emits existing Stage 4 ack events without new payload types.
+   * Parity note: this emits existing Authoritative Runtime ack events without new payload types.
    */
   private processSimControlCommand(command: CoreHostSimControlCommand): CoreHostEvent[] {
     const currentTick = this.currentTick();
@@ -373,7 +402,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   /**
-   * Pause semantics for Stage 1 sim-core authority.
+   * Pause semantics for Sim-Core Authority sim-core authority.
    * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: this is a 1:1 ordering port of pause state transitions.
    */
@@ -388,7 +417,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   /**
-   * Resume semantics for Stage 1 sim-core authority.
+   * Resume semantics for Sim-Core Authority sim-core authority.
    * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: this is a 1:1 ordering port of resume state transitions.
    */
@@ -402,7 +431,7 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
   }
 
   /**
-   * Speed semantics for Stage 1 sim-core authority.
+   * Speed semantics for Sim-Core Authority sim-core authority.
    * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: values are explicitly truncated/clamped to `0..3` to preserve
    * C integer and clamp behavior in TypeScript.
@@ -538,14 +567,69 @@ export class SimCoreCommandAuthority implements Stage4CommandAuthority {
 }
 
 /**
- * Factory for Stage 4 authority selection.
- * Mirrors Stage 1 migration requirement to make sim-core ownership the default
+ * Update map invalidation flags produced by simulation phases.
+ * Mirrors `NewMapFlags[...] = 1` writes in `Simulate` from
+ * `ref/micropolis/src/sim/s_sim.c`.
+ */
+function markMapFlagsForAuthority(state: SimState, flags: ReadonlyArray<SimMapFlag>): void {
+  for (const flag of flags) {
+    state.NewMapFlags[MAP_FLAGS[flag]] = 1;
+  }
+}
+
+/**
+ * Build the full simulation phase wiring used by the Authoritative Runtime authority loop.
+ * Mirrors `Simulate` + `MapScan` dispatch in `ref/micropolis/src/sim/s_sim.c`
+ * and map-scan handlers in `ref/micropolis/src/sim/s_zone.c`, `s_disast.c`,
+ * `s_sim.c`, and `s_scan.c`.
+ */
+function createAuthoritySimPhaseSystems(_state: SimState, _context: SimContext): SimPhaseSystems {
+  let mapScanHandlers: MapScanHandlers | undefined;
+
+  return {
+    mapScan: (phase, scanState, scanContext) => {
+      if (!mapScanHandlers) {
+        mapScanHandlers = {
+          onFire: createFireHandler(scanContext),
+          onFlood: createFloodHandler(scanState, scanContext),
+          onRadTile: createRadHandler(),
+          onRoad: createRoadHandler(scanState, scanContext, {
+            doBridge: createBridgeHandler(scanState, scanContext),
+          }),
+          onZone: createZoneHandler(scanState, scanContext),
+          onRail: createRailHandler(scanState, scanContext),
+        };
+      }
+      runMapScanPhase(scanState, scanContext, phase, mapScanHandlers);
+    },
+    setValves,
+    clearCensus,
+    takeCensus,
+    take2Census,
+    collectTax,
+    cityEvaluation,
+    decROGMem,
+    decTrafficMem,
+    markMapDirty: (flags, dirtyState) => {
+      markMapFlagsForAuthority(dirtyState, flags);
+    },
+    sendMessages,
+    doPowerScan,
+    ptlScan,
+    crimeScan,
+    popDenScan,
+    fireAnalysis,
+    doDisasters,
+  };
+}
+
+/**
+ * Factory for Authoritative Runtime authority selection.
+ * Mirrors Sim-Core Authority migration requirement to make sim-core ownership the default
  * while keeping deterministic fallback for isolated tests.
  * Parity note: fallback mode is a TypeScript migration aid, not a C concept.
  */
-export function createStage4CommandAuthority(
-  options: CreateStage4CommandAuthorityOptions,
-): Stage4CommandAuthority {
+export function createCommandAuthority(options: CreateCommandAuthorityOptions): CommandAuthority {
   if (options.authorityMode === 'deterministic') {
     if (!options.allowDeterministicFallback) {
       throw new Error(

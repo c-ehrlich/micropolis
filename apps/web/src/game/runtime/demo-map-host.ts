@@ -2,6 +2,7 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  ANI_TILE,
   consumeMapRedrawPlan,
   createRealtimeContext,
   destroyAllSprites as destroyRealtimeSprites,
@@ -26,6 +27,10 @@ import {
   type SimContext,
   type SimSprite,
   type SimState,
+  Tile,
+  TileFlag,
+  TileMask,
+  WIRE_TABLE,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
@@ -35,7 +40,7 @@ import {
   SCENARIO_TABLE,
   type ScenarioDefinition,
 } from '../../../../../packages/sim-io/src/scenarios.ts';
-import { Stage4SimCoreAuthorityState } from '../stage4-sim-core-authority-state.ts';
+import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import {
   type ClientEnvelope,
   type CoreHost,
@@ -49,18 +54,18 @@ import {
   type HostPatchPayload,
   type HostRealtimeObjectDeltaPayload,
   type HostRealtimeObjectPayload,
-  isStage2CityIoCommand,
-  isStage2CityLifecycleCommand,
-  isStage2ScenarioCommand,
-  isStage2SimControlCommand,
-  isStage2ToolCommand,
-  type Stage2CityIoCommand,
-  type Stage2LoadCityCommand,
-  type Stage2LoadScenarioCommand,
-  type Stage2SaveCityCommand,
-  type Stage2SimControlCommand,
-  type Stage2ToolCommand,
-  type Stage2ToolName,
+  isPlayableCityIoCommand,
+  isPlayableCityLifecycleCommand,
+  isPlayableScenarioCommand,
+  isPlayableSimControlCommand,
+  isPlayableToolCommand,
+  type PlayableCityIoCommand,
+  type PlayableLoadCityCommand,
+  type PlayableLoadScenarioCommand,
+  type PlayableSaveCityCommand,
+  type PlayableSimControlCommand,
+  type PlayableToolCommand,
+  type PlayableToolName,
 } from './protocol.ts';
 
 const DEMO_WORLD_WIDTH = 120;
@@ -89,7 +94,7 @@ type NodeFsPromisesModule = {
   readFile: typeof nodeReadFile;
 };
 
-const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
+const TOOL_TILE_VALUES: Record<PlayableToolName, number> = {
   road: 66,
   rail: 226,
   wire: 210,
@@ -99,7 +104,7 @@ const TOOL_TILE_VALUES: Record<Stage2ToolName, number> = {
   ind: 612,
 };
 
-const TOOL_COSTS: Record<Stage2ToolName, number> = {
+const TOOL_COSTS: Record<PlayableToolName, number> = {
   // Mirrors `CostOf[]` values for road/rail/wire/bulldoze/R/C/I in
   // `ref/micropolis/src/sim/w_tool.c`.
   road: 10,
@@ -111,9 +116,11 @@ const TOOL_COSTS: Record<Stage2ToolName, number> = {
   ind: 100,
 };
 
-const ZONE_TOOLS = new Set<Stage2ToolName>(['res', 'com', 'ind']);
+const ZONE_TOOLS = new Set<PlayableToolName>(['res', 'com', 'ind']);
+const DEMO_WIRE_REBUILD_MIN_TILE_ID = 210;
+const DEMO_WIRE_REBUILD_MAX_TILE_ID = 220;
 
-const STAGE2_MESSAGE_TEXT: Record<number, string> = {
+const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
   2: 'Need more commercial zones.',
   3: 'Need more industrial zones.',
@@ -155,12 +162,12 @@ const STAGE2_MESSAGE_TEXT: Record<number, string> = {
 };
 
 /**
- * Manual Stage 7 realtime event choices exposed in the browser QA panel.
+ * Manual Realtime Overlay realtime event choices exposed in the browser QA panel.
  * Mirrors tornado/monster disaster sprite entrypoints (`MakeTornado`,
  * `MakeMonster`) in `ref/micropolis/src/sim/w_sprite.c`.
  * Difference: this explicit chooser is a browser-only manual verification aid.
  */
-export const STAGE7_MANUAL_REALTIME_EVENT_CHOICES = [
+export const MANUAL_REALTIME_EVENT_CHOICES = [
   {
     id: 'tornado',
     label: 'Trigger Tornado',
@@ -172,19 +179,18 @@ export const STAGE7_MANUAL_REALTIME_EVENT_CHOICES = [
 ] as const;
 
 /**
- * Union of manual Stage 7 QA event ids.
+ * Union of manual Realtime Overlay QA event ids.
  * Mirrors the `MakeTornado`/`MakeMonster` disaster entrypoint set in
  * `ref/micropolis/src/sim/w_sprite.c`.
  * Difference: this browser-only union narrows explicit manual trigger inputs.
  */
-export type Stage7ManualRealtimeEventId =
-  (typeof STAGE7_MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
+export type ManualRealtimeEventId = (typeof MANUAL_REALTIME_EVENT_CHOICES)[number]['id'];
 
 /**
- * Scenario choice metadata shown in the Stage 2 browser selector.
+ * Scenario choice metadata shown in the Playable Runtime browser selector.
  * Mirrors scenario rows from `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c`.
  */
-export interface Stage2ScenarioChoice {
+export interface PlayableScenarioChoice {
   id: number;
   name: string;
   fileName: string;
@@ -192,12 +198,12 @@ export interface Stage2ScenarioChoice {
 }
 
 /**
- * Stage 2 browser scenario option table.
+ * Playable Runtime browser scenario option table.
  * Mirrors `LoadScenario` switch-table labels/file ids from
  * `ref/micropolis/src/sim/s_fileio.c` (1:1 metadata). Runtime scenario starts
  * load canonical `snro.*` payloads from `ref/micropolis/res`.
  */
-export const STAGE2_SCENARIO_CHOICES: readonly Stage2ScenarioChoice[] = SCENARIO_TABLE.map(
+export const PLAYABLE_SCENARIO_CHOICES: readonly PlayableScenarioChoice[] = SCENARIO_TABLE.map(
   (scenario: ScenarioDefinition) => ({
     id: scenario.id,
     name: scenario.name,
@@ -278,7 +284,7 @@ export function readDemoCityExportPayload(payload: unknown): DemoCityExportPaylo
 }
 
 /**
- * Runtime configuration for the scripted Stage 2 local host.
+ * Runtime configuration for the scripted Playable Runtime local host.
  * Mirrors timer cadence control intent from `ref/micropolis/src/sim/w_util.c`.
  */
 export interface DemoMapHostOptions {
@@ -289,7 +295,7 @@ export interface DemoMapHostOptions {
    * simulation ticks.
    * Mirrors `GenerateCopter` sprite behavior from `ref/micropolis/src/sim/w_sprite.c`.
    * Difference: C only spawns copters from simulation triggers; this host-level
-   * seam ensures Stage 7 manual overlay movement is always observable in browser runs.
+   * seam ensures Realtime Overlay manual overlay movement is always observable in browser runs.
    */
   seedRealtimeDemoObject?: boolean;
   /**
@@ -302,7 +308,7 @@ export interface DemoMapHostOptions {
 }
 
 /**
- * Deterministic local map host used for Stage 2 browser play.
+ * Deterministic local map host used for Playable Runtime browser play.
  * Mirrors authoritative command + update intent from
  * `ref/micropolis/src/sim/w_tool.c`, `ref/micropolis/src/sim/w_update.c`,
  * `ref/micropolis/src/sim/w_util.c`, `ref/micropolis/src/sim/s_msg.c`, and
@@ -359,7 +365,7 @@ export class DemoMapHost implements CoreHost {
       scenarioResourceLoader === undefined
         ? (fileName) => this.loadScenarioResourceBytes(fileName)
         : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
-    const authorityState = new Stage4SimCoreAuthorityState({
+    const authorityState = new SimCoreRuntimeState({
       hooks: {
         tickCount: () => this.readMessageTickCount(),
         uiSet: (key, value) => this.captureUiSet(key, value),
@@ -408,14 +414,14 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Triggers one manual Stage 7 disaster overlay/message event patch.
+   * Triggers one manual Realtime Overlay disaster overlay/message event patch.
    * Mirrors `MakeTornado`/`MakeMonster` entrypoints in
    * `ref/micropolis/src/sim/w_sprite.c` and message delivery through
    * `doMessage` in `ref/micropolis/src/sim/s_msg.c`.
-   * Difference: this is a browser QA seam so manual Stage 7 verification can
+   * Difference: this is a browser QA seam so manual Realtime Overlay verification can
    * deterministically produce coherent overlay + message behavior on demand.
    */
-  public triggerManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): boolean {
+  public triggerManualRealtimeEvent(eventId: ManualRealtimeEventId): boolean {
     if (
       this.onEnvelope === undefined ||
       this.activeRoomId === undefined ||
@@ -499,12 +505,12 @@ export class DemoMapHost implements CoreHost {
       return;
     }
 
-    if (isStage2ToolCommand(envelope.command)) {
+    if (isPlayableToolCommand(envelope.command)) {
       this.handleToolCommand(envelope, envelope.command);
       return;
     }
 
-    if (isStage2SimControlCommand(envelope.command)) {
+    if (isPlayableSimControlCommand(envelope.command)) {
       this.handleSimControlCommand(envelope, envelope.command);
       return;
     }
@@ -522,15 +528,15 @@ export class DemoMapHost implements CoreHost {
    * Routes lifecycle + IO command classes through one command surface.
    * Mirrors `SimCmd` command-table dispatch in `ref/micropolis/src/sim/w_sim.c`
    * for `GenerateNewCity`, `LoadCity`, `SaveCity`/`SaveCityAs`, and `LoadScenario`.
-   * Parity note: command keys are Stage 2 discriminated unions rather than Tcl strings.
+   * Parity note: command keys are Playable Runtime discriminated unions rather than Tcl strings.
    */
   private routeLifecycleIoCommand(envelope: Extract<ClientEnvelope, { kind: 'command' }>): boolean {
-    if (isStage2CityLifecycleCommand(envelope.command)) {
+    if (isPlayableCityLifecycleCommand(envelope.command)) {
       this.handleCityLifecycleCommand(envelope.roomId, envelope.clientId, envelope.commandId);
       return true;
     }
 
-    if (isStage2CityIoCommand(envelope.command)) {
+    if (isPlayableCityIoCommand(envelope.command)) {
       this.handleCityIoCommand(
         envelope.roomId,
         envelope.clientId,
@@ -540,7 +546,7 @@ export class DemoMapHost implements CoreHost {
       return true;
     }
 
-    if (isStage2ScenarioCommand(envelope.command)) {
+    if (isPlayableScenarioCommand(envelope.command)) {
       this.handleScenarioCommand(
         envelope.roomId,
         envelope.clientId,
@@ -554,14 +560,14 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Applies a Stage 2 tool command and emits map/HUD patch deltas.
+   * Applies a Playable Runtime tool command and emits map/HUD patch deltas.
    * Mirrors tool placement + spending intent from `do_tool`/`Spend` in
    * `ref/micropolis/src/sim/w_tool.c`.
    * Difference: tile values are synthetic debug IDs in this local host.
    */
   private handleToolCommand(
     envelope: Extract<ClientEnvelope, { kind: 'command' }>,
-    command: Stage2ToolCommand,
+    command: PlayableToolCommand,
   ): void {
     const placement = applyDemoToolCommand(
       this.mapTiles,
@@ -607,7 +613,7 @@ export class DemoMapHost implements CoreHost {
    */
   private handleSimControlCommand(
     envelope: Extract<ClientEnvelope, { kind: 'command' }>,
-    command: Stage2SimControlCommand,
+    command: PlayableSimControlCommand,
   ): void {
     const didEmitSpeedUpdate = this.applySimControl(command);
     this.refreshAmbientInterval();
@@ -643,7 +649,7 @@ export class DemoMapHost implements CoreHost {
     roomId: string,
     clientId: string,
     commandId: string,
-    command: Stage2CityIoCommand,
+    command: PlayableCityIoCommand,
   ): void {
     if (command.action === 'save-city') {
       this.handleSaveCityCommand(roomId, clientId, commandId, command);
@@ -657,7 +663,7 @@ export class DemoMapHost implements CoreHost {
     roomId: string,
     clientId: string,
     commandId: string,
-    command: Stage2SaveCityCommand,
+    command: PlayableSaveCityCommand,
   ): void {
     const fileName = sanitizeCityFileName(command.fileName);
     this.syncRuntimeTilesToClassicMapLayerForSave();
@@ -688,7 +694,7 @@ export class DemoMapHost implements CoreHost {
     roomId: string,
     clientId: string,
     commandId: string,
-    command: Stage2LoadCityCommand,
+    command: PlayableLoadCityCommand,
   ): void {
     const fileName = sanitizeCityFileName(command.fileName);
 
@@ -727,7 +733,7 @@ export class DemoMapHost implements CoreHost {
     roomId: string,
     clientId: string,
     commandId: string,
-    command: Stage2LoadScenarioCommand,
+    command: PlayableLoadScenarioCommand,
   ): void {
     const scenario = getScenarioDefinition(command.scenarioId);
     const commandTick = this.tick;
@@ -916,10 +922,10 @@ export class DemoMapHost implements CoreHost {
    * Runs one ambient simulation slice and emits HUD/message deltas.
    * Mirrors speed-gated frame stepping in `ref/micropolis/src/sim/s_sim.c`
    * plus head updates in `ref/micropolis/src/sim/w_update.c`.
-   * Parity note: unlike earlier Stage 2 scaffolding, this no longer emits
-   * synthetic random map tile churn; map deltas are reserved for authoritative
-   * map mutations (tools/new city/load/scenario), matching `DoUpdateMap`
-   * invalidation ownership in `ref/micropolis/src/sim/w_map.c`.
+   * Parity note: map payloads are only emitted when authoritative map words
+   * changed during the tick (tool/lifecycle updates or C-style ANIMBIT tile
+   * animation), matching `DoUpdateMap` invalidation ownership in
+   * `ref/micropolis/src/sim/w_map.c`.
    */
   private emitAmbientPatch(roomId: string, clientId: string): void {
     if (this.getVisibleSpeed() === 0) {
@@ -946,12 +952,20 @@ export class DemoMapHost implements CoreHost {
       this.simContext.store.commitTick();
     }
 
+    const mapTileWordDeltas = animateRuntimeMapTilesLikeC(
+      this.mapTiles,
+      DEMO_WORLD_WIDTH,
+      DEMO_WORLD_HEIGHT,
+      this.simState.doAnimation,
+    );
+
     this.tick += 1;
     this.emitPatch(
       roomId,
       clientId,
       this.buildHookDrivenPatchPayload({
         includeHud: true,
+        mapTileWordDeltas,
       }),
     );
   }
@@ -977,7 +991,7 @@ export class DemoMapHost implements CoreHost {
   /**
    * Builds one patch payload from hook-driven HUD and message queues.
    * Mirrors `DoUpdateHeads` (`ref/micropolis/src/sim/w_update.c`) and `doMessage`
-   * (`ref/micropolis/src/sim/s_msg.c`) dispatch ownership, adapted to Stage 2
+   * (`ref/micropolis/src/sim/s_msg.c`) dispatch ownership, adapted to Playable Runtime
    * bridge payload fields.
    * Difference: map deltas are passed in by host command handlers instead of
    * being emitted directly from C update globals.
@@ -1019,7 +1033,7 @@ export class DemoMapHost implements CoreHost {
    * consumes the cycle markers after planning.
    * Mirrors `DoUpdateMap` invalidation gating in `ref/micropolis/src/sim/w_map.c`
    * and `sim_update_maps` clear behavior in `ref/micropolis/src/sim/sim.c`.
-   * Parity note: Stage 4 currently uses one `map_state` view (`ALMAP` index 0).
+   * Parity note: Authoritative Runtime currently uses one `map_state` view (`ALMAP` index 0).
    */
   private planAndConsumeMapRedraw(
     mapTileWordDeltas?: ReadonlyArray<DemoMapTileWordDelta>,
@@ -1038,7 +1052,7 @@ export class DemoMapHost implements CoreHost {
    * Installs sprite/realtime hooks onto sim-core context callbacks.
    * Mirrors `sim->hooks` ownership from `ref/micropolis/src/sim/sim.c`,
    * routing `MoveObjects` (`w_sprite.c`) and sprite factory calls through the
-   * Stage 7 TypeScript realtime port in `packages/sim-core/src/sim/realtime.ts`.
+   * Realtime Overlay TypeScript realtime port in `packages/sim-core/src/sim/realtime.ts`.
    */
   private installRealtimeHooks(): void {
     this.simContext.hooks.destroyAllSprites = () => {
@@ -1052,7 +1066,7 @@ export class DemoMapHost implements CoreHost {
     };
     // Hook parity note: current sim-core `generatePlane`/`generateCopter` hooks do
     // not carry tile coordinates (unlike C `GeneratePlane(x,y)`/`GenerateCopter(x,y)`),
-    // so Stage 7 host integration uses world-center launch coordinates.
+    // so Realtime Overlay host integration uses world-center launch coordinates.
     this.simContext.hooks.generatePlane = () => {
       generateRealtimePlane(this.realtimeContext, DEMO_WORLD_WIDTH >> 1, DEMO_WORLD_HEIGHT >> 1);
     };
@@ -1110,7 +1124,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Ensures Stage 7 overlay payloads always have at least one moving object
+   * Ensures Realtime Overlay overlay payloads always have at least one moving object
    * while simulation is running.
    * Mirrors realtime copter movement from `GenerateCopter`/`DoCopterSprite` in
    * `ref/micropolis/src/sim/w_sprite.c`.
@@ -1155,7 +1169,7 @@ export class DemoMapHost implements CoreHost {
    * Mirrors per-tick sprite move/create/destroy progression in
    * `ref/micropolis/src/sim/w_sprite.c`.
    * Parity note: explicit bridge deltas are transport metadata and keep legacy
-   * `objects` compatibility while Stage 7 overlay projection migrates.
+   * `objects` compatibility while Realtime Overlay overlay projection migrates.
    */
   private buildRealtimeDeltaPayload(): NonNullable<DemoPatchPayload['realtime']> {
     const objects = this.collectRealtimeObjectsWithIds();
@@ -1385,12 +1399,12 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Applies one manual Stage 7 realtime event into authoritative sprite state.
+   * Applies one manual Realtime Overlay realtime event into authoritative sprite state.
    * Mirrors disaster sprite creation paths in `MakeTornado`/`MakeMonster` from
    * `ref/micropolis/src/sim/w_sprite.c`.
    * Difference: host operators explicitly pick the event kind for manual QA.
    */
-  private applyManualRealtimeEvent(eventId: Stage7ManualRealtimeEventId): void {
+  private applyManualRealtimeEvent(eventId: ManualRealtimeEventId): void {
     if (eventId === 'tornado') {
       makeRealtimeTornado(this.realtimeContext);
       return;
@@ -1442,7 +1456,7 @@ export class DemoMapHost implements CoreHost {
    * Ensures snapshot baseline messages retain stable ordering metadata.
    * Mirrors deterministic replay cursor intent from
    * `ref/micropolis/spec/integration/SPEC.md`.
-   * Difference: C message payloads do not carry tick/sequence fields, so Stage 2
+   * Difference: C message payloads do not carry tick/sequence fields, so Playable Runtime
    * records these bridge metadata fields for deterministic snapshot replay.
    */
   private ensureMessageLogReplayMetadata(tick: number, serverSeq: number): void {
@@ -1478,7 +1492,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Builds Stage 2 HUD payload heads from authoritative sim-core hook state.
+   * Builds Playable Runtime HUD payload heads from authoritative sim-core hook state.
    * Mirrors `UISetFunds`, `UISetDate`, `UISetDemand`, and `UISetSpeed` flows in
    * `ref/micropolis/src/sim/w_update.c` and `ref/micropolis/src/sim/w_util.c`.
    */
@@ -1525,7 +1539,7 @@ export class DemoMapHost implements CoreHost {
    * Parity note: returns whether this command path executed `setSpeed` and
    * therefore emitted `UISetSpeed` in C.
    */
-  private applySimControl(command: Stage2SimControlCommand): boolean {
+  private applySimControl(command: PlayableSimControlCommand): boolean {
     if (command.control === 'pause') {
       return this.pauseSimulation();
     }
@@ -1538,7 +1552,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Pause semantics for Stage 2 host sim controls.
+   * Pause semantics for Playable Runtime host sim controls.
    * Mirrors `Pause()` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: returns false on C-equivalent no-op (`sim_paused` already true).
    */
@@ -1553,7 +1567,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Resume semantics for Stage 2 host sim controls.
+   * Resume semantics for Playable Runtime host sim controls.
    * Mirrors `Resume()` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: returns false on C-equivalent no-op (`sim_paused` already false).
    */
@@ -1567,7 +1581,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Speed semantics for Stage 2 host sim controls.
+   * Speed semantics for Playable Runtime host sim controls.
    * Mirrors `setSpeed(short)` in `ref/micropolis/src/sim/w_util.c`.
    * Parity note: always returns true because C `setSpeed` always emits `UISetSpeed`,
    * even when the clamped speed value is unchanged.
@@ -1624,7 +1638,7 @@ export class DemoMapHost implements CoreHost {
    * Mirrors scenario/reset scalar bootstrap intent from
    * `ref/micropolis/src/sim/s_fileio.c` (`LoadScenario`) and
    * `ref/micropolis/src/sim/s_init.c` reset ownership.
-   * Parity note: map tile payload remains Stage 2 demo-owned in this host.
+   * Parity note: map tile payload remains Playable Runtime demo-owned in this host.
    */
   private applyScenarioSimulationMeta(cityTime: number, totalFunds: number): void {
     this.simState.CityTime = cityTime;
@@ -1655,7 +1669,7 @@ export class DemoMapHost implements CoreHost {
   }
 
   /**
-   * Resets Stage 2 host state to a new-city baseline.
+   * Resets Playable Runtime host state to a new-city baseline.
    * Mirrors `DoNewCity` reset intent in `ref/micropolis/src/sim/s_init.c`.
    * Parity note: map regeneration remains deterministic/demo-scripted here.
    */
@@ -1673,7 +1687,7 @@ export class DemoMapHost implements CoreHost {
    * Mirrors `saveFile` map persistence in `ref/micropolis/src/sim/s_fileio.c`
    * where `_save_short((&Map[0][0]), WORLD_X * WORLD_Y, f)` writes contiguous
    * `Map[x][y]` storage.
-   * Parity note: Stage 2 host mutates row-major `mapTiles` for rendering and only
+   * Parity note: Playable Runtime host mutates row-major `mapTiles` for rendering and only
    * mirrors into sim-core classic storage at save boundaries.
    */
   private syncRuntimeTilesToClassicMapLayerForSave(): void {
@@ -1777,7 +1791,7 @@ function buildMapPatchForRedrawPlan(
 }
 
 /**
- * Converts one sim-core redraw plan to the Stage 2 host payload contract.
+ * Converts one sim-core redraw plan to the Playable Runtime host payload contract.
  * Mirrors invalidation plan metadata generated by `planMapRedraw` in
  * `packages/sim-core/src/core/map-invalidation.ts`.
  * Parity note: this is a shape conversion only; redraw policy decisions stay
@@ -1852,10 +1866,10 @@ function normalizePlayableSpeed(value: number): number {
 /**
  * Resolves message text for one message id.
  * Mirrors `GetIndString` message lookup intent in `ref/micropolis/src/sim/s_msg.c`.
- * Difference: Stage 2 uses a compact local subset instead of full resource tables.
+ * Difference: Playable Runtime uses a compact local subset instead of full resource tables.
  */
 function messageTextForId(id: number): string {
-  const text = STAGE2_MESSAGE_TEXT[id];
+  const text = RUNTIME_MESSAGE_TEXT[id];
   if (text !== undefined) {
     return text;
   }
@@ -1895,7 +1909,7 @@ function formatDollarDecimal(value: number): string {
 }
 
 /**
- * Applies one Stage 2 tool command to the local demo map and returns changed
+ * Applies one Playable Runtime tool command to the local demo map and returns changed
  * tiles for a host `patch` envelope.
  * Mirrors placement footprint rules from `ref/micropolis/src/sim/w_tool.c`
  * (`toolSize[]`, `toolOffset[]`, 3x3 zone stamp shape).
@@ -1905,7 +1919,7 @@ function applyDemoToolCommand(
   tiles: Uint16Array,
   width: number,
   height: number,
-  command: Stage2ToolCommand,
+  command: PlayableToolCommand,
 ):
   | { accepted: true; deltas: Array<{ x: number; y: number; tileWord: number }> }
   | { accepted: false; reason: string } {
@@ -1925,7 +1939,24 @@ function applyDemoToolCommand(
 
   const deltas: Array<{ x: number; y: number; tileWord: number }> = [];
 
+  if (command.tool === 'wire') {
+    return {
+      accepted: true,
+      deltas: applyDemoWireToolCommand(tiles, width, height, command.x, command.y),
+    };
+  }
+
   if (ZONE_TOOLS.has(command.tool)) {
+    for (let yy = startY; yy < endY; yy += 1) {
+      for (let xx = startX; xx < endX; xx += 1) {
+        const index = yy * width + xx;
+        const tileWord = tiles[index] ?? 0;
+        if (!canPlaceDemoZoneOnTile(tileWord)) {
+          return { accepted: false, reason: 'invalid-placement' };
+        }
+      }
+    }
+
     const base = TOOL_TILE_VALUES[command.tool];
     let offset = 0;
     for (let yy = startY; yy < endY; yy += 1) {
@@ -1939,6 +1970,223 @@ function applyDemoToolCommand(
 
   writeDemoTile(tiles, width, command.x, command.y, TOOL_TILE_VALUES[command.tool], deltas);
   return { accepted: true, deltas };
+}
+
+/**
+ * Zone placement terrain gate used by the demo host tool path.
+ * Mirrors the `check3x3` + `tally` interaction in `ref/micropolis/src/sim/w_tool.c`:
+ * deep water tiles (`RIVER`, `REDGE`, `CHANNEL`) are never auto-bulldozable and
+ * therefore reject zone placement.
+ * Difference: demo host intentionally keeps other occupancy checks permissive.
+ */
+function canPlaceDemoZoneOnTile(tileWord: number): boolean {
+  const tileId = tileWord & TileMask.LOMASK;
+  return tileId !== Tile.RIVER && tileId !== Tile.REDGE && tileId !== Tile.CHANNEL;
+}
+
+/**
+ * Applies one wire placement and rebuilds local wire connectivity.
+ * Mirrors `_FixZone` + `_FixSingle` cleanup for wire tiles in
+ * `ref/micropolis/src/sim/w_con.c` using `_WireTable` adjacency mapping.
+ * Parity note: demo map tiles may be stored without `CONDBIT`, so this treats
+ * bare conductive tile ids as connectable in addition to `CONDBIT`-flagged
+ * words to keep browser-stage wire visuals coherent.
+ */
+function applyDemoWireToolCommand(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): DemoMapTileWordDelta[] {
+  const fixupCoords = collectDemoWireFixupCoordinates(width, height, x, y);
+  const previousTileWordByIndex = new Map<number, number>();
+  for (const coord of fixupCoords) {
+    const index = coord.y * width + coord.x;
+    previousTileWordByIndex.set(index, tiles[index] ?? 0);
+  }
+
+  const centerIndex = y * width + x;
+  tiles[centerIndex] = TOOL_TILE_VALUES.wire;
+  for (const coord of fixupCoords) {
+    fixDemoWireTileAt(tiles, width, height, coord.x, coord.y);
+  }
+
+  const deltas: DemoMapTileWordDelta[] = [];
+  for (const coord of fixupCoords) {
+    const index = coord.y * width + coord.x;
+    const previousTileWord = previousTileWordByIndex.get(index) ?? 0;
+    const nextTileWord = tiles[index] ?? 0;
+    if (previousTileWord === nextTileWord) {
+      continue;
+    }
+    deltas.push({
+      x: coord.x,
+      y: coord.y,
+      tileWord: nextTileWord,
+    });
+  }
+  return deltas;
+}
+
+/**
+ * Collects the wire fixup neighborhood for one placement.
+ * Mirrors `_FixZone` visit order in `ref/micropolis/src/sim/w_con.c`:
+ * center, north, east, south, west.
+ */
+function collectDemoWireFixupCoordinates(
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): ReadonlyArray<Readonly<{ x: number; y: number }>> {
+  const coords: Array<{ x: number; y: number }> = [{ x, y }];
+  if (y > 0) {
+    coords.push({ x, y: y - 1 });
+  }
+  if (x < width - 1) {
+    coords.push({ x: x + 1, y });
+  }
+  if (y < height - 1) {
+    coords.push({ x, y: y + 1 });
+  }
+  if (x > 0) {
+    coords.push({ x: x - 1, y });
+  }
+  return coords;
+}
+
+/**
+ * Rebuilds one wire tile by cardinal-neighbor adjacency.
+ * Mirrors the wire branch in `_FixSingle` from `ref/micropolis/src/sim/w_con.c`,
+ * including direction-specific exclusions for `HPOWER`/`VPOWER`,
+ * `HROADPOWER`/`VROADPOWER`, and `RAILHPOWERV`/`RAILVPOWERH`.
+ */
+function fixDemoWireTileAt(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): void {
+  const index = y * width + x;
+  const tileWord = tiles[index] ?? 0;
+  const normalizedTile = normalizeDemoRoadLikeC(tileWord);
+  if (
+    normalizedTile < DEMO_WIRE_REBUILD_MIN_TILE_ID ||
+    normalizedTile > DEMO_WIRE_REBUILD_MAX_TILE_ID
+  ) {
+    return;
+  }
+
+  let adjacency = 0;
+  if (
+    y > 0 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[(y - 1) * width + x] ?? 0,
+      axis: 'vertical',
+    })
+  ) {
+    adjacency |= 0x0001;
+  }
+  if (
+    x < width - 1 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[y * width + (x + 1)] ?? 0,
+      axis: 'horizontal',
+    })
+  ) {
+    adjacency |= 0x0002;
+  }
+  if (
+    y < height - 1 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[(y + 1) * width + x] ?? 0,
+      axis: 'vertical',
+    })
+  ) {
+    adjacency |= 0x0004;
+  }
+  if (
+    x > 0 &&
+    isDemoWireNeighborConnected({
+      tileWord: tiles[y * width + (x - 1)] ?? 0,
+      axis: 'horizontal',
+    })
+  ) {
+    adjacency |= 0x0008;
+  }
+
+  const rebuiltWireTile = WIRE_TABLE[adjacency];
+  if (rebuiltWireTile === undefined) {
+    throw new Error(`Missing wire adjacency mapping for index ${adjacency}`);
+  }
+  tiles[index] = rebuiltWireTile;
+}
+
+/**
+ * Checks whether one neighboring tile contributes wire connectivity.
+ * Mirrors `_FixSingle` wire-neighbor tests in `ref/micropolis/src/sim/w_con.c`:
+ * only conductive neighbors are considered, then direction-specific exclusions
+ * filter out incompatible straight-through variants.
+ */
+function isDemoWireNeighborConnected({
+  tileWord,
+  axis,
+}: Readonly<{
+  tileWord: number;
+  axis: 'vertical' | 'horizontal';
+}>): boolean {
+  const normalizedNeighborTile = normalizeDemoRoadLikeC(tileWord);
+  if (!isDemoConductiveTileWord(tileWord, normalizedNeighborTile)) {
+    return false;
+  }
+
+  if (axis === 'vertical') {
+    return (
+      normalizedNeighborTile !== Tile.VPOWER &&
+      normalizedNeighborTile !== Tile.VROADPOWER &&
+      normalizedNeighborTile !== Tile.RAILVPOWERH
+    );
+  }
+
+  return (
+    normalizedNeighborTile !== Tile.HPOWER &&
+    normalizedNeighborTile !== Tile.HROADPOWER &&
+    normalizedNeighborTile !== Tile.RAILHPOWERV
+  );
+}
+
+/**
+ * Determines whether one tile participates in power conductivity checks.
+ * Mirrors `_FixSingle` `if (Tile & CONDBIT)` behavior in
+ * `ref/micropolis/src/sim/w_con.c`.
+ * Parity note: demo writes often omit high-bit flags, so this also recognizes
+ * bare conductive tile ids in the power/road-power/rail-power families.
+ */
+function isDemoConductiveTileWord(tileWord: number, normalizedTile: number): boolean {
+  if ((tileWord & TileFlag.CONDBIT) !== 0) {
+    return true;
+  }
+
+  return (
+    (normalizedTile >= Tile.HPOWER && normalizedTile <= Tile.RAILVPOWERH) ||
+    normalizedTile === Tile.HROADPOWER ||
+    normalizedTile === Tile.VROADPOWER
+  );
+}
+
+/**
+ * Applies C road neutralization before adjacency checks.
+ * Mirrors `NeutralizeRoad(Tile)` macro in `ref/micropolis/src/sim/w_con.c`,
+ * where road variants in `[64, 207]` are normalized to base nibble forms.
+ */
+function normalizeDemoRoadLikeC(tileWord: number): number {
+  let tile = tileWord & 0xffff;
+  if (tile >= Tile.ROADBASE && tile <= Tile.LASTROAD) {
+    tile = (tile & 0x000f) + Tile.ROADBASE;
+  }
+  return tile;
 }
 
 /**
@@ -1960,6 +2208,56 @@ function writeDemoTile(
 
   tiles[index] = tile;
   deltas.push({ x, y, tileWord: tile });
+}
+
+/**
+ * Applies one `animateTiles` pass to the runtime row-major map tile buffer.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c` using
+ * `aniTile[]` from `ref/micropolis/src/sim/animtab.h`: if `ANIMBIT` is set,
+ * preserve high bits (`ALLBITS`) and rewrite low tile-id bits (`LOMASK`) via
+ * the animation lookup table.
+ * Difference: this mutates the Playable Runtime host row-major runtime buffer, while C
+ * mutates classic `Map[x][y]` x-major storage.
+ */
+function animateRuntimeMapTilesLikeC(
+  tiles: Uint16Array,
+  width: number,
+  height: number,
+  doAnimation: boolean,
+): DemoMapTileWordDelta[] | undefined {
+  if (!doAnimation) {
+    return undefined;
+  }
+
+  const deltas: DemoMapTileWordDelta[] = [];
+  for (let index = 0; index < tiles.length; index += 1) {
+    const tileWord = tiles[index] ?? 0;
+    if ((tileWord & TileFlag.ANIMBIT) === 0) {
+      continue;
+    }
+
+    const flags = tileWord & TileMask.ALLBITS;
+    const tileId = tileWord & TileMask.LOMASK;
+    const nextTileId = ANI_TILE[tileId] ?? tileId;
+    const nextTileWord = nextTileId | flags;
+    if (nextTileWord === tileWord) {
+      continue;
+    }
+
+    tiles[index] = nextTileWord;
+    const y = Math.trunc(index / width);
+    const x = index - y * width;
+    if (x < 0 || x >= width || y < 0 || y >= height) {
+      continue;
+    }
+    deltas.push({
+      x,
+      y,
+      tileWord: nextTileWord,
+    });
+  }
+
+  return deltas.length > 0 ? deltas : undefined;
 }
 
 /**
@@ -2011,7 +2309,7 @@ function copyClassicXMajorMapToRuntimeTiles(
  * Copies runtime row-major tile order into classic Micropolis x-major map storage.
  * Mirrors contiguous `Map[x][y]` map ownership consumed by `saveFile` in
  * `ref/micropolis/src/sim/s_fileio.c`.
- * Difference: Stage 2 host runtime map is row-major for canvas convenience.
+ * Difference: Playable Runtime host runtime map is row-major for canvas convenience.
  */
 function copyRuntimeRowMajorTilesToClassicXMajorMap(
   runtimeTiles: Uint16Array,
@@ -2029,7 +2327,7 @@ function copyRuntimeRowMajorTilesToClassicXMajorMap(
 }
 
 /**
- * Builds an initial deterministic tile baseline for the Stage 2 debug map view.
+ * Builds an initial deterministic tile baseline for the Playable Runtime debug map view.
  * Mirrors map-buffer baseline setup intent from `ref/micropolis/src/sim/g_map.c`.
  * Difference: values are synthetic so UI work can proceed before full art parity.
  */

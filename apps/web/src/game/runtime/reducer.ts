@@ -18,10 +18,10 @@ import {
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
   type HostEnvelope,
+  isPlayableToolCommand,
   isSequencedHostEnvelope,
-  isStage2ToolCommand,
-  type Stage2ClientCommand,
-  type Stage2ToolCommand,
+  type PlayableClientCommand,
+  type PlayableToolCommand,
 } from './protocol.ts';
 import {
   createInitialRuntimeRealtimeState,
@@ -47,16 +47,16 @@ export type WebRuntimePhase =
  * Visual-only pending tool marker tracked by `commandId`.
  * Mirrors the pending tool UX intent behind `DoPendTool` in
  * `ref/micropolis/src/sim/w_tool.c`.
- * Difference: Stage 2 stores pending markers in client runtime state instead
+ * Difference: Playable Runtime stores pending markers in client runtime state instead
  * of driving Tcl callbacks directly.
  */
 export interface PendingToolCommandVisual {
   commandId: string;
-  command: Stage2ToolCommand;
+  command: PlayableToolCommand;
 }
 
 /**
- * Mutable state projection for Stage 2 host-client runtime behavior.
+ * Mutable state projection for Playable Runtime host-client runtime behavior.
  * Mirrors authoritative update tracking intent from
  * `ref/micropolis/src/sim/w_update.c`; this is intentionally a bridge-client
  * state snapshot rather than Micropolis global variables.
@@ -123,7 +123,7 @@ export interface WebRuntimeReducerResult {
 }
 
 /**
- * Creates the baseline Stage 2 web runtime state.
+ * Creates the baseline Playable Runtime web runtime state.
  * Mirrors deterministic local identity defaults and startup ordering from
  * `ref/micropolis/src/sim/w_sim.c`; this intentionally stores reducer state in
  * one immutable object instead of C globals.
@@ -149,7 +149,7 @@ export function createInitialWebRuntimeState(
 }
 
 /**
- * Adds a visual-only pending marker for a newly sent Stage 2 tool command.
+ * Adds a visual-only pending marker for a newly sent Playable Runtime tool command.
  * Mirrors `DoPendTool` pending command UI behavior in
  * `ref/micropolis/src/sim/w_tool.c`.
  * Difference: this only tracks a local marker and does not mutate authoritative
@@ -158,9 +158,9 @@ export function createInitialWebRuntimeState(
 export function enqueuePendingToolCommandVisual(
   state: WebRuntimeState,
   commandId: string,
-  command: Stage2ClientCommand,
+  command: PlayableClientCommand,
 ): WebRuntimeState {
-  if (!isStage2ToolCommand(command)) {
+  if (!isPlayableToolCommand(command)) {
     return state;
   }
 
@@ -400,7 +400,7 @@ function getHelloRejectionReason(
  * Settles client-side pending tool markers after host command outcomes.
  * Mirrors `DoTool` plus pending tool completion intent in
  * `ref/micropolis/src/sim/w_tool.c`.
- * Difference: Stage 2 rollback is purely visual (remove pending marker) while
+ * Difference: Playable Runtime rollback is purely visual (remove pending marker) while
  * authoritative map rollback remains host-owned through envelope streams.
  */
 function settlePendingToolCommand(state: WebRuntimeState, envelope: HostEnvelope): WebRuntimeState {

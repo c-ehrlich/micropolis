@@ -1,5 +1,5 @@
 /**
- * Frozen bridge protocol identifier for Stage 0 v1 contracts.
+ * Frozen bridge protocol identifier for Bridge V1 v1 contracts.
  * Mirrors the strict lockstep handshake intent documented in
  * `ref/micropolis/spec/integration/SPEC.md` and the command gateway mindset in
  * `ref/micropolis/src/sim/w_sim.c`.
@@ -19,7 +19,7 @@ export const CORE_BRIDGE_V1_CITY_PAYLOAD_VERSION = 'city/v1' as const;
 
 /**
  * Default authoritative snapshot cadence in ticks.
- * Mirrors the Stage 0 lock in `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`.
+ * Mirrors the Bridge V1 lock in `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`.
  * Parity note: intentionally different from legacy ad-hoc update cadence by
  * making the default interval explicit in the wire contract.
  */
@@ -133,7 +133,7 @@ export type CoreBridgeV1ServerEnvelopeKind = (typeof CORE_BRIDGE_V1_SERVER_ENVEL
 
 /**
  * Union of all v1 envelope kind discriminants.
- * Mirrors the full protocol inventory locked in Stage 0 plans.
+ * Mirrors the full protocol inventory locked in Bridge V1 plans.
  * Parity note: intentionally different from the C integration path by centralizing
  * all envelope names under one typed union.
  */
@@ -608,18 +608,18 @@ export type CoreBridgeV1ServerEnvelope =
 
 /**
  * Union of every canonical v1 bridge envelope.
- * Mirrors Stage 0 protocol freeze scope in
- * `/Users/cje/dev/city/STAGE_0_CONTRACT_FREEZE_PLAN.md`.
+ * Mirrors Bridge V1 protocol freeze scope in
+ * `/Users/cje/dev/city/MASTER_GAME_ALIGNMENT_PLAN.md`.
  * Parity note: intentionally different from Micropolis C integration by exposing a
  * single strongly-typed envelope root for all transports.
  */
 export type CoreBridgeV1Envelope = CoreBridgeV1ClientEnvelope | CoreBridgeV1ServerEnvelope;
 
 /**
- * Stage 1 mocked host envelope contracts.
+ * Sim-Core Authority mocked host envelope contracts.
  * Mirrors command-routing and NET bridge intent in
  * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_net.c`.
- * Parity note: intentionally coexists with frozen Stage 0 `CoreBridgeV1*`
+ * Parity note: intentionally coexists with frozen Bridge V1 `CoreBridgeV1*`
  * contracts during the staged bridge port.
  */
 
@@ -863,7 +863,7 @@ export interface HostErrorEnvelope extends BridgeEnvelopeIdentity, BridgeEnvelop
 }
 
 /**
- * Canonical command payload shape for Stage 1 bridge contracts.
+ * Canonical command payload shape for Sim-Core Authority bridge contracts.
  * Mirrors the high-level command intent of `sim` handlers in
  * `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: this is intentionally not a direct Tcl argv tuple.
@@ -874,7 +874,7 @@ export interface CoreCommandPayload {
 }
 
 /**
- * Canonical patch payload shape for Stage 1 bridge contracts.
+ * Canonical patch payload shape for Sim-Core Authority bridge contracts.
  * Mirrors incremental simulation update intent from `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: concrete patch field unions are added in later contract tasks.
  */
@@ -884,7 +884,7 @@ export interface CorePatchPayload {
 }
 
 /**
- * Canonical snapshot payload shape for Stage 1 bridge contracts.
+ * Canonical snapshot payload shape for Sim-Core Authority bridge contracts.
  * Mirrors baseline state transfer intent from `ref/micropolis/src/sim/w_sim.c`.
  * Parity note: concrete snapshot field schemas are added in later contract tasks.
  */
@@ -920,7 +920,7 @@ export type CoreHostEnvelope =
   | HostErrorEnvelope;
 
 /**
- * Stage 3 bridge envelope compatibility contracts retained for DO host/runtime work.
+ * Multi-host Compatibility bridge envelope compatibility contracts retained for DO host/runtime work.
  * Mirrors bridge host/message routing behavior from `ref/micropolis/src/sim/w_sim.c` and
  * `ref/micropolis/src/sim/w_net.c` while coexisting with `CoreBridgeV1*` types above.
  */

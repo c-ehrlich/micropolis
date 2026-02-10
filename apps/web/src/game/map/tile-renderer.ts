@@ -1,8 +1,8 @@
 import { Tile, TileFlag, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 
-const STAGE4_TILE_DEBUG_FALLBACK = '#475569';
+const TILE_DEBUG_FALLBACK = '#475569';
 
-const TILE_ID_DEBUG_COLOR_LOOKUP = buildStage4TileDebugColorLookup();
+const TILE_ID_DEBUG_COLOR_LOOKUP = buildTileDebugColorLookup();
 
 /**
  * Resolves one authoritative tile word to the draw-time tile id.
@@ -13,7 +13,7 @@ const TILE_ID_DEBUG_COLOR_LOOKUP = buildStage4TileDebugColorLookup();
  * Parity note: this is a 1:1 port of C draw-id selection, parameterizing
  * `flagBlink <= 0` as an explicit option for deterministic tests.
  */
-export function toStage4DrawTileId(
+export function toDrawTileId(
   tileWord: number,
   options: Readonly<{ blinkUnpoweredZoneCenter?: boolean }> = {},
 ): number {
@@ -41,33 +41,33 @@ export function toStage4DrawTileId(
  * `WireDrawBeegMapRect` in `ref/micropolis/src/sim/g_bigmap.c` (wrap ids in
  * `[TILE_COUNT, 1023]` back into the base tile page).
  * Parity note: this helper intentionally excludes `flagBlink` draw-time
- * substitution; use `toStage4DrawTileId` when blink-phase parity is required.
+ * substitution; use `toDrawTileId` when blink-phase parity is required.
  */
-export function toStage4RenderableTileId(tileWord: number): number {
-  return toStage4DrawTileId(tileWord);
+export function toRenderableTileId(tileWord: number): number {
+  return toDrawTileId(tileWord);
 }
 
 /**
- * Resolves one authoritative map tile word to a stable Stage 4 debug color.
+ * Resolves one authoritative map tile word to a stable Authoritative Runtime debug color.
  * Mirrors C tile lookup masking in `ref/micropolis/src/sim/g_bigmap.c` and
  * animation-flag masking in `ref/micropolis/src/sim/g_ani.c`.
  * Parity note: intentionally diverges from C sprite rendering by mapping tile
- * classes to debug colors (Stage 4 scope before sprite-atlas work).
+ * classes to debug colors (Authoritative Runtime scope before sprite-atlas work).
  */
-export function getStage4TileDebugColor(tileWord: number): string {
-  const tileId = toStage4DrawTileId(tileWord);
-  return TILE_ID_DEBUG_COLOR_LOOKUP[tileId] ?? STAGE4_TILE_DEBUG_FALLBACK;
+export function getTileDebugColor(tileWord: number): string {
+  const tileId = toDrawTileId(tileWord);
+  return TILE_ID_DEBUG_COLOR_LOOKUP[tileId] ?? TILE_DEBUG_FALLBACK;
 }
 
-function buildStage4TileDebugColorLookup(): string[] {
+function buildTileDebugColorLookup(): string[] {
   const lookup = new Array<string>(Tile.TILE_COUNT);
   for (let tileId = 0; tileId < Tile.TILE_COUNT; tileId += 1) {
-    lookup[tileId] = classifyStage4TileDebugColor(tileId);
+    lookup[tileId] = classifyTileDebugColor(tileId);
   }
   return lookup;
 }
 
-function classifyStage4TileDebugColor(tileId: number): string {
+function classifyTileDebugColor(tileId: number): string {
   if (tileId >= Tile.RIVER && tileId <= Tile.LASTRIVEDGE) {
     return '#0ea5e9';
   }
@@ -107,5 +107,5 @@ function classifyStage4TileDebugColor(tileId: number): string {
   if (tileId === Tile.DIRT) {
     return '#334155';
   }
-  return STAGE4_TILE_DEBUG_FALLBACK;
+  return TILE_DEBUG_FALLBACK;
 }

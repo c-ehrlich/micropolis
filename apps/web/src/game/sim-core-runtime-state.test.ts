@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
 import { MAP_FLAGS } from '../../../../packages/sim-core/src/core/map-flags.ts';
-import { Stage4SimCoreAuthorityState } from './stage4-sim-core-authority-state';
+import { SimCoreRuntimeState } from './sim-core-runtime-state';
 
-describe('Stage4SimCoreAuthorityState', () => {
+describe('SimCoreRuntimeState', () => {
   test('creates one authority-owned bundle for map store, sim state/context, and tool context', () => {
-    const authorityState = new Stage4SimCoreAuthorityState({ seed: 1234 });
+    const authorityState = new SimCoreRuntimeState({ seed: 1234 });
 
     expect(authorityState.simContext.store).toBe(authorityState.store);
     expect(authorityState.toolContext.store).toBe(authorityState.store);
@@ -16,14 +16,14 @@ describe('Stage4SimCoreAuthorityState', () => {
 
   test('applies explicit starting funds to authoritative state and tool context seed data', () => {
     const startingFunds = 12_345;
-    const authorityState = new Stage4SimCoreAuthorityState({ startingFunds });
+    const authorityState = new SimCoreRuntimeState({ startingFunds });
 
     expect(authorityState.simState.TotalFunds).toBe(startingFunds);
     expect(authorityState.toolContext.funds).toBe(startingFunds);
   });
 
   test('initialization marks s_scan.c NewMapFlags producers dirty', () => {
-    const authorityState = new Stage4SimCoreAuthorityState({ seed: 7 });
+    const authorityState = new SimCoreRuntimeState({ seed: 7 });
     const flags = authorityState.simState.NewMapFlags;
 
     // `PTLScan`/`CrimeScan`/`PopDenScan`/`FireAnalysis` in `ref/micropolis/src/sim/s_scan.c`

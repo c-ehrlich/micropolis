@@ -6,8 +6,8 @@ import {
   DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
-  type Stage2ClientCommand,
-  type Stage2ToolCommand,
+  type PlayableClientCommand,
+  type PlayableToolCommand,
 } from './protocol.ts';
 import {
   createInitialWebRuntimeState,
@@ -16,7 +16,7 @@ import {
 } from './reducer.ts';
 
 /**
- * Builds a valid accepted hello envelope for deterministic Stage 2 runtime tests.
+ * Builds a valid accepted hello envelope for deterministic Playable Runtime runtime tests.
  * Mirrors startup validation gate expectations mapped from
  * `ref/micropolis/src/sim/w_sim.c`.
  */
@@ -32,10 +32,10 @@ function createAcceptedHelloEnvelope(): HostEnvelope {
 }
 
 /**
- * Creates a deterministic Stage 2 tool command fixture used in pending tests.
+ * Creates a deterministic Playable Runtime tool command fixture used in pending tests.
  * Mirrors tool intent routing for `DoTool` in `ref/micropolis/src/sim/w_tool.c`.
  */
-function createToolCommand(tool: Stage2ToolCommand['tool']): Stage2ToolCommand {
+function createToolCommand(tool: PlayableToolCommand['tool']): PlayableToolCommand {
   return {
     kind: 'tool',
     tool,
@@ -129,7 +129,7 @@ describe('reduceHostEnvelope', () => {
       kind: 'snapshot',
       roomId: DEFAULT_LOCAL_ROOM_ID,
       clientId: DEFAULT_LOCAL_CLIENT_ID,
-      // Stage 0 sequencing allows an initial baseline at sequence 0; this mirrors
+      // Bridge V1 sequencing allows an initial baseline at sequence 0; this mirrors
       // replay baselines in bridge recovery streams mapped from `sim.c` update loops.
       tick: 0,
       serverSeq: 0,
@@ -796,7 +796,7 @@ describe('reduceHostEnvelope', () => {
   it('does not enqueue pending visuals for non-tool commands', () => {
     const state = createInitialWebRuntimeState();
     const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
-    const pauseCommand: Stage2ClientCommand = {
+    const pauseCommand: PlayableClientCommand = {
       kind: 'sim-control',
       control: 'pause',
     };
