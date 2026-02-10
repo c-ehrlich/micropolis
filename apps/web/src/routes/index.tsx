@@ -173,7 +173,7 @@ function RuntimePanel() {
     context.font = '24px monospace';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText('Select a scenario to start.', canvas.width / 2, canvas.height / 2);
+    context.fillText('Micropolis', canvas.width / 2, canvas.height / 2);
   }, [hasStartedPlayableSession]);
 
   const controlsDisabled = state.phase !== 'ready';
