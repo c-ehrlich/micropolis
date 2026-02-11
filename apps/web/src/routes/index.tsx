@@ -31,12 +31,6 @@ export const Route = createFileRoute('/')({
 });
 
 const MAP_TILE_SIZE = 6;
-const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
-const ENVELOPE_RUNTIME_CONTRACT_PATH = 'apps/web/src/game/runtime/protocol.ts';
-const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
-  'apps/web/src/game/core-host.ts',
-  'apps/web/src/game/runtime/protocol.ts',
-] as const;
 
 /**
  * Triggers one playable-route manual disaster control click and returns status text.
@@ -74,13 +68,7 @@ function HomePage() {
         padding: 16,
       }}
     >
-      <h1 style={{ fontSize: 20, margin: 0 }}>City Runtime</h1>
-      <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>
-        Bridge V1 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`.
-        Envelope runtime contract for `/`: `{ENVELOPE_RUNTIME_CONTRACT_PATH}`. Delete duplicate
-        protocol surfaces after bridge-contract port:{' '}
-        {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
-      </div>
+      <h1 style={{ fontSize: 20, margin: 0 }}>Micropolis</h1>
       <RuntimePanel />
     </main>
   );
@@ -217,9 +205,6 @@ function RuntimePanel() {
         gap: 12,
       }}
     >
-      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>
-        Authoritative Runtime Runtime
-      </h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
         phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
       </div>
