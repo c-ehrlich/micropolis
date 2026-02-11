@@ -970,6 +970,13 @@ describe('SimCoreEnvelopeHost', () => {
       tick: 1,
       serverSeq: 2,
       commandId: 'cmd-query',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'E -speed 200',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
     // Default city funds are 20,000 in Micropolis init/new-city flows
     // (`ref/micropolis/src/sim/s_init.c` via startup state wiring).
@@ -2169,6 +2176,45 @@ describe('SimCoreEnvelopeHost', () => {
     }
   });
 
+  it('maps every playable tool ack to the corresponding UIDidTool sound spec', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      buildToolSuccessSoundDeltas(
+        tool: (typeof PLAYABLE_TOOL_SPECS)[number]['tool'],
+      ): HostSoundDeltaPayload[];
+    };
+    const expectedSoundSpecByTool = {
+      res: 'O -speed 140',
+      com: 'A -speed 140',
+      ind: 'E -speed 140',
+      fire: 'O -speed 130',
+      query: 'E -speed 200',
+      police: 'E -speed 130',
+      wire: 'O -speed 120',
+      bulldoze: 'Rumble',
+      rail: 'O -speed 100',
+      road: 'E -speed 100',
+      stadium: 'O -speed 90',
+      park: 'A -speed 130',
+      seaport: 'E -speed 90',
+      coal: 'O -speed 75',
+      nuclear: 'E -speed 75',
+      airport: 'A -speed 50',
+    } as const satisfies Record<(typeof PLAYABLE_TOOL_SPECS)[number]['tool'], string>;
+
+    // `DidTool(..., name, ...)` in `w_tool.c` dispatches `UIDidTool*` callbacks in
+    // `micropolis.tcl`; each callback sound comes from `UIMakeSoundOn ... edit ...`.
+    for (const spec of PLAYABLE_TOOL_SPECS) {
+      expect(hostInternals.buildToolSuccessSoundDeltas(spec.tool)).toEqual([
+        {
+          channel: 'edit',
+          soundSpec: expectedSoundSpecByTool[spec.tool],
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ]);
+    }
+  });
+
   it('covers parity-oriented tool/map/HUD/message/realtime behavior in one deterministic host flow', () => {
     const roomId = 'room-parity-certification';
     const clientId = 'client-parity-certification';
@@ -2239,6 +2285,13 @@ describe('SimCoreEnvelopeHost', () => {
       tick: 1,
       serverSeq: 2,
       commandId: 'cmd-road-parity-certification',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'E -speed 100',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
 
     const roadPatchEnvelope = captured.envelopes[3];
@@ -2428,6 +2481,13 @@ describe('SimCoreEnvelopeHost', () => {
         tick: 1,
         serverSeq: 2,
         commandId,
+        soundDeltas: [
+          {
+            channel: 'edit',
+            soundSpec: 'O -speed 120',
+            scope: { kind: 'view', target: '.playMap' },
+          },
+        ],
       });
       expect(captured.envelopes[3]).toMatchObject({
         kind: 'patch',
@@ -2677,6 +2737,13 @@ describe('SimCoreEnvelopeHost', () => {
       tick: 1,
       serverSeq: 2,
       commandId: 'cmd-road-spend',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'E -speed 100',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
     expect(captured.envelopes[3]).toMatchObject({
       kind: 'patch',
@@ -3183,6 +3250,11 @@ describe('SimCoreEnvelopeHost', () => {
       throw new Error('expected command ack envelope');
     }
     expect(readSoundDeltasFromEnvelope(ackEnvelope)).toEqual([
+      {
+        channel: 'edit',
+        soundSpec: 'E -speed 200',
+        scope: { kind: 'view', target: '.playMap' },
+      },
       {
         channel: 'city',
         soundSpec: 'Siren',

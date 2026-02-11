@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   listSimUiToolAssetHelpers,
+  resolveSimUiDidToolSoundIntent,
   resolveSimUiToolAssetHelper,
   resolveSimUiToolHelpDocId,
   resolveSimUiToolHelpHtmlFileName,
@@ -61,6 +62,73 @@ describe('sim-ui helper parity', () => {
     expect(resolveSimUiToolHelpHtmlFileName(8)).toBe('Editor.ToolRail.html');
   });
 
+  it('resolves DidTool success sounds for the full playable tool-state set', () => {
+    // `DidTool(..., name, ...)` in `w_tool.c` dispatches `UIDidTool*` Tcl callbacks.
+    // Each expected `soundSpec` here comes from the corresponding callback's
+    // `UIMakeSoundOn $win edit ...` arguments in `ref/micropolis/res/micropolis.tcl`.
+    expect(resolveSimUiDidToolSoundIntent(0)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 140',
+    });
+    expect(resolveSimUiDidToolSoundIntent(1)).toEqual({
+      channel: 'edit',
+      soundSpec: 'A -speed 140',
+    });
+    expect(resolveSimUiDidToolSoundIntent(2)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 140',
+    });
+    expect(resolveSimUiDidToolSoundIntent(3)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 130',
+    });
+    expect(resolveSimUiDidToolSoundIntent(4)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 200',
+    });
+    expect(resolveSimUiDidToolSoundIntent(5)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 130',
+    });
+    expect(resolveSimUiDidToolSoundIntent(6)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 120',
+    });
+    expect(resolveSimUiDidToolSoundIntent(7)).toEqual({ channel: 'edit', soundSpec: 'Rumble' });
+    expect(resolveSimUiDidToolSoundIntent(8)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 100',
+    });
+    expect(resolveSimUiDidToolSoundIntent(9)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 100',
+    });
+    expect(resolveSimUiDidToolSoundIntent(12)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 90',
+    });
+    expect(resolveSimUiDidToolSoundIntent(13)).toEqual({
+      channel: 'edit',
+      soundSpec: 'A -speed 130',
+    });
+    expect(resolveSimUiDidToolSoundIntent(14)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 90',
+    });
+    expect(resolveSimUiDidToolSoundIntent(15)).toEqual({
+      channel: 'edit',
+      soundSpec: 'O -speed 75',
+    });
+    expect(resolveSimUiDidToolSoundIntent(16)).toEqual({
+      channel: 'edit',
+      soundSpec: 'E -speed 75',
+    });
+    expect(resolveSimUiDidToolSoundIntent(17)).toEqual({
+      channel: 'edit',
+      soundSpec: 'A -speed 50',
+    });
+  });
+
   it('resolves canonical icon asset keys with optional derived png overlays', () => {
     // `rail` is entry index 8 in `EditorPalletImages` from
     // `ref/micropolis/res/micropolis.tcl`; `ExclusivePallet` loads it via
@@ -93,12 +161,17 @@ describe('sim-ui helper parity', () => {
     // `networkState` is `18` in `ref/micropolis/src/sim/headers/sim.h`, but
     // there is no matching icon entry in `EditorPalletImages`.
     expect(resolveSimUiToolAssetHelper(18)).toBeUndefined();
+    // `UIDidToolChlk`/`UIDidToolEraser` in `micropolis.tcl` do not call `UIMakeSoundOn`.
+    expect(resolveSimUiDidToolSoundIntent(10)).toBeUndefined();
+    expect(resolveSimUiDidToolSoundIntent(11)).toBeUndefined();
     expect(resolveSimUiToolIconBitmapName(18)).toBeUndefined();
     expect(resolveSimUiToolStringResource(18)).toBeUndefined();
     expect(resolveSimUiToolSoundToken(18)).toBeUndefined();
     expect(resolveSimUiToolHelpDocId(18)).toBeUndefined();
     expect(resolveSimUiToolIconAssetLookup(18)).toBeUndefined();
     expect(resolveSimUiToolAssetHelper(-1)).toBeUndefined();
+    expect(resolveSimUiDidToolSoundIntent(-1)).toBeUndefined();
     expect(resolveSimUiToolAssetHelper(2.5)).toBeUndefined();
+    expect(resolveSimUiDidToolSoundIntent(2.5)).toBeUndefined();
   });
 });

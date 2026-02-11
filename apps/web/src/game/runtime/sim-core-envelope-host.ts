@@ -1,6 +1,7 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
+import { resolveSimUiDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
   cityEvaluation,
@@ -54,6 +55,7 @@ import {
   type SimSprite,
   take2Census,
   takeCensus,
+  TOOL_STATE,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -170,11 +172,11 @@ const SIM_CORE_SOUND_CHANNEL_CITY = 0;
 const SIM_CORE_SOUND_CHANNEL_BY_ID: Readonly<Record<number, string>> = {
   [SIM_CORE_SOUND_CHANNEL_CITY]: 'city',
 };
-const TOOL_ERROR_SOUND_CHANNEL = 'edit';
-const TOOL_ERROR_SOUND_SCOPE_TARGET = '.playMap';
-const TOOL_ERROR_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
+const TOOL_SOUND_CHANNEL = 'edit';
+const TOOL_SOUND_SCOPE_TARGET = '.playMap';
+const TOOL_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
   kind: 'view',
-  target: TOOL_ERROR_SOUND_SCOPE_TARGET,
+  target: TOOL_SOUND_SCOPE_TARGET,
 };
 const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
   'out-of-bounds': 'UhUh',
@@ -608,7 +610,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
         return undefined;
       }
 
-      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      const soundDeltas = this.buildToolSuccessSoundDeltas(envelope.command.tool);
+      this.emitAck(
+        envelope.roomId,
+        envelope.clientId,
+        envelope.commandId,
+        this.tick,
+        soundDeltas.length === 0 ? undefined : soundDeltas,
+      );
       this.emitPatch(
         envelope.roomId,
         envelope.clientId,
@@ -722,6 +731,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     clientId: string,
     commandId: string,
     tickOverride = this.tick,
+    soundDeltas?: readonly HostSoundDeltaPayload[],
   ): void {
     this.emitSequencedEnvelope({
       kind: 'ack',
@@ -729,6 +739,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       clientId,
       tick: tickOverride,
       commandId,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
     });
   }
 
@@ -2033,9 +2044,34 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
     return [
       {
-        channel: TOOL_ERROR_SOUND_CHANNEL,
+        channel: TOOL_SOUND_CHANNEL,
         soundSpec,
-        scope: TOOL_ERROR_SOUND_SCOPE,
+        scope: TOOL_SOUND_SCOPE,
+      },
+    ];
+  }
+
+  /**
+   * Builds `DidTool(...)` success sound deltas for acknowledged tool commands.
+   * Mirrors `DidTool` callback dispatch in `ref/micropolis/src/sim/w_tool.c`
+   * and `UIDidTool*` -> `UIMakeSoundOn` specs in `ref/micropolis/res/micropolis.tcl`,
+   * with scope metadata mapped from `MakeSoundOn(view, ...)` semantics in
+   * `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private buildToolSuccessSoundDeltas(tool: PlayableToolCommand['tool']): HostSoundDeltaPayload[] {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return [];
+    }
+    const toolState = TOOL_STATE[tool];
+    const soundIntent = resolveSimUiDidToolSoundIntent(toolState);
+    if (soundIntent === undefined) {
+      return [];
+    }
+    return [
+      {
+        channel: soundIntent.channel,
+        soundSpec: soundIntent.soundSpec,
+        scope: TOOL_SOUND_SCOPE,
       },
     ];
   }
