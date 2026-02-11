@@ -217,6 +217,133 @@ describe('createWebHostRuntime', () => {
     ]);
   });
 
+  it('routes sound deltas on every sequenced envelope kind, not only patch/snapshot payload envelopes', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const routed: Array<{
+      outcome: string;
+      kind: HostEnvelope['kind'];
+      soundDeltas: readonly HostSoundDeltaPayload[] | null;
+    }> = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope === undefined || event.envelope.kind === 'hello') {
+        return;
+      }
+
+      routed.push({
+        outcome: event.outcome,
+        kind: event.envelope.kind,
+        soundDeltas: event.envelope.soundDeltas ?? null,
+      });
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    // `w_sim.c`/`w_update.c` event transport is monotonic by sequence; this mirrors
+    // deterministic sequenced envelope ordering while asserting sound transport.
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [7] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-sound-ack',
+      soundDeltas: [{ channel: 'edit', soundSpec: 'Bulldozer' }],
+    });
+    host.emit({
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 3,
+      commandId: 'cmd-sound-reject',
+      reason: 'no-funds',
+      soundDeltas: [{ channel: 'edit', soundSpec: 'Sorry' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 4,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 8 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'resync',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 5,
+      reason: 'sequence-gap',
+      soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed [MonsterSpeed]' }],
+    });
+    host.emit({
+      kind: 'error',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 6,
+      message: 'fatal',
+      soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+    });
+
+    expect(routed).toEqual([
+      {
+        outcome: 'applied',
+        kind: 'snapshot',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'ack',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'Bulldozer' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'reject',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'Sorry' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'resync',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed [MonsterSpeed]' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'error',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+      },
+    ]);
+  });
+
   it('creates pending visuals on sendCommand and settles them on ack/reject', () => {
     const host = new FakeLocalHost();
     const runtime = createWebHostRuntime({ host });
