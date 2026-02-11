@@ -132,7 +132,7 @@ Deliverable: route plays only host-provided sound deltas.
 
 - [x] Remove gameplay sound derivation from route reject/message inspection.
 - [x] Keep `/` Sound Test section as manual verification only.
-- [ ] Ensure no gameplay path imports mapping helpers intended only for sound preview UI.
+- [x] Ensure no gameplay path imports mapping helpers intended only for sound preview UI.
 
 Deliverable: single authoritative sound path from host envelopes.
 

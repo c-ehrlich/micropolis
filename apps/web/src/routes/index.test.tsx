@@ -88,10 +88,29 @@ describe('routes/index default gameplay path', () => {
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
       'utf8',
     );
+    const soundPreviewPanelSource = readFileSync(
+      fileURLToPath(new URL('../game/audio/micropolis-sound-preview-panel.tsx', import.meta.url)),
+      'utf8',
+    );
 
-    expect(routeSource).toContain('Manual verification only: preview Micropolis wav assets');
-    expect(routeSource).toContain('playMicropolisSoundPreview({');
-    expect(routeSource).toContain('Gameplay audio remains host-envelope driven.');
+    expect(routeSource).toContain("from '../game/audio/micropolis-sound-preview-panel.tsx'");
+    expect(routeSource).toContain('<MicropolisSoundPreviewPanel />');
+    expect(soundPreviewPanelSource).toContain(
+      'Manual verification only: preview Micropolis wav assets',
+    );
+    expect(soundPreviewPanelSource).toContain('playMicropolisSoundPreview({');
+    expect(soundPreviewPanelSource).toContain('Gameplay audio remains host-envelope driven.');
+  });
+
+  test('keeps gameplay route free of preview-only sound mapping helper imports', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).not.toContain("from '../game/audio/micropolis-soundboard.ts'");
+    expect(routeSource).not.toContain('toMicropolisSoundPreviewWavPath');
+    expect(routeSource).not.toContain('normalizeMicropolisSoundTokenForWav');
   });
 
   test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
