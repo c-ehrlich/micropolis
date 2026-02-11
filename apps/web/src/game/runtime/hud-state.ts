@@ -46,6 +46,20 @@ export interface RuntimeHudMessageEvent {
 }
 
 /**
+ * One active notice event shown in the Playable Runtime notice panel.
+ * Mirrors `UIShowPictureOn` notice title/body/color projection in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+export interface RuntimeHudNoticeEvent {
+  id: number;
+  title: string;
+  body: string;
+  color: string;
+  tick: number;
+  serverSeq: number;
+}
+
+/**
  * Runtime HUD options heads projection consumed by Playable Runtime UI components.
  * Mirrors `updateOptions` / `UISetOptions` output in
  * `ref/micropolis/src/sim/w_update.c`.
@@ -88,6 +102,7 @@ export interface RuntimeHudState {
   speedLabel: string;
   options: RuntimeHudOptionsState;
   messages: readonly RuntimeHudMessageEvent[];
+  notice: RuntimeHudNoticeEvent | null;
 }
 
 /**
@@ -128,6 +143,7 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
       doNotices: true,
     },
     messages: [],
+    notice: null,
   };
 }
 
@@ -185,6 +201,7 @@ export function projectRuntimeHudState(
       envelope.kind === 'snapshot'
         ? parsed.messages
         : appendMessages(state.messages, parsed.messages),
+    notice: parsed.notice === undefined ? state.notice : parsed.notice,
   };
 
   if (isHudStateEqual(state, nextState)) {
@@ -207,6 +224,7 @@ interface ParsedHudPayload {
   speed?: number;
   options?: Partial<RuntimeHudOptionsState>;
   messages: RuntimeHudMessageEvent[];
+  notice?: RuntimeHudNoticeEvent | null;
 }
 
 interface ParsedMessageInput {
@@ -340,6 +358,11 @@ function parseHudPayload(
     parsed.messages.push(legacyHudMessage);
   }
 
+  const parsedNotice = parseNoticeInput(payload.notice, tick, serverSeq);
+  if (parsedNotice !== undefined) {
+    parsed.notice = parsedNotice;
+  }
+
   return parsed;
 }
 
@@ -444,6 +467,61 @@ function parseMessageInput(value: unknown): ParsedMessageInput | null {
     y: projectedY,
     ...(replayTick === null ? {} : { tick: replayTick }),
     ...(replayServerSeq === null ? {} : { serverSeq: replayServerSeq }),
+  };
+}
+
+/**
+ * Parses one optional notice payload entry from host snapshots/patches.
+ * Mirrors `UIShowPictureOn` notice state projection from
+ * `ref/micropolis/res/micropolis.tcl`.
+ * Difference: this parser accepts explicit `null` to clear active notices
+ * without running Tcl window-pack operations.
+ */
+function parseNoticeInput(
+  value: unknown,
+  tick: number,
+  serverSeq: number,
+): RuntimeHudNoticeEvent | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+
+  const record = readRecord(value);
+  if (record === null) {
+    return undefined;
+  }
+
+  const id = readRangeInteger(record.id, 1, 400);
+  if (id === null) {
+    return undefined;
+  }
+  if (
+    typeof record.title !== 'string' ||
+    typeof record.body !== 'string' ||
+    typeof record.color !== 'string'
+  ) {
+    return undefined;
+  }
+
+  const replayTick = readReplayOrderInteger(record.tick);
+  if (replayTick === undefined) {
+    return undefined;
+  }
+  const replayServerSeq = readReplayOrderInteger(record.serverSeq);
+  if (replayServerSeq === undefined) {
+    return undefined;
+  }
+
+  return {
+    id,
+    title: record.title,
+    body: record.body,
+    color: record.color,
+    tick: replayTick ?? tick,
+    serverSeq: replayServerSeq ?? serverSeq,
   };
 }
 
@@ -563,6 +641,21 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     left.options.doMessages !== right.options.doMessages ||
     left.options.doNotices !== right.options.doNotices ||
     left.messages.length !== right.messages.length
+  ) {
+    return false;
+  }
+
+  if (left.notice === null || right.notice === null) {
+    if (left.notice !== right.notice) {
+      return false;
+    }
+  } else if (
+    left.notice.id !== right.notice.id ||
+    left.notice.title !== right.notice.title ||
+    left.notice.body !== right.notice.body ||
+    left.notice.color !== right.notice.color ||
+    left.notice.tick !== right.notice.tick ||
+    left.notice.serverSeq !== right.notice.serverSeq
   ) {
     return false;
   }

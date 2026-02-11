@@ -11,13 +11,18 @@ import {
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
-import { sendMes, sendMesAt } from '../../../../../packages/sim-core/src/systems/messages.ts';
+import {
+  doScenarioScore,
+  sendMes,
+  sendMesAt,
+} from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { projectRealtimeOverlaySprites } from '../map/map-canvas.tsx';
 import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {
   type HostEnvelope,
   type HostHudMessagePayload,
+  type HostHudNoticePayload,
   type HostHudPayload,
   type HostMapPatchPayload,
   type HostPatchPayload,
@@ -225,6 +230,24 @@ function readLegacyHudMessageFromEnvelope(envelope: HostEnvelope): HostHudMessag
   }
 
   return hudPayload.message;
+}
+
+/**
+ * Reads canonical notice payload data from snapshot/patch envelopes.
+ * Mirrors `UIShowPicture` notice projection ownership in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+function readNoticeFromEnvelope(envelope: HostEnvelope): HostHudNoticePayload | null {
+  if (envelope.kind !== 'patch' && envelope.kind !== 'snapshot') {
+    return null;
+  }
+
+  const notice = (envelope.payload as { notice?: unknown }).notice;
+  if (notice === null || notice === undefined || typeof notice !== 'object') {
+    return null;
+  }
+
+  return notice as HostHudNoticePayload;
 }
 
 /**
@@ -1386,6 +1409,105 @@ describe('SimCoreEnvelopeHost', () => {
     expect(textMessage).toMatchObject({
       id: 11,
       text: 'Crime very high.',
+    });
+  });
+
+  it('projects picture-message ids to canonical notice payloads', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-notice-picture-parity',
+      clientId: 'client-notice-picture-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Message id `-22` comes from `MakeTornado` -> `SendMesAt(-22, x, y)` in
+    // `ref/micropolis/src/sim/s_disast.c`; `doMessage` routes this through
+    // `DoShowPicture(22)` in `ref/micropolis/src/sim/s_msg.c`.
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, -22),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-notice-picture-parity',
+      clientId: 'client-notice-picture-parity',
+      commandId: 'cmd-notice-picture-parity-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const patch = captured.envelopes.at(-1);
+    if (patch === undefined) {
+      throw new Error('expected picture-message patch envelope');
+    }
+    expect(readNoticeFromEnvelope(patch)).toMatchObject({
+      id: 22,
+      title: 'TORNADO ALERT!',
+    });
+  });
+
+  it('mirrors lose-game hook behavior with pause plus impeachment notice payload', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      simPaused: boolean;
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-lose-notice-parity',
+      clientId: 'client-lose-notice-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    hostInternals.authorityState.simState.CrimeAverage = 100;
+    // Scenario type `6` (`Detroit`) fails unless `CrimeAverage < 60` in
+    // `DoScenarioScore` from `ref/micropolis/src/sim/s_msg.c`, yielding `z=-200`
+    // and `DoLoseGame()` -> `UILoseGame` (`UIShowPicture 200`).
+    doScenarioScore(
+      hostInternals.authorityState.simState,
+      hostInternals.authorityState.simContext,
+      6,
+    );
+    expect(hostInternals.simPaused).toBe(true);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-lose-notice-parity',
+      clientId: 'client-lose-notice-parity',
+      commandId: 'cmd-lose-notice-parity-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const patch = captured.envelopes.at(-1);
+    if (patch === undefined) {
+      throw new Error('expected lose-game patch envelope');
+    }
+    expect(
+      readMessageDeltasFromEnvelope(patch)?.some((message) => message.id === -200) ?? false,
+    ).toBe(false);
+    expect(readNoticeFromEnvelope(patch)).toMatchObject({
+      id: 200,
+      title: 'IMPEACHMENT NOTICE!',
     });
   });
 
