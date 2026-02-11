@@ -10,7 +10,7 @@ import path from 'node:path';
  * it automates Codex task execution over markdown migration plans rather than
  * implementing simulation behavior directly.
  */
-const SHIPPING_PLAN_PATH = 'SOUND_PARITY_PLAN.md';
+const PLAN_PATH = 'SOUND_PARITY_PLAN.md';
 
 /**
  * Plan stream definitions for the single sound parity plan document.
@@ -24,7 +24,7 @@ const DEFAULT_PACKAGES = [
     stageNumber: null,
     stageLabel: 'Sound Parity Plan',
     packagePath: 'repo',
-    planPath: SHIPPING_PLAN_PATH,
+    planPath: PLAN_PATH,
     branch: null,
     worktreePath: '.',
   },
@@ -997,7 +997,7 @@ function buildDriftReport(repoRoot, packages) {
  * Not from Micropolis C; this is operator visibility for checklist work.
  */
 function printQueue(repoRoot, packages) {
-  process.stdout.write(`Plan queue status (${SHIPPING_PLAN_PATH}):\n`);
+  process.stdout.write(`Plan queue status (${PLAN_PATH}):\n`);
   for (const pkg of packages) {
     const statusRoot = resolveStatusRepoRoot(repoRoot, pkg);
     const status = getPackagePlanStatus(statusRoot, pkg);

@@ -734,6 +734,33 @@ export interface HostHudMessagePayload {
 export type HostMessageDeltaPayload = HostHudMessagePayload;
 
 /**
+ * `MakeSoundOn` scope metadata projected onto bridge transport payloads.
+ * Mirrors local-vs-global sound dispatch intent in
+ * `ref/micropolis/src/sim/w_sound.c` (`MakeSound` and `MakeSoundOn`).
+ * Parity note: this preserves host routing context; browser runtime playback
+ * may ignore `target` while still retaining deterministic transport data.
+ */
+export interface HostSoundScopePayload {
+  kind: 'view' | 'global';
+  target?: string;
+}
+
+/**
+ * One authoritative gameplay sound delta carried by host envelopes.
+ * Mirrors sound-intent emission through `MakeSound` / `MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`, with Tcl/activity token forwarding in
+ * `ref/micropolis/res/micropolis.tcl` (`EchoPlaySound`) and
+ * `ref/micropolis/micropolisactivity.py` (`PlaySound` handling).
+ * Parity note: `soundSpec` is intentionally the full Micropolis sound spec
+ * string; normalization to wav token is a runtime playback concern.
+ */
+export interface HostSoundDeltaPayload {
+  channel: string;
+  soundSpec: string;
+  scope?: HostSoundScopePayload;
+}
+
+/**
  * One authoritative realtime object entry carried by snapshot/patch envelopes.
  * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
  * represented by `SimSprite` in `packages/sim-core/src/sim/realtime.ts`.

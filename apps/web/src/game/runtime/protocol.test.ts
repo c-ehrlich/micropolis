@@ -4,6 +4,7 @@ import {
   fromCanonicalBridgeToolName,
   getPlayableBridgeCommandType,
   getPlayableToolSpec,
+  type HostSoundDeltaPayload,
   isPlayableBridgeCommandType,
   isPlayableScenarioCommand,
   PLAYABLE_BRIDGE_COMMAND_TYPES,
@@ -172,5 +173,39 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         scenarioId: 1.5,
       }),
     ).toBe(false);
+  });
+
+  it('defines sound-delta payload shape for authoritative transport', () => {
+    const viewScopedDelta: HostSoundDeltaPayload = {
+      channel: 'city',
+      soundSpec: 'Siren',
+      scope: { kind: 'view', target: '.playMap' },
+    };
+
+    const globalDelta: HostSoundDeltaPayload = {
+      channel: 'warning',
+      soundSpec: 'Explosion High',
+      scope: { kind: 'global' },
+    };
+
+    const noScopeDelta: HostSoundDeltaPayload = {
+      channel: 'edit',
+      soundSpec: 'UhUh',
+    };
+
+    expect(viewScopedDelta).toEqual({
+      channel: 'city',
+      soundSpec: 'Siren',
+      scope: { kind: 'view', target: '.playMap' },
+    });
+    expect(globalDelta).toEqual({
+      channel: 'warning',
+      soundSpec: 'Explosion High',
+      scope: { kind: 'global' },
+    });
+    expect(noScopeDelta).toEqual({
+      channel: 'edit',
+      soundSpec: 'UhUh',
+    });
   });
 });

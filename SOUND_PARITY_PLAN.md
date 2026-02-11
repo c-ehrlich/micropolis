@@ -78,7 +78,7 @@ Target outcome:
 
 ## Phase 0: Contract And Semantics Lock
 
-- [ ] Add protocol payload types for sound deltas in `apps/web/src/game/runtime/protocol.ts`.
+- [x] Add protocol payload types for sound deltas in `apps/web/src/game/runtime/protocol.ts`.
 - [ ] Add a shared sound delta schema usable by any sequenced envelope.
 - [ ] Lock parity payload shape:
   - [ ] `channel` (e.g., `city`, `edit`, `warning`, etc.)
