@@ -1230,6 +1230,77 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('keeps doMessage picture/text resend ids text-equivalent in message feed payloads', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // `SendMessages` in `ref/micropolis/src/sim/s_msg.c` emits `SendMes(-11)`
+    // for high crime (`case 42`). `doMessage` then requeues `MessagePort = 11`
+    // so the next heads cycle emits the positive text id.
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, -11),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      commandId: 'cmd-message-sign-parity-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const picturePatch = captured.envelopes.at(-1);
+    if (picturePatch === undefined) {
+      throw new Error('expected picture-message patch envelope');
+    }
+    const pictureMessage = readMessageDeltasFromEnvelope(picturePatch)?.find(
+      (message) => message.id === -11,
+    );
+    expect(pictureMessage).toMatchObject({
+      id: -11,
+      text: 'Crime is out of control.',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      commandId: 'cmd-message-sign-parity-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const textPatch = captured.envelopes.at(-1);
+    if (textPatch === undefined) {
+      throw new Error('expected text-message patch envelope');
+    }
+    const textMessage = readMessageDeltasFromEnvelope(textPatch)?.find(
+      (message) => message.id === 11,
+    );
+    expect(textMessage).toMatchObject({
+      id: 11,
+      text: 'Crime is out of control.',
+    });
+  });
+
   it('keeps replay snapshot message metadata deterministic even if a prior replay payload is mutated', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);

@@ -2494,12 +2494,19 @@ function normalizeReplayCursor(candidate: number, highestKnown: number): number 
  * Resolves message text for one message id.
  * Mirrors `GetIndString` lookup intent from `ref/micropolis/src/sim/s_msg.c`.
  * Parity note: this host currently keeps the same compact bridge-side subset
- * used during migration and falls back to `Message <id>`.
+ * used during migration and falls back to `Message <id>`. `doMessage` flips
+ * picture ids negative->positive (`pictId = -MesNum; MessagePort = pictId`),
+ * so this lookup mirrors that sign-invariant text identity.
  */
 function messageTextForId(id: number): string {
   const text = RUNTIME_MESSAGE_TEXT[id];
   if (text !== undefined) {
     return text;
+  }
+
+  const mirroredSignText = RUNTIME_MESSAGE_TEXT[-id];
+  if (mirroredSignText !== undefined) {
+    return mirroredSignText;
   }
 
   return `Message ${id}`;

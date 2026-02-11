@@ -235,7 +235,6 @@ function RuntimePanel() {
   const activeToolSpec = getPlayableToolSpec(activeTool);
   const isSimulationRunning = state.hudState.speed > 0;
   const runtimePhaseStatus = formatRuntimePhaseStatus(state.phase);
-  const topStatusLine = `${runtimePhaseStatus} phase=${state.phase} seq=${state.lastAppliedServerSeq} tick=${state.lastAppliedTick}`;
 
   return (
     <section
@@ -539,19 +538,6 @@ function RuntimePanel() {
               </section>
             )}
           </div>
-        </div>
-        <div
-          style={{
-            alignItems: 'center',
-            color: '#334155',
-            display: 'flex',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            marginLeft: 'auto',
-            minHeight: 24,
-          }}
-        >
-          <span>{topStatusLine}</span>
         </div>
       </header>
 

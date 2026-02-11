@@ -5,11 +5,13 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
+const SHOW_DEVTOOLS = false;
+
 function RootLayout() {
   return (
     <>
       <Outlet />
-      <TanStackRouterDevtools position="bottom-right" />
+      {SHOW_DEVTOOLS ? <TanStackRouterDevtools position="bottom-right" /> : null}
     </>
   );
 }

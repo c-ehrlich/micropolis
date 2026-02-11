@@ -175,12 +175,11 @@ describe('routes/index default gameplay path', () => {
 
     const markup = renderToStaticMarkup(React.createElement(component));
     expect(markup).not.toContain('Sound Test');
-    expect(markup).toContain('phase=disconnected seq=0 tick=0');
-    expect(markup).toContain('Disconnected.');
+    expect(markup).toContain('Runtime');
     expect(markup).toContain('Build');
     expect(markup).toContain('Road: $10');
     expect(markup).toContain('Demand heads R 0, C 0, I 0');
-    expect(markup).toContain('HUD');
+    expect(markup).toContain('Message Feed');
     expect(markup).toContain('Micropolis');
   });
 
