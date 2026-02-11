@@ -319,17 +319,28 @@ function RuntimePanel() {
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
-                  <img
-                    alt={`${spec.label} tool`}
-                    draggable={false}
-                    src={iconUrl}
+                  <span
                     style={{
-                      display: 'block',
-                      height: 28,
-                      imageRendering: 'pixelated',
-                      width: 28,
+                      alignItems: 'center',
+                      display: 'flex',
+                      height: 30,
+                      justifyContent: 'center',
+                      width: 30,
                     }}
-                  />
+                  >
+                    <img
+                      alt={`${spec.label} tool`}
+                      draggable={false}
+                      src={iconUrl}
+                      style={{
+                        display: 'block',
+                        height: '100%',
+                        imageRendering: 'pixelated',
+                        objectFit: 'contain',
+                        width: '100%',
+                      }}
+                    />
+                  </span>
                 )}
               </button>
             );
