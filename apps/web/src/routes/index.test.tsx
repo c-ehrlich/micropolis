@@ -95,6 +95,16 @@ describe('routes/index default gameplay path', () => {
     expect(routeSource).not.toContain('readMessageIdsFromPatchPayload');
   });
 
+  test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain('event.state.hudState.options.userSoundOn');
+    expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+  });
+
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(
       fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),

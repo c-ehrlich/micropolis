@@ -140,8 +140,10 @@ function RuntimePanel() {
       }
 
       if (isSequencedHostEnvelope(runtimeEnvelope)) {
-        for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
-          void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
+        if (event.state.hudState.options.userSoundOn) {
+          for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+            void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
+          }
         }
       }
 
