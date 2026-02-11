@@ -77,6 +77,19 @@ export interface MapCanvasPanDragState {
 }
 
 /**
+ * Active left-button drag state for repeated single-tile tool placement.
+ * Mirrors `ToolDown` + `ToolDrag` tracking of `last_x/last_y` in
+ * `ref/micropolis/src/sim/w_tool.c`, adapted to browser pointer ids.
+ */
+interface MapCanvasToolPlacementDragState {
+  pointerId: number;
+  lastTile: {
+    x: number;
+    y: number;
+  };
+}
+
+/**
  * Chooses the base map tile atlas identity for one runtime tile-size mode.
  * Mirrors `GetViewTiles` atlas identities in `ref/micropolis/src/sim/g_setup.c`:
  * `Editor_Class` (`tiles.xpm`) and `Map_Class` color (`tilessm.xpm`).
@@ -395,6 +408,7 @@ export function MapCanvas({
   hoverTool,
   showHoverToolPreview = true,
   onTileClick,
+  dragPlacementEnabled = false,
   tileSize = 4,
   cameraControlsContainer,
 }: {
@@ -404,6 +418,7 @@ export function MapCanvas({
   hoverTool?: PlayableToolName;
   showHoverToolPreview?: boolean;
   onTileClick?: (x: number, y: number) => void;
+  dragPlacementEnabled?: boolean;
   tileSize?: number;
   cameraControlsContainer?: HTMLElement | null;
 }) {
@@ -416,6 +431,7 @@ export function MapCanvas({
   const pendingAnimationFrameRef = useRef<number | null>(null);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const panDragStateRef = useRef<MapCanvasPanDragState | null>(null);
+  const toolPlacementDragStateRef = useRef<MapCanvasToolPlacementDragState | null>(null);
   const lastRenderedBlinkUnpoweredZoneCenterRef = useRef<boolean | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
@@ -659,6 +675,36 @@ export function MapCanvas({
       tileSize,
     });
   }, [hoverToolSpec, hoveredToolTile, isToolCursorPreviewEnabled, mapState, tileSize]);
+
+  const applyToolPlacementDragSample = useCallback(
+    (tile: { x: number; y: number }): void => {
+      if (onTileClick === undefined) {
+        return;
+      }
+      const dragState = toolPlacementDragStateRef.current;
+      if (dragState === null) {
+        return;
+      }
+      if (tile.x === dragState.lastTile.x && tile.y === dragState.lastTile.y) {
+        return;
+      }
+
+      const dragPath = traceMapCanvasSingleTileToolDragPath({
+        fromX: dragState.lastTile.x,
+        fromY: dragState.lastTile.y,
+        toX: tile.x,
+        toY: tile.y,
+      });
+      for (const point of dragPath) {
+        if (!isTileInBounds(point.x, point.y, mapState)) {
+          continue;
+        }
+        onTileClick(point.x, point.y);
+      }
+      dragState.lastTile = tile;
+    },
+    [mapState, onTileClick],
+  );
 
   const updateHoveredToolTileFromPointer = useCallback(
     (event: PointerEvent<HTMLCanvasElement>): void => {
@@ -927,6 +973,7 @@ export function MapCanvas({
         ref={mapViewportRef}
         onPointerCancel={(event) => {
           panDragStateRef.current = null;
+          toolPlacementDragStateRef.current = null;
           setHoveredToolTile(null);
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
@@ -989,17 +1036,98 @@ export function MapCanvas({
         >
           <canvas
             ref={canvasRef}
+            onPointerDown={(event) => {
+              if (!dragPlacementEnabled || onTileClick === undefined || event.button !== 0) {
+                return;
+              }
+
+              const canvas = canvasRef.current;
+              if (canvas === null) {
+                return;
+              }
+
+              const tile = getPointerTilePosition(event, canvas, tileSize);
+              if (tile === null || !isTileInBounds(tile.x, tile.y, mapState)) {
+                return;
+              }
+
+              toolPlacementDragStateRef.current = {
+                pointerId: event.pointerId,
+                lastTile: tile,
+              };
+              onTileClick(tile.x, tile.y);
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.preventDefault();
+            }}
             onPointerEnter={(event) => {
               updateHoveredToolTileFromPointer(event);
             }}
             onPointerMove={(event) => {
               updateHoveredToolTileFromPointer(event);
+
+              const dragState = toolPlacementDragStateRef.current;
+              if (
+                !dragPlacementEnabled ||
+                dragState === null ||
+                dragState.pointerId !== event.pointerId
+              ) {
+                return;
+              }
+
+              const canvas = canvasRef.current;
+              if (canvas === null) {
+                return;
+              }
+
+              const tile = getPointerTilePosition(event, canvas, tileSize);
+              if (tile === null || !isTileInBounds(tile.x, tile.y, mapState)) {
+                return;
+              }
+              applyToolPlacementDragSample(tile);
+            }}
+            onPointerCancel={(event) => {
+              if (
+                toolPlacementDragStateRef.current !== null &&
+                toolPlacementDragStateRef.current.pointerId === event.pointerId
+              ) {
+                toolPlacementDragStateRef.current = null;
+              }
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerUp={(event) => {
+              const dragState = toolPlacementDragStateRef.current;
+              if (
+                !dragPlacementEnabled ||
+                dragState === null ||
+                dragState.pointerId !== event.pointerId
+              ) {
+                return;
+              }
+
+              const canvas = canvasRef.current;
+              if (canvas !== null) {
+                const tile = getPointerTilePosition(event, canvas, tileSize);
+                if (tile !== null && isTileInBounds(tile.x, tile.y, mapState)) {
+                  applyToolPlacementDragSample(tile);
+                }
+              }
+
+              toolPlacementDragStateRef.current = null;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+              event.preventDefault();
             }}
             onPointerLeave={() => {
               setHoveredToolTile(null);
             }}
             onClick={(event) => {
               if (onTileClick === undefined) {
+                return;
+              }
+              if (dragPlacementEnabled) {
                 return;
               }
 
@@ -1801,6 +1929,85 @@ function getPointerTilePosition(
     clientY: event.clientY,
     tileSize,
   });
+}
+
+/**
+ * One interpolated tile sample emitted while dragging one single-tile tool.
+ * Mirrors `current_tool(..., first=0)` tile targets from `ToolDrag` in
+ * `ref/micropolis/src/sim/w_tool.c` when `toolSize[tool_state] == 1`.
+ */
+export interface MapCanvasSingleTileDragSample {
+  x: number;
+  y: number;
+}
+
+/**
+ * Interpolates one drag segment for single-tile tools with classic corner fill.
+ * Mirrors the `dist == 1` branch in `ToolDrag` from
+ * `ref/micropolis/src/sim/w_tool.c` including:
+ * - `step = 0.3 / max(abs(dx), abs(dy))`
+ * - truncation toward zero on sampled tile coordinates
+ * - corner-fill insertion when both axes advance in one sample.
+ * Difference: this helper works in tile coordinates only and excludes bounds checks.
+ */
+export function traceMapCanvasSingleTileToolDragPath({
+  fromX,
+  fromY,
+  toX,
+  toY,
+}: {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+}): MapCanvasSingleTileDragSample[] {
+  let lx = fromX;
+  let ly = fromY;
+  const dx = toX - lx;
+  const dy = toY - ly;
+  if (dx === 0 && dy === 0) {
+    return [];
+  }
+
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+  const step = 0.3 / (adx > ady ? adx : ady);
+  const rx = dx < 0 ? 1 : 0;
+  const ry = dy < 0 ? 1 : 0;
+  const samples: MapCanvasSingleTileDragSample[] = [];
+
+  for (let i = 0; i <= 1 + step; i += step) {
+    const tx = fromX + i * dx;
+    const ty = fromY + i * dy;
+    const dtx = Math.abs(tx - lx);
+    const dty = Math.abs(ty - ly);
+    if (dtx < 1 && dty < 1) {
+      continue;
+    }
+
+    if (dtx >= 1 && dty >= 1) {
+      if (dtx > dty) {
+        samples.push({
+          x: truncateTowardZero(tx + rx),
+          y: ly,
+        });
+      } else {
+        samples.push({
+          x: lx,
+          y: truncateTowardZero(ty + ry),
+        });
+      }
+    }
+
+    lx = truncateTowardZero(tx + rx);
+    ly = truncateTowardZero(ty + ry);
+    samples.push({
+      x: lx,
+      y: ly,
+    });
+  }
+
+  return samples;
 }
 
 /**

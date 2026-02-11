@@ -297,6 +297,7 @@ function RuntimePanel() {
       >
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
+          dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
           hoverTool={sessionControlsDisabled ? undefined : activeTool}
           mapState={state.mapState}
           onTileClick={(x, y) => {
@@ -847,7 +848,9 @@ function RuntimePanel() {
         <div style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>
           {sessionControlsDisabled
             ? 'Connect and start a city to build.'
-            : 'Click map tiles to place tool.'}
+            : activeToolSpec.size === 1
+              ? 'Click or drag to place tool.'
+              : 'Click map tiles to place tool.'}
         </div>
       </section>
 

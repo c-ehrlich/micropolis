@@ -19,6 +19,7 @@ import {
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
   startMapCanvasPanDrag,
+  traceMapCanvasSingleTileToolDragPath,
   zoomMapCanvasCameraOffsetAtAnchor,
 } from './map-canvas.tsx';
 import {
@@ -473,6 +474,64 @@ describe('map canvas pan parity', () => {
 
     expect(dragStep.deltaCanvasX).toBe(0);
     expect(dragStep.deltaCanvasY).toBe(0);
+  });
+});
+
+describe('map canvas tool drag parity', () => {
+  it('fills intermediate cardinal tiles for single-tile drag strokes', () => {
+    expect(
+      traceMapCanvasSingleTileToolDragPath({
+        fromX: 10,
+        fromY: 10,
+        toX: 13,
+        toY: 10,
+      }),
+    ).toEqual([
+      { x: 11, y: 10 },
+      { x: 12, y: 10 },
+      { x: 13, y: 10 },
+    ]);
+  });
+
+  it('adds the corner-fill tile on diagonal movement like classic ToolDrag', () => {
+    // Magic-number source: `step = .3 / max(adx, ady)` and corner-fill branch
+    // in `ToolDrag` (`dist == 1`) from `ref/micropolis/src/sim/w_tool.c`.
+    expect(
+      traceMapCanvasSingleTileToolDragPath({
+        fromX: 10,
+        fromY: 10,
+        toX: 11,
+        toY: 11,
+      }),
+    ).toEqual([
+      { x: 10, y: 11 },
+      { x: 11, y: 11 },
+    ]);
+  });
+
+  it('preserves C truncation-toward-zero semantics for negative deltas', () => {
+    expect(
+      traceMapCanvasSingleTileToolDragPath({
+        fromX: 11,
+        fromY: 11,
+        toX: 10,
+        toY: 10,
+      }),
+    ).toEqual([
+      { x: 11, y: 10 },
+      { x: 10, y: 10 },
+    ]);
+  });
+
+  it('returns no samples when drag does not cross into another tile', () => {
+    expect(
+      traceMapCanvasSingleTileToolDragPath({
+        fromX: 8,
+        fromY: 5,
+        toX: 8,
+        toY: 5,
+      }),
+    ).toEqual([]);
   });
 });
 
