@@ -1,3 +1,5 @@
+import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
+
 /**
  * Manual sound-preview button spec for the Authoritative Runtime browser UI.
  * Mirrors playable sound IDs used by `UIMakeSound` and `EchoPlaySound` in
@@ -43,16 +45,17 @@ export function resolveMicropolisSoundTokenForToolRejectReason(reason: string): 
 }
 
 /**
- * Resolve one acknowledged playable tool command to a one-shot sound token.
- * Mirrors `UIDidTool*` callbacks in `ref/micropolis/res/micropolis.tcl`.
- * Difference: browser route currently ships only a small subset of WAV assets,
- * so this helper maps only tool sounds guaranteed by `public/sounds`.
+ * Resolve one acknowledged playable tool command to the Micropolis tool-success
+ * `soundSpec` emitted by `UIDidTool*` callbacks.
+ * Mirrors `DidTool(..., name, ...)` callback dispatch in
+ * `ref/micropolis/src/sim/w_tool.c` and callback bodies in
+ * `ref/micropolis/res/micropolis.tcl`.
+ * Difference: none for playable tools; this is a 1:1 lookup through
+ * `packages/sim-assets/src/sim-ui.ts`.
  */
 export function resolveMicropolisSoundTokenForToolAck(tool: string): string | null {
-  if (tool === 'bulldoze') {
-    return 'Bulldozer';
-  }
-  return null;
+  const soundIntent = resolveSimUiPlayableToolDidToolSoundIntent(tool);
+  return soundIntent?.soundSpec ?? null;
 }
 
 const MESSAGE_SOUND_TOKENS: Readonly<Record<number, readonly string[]>> = Object.freeze({

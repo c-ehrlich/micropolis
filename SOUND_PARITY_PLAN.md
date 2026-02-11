@@ -105,7 +105,7 @@ Deliverable: protocol/test updates that compile and document sound envelope sema
   - [x] reject `no-funds` -> `Sorry`
 - [x] Mirror C tool success `DidTool` sound intent at host level:
   - [x] map every playable tool -> `UIDidTool*` sound token/spec from `micropolis.tcl`
-  - [ ] prefer `packages/sim-assets` helpers where possible, extending as needed for full tool parity
+  - [x] prefer `packages/sim-assets` helpers where possible, extending as needed for full tool parity
 
 ### Message parity sub-phase
 

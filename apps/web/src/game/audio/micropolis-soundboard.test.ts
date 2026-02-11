@@ -40,11 +40,36 @@ describe('micropolis soundboard helper parity', () => {
     expect(resolveMicropolisSoundTokenForToolRejectReason('unknown-reason')).toBeNull();
   });
 
-  it('maps playable tool acknowledgements to shipped sound tokens', () => {
-    // Mirrors `UIDidToolDozr` -> `UIMakeSoundOn ... Rumble` intent in
-    // `ref/micropolis/res/micropolis.tcl`, adapted to shipped browser assets.
-    expect(resolveMicropolisSoundTokenForToolAck('bulldoze')).toBe('Bulldozer');
-    expect(resolveMicropolisSoundTokenForToolAck('road')).toBeNull();
+  it('maps every playable tool acknowledgement to UIDidTool sound specs', () => {
+    // `UIDidTool*` callback suffixes and `UIMakeSoundOn $win edit ...` specs come
+    // from `ref/micropolis/res/micropolis.tcl` and are dispatched by `DidTool`
+    // in `ref/micropolis/src/sim/w_tool.c`.
+    const expectedByTool = {
+      res: 'O -speed 140',
+      com: 'A -speed 140',
+      ind: 'E -speed 140',
+      fire: 'O -speed 130',
+      query: 'E -speed 200',
+      police: 'E -speed 130',
+      wire: 'O -speed 120',
+      bulldoze: 'Rumble',
+      rail: 'O -speed 100',
+      road: 'E -speed 100',
+      stadium: 'O -speed 90',
+      park: 'A -speed 130',
+      seaport: 'E -speed 90',
+      coal: 'O -speed 75',
+      nuclear: 'E -speed 75',
+      airport: 'A -speed 50',
+    } as const;
+
+    for (const [tool, expectedSoundSpec] of Object.entries(expectedByTool)) {
+      expect(resolveMicropolisSoundTokenForToolAck(tool)).toBe(expectedSoundSpec);
+    }
+
+    expect(resolveMicropolisSoundTokenForToolAck('chalk')).toBeNull();
+    expect(resolveMicropolisSoundTokenForToolAck('eraser')).toBeNull();
+    expect(resolveMicropolisSoundTokenForToolAck('network')).toBeNull();
   });
 
   it('maps message ids to first-display sound tokens', () => {
