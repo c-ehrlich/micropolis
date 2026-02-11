@@ -83,6 +83,17 @@ describe('routes/index default gameplay path', () => {
     expect(routeSource).toContain('gameplayAudioConsumer.playSoundSpec(');
   });
 
+  test('keeps "/" Sound Test as manual verification-only preview UI', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain('Manual verification only: preview Micropolis wav assets');
+    expect(routeSource).toContain('playMicropolisSoundPreview({');
+    expect(routeSource).toContain('Gameplay audio remains host-envelope driven.');
+  });
+
   test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
     const routeSource = readFileSync(
       fileURLToPath(new URL('./index.tsx', import.meta.url)),

@@ -576,7 +576,8 @@ function RuntimePanel() {
       >
         <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Sound Test</strong>
         <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
-          Manual Micropolis sound preview (`/sounds/*.wav`) from the Sugar-style token route.
+          Manual verification only: preview Micropolis wav assets (`/sounds/*.wav`) from the
+          Sugar-style token route. Gameplay audio remains host-envelope driven.
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {SOUND_PREVIEW_SPECS.map((soundSpec) => (
@@ -646,6 +647,8 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
  * Mirrors the Micropolis Tcl/Python sound path:
  * `EchoPlaySound` emits a token and Sugar resolves `<token>.wav` in
  * `ref/micropolis/micropolisactivity.py`, adapted here to Vite public assets.
+ * Parity note: this helper stays exclusive to the `/` manual Sound Test harness
+ * and is intentionally separate from authoritative gameplay sound-delta playback.
  */
 async function playMicropolisSoundPreview({
   token,
