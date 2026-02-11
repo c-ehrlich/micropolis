@@ -419,8 +419,10 @@ describe('SimCoreEnvelopeHost', () => {
 
     expect(hud.funds).toBe(authorityState.simState.TotalFunds);
     expect(hud.fundsLabel).toBeTypeOf('string');
-    expect(hud.cityPopulation).toBe(authorityState.simState.CityPop);
-    expect(hud.cityClass).toBe(authorityState.simState.CityClass);
+    // `CityPop`/`CityClass` can be negative sentinel values before evaluation,
+    // so host HUD payloads clamp to visible C class/pop domains.
+    expect(hud.cityPopulation).toBe(Math.max(0, authorityState.simState.CityPop));
+    expect(hud.cityClass).toBe(Math.max(0, Math.min(authorityState.simState.CityClass, 5)));
     expect(hud.date).toMatchObject({
       label: expect.any(String),
       month: expect.any(Number),
@@ -2912,6 +2914,140 @@ describe('SimCoreEnvelopeHost', () => {
     // normalizes via `_RoadTable[0]` to base road tile 66 (`ROADS`).
     expect(tileAfter & TileMask.LOMASK).toBe(Tile.ROADS);
     expect(hostInternals.authorityState.simState.TotalFunds).toBe(fundsBefore);
+  });
+
+  it('propagates plant power to conductive wires and zone centers during ambient map-scan phases', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      lifecycle:
+        | {
+            phase: 'disconnected';
+          }
+        | {
+            phase: 'awaiting-hello';
+            sessionId: number;
+          }
+        | {
+            phase: 'ready';
+            sessionId: number;
+            roomId: string;
+            clientId: string;
+          };
+      handleAmbientTick(sessionId: number): void;
+      authorityState: {
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+          snapshot(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-power-propagation',
+      clientId: 'client-power-propagation',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-power-propagation',
+      clientId: 'client-power-propagation',
+      commandId: 'cmd-new-city-power-propagation',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+      },
+    });
+
+    if (hostInternals.lifecycle.phase !== 'ready') {
+      throw new Error('expected ready lifecycle');
+    }
+
+    const indexFor = (x: number, y: number) => x * World.WORLD_Y + y;
+    const plantCenter = { x: 20, y: 20 };
+    const resCenter = { x: 27, y: 20 };
+    const wireProbe = { x: 24, y: 20 };
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+
+      for (let x = 16; x <= 31; x += 1) {
+        for (let y = 17; y <= 23; y += 1) {
+          mapLayer[indexFor(x, y)] = Tile.DIRT;
+        }
+      }
+
+      // Mirrors `check4x4` in `ref/micropolis/src/sim/w_tool.c`: COALBASE 4x4
+      // progression with zone-center at `(col,row)=(1,1)` and animation tile at `(1,2)`.
+      let coalBase = Tile.COALBASE;
+      for (let row = 0; row <= 3; row += 1) {
+        for (let col = 0; col <= 3; col += 1) {
+          const x = plantCenter.x - 1 + col;
+          const y = plantCenter.y - 1 + row;
+          let word = coalBase + TileFlag.BNCNBIT;
+          if (col === 1 && row === 1) {
+            word = coalBase + TileFlag.BNCNBIT + TileFlag.ZONEBIT;
+          } else if (col === 1 && row === 2) {
+            word = coalBase + TileFlag.BNCNBIT + TileFlag.ANIMBIT;
+          }
+          mapLayer[indexFor(x, y)] = word;
+          coalBase += 1;
+        }
+      }
+
+      // Mirrors `check3x3` in `ref/micropolis/src/sim/w_tool.c`: RESBASE 3x3
+      // progression with zone-center at `(col,row)=(1,1)`.
+      let resBase = Tile.RESBASE;
+      for (let row = 0; row <= 2; row += 1) {
+        for (let col = 0; col <= 2; col += 1) {
+          const x = resCenter.x - 1 + col;
+          const y = resCenter.y - 1 + row;
+          const word =
+            col === 1 && row === 1
+              ? resBase + TileFlag.BNCNBIT + TileFlag.ZONEBIT
+              : resBase + TileFlag.BNCNBIT;
+          mapLayer[indexFor(x, y)] = word;
+          resBase += 1;
+        }
+      }
+
+      // Conductive bridge between the 4x4 plant edge and 3x3 residential center.
+      for (let x = 23; x <= 25; x += 1) {
+        mapLayer[indexFor(x, plantCenter.y)] =
+          Tile.HPOWER | TileFlag.CONDBIT | TileFlag.BULLBIT | TileFlag.BURNBIT;
+      }
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    // C pacing source: `Simulate` in `ref/micropolis/src/sim/s_sim.c`.
+    // - One phase per `runSimLoop` call (`Fcycle & 15`)
+    // - `DoPowerScan` at phase 11 when `Scycle % SpdPwr[3] == 0`, where `SpdPwr[3] == 5`
+    // Running 320 ambient ticks guarantees multiple power-scan + map-scan passes.
+    for (let tick = 0; tick < 320; tick += 1) {
+      hostInternals.handleAmbientTick(hostInternals.lifecycle.sessionId);
+    }
+
+    const mapAfter = hostInternals.authorityState.store.snapshot('map');
+    if (!(mapAfter instanceof Uint16Array)) {
+      throw new Error('expected authoritative map layer snapshot to be Uint16Array');
+    }
+
+    const plantAfter = mapAfter[indexFor(plantCenter.x, plantCenter.y)] ?? 0;
+    const resAfter = mapAfter[indexFor(resCenter.x, resCenter.y)] ?? 0;
+    const wireAfter = mapAfter[indexFor(wireProbe.x, wireProbe.y)] ?? 0;
+
+    expect(plantAfter & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    expect(wireAfter & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
+    expect(resAfter & TileFlag.PWRBIT).toBe(TileFlag.PWRBIT);
   });
 
   it('treats SimState.TotalFunds as canonical before tool evaluation', () => {

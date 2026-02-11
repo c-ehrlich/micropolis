@@ -43,6 +43,24 @@ const MAP_CANVAS_MAX_ZOOM = 4;
 const MAP_CANVAS_BUTTON_ZOOM_STEP = 1.25;
 const MAP_CANVAS_WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const MAP_CANVAS_WHEEL_LINE_DELTA_PX = 16;
+const MICROPOLIS_FLAG_BLINK_PERIOD_MS = 1000;
+const MAP_CANVAS_BLINK_PHASE_SAMPLE_INTERVAL_MS = 125;
+
+/**
+ * Resolve whether unpowered-zone blink substitution is active at one wall-clock sample.
+ * Mirrors `flagBlink` assignment in `ref/micropolis/src/sim/sim.c`:
+ * `flagBlink = (now_time.tv_usec < 500000) ? 1 : -1`, then
+ * `MemDrawBeegMapRect` in `ref/micropolis/src/sim/g_bigmap.c` blinks when
+ * `flagBlink <= 0` for unpowered zone centers.
+ * Parity note: this is a 1:1 half-second phase port in milliseconds
+ * (`tv_usec >= 500000` <=> `(nowMs % 1000) >= 500`).
+ */
+export function isMapCanvasUnpoweredZoneBlinkPhase(nowMs: number): boolean {
+  const microsWindowMs =
+    ((Math.trunc(nowMs) % MICROPOLIS_FLAG_BLINK_PERIOD_MS) + MICROPOLIS_FLAG_BLINK_PERIOD_MS) %
+    MICROPOLIS_FLAG_BLINK_PERIOD_MS;
+  return microsWindowMs >= 500;
+}
 
 /**
  * Pointer-anchor state for one active drag-pan gesture.
@@ -351,8 +369,12 @@ export function MapCanvas({
   const pendingAnimationFrameRef = useRef<number | null>(null);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const panDragStateRef = useRef<MapCanvasPanDragState | null>(null);
+  const lastRenderedBlinkUnpoweredZoneCenterRef = useRef<boolean | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
+  const [blinkUnpoweredZoneCenter, setBlinkUnpoweredZoneCenter] = useState(() =>
+    isMapCanvasUnpoweredZoneBlinkPhase(Date.now()),
+  );
   const [cameraZoom, setCameraZoom] = useState(1);
   const [cameraOffsetPx, setCameraOffsetPx] = useState<{
     x: number;
@@ -410,12 +432,33 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!mapState.hasSnapshot) {
+      return;
+    }
+    const syncBlinkPhase = (): void => {
+      setBlinkUnpoweredZoneCenter((current) => {
+        const next = isMapCanvasUnpoweredZoneBlinkPhase(Date.now());
+        return current === next ? current : next;
+      });
+    };
+    syncBlinkPhase();
+    const intervalId = window.setInterval(
+      syncBlinkPhase,
+      MAP_CANVAS_BLINK_PHASE_SAMPLE_INTERVAL_MS,
+    );
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mapState.hasSnapshot]);
+
+  useEffect(() => {
+    if (!mapState.hasSnapshot) {
       queuedMapFrameRef.current = null;
       if (pendingAnimationFrameRef.current !== null) {
         cancelAnimationFrame(pendingAnimationFrameRef.current);
         pendingAnimationFrameRef.current = null;
       }
       lastRenderedEpochRef.current = 0;
+      lastRenderedBlinkUnpoweredZoneCenterRef.current = null;
       return;
     }
 
@@ -424,6 +467,7 @@ export function MapCanvas({
       tileSize,
       tileRenderer: {
         baseTileAtlasCanonicalIdentityKey,
+        blinkUnpoweredZoneCenter,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
@@ -450,9 +494,17 @@ export function MapCanvas({
         canvas: canvasRef.current,
         frame,
         lastRenderedEpoch: lastRenderedEpochRef.current,
+        lastRenderedBlinkUnpoweredZoneCenter: lastRenderedBlinkUnpoweredZoneCenterRef.current,
       });
+      lastRenderedBlinkUnpoweredZoneCenterRef.current = frame.tileRenderer.blinkUnpoweredZoneCenter;
     });
-  }, [baseTileAtlasCanonicalIdentityKey, mapState, tileAtlasRenderVersion, tileSize]);
+  }, [
+    baseTileAtlasCanonicalIdentityKey,
+    blinkUnpoweredZoneCenter,
+    mapState,
+    tileAtlasRenderVersion,
+    tileSize,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -950,6 +1002,7 @@ type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay';
 
 interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
+  blinkUnpoweredZoneCenter: boolean;
   tileAtlasImagesByCanonicalIdentityKey: ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>;
 }
 
@@ -993,10 +1046,12 @@ function drawMapCanvasFrame({
   canvas,
   frame,
   lastRenderedEpoch,
+  lastRenderedBlinkUnpoweredZoneCenter,
 }: {
   canvas: HTMLCanvasElement | null;
   frame: MapCanvasRenderFrame;
   lastRenderedEpoch: number;
+  lastRenderedBlinkUnpoweredZoneCenter: boolean | null;
 }): number {
   if (canvas === null || !frame.mapState.hasSnapshot) {
     return 0;
@@ -1027,6 +1082,9 @@ function drawMapCanvasFrame({
     renderEpoch: frame.mapState.renderEpoch,
     lastRenderedEpoch,
     resized,
+    blinkPhaseChanged:
+      lastRenderedBlinkUnpoweredZoneCenter !== null &&
+      frame.tileRenderer.blinkUnpoweredZoneCenter !== lastRenderedBlinkUnpoweredZoneCenter,
   });
   MAP_CANVAS_DRAW_PROCS[drawMode](context, frame.mapState, frame.tileSize, frame.tileRenderer);
   return frame.mapState.renderEpoch;
@@ -1068,13 +1126,15 @@ export function selectMapCanvasDrawMode({
   renderEpoch,
   lastRenderedEpoch,
   resized,
+  blinkPhaseChanged = false,
 }: {
   mapDrawMode: RuntimeMapState['drawMode'];
   renderEpoch: number;
   lastRenderedEpoch: number;
   resized: boolean;
+  blinkPhaseChanged?: boolean;
 }): RuntimeMapState['drawMode'] {
-  if (mapDrawMode === 'snapshot' || resized || lastRenderedEpoch === 0) {
+  if (mapDrawMode === 'snapshot' || resized || lastRenderedEpoch === 0 || blinkPhaseChanged) {
     return 'snapshot';
   }
 
@@ -1441,6 +1501,7 @@ function drawMapCanvasTile(
 ): void {
   const sprite = lookupTileSprite(tileWord, {
     atlasCanonicalIdentityKey: tileRenderer.baseTileAtlasCanonicalIdentityKey,
+    blinkUnpoweredZoneCenter: tileRenderer.blinkUnpoweredZoneCenter,
   });
   const targetX = x * tileSize;
   const targetY = y * tileSize;

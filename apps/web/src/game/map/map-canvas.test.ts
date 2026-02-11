@@ -8,6 +8,7 @@ import {
   forEachMapCanvasPatchTileIndex,
   getMapCanvasCameraMetrics,
   getMapCanvasLayerZIndex,
+  isMapCanvasUnpoweredZoneBlinkPhase,
   isMapCanvasZoomWheelGesture,
   normalizeMapCanvasWheelDeltaToPixels,
   projectRealtimeOverlaySprites,
@@ -135,6 +136,18 @@ describe('map canvas draw-mode selection', () => {
     ).toBe('snapshot');
   });
 
+  it('forces full redraw when Micropolis blink phase toggles', () => {
+    expect(
+      selectMapCanvasDrawMode({
+        mapDrawMode: 'patch',
+        renderEpoch: 2,
+        lastRenderedEpoch: 2,
+        resized: false,
+        blinkPhaseChanged: true,
+      }),
+    ).toBe('snapshot');
+  });
+
   it('keeps patch redraw when runtime skipped intermediate map epochs', () => {
     // Dirty-Rect Coalescing coalesces queued map dirty coverage across skipped epochs, so
     // patch repaint remains sufficient without forcing full-canvas redraw.
@@ -157,6 +170,17 @@ describe('map canvas draw-mode selection', () => {
         resized: false,
       }),
     ).toBe('patch');
+  });
+
+  it('matches C half-second flagBlink phase for unpowered-zone lightning blinking', () => {
+    // `sim_update` in `sim.c` sets:
+    // `flagBlink = (now_time.tv_usec < 500000) ? 1 : -1`
+    // and `g_bigmap.c` blinks when `flagBlink <= 0`.
+    expect(isMapCanvasUnpoweredZoneBlinkPhase(0)).toBe(false);
+    expect(isMapCanvasUnpoweredZoneBlinkPhase(499)).toBe(false);
+    expect(isMapCanvasUnpoweredZoneBlinkPhase(500)).toBe(true);
+    expect(isMapCanvasUnpoweredZoneBlinkPhase(999)).toBe(true);
+    expect(isMapCanvasUnpoweredZoneBlinkPhase(1000)).toBe(false);
   });
 
   it('projects train overlay placement using Micropolis sprite offsets', () => {

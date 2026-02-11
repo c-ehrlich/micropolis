@@ -60,7 +60,7 @@ import {
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
-import { doPowerScan } from '../../../../../packages/sim-core/src/systems/power.ts';
+import { doPowerScan, pushPowerStack } from '../../../../../packages/sim-core/src/systems/power.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
@@ -2513,7 +2513,15 @@ function createEnvelopeHostSimPhaseSystems(): SimPhaseSystems {
           onRoad: createRoadHandler(scanState, scanContext, {
             doBridge: createBridgeHandler(scanState, scanContext),
           }),
-          onZone: createZoneHandler(scanState, scanContext),
+          onZone: createZoneHandler(scanState, scanContext, {
+            // C path parity: `DoZone` in `ref/micropolis/src/sim/s_zone.c`
+            // dispatches `DoSPZone` (defined in `s_sim.c`), which calls
+            // `PushPowerStack()` for coal/nuclear plants, feeding
+            // `DoPowerScan` in `ref/micropolis/src/sim/s_power.c`.
+            pushPowerStack: (system, x, y) => {
+              pushPowerStack(system.state, x, y);
+            },
+          }),
           onRail: createRailHandler(scanState, scanContext),
         };
       }
