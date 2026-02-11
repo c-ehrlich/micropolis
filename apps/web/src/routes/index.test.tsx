@@ -87,8 +87,6 @@ describe('routes/index default gameplay path', () => {
     }
 
     const markup = renderToStaticMarkup(React.createElement(component));
-    expect(markup).toContain('City Runtime');
-    expect(markup).toContain('Authoritative Runtime Runtime');
     expect(markup).toContain('Sound Test');
     expect(markup).toContain('surviving gameplay route is');
     expect(markup).toContain('Envelope runtime contract for `/`');

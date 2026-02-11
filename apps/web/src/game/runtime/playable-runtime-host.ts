@@ -65,7 +65,10 @@ function isCityExportByteArray(value: unknown): value is Uint8Array {
  * only scenario resource loading override wiring remains configurable.
  */
 export function createPlayableRuntimeHost(options: PlayableRuntimeHostOptions = {}): CoreHost {
-  return new SimCoreEnvelopeHost(options);
+  return new SimCoreEnvelopeHost({
+    ...options,
+    enableAmbientTicks: options.enableAmbientTicks ?? true,
+  });
 }
 
 /**

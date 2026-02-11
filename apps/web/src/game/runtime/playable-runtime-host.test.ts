@@ -1207,6 +1207,48 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
 describe('createPlayableRuntimeHost', () => {
+  test('advances authoritative tick from ambient host timer without commands', () => {
+    vi.useFakeTimers();
+    const host = createPlayableRuntimeHost();
+    const hostEnvelopes: HostEnvelope[] = [];
+    const roomId = 'playable-cert-ambient-time-room';
+    const clientId = 'playable-cert-ambient-time-client';
+    const connection = host.connect((envelope) => {
+      hostEnvelopes.push(envelope);
+    });
+
+    try {
+      connection.send({
+        kind: 'hello',
+        roomId,
+        clientId,
+        protocolVersion: 'bridge-v1',
+        coreVersion: 'sim-core',
+      });
+
+      const initialSnapshot = hostEnvelopes.find(
+        (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+      );
+      if (initialSnapshot === undefined) {
+        throw new Error('expected initial snapshot before ambient progression');
+      }
+
+      vi.advanceTimersByTime(1_000);
+
+      const latestTick = hostEnvelopes.reduce((highestTick, envelope) => {
+        if ('tick' in envelope) {
+          return Math.max(highestTick, envelope.tick);
+        }
+        return highestTick;
+      }, 0);
+      expect(latestTick).toBeGreaterThan(initialSnapshot.tick);
+      expect(hostEnvelopes.some((envelope) => envelope.kind === 'patch')).toBe(true);
+    } finally {
+      connection.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
     const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];

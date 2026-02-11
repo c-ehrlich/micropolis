@@ -3,9 +3,24 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
   applyToolAction,
+  cityEvaluation,
+  clearCensus,
+  collectTax,
   consumeMapRedrawPlan,
+  createBridgeHandler,
+  createFireHandler,
+  createFloodHandler,
+  createRadHandler,
+  createRailHandler,
   createRealtimeContext,
+  createRoadHandler,
+  createZoneHandler,
+  crimeScan,
+  decROGMem,
+  decTrafficMem,
   destroyAllSprites as destroyRealtimeSprites,
+  doDisasters,
+  fireAnalysis,
   generateCopter as generateRealtimeCopter,
   generatePlane as generateRealtimePlane,
   generateShip as generateRealtimeShip,
@@ -19,17 +34,30 @@ import {
   makeMeltdown,
   makeMonster as makeRealtimeMonster,
   makeTornado as makeRealtimeTornado,
+  MAP_FLAGS,
   type MapRedrawPlan,
+  type MapScanHandlers,
   type Patch,
   planMapRedraw,
+  popDenScan,
+  ptlScan,
   type RealtimeContext,
   resetForNewCityFromSeed,
+  runMapScanPhase,
   runRealtimeTick,
+  runSimLoop,
   runUiUpdate,
+  sendMessages,
+  setValves,
+  type SimMapFlag,
+  type SimPhaseSystems,
   type SimSprite,
+  take2Census,
+  takeCensus,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
+import { doPowerScan } from '../../../../../packages/sim-core/src/systems/power.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
 import {
@@ -64,6 +92,10 @@ type PlayableScenarioCommand = Extract<PlayableClientCommand, { kind: 'scenario'
 type PlayableSaveCityCommand = Extract<PlayableCityIoCommand, { action: 'save-city' }>;
 type PlayableLoadCityCommand = Extract<PlayableCityIoCommand, { action: 'load-city' }>;
 type CommandClientEnvelope = Extract<ClientEnvelope, { kind: 'command' }>;
+interface AmbientTickQueueItem {
+  kind: 'ambient-tick';
+}
+type SessionQueueItem = CommandClientEnvelope | AmbientTickQueueItem;
 type SequencedHostEnvelope = Exclude<HostEnvelope, { kind: 'hello' }>;
 type ManualRealtimeEventId = PlayableDisasterChoiceId;
 type DistributiveOmit<TValue, TKey extends PropertyKey> = TValue extends unknown
@@ -83,7 +115,7 @@ interface EmitSequencedEnvelopeOptions {
   recordMessages?: boolean;
 }
 interface SessionCommandQueueState {
-  pending: CommandClientEnvelope[];
+  pending: SessionQueueItem[];
   draining: boolean;
 }
 interface ToolCommandOutcome {
@@ -127,6 +159,7 @@ const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
 const NEW_CITY_CURVE_LEVEL = -1;
 const NEW_CITY_CREATE_ISLAND = -1;
+const DEFAULT_PATCH_INTERVAL_MS = 180;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
@@ -218,6 +251,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly snapshotReplayCheckpoints = new Map<number, SnapshotReplayCheckpoint>();
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
   private readonly sessionCommandQueues = new Map<number, SessionCommandQueueState>();
+  private readonly simPhaseSystems: SimPhaseSystems;
+  private readonly enableAmbientTicks: boolean;
+  private readonly patchIntervalMs: number | undefined;
+  private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
@@ -256,6 +293,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
         context: this.authorityState.simContext,
       },
     });
+    this.simPhaseSystems = createEnvelopeHostSimPhaseSystems();
+    this.enableAmbientTicks = options.enableAmbientTicks ?? false;
+    this.patchIntervalMs = normalizePatchIntervalMs(options.patchIntervalMs);
     this.installRealtimeHooks();
     const scenarioResourceLoader = options.scenarioResourceLoader;
     this.scenarioResourceLoader =
@@ -359,6 +399,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
+    this.stopAmbientInterval();
     this.onEnvelope = undefined;
     this.lifecycle = { phase: 'disconnected' };
     this.sessionCommandQueues.delete(sessionId);
@@ -373,6 +414,25 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private enqueueCommandEnvelope(sessionId: number, envelope: CommandClientEnvelope): void {
     const sessionQueue = this.readOrCreateSessionCommandQueue(sessionId);
     sessionQueue.pending.push(envelope);
+    this.drainSessionCommandQueue(sessionId, sessionQueue);
+  }
+
+  /**
+   * Enqueues one ambient simulation step for serialized session settlement.
+   * Mirrors periodic timer-driven `sim_loop` ownership in
+   * `ref/micropolis/src/sim/sim.c`, while preserving single-queue ordering.
+   */
+  private enqueueAmbientTick(sessionId: number): void {
+    if (
+      !this.isSessionActive(sessionId) ||
+      this.lifecycle.phase !== 'ready' ||
+      this.authorityState.simState.SimSpeed === 0
+    ) {
+      return;
+    }
+
+    const sessionQueue = this.readOrCreateSessionCommandQueue(sessionId);
+    sessionQueue.pending.push({ kind: 'ambient-tick' });
     this.drainSessionCommandQueue(sessionId, sessionQueue);
   }
 
@@ -410,10 +470,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Drains queued commands sequentially for one active session.
+   * Drains queued session actions sequentially for one active session.
    * Mirrors serial command settlement expectations from
    * `ref/micropolis/src/sim/w_sim.c`; difference: this bridge host awaits async
-   * scenario resource loads before settling later queued commands.
+   * scenario resource loads before settling later queued commands and ambient ticks.
    */
   private async processSessionCommandQueueAsync(
     sessionId: number,
@@ -421,15 +481,20 @@ export class SimCoreEnvelopeHost implements CoreHost {
   ): Promise<void> {
     try {
       while (queue.pending.length > 0) {
-        const envelope = queue.pending.shift();
-        if (envelope === undefined) {
+        const queuedItem = queue.pending.shift();
+        if (queuedItem === undefined) {
           continue;
         }
 
-        const pendingAsyncSettlement = this.handleCommandEnvelope(sessionId, envelope);
-        if (pendingAsyncSettlement !== undefined) {
-          await pendingAsyncSettlement;
+        if (queuedItem.kind === 'command') {
+          const pendingAsyncSettlement = this.handleCommandEnvelope(sessionId, queuedItem);
+          if (pendingAsyncSettlement !== undefined) {
+            await pendingAsyncSettlement;
+          }
+          continue;
         }
+
+        this.handleAmbientTick(sessionId);
       }
     } finally {
       queue.draining = false;
@@ -469,6 +534,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.emitSnapshot(envelope.roomId, envelope.clientId, this.tick, {
       replayTailEligible: false,
     });
+    this.refreshAmbientInterval();
   }
 
   private handleSnapshotRequestEnvelope(
@@ -571,6 +637,45 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     this.emitReject(envelope.roomId, envelope.clientId, envelope.commandId, 'invalid-command');
     return undefined;
+  }
+
+  /**
+   * Settles one ambient simulation step through authoritative sim-core state.
+   * Mirrors timer-driven `sim_loop` ownership in `ref/micropolis/src/sim/sim.c`
+   * and envelope patch propagation intent in `ref/micropolis/src/sim/w_update.c`.
+   */
+  private handleAmbientTick(sessionId: number): void {
+    if (
+      !this.isSessionActive(sessionId) ||
+      this.lifecycle.phase !== 'ready' ||
+      this.onEnvelope === undefined
+    ) {
+      return;
+    }
+
+    if (this.authorityState.simState.SimSpeed === 0) {
+      this.refreshAmbientInterval();
+      return;
+    }
+
+    const { roomId, clientId } = this.lifecycle;
+    this.advanceCommandTick();
+    let mapPatch: Patch | null = null;
+    this.authorityState.simContext.store.beginTick();
+    try {
+      this.syncRealtimeContextFromSimState();
+      runSimLoop(
+        this.authorityState.simState,
+        this.authorityState.simContext,
+        this.simPhaseSystems,
+      );
+      this.syncToolContextFromState();
+    } finally {
+      const tickResult = this.authorityState.simContext.store.commitTick();
+      mapPatch = readMapPatchFromTickResult(tickResult.patches);
+    }
+
+    this.emitPatch(roomId, clientId, this.buildPatchPayload(mapPatch));
   }
 
   /**
@@ -866,6 +971,57 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.authorityState.simState.SimSpeed = speed;
+    this.refreshAmbientInterval();
+  }
+
+  /**
+   * Starts the authority-owned ambient simulation timer for one ready session.
+   * Mirrors `StartMicropolisTimer()` start ownership in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private startAmbientInterval(sessionId: number): void {
+    this.stopAmbientInterval();
+    if (!this.enableAmbientTicks || this.patchIntervalMs === undefined) {
+      return;
+    }
+
+    this.intervalHandle = setInterval(() => {
+      this.enqueueAmbientTick(sessionId);
+    }, this.patchIntervalMs);
+  }
+
+  /**
+   * Applies C-style timer gating based on readiness and effective sim speed.
+   * Mirrors timer start/stop gating in `setSpeed(short)` from
+   * `ref/micropolis/src/sim/w_util.c`.
+   */
+  private refreshAmbientInterval(): void {
+    if (
+      !this.enableAmbientTicks ||
+      this.patchIntervalMs === undefined ||
+      this.onEnvelope === undefined ||
+      this.lifecycle.phase !== 'ready' ||
+      this.authorityState.simState.SimSpeed === 0
+    ) {
+      this.stopAmbientInterval();
+      return;
+    }
+
+    if (this.intervalHandle !== undefined) {
+      return;
+    }
+
+    this.startAmbientInterval(this.lifecycle.sessionId);
+  }
+
+  /**
+   * Stops the authority-owned ambient simulation timer.
+   * Mirrors `StopMicropolisTimer()` stop ownership in `ref/micropolis/src/sim/w_util.c`.
+   */
+  private stopAmbientInterval(): void {
+    if (this.intervalHandle !== undefined) {
+      clearInterval(this.intervalHandle);
+      this.intervalHandle = undefined;
+    }
   }
 
   /**
@@ -1073,6 +1229,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.simPaused = false;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
     this.syncToolContextFromState();
+    this.refreshAmbientInterval();
   }
 
   /**
@@ -2018,6 +2175,77 @@ function rejectReasonFromToolResult(result: ToolResult): string | undefined {
  */
 function isPlacementCoordinate(x: number, y: number): boolean {
   return Number.isInteger(x) && Number.isInteger(y);
+}
+
+/**
+ * Marks sim-core `NewMapFlags` from phase dirty-map signals.
+ * Mirrors `NewMapFlags[...] = 1` writes in `Simulate` from
+ * `ref/micropolis/src/sim/s_sim.c`.
+ */
+function markMapFlagsForEnvelopeHost(
+  state: SimCoreRuntimeState['simState'],
+  flags: ReadonlyArray<SimMapFlag>,
+): void {
+  for (const flag of flags) {
+    state.NewMapFlags[MAP_FLAGS[flag]] = 1;
+  }
+}
+
+/**
+ * Builds full sim-phase wiring for authority-owned ambient simulation ticks.
+ * Mirrors `Simulate` + `MapScan` dispatch in `ref/micropolis/src/sim/s_sim.c`
+ * and map-scan handlers in `ref/micropolis/src/sim/s_zone.c`, `s_disast.c`,
+ * `s_sim.c`, and `s_scan.c`.
+ */
+function createEnvelopeHostSimPhaseSystems(): SimPhaseSystems {
+  let mapScanHandlers: MapScanHandlers | undefined;
+
+  return {
+    mapScan: (phase, scanState, scanContext) => {
+      if (mapScanHandlers === undefined) {
+        mapScanHandlers = {
+          onFire: createFireHandler(scanContext),
+          onFlood: createFloodHandler(scanState, scanContext),
+          onRadTile: createRadHandler(),
+          onRoad: createRoadHandler(scanState, scanContext, {
+            doBridge: createBridgeHandler(scanState, scanContext),
+          }),
+          onZone: createZoneHandler(scanState, scanContext),
+          onRail: createRailHandler(scanState, scanContext),
+        };
+      }
+      runMapScanPhase(scanState, scanContext, phase, mapScanHandlers);
+    },
+    setValves,
+    clearCensus,
+    takeCensus,
+    take2Census,
+    collectTax,
+    cityEvaluation,
+    decROGMem,
+    decTrafficMem,
+    markMapDirty: (flags, dirtyState) => {
+      markMapFlagsForEnvelopeHost(dirtyState, flags);
+    },
+    sendMessages,
+    doPowerScan,
+    ptlScan,
+    crimeScan,
+    popDenScan,
+    fireAnalysis,
+    doDisasters,
+  };
+}
+
+function normalizePatchIntervalMs(candidate: number | undefined): number | undefined {
+  if (candidate === undefined) {
+    return DEFAULT_PATCH_INTERVAL_MS;
+  }
+  if (!Number.isFinite(candidate) || candidate <= 0) {
+    return undefined;
+  }
+
+  return Math.trunc(candidate);
 }
 
 /**
