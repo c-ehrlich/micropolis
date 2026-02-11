@@ -35,6 +35,8 @@ const CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(World.WORLD_X, World.
 // C `LoadScenario` always applies `CityTax = 7` and `setSpeed(3)` in `s_fileio.c`.
 const LOAD_SCENARIO_CITY_TAX = 7;
 const LOAD_SCENARIO_SIM_SPEED = 3;
+// Replay retention bound from `apps/web/src/game/runtime/sim-core-envelope-host.ts`.
+const REPLAY_HISTORY_LIMIT = 1024;
 // `DidTool(..., name, ...)` in `ref/micropolis/src/sim/w_tool.c` dispatches
 // `UIDidTool*` callbacks in `ref/micropolis/res/micropolis.tcl`; each callback's
 // `UIMakeSoundOn ... edit ...` argument is the expected tool-success soundSpec.
@@ -4690,5 +4692,70 @@ describe('SimCoreEnvelopeHost', () => {
     expect(thirdSnapshot.kind).toBe('snapshot');
     expect(secondSnapshot.serverSeq).toBe(firstSnapshot.serverSeq + 1);
     expect(thirdSnapshot.serverSeq).toBe(secondSnapshot.serverSeq + 1);
+  });
+
+  it('bounds replay retention and clamps stale snapshot cursors to retained history', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      readonly sequencedReplayLog: Array<{
+        readonly replayTailEligible: boolean;
+        readonly envelope: {
+          readonly serverSeq: number;
+        };
+      }>;
+      readonly snapshotReplayCheckpoints: ReadonlyMap<number, unknown>;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-replay-retention-bound',
+      clientId: 'client-replay-retention-bound',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    for (let i = 1; i <= 530; i += 1) {
+      captured.send({
+        kind: 'command',
+        roomId: 'room-replay-retention-bound',
+        clientId: 'client-replay-retention-bound',
+        commandId: `cmd-retain-${i}`,
+        command: {
+          kind: 'sim-control',
+          control: i % 2 === 0 ? 'pause' : 'play',
+        },
+      });
+    }
+
+    expect(hostInternals.sequencedReplayLog.length).toBe(REPLAY_HISTORY_LIMIT);
+    expect(hostInternals.snapshotReplayCheckpoints.size).toBeLessThanOrEqual(
+      REPLAY_HISTORY_LIMIT + 1,
+    );
+
+    const oldestRetainedServerSeq = hostInternals.sequencedReplayLog[0]?.envelope.serverSeq;
+    expect(oldestRetainedServerSeq).toBeDefined();
+    if (oldestRetainedServerSeq === undefined) {
+      throw new Error('expected retained replay entries');
+    }
+
+    const eligibleReplayEntries = hostInternals.sequencedReplayLog.filter(
+      (entry) => entry.replayTailEligible,
+    );
+    const expectedTailCount = eligibleReplayEntries.filter(
+      (entry) => entry.envelope.serverSeq > oldestRetainedServerSeq,
+    ).length;
+
+    const replayStart = captured.envelopes.length;
+    captured.send({
+      kind: 'request_snapshot',
+      roomId: 'room-replay-retention-bound',
+      clientId: 'client-replay-retention-bound',
+      fromServerSeq: 0,
+      reason: 'manual',
+    });
+    const replayResponse = captured.envelopes.slice(replayStart);
+    expect(replayResponse[0]?.kind).toBe('snapshot');
+    expect(replayResponse.slice(1)).toHaveLength(expectedTailCount);
   });
 });
