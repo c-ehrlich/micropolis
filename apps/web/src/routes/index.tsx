@@ -2,6 +2,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  resolveMicropolisSoundTokenForToolAck,
+  resolveMicropolisSoundTokenForToolRejectReason,
+  resolveMicropolisSoundTokensForMessageId,
   SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from '../game/audio/micropolis-soundboard.ts';
@@ -20,20 +23,37 @@ import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
   PLAYABLE_SCENARIO_CHOICES,
+  type PlayableDisasterChoiceId,
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
+import type { CoreHost } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
 const MAP_TILE_SIZE = 6;
-const SURVIVING_GAMEPLAY_ROUTE_PATH = '/';
-const DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN = [
-  'apps/web/src/game/core-host.ts',
-  'apps/web/src/game/runtime/protocol.ts',
-] as const;
+
+/**
+ * Triggers one playable-route manual disaster control click and returns status text.
+ * Mirrors Disasters menu entrypoint ownership in `ref/micropolis/res/whead.tcl`,
+ * with runtime disaster handling in `ref/micropolis/src/sim/s_disast.c` and
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Parity note: this keeps route `/` disaster controls host-agnostic by delegating
+ * to the structural host capability adapter instead of concrete host classes.
+ */
+export function triggerRouteDisasterControl(
+  host: CoreHost,
+  disasterId: PlayableDisasterChoiceId,
+  disasterLabel: string,
+): string {
+  if (triggerPlayableRuntimeDisaster(host, disasterId)) {
+    return `${disasterLabel}.`;
+  }
+
+  return 'Disaster trigger is unavailable on this host.';
+}
 
 /**
  * Primary Authoritative Runtime gameplay route rendered at `/`.
@@ -51,12 +71,7 @@ function HomePage() {
         padding: 16,
       }}
     >
-      <h1 style={{ fontSize: 20, margin: 0 }}>City Runtime</h1>
-      <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 11 }}>
-        Bridge V1 contract lock: surviving gameplay route is `{SURVIVING_GAMEPLAY_ROUTE_PATH}`.
-        Delete duplicate protocol surfaces after bridge-contract port:{' '}
-        {DUPLICATE_PROTOCOL_SURFACE_DELETE_PLAN.join(', ')}.
-      </div>
+      <h1 style={{ fontSize: 20, margin: 0 }}>Micropolis</h1>
       <RuntimePanel />
     </main>
   );
@@ -101,37 +116,81 @@ function RuntimePanel() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
     PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
   );
+  const [hasStartedPlayableSession, setHasStartedPlayableSession] = useState(false);
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
   const [soundStatus, setSoundStatus] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const pendingToolAckSoundByCommandId = useRef<Map<string, string>>(new Map());
   const commandCounter = useRef(1);
 
   useEffect(() => {
+    const pendingToolAckSoundTokensByCommandId = pendingToolAckSoundByCommandId.current;
     const unsubscribe = runtime.subscribe((event) => {
       stateCommitDispatcher.queue(event.state);
 
-      if (event.envelope?.kind !== 'patch') {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined) {
         return;
       }
 
-      const savePayload = readCityExportPayload(event.envelope.payload);
-      if (savePayload === null) {
+      if (runtimeEnvelope.kind === 'ack') {
+        const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
+        if (toolSoundToken !== undefined) {
+          pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
+          void playMicropolisSoundPreview({
+            token: toolSoundToken,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
         return;
       }
 
-      downloadCityBytes(savePayload.fileName, savePayload.cityBytes);
-      setSaveFileName(savePayload.fileName);
-      setLastSaveStatus(`Saved ${savePayload.cityName} -> ${savePayload.fileName}`);
-      setCityIoError('');
+      if (runtimeEnvelope.kind === 'reject') {
+        pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
+        const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
+          runtimeEnvelope.reason,
+        );
+        if (rejectSoundToken !== null) {
+          void playMicropolisSoundPreview({
+            token: rejectSoundToken,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
+        return;
+      }
+
+      if (runtimeEnvelope.kind !== 'patch') {
+        return;
+      }
+
+      for (const messageId of readMessageIdsFromPatchPayload(runtimeEnvelope.payload)) {
+        const tokens = resolveMicropolisSoundTokensForMessageId(messageId);
+        for (const token of tokens) {
+          void playMicropolisSoundPreview({
+            token,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
+      }
+
+      const savePayload = readCityExportPayload(runtimeEnvelope.payload);
+      if (savePayload !== null) {
+        downloadCityBytes(savePayload.fileName, savePayload.cityBytes);
+        setSaveFileName(savePayload.fileName);
+        setLastSaveStatus(`Saved ${savePayload.cityName} -> ${savePayload.fileName}`);
+        setCityIoError('');
+      }
     });
 
     runtime.connect();
     return () => {
       unsubscribe();
+      pendingToolAckSoundTokensByCommandId.clear();
       stateCommitDispatcher.dispose();
       runtime.disconnect();
     };
@@ -147,6 +206,32 @@ function RuntimePanel() {
       soundPreviewAudioElementsByPath.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (hasStartedPlayableSession) {
+      return;
+    }
+
+    const canvas = scenarioIntroCanvasRef.current;
+    if (canvas === null) {
+      return;
+    }
+
+    const context = canvas.getContext('2d');
+    if (context === null) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#f8fafc';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.fillStyle = '#0f172a';
+    context.font = '24px monospace';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText('Micropolis', canvas.width / 2, canvas.height / 2);
+  }, [hasStartedPlayableSession]);
 
   const controlsDisabled = state.phase !== 'ready';
   const reconnectDisabled =
@@ -165,9 +250,6 @@ function RuntimePanel() {
         gap: 12,
       }}
     >
-      <h2 style={{ fontFamily: 'monospace', fontSize: 16, margin: 0 }}>
-        Authoritative Runtime Runtime
-      </h2>
       <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
         phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
       </div>
@@ -242,24 +324,49 @@ function RuntimePanel() {
             })}
           </div>
 
-          <MapCanvas
-            mapState={state.mapState}
-            onTileClick={(x, y) => {
-              if (controlsDisabled) {
-                return;
-              }
+          {hasStartedPlayableSession ? (
+            <MapCanvas
+              mapState={state.mapState}
+              onTileClick={(x, y) => {
+                if (controlsDisabled) {
+                  return;
+                }
 
-              runtime.sendCommand(nextCommandId(commandCounter, 'tool'), {
-                kind: 'tool',
-                tool: activeTool,
-                x,
-                y,
-              });
-            }}
-            pendingTools={state.pendingTools}
-            realtimeObjects={state.realtimeState.objects}
-            tileSize={MAP_TILE_SIZE}
-          />
+                const commandId = nextCommandId(commandCounter, 'tool');
+                const toolAckSoundToken = resolveMicropolisSoundTokenForToolAck(activeTool);
+                if (toolAckSoundToken !== null) {
+                  pendingToolAckSoundByCommandId.current.set(commandId, toolAckSoundToken);
+                }
+
+                runtime.sendCommand(commandId, {
+                  kind: 'tool',
+                  tool: activeTool,
+                  x,
+                  y,
+                });
+              }}
+              pendingTools={state.pendingTools}
+              realtimeObjects={state.realtimeState.objects}
+              tileSize={MAP_TILE_SIZE}
+            />
+          ) : (
+            <canvas
+              aria-label="Scenario start prompt"
+              height={480}
+              ref={scenarioIntroCanvasRef}
+              role="img"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: 6,
+                display: 'block',
+                maxWidth: '100%',
+              }}
+              width={640}
+            >
+              Select a scenario to start.
+            </canvas>
+          )}
         </div>
 
         <aside
@@ -332,23 +439,13 @@ function RuntimePanel() {
 
           <section style={{ display: 'grid', gap: 6 }}>
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
-            <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
-              Mirrors the Micropolis Disasters menu (`Monster`, `Fire`, `Flood`, `Meltdown`,
-              `Tornado`, `Earthquake`) from `ref/micropolis/res/whead.tcl`.
-            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {PLAYABLE_DISASTER_CHOICES.map((choice) => (
                 <button
                   key={choice.id}
                   disabled={controlsDisabled}
                   onClick={() => {
-                    const triggered = triggerPlayableRuntimeDisaster(host, choice.id);
-                    if (triggered) {
-                      setDisasterStatus(`${choice.label}.`);
-                      return;
-                    }
-
-                    setDisasterStatus('Disaster trigger is unavailable on this host.');
+                    setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                   }}
                   type="button"
                 >
@@ -367,6 +464,7 @@ function RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
+                  setHasStartedPlayableSession(true);
                   setSaveFileName('newcity.cty');
                   runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
                     kind: 'city-lifecycle',
@@ -424,6 +522,7 @@ function RuntimePanel() {
 
                 try {
                   const cityBytes = new Uint8Array(await file.arrayBuffer());
+                  setHasStartedPlayableSession(true);
                   setSaveFileName(file.name);
                   runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
                     kind: 'city-io',
@@ -461,6 +560,7 @@ function RuntimePanel() {
               <button
                 disabled={controlsDisabled}
                 onClick={() => {
+                  setHasStartedPlayableSession(true);
                   const scenario = PLAYABLE_SCENARIO_CHOICES.find(
                     (entry) => entry.id === selectedScenarioId,
                   );
@@ -591,6 +691,44 @@ async function playMicropolisSoundPreview({
 
   audioElement.currentTime = 0;
   await audioElement.play();
+}
+
+/**
+ * Reads canonical HUD message ids from one patch payload for runtime SFX mapping.
+ * Mirrors `SendMes` / `SendMesAt` message-id ownership in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: prefers canonical `messageDeltas` and falls back to legacy
+ * `messages` compatibility arrays to avoid duplicate playback.
+ */
+function readMessageIdsFromPatchPayload(payload: unknown): readonly number[] {
+  if (payload === null || typeof payload !== 'object') {
+    return [];
+  }
+
+  const candidate = payload as {
+    messageDeltas?: unknown;
+    messages?: unknown;
+  };
+  const entries = Array.isArray(candidate.messageDeltas)
+    ? candidate.messageDeltas
+    : Array.isArray(candidate.messages)
+      ? candidate.messages
+      : null;
+  if (entries === null) {
+    return [];
+  }
+
+  const messageIds: number[] = [];
+  for (const entry of entries) {
+    if (entry === null || typeof entry !== 'object') {
+      continue;
+    }
+    const id = (entry as { id?: unknown }).id;
+    if (typeof id === 'number' && Number.isFinite(id) && Number.isInteger(id)) {
+      messageIds.push(id);
+    }
+  }
+  return messageIds;
 }
 
 /**

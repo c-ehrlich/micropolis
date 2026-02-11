@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type SimContext,
+  type SimState,
+  Tile,
+  TileFlag,
+  World,
+} from '../../../../../packages/sim-core/src/index.ts';
+import { sendMes } from '../../../../../packages/sim-core/src/systems/messages.ts';
+import {
   DEFAULT_CORE_VERSION,
   DEFAULT_LOCAL_CLIENT_ID,
   DEFAULT_LOCAL_ROOM_ID,
@@ -14,6 +22,7 @@ import {
   enqueuePendingToolCommandVisual,
   reduceHostEnvelope,
 } from './reducer.ts';
+import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 /**
  * Builds a valid accepted hello envelope for deterministic Playable Runtime runtime tests.
@@ -689,6 +698,128 @@ describe('reduceHostEnvelope', () => {
     expect(afterPatch.state.realtimeState.objects).toEqual([
       { name: 'TRA', type: 1, x: 80, y: 96, frame: 3 },
     ]);
+  });
+
+  it('consumes sim-core envelope-host snapshot/patch payload schemas without reducer regressions', () => {
+    const host = new SimCoreEnvelopeHost();
+    const envelopes: HostEnvelope[] = [];
+    const connection = host.connect((envelope) => {
+      envelopes.push(envelope);
+    });
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: SimState;
+        simContext: SimContext;
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+    const wireX = 22;
+    const wireY = 22;
+    const mapIndex = wireX * World.WORLD_Y + wireY;
+
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected authoritative map layer to be Uint16Array');
+      }
+      mapLayer[mapIndex] = Tile.ROADS | TileFlag.BULLBIT | TileFlag.BURNBIT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    connection.send({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+    });
+    connection.send({
+      kind: 'command',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      commandId: 'cmd-wire-schema',
+      command: {
+        kind: 'tool',
+        tool: 'wire',
+        x: wireX,
+        y: wireY,
+      },
+    });
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, 14),
+    ).toBe(true);
+    hostInternals.authorityState.simContext.hooks.generateCopter();
+    connection.send({
+      kind: 'command',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      commandId: 'cmd-pause-schema',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const wireAck = envelopes.find(
+      (envelope): envelope is Extract<HostEnvelope, { kind: 'ack' }> =>
+        envelope.kind === 'ack' && envelope.commandId === 'cmd-wire-schema',
+    );
+    expect(wireAck).toBeDefined();
+    const wirePatch = envelopes.find((envelope) => {
+      return envelope.kind === 'patch' && envelope.serverSeq === (wireAck?.serverSeq ?? -1) + 1;
+    });
+    if (wirePatch === undefined || wirePatch.kind !== 'patch') {
+      throw new Error('expected patch envelope immediately after wire ack');
+    }
+    const wireMapPayload = wirePatch.payload.map;
+    if (wireMapPayload === undefined || !('tileWordDeltas' in wireMapPayload)) {
+      throw new Error('expected canonical map tileWordDeltas payload after wire command');
+    }
+    const wireDelta = wireMapPayload.tileWordDeltas.find(
+      (delta) => delta.x === wireX && delta.y === wireY,
+    );
+    expect(wireDelta).toBeDefined();
+    expect(wireMapPayload.redrawPlan).toMatchObject({
+      reason: 'patch-rects',
+      fullRedraw: false,
+    });
+    const pauseAck = envelopes.find(
+      (envelope): envelope is Extract<HostEnvelope, { kind: 'ack' }> =>
+        envelope.kind === 'ack' && envelope.commandId === 'cmd-pause-schema',
+    );
+    expect(pauseAck).toBeDefined();
+    const pausePatch = envelopes.find((envelope) => {
+      return envelope.kind === 'patch' && envelope.serverSeq === (pauseAck?.serverSeq ?? -1) + 1;
+    });
+    if (pausePatch === undefined || pausePatch.kind !== 'patch') {
+      throw new Error('expected patch envelope immediately after pause ack');
+    }
+    const pauseRealtime = pausePatch.payload.realtime;
+    expect(pauseRealtime).toBeDefined();
+    expect(Array.isArray(pauseRealtime?.objects)).toBe(true);
+    expect(Array.isArray(pauseRealtime?.deltas)).toBe(true);
+
+    let reducedState = createInitialWebRuntimeState();
+    for (const envelope of envelopes) {
+      const reduction = reduceHostEnvelope(reducedState, envelope);
+      expect(reduction.outcome).toBe('applied');
+      reducedState = reduction.state;
+    }
+
+    const rowMajorIndex = wireY * reducedState.mapState.width + wireX;
+    expect(reducedState.handshakeComplete).toBe(true);
+    expect(reducedState.mapState.hasSnapshot).toBe(true);
+    expect(reducedState.mapState.width).toBe(World.WORLD_X);
+    expect(reducedState.mapState.height).toBe(World.WORLD_Y);
+    expect(reducedState.mapState.tiles[rowMajorIndex]).toBe(wireDelta?.tileWord);
+    expect(reducedState.hudState.messages.some((message) => message.id === 14)).toBe(true);
+    expect(reducedState.realtimeState.objects).toEqual(pauseRealtime?.objects ?? []);
   });
 
   it('keeps authoritative projection state unchanged when enqueueing pending tool visuals', () => {
