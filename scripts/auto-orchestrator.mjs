@@ -48,6 +48,40 @@ function today() {
 }
 
 /**
+ * Writes one or more log lines with an ISO timestamp prefix.
+ *
+ * Not from Micropolis C; this standardizes orchestrator diagnostics.
+ */
+function writeTimestampedMessage(stream, message) {
+  const text = String(message).replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+  const hasTrailingNewline = text.endsWith('\n');
+  const renderedLines = hasTrailingNewline ? lines.slice(0, -1) : lines;
+
+  for (const line of renderedLines) {
+    stream.write(`[${new Date().toISOString()}] ${line}\n`);
+  }
+}
+
+/**
+ * Writes timestamped output to stdout.
+ *
+ * Not from Micropolis C; this emits orchestrator progress events.
+ */
+function writeStdoutMessage(message) {
+  writeTimestampedMessage(process.stdout, message);
+}
+
+/**
+ * Writes timestamped output to stderr.
+ *
+ * Not from Micropolis C; this emits orchestrator failure diagnostics.
+ */
+function writeStderrMessage(message) {
+  writeTimestampedMessage(process.stderr, message);
+}
+
+/**
  * Sanitizes dynamic values for safe use in log file names.
  *
  * Not from Micropolis C; this prevents `/` and other path/control characters
@@ -632,7 +666,7 @@ async function runCodexExec(cwd, prompt, logPath, model) {
    * human-readable terminal progress.
    */
   function writeProgressLine(line) {
-    process.stdout.write(`${line}\n\n`);
+    writeStdoutMessage(`${line}\n\n`);
   }
 
   /**
@@ -782,7 +816,7 @@ async function runChecks(repoRoot, checks) {
   const failures = [];
 
   for (const command of checks) {
-    process.stdout.write(`\n[checks] ${command}\n`);
+    writeStdoutMessage(`\n[checks] ${command}\n`);
     // eslint-disable-next-line no-await-in-loop
     const result = await runShell(command, repoRoot);
     if (result.code !== 0) {
@@ -791,9 +825,9 @@ async function runChecks(repoRoot, checks) {
         code: result.code,
         output: `${result.stdout}${result.stderr}`,
       });
-      process.stdout.write(`[checks] failed: ${command}\n`);
+      writeStdoutMessage(`[checks] failed: ${command}\n`);
     } else {
-      process.stdout.write(`[checks] passed: ${command}\n`);
+      writeStdoutMessage(`[checks] passed: ${command}\n`);
     }
   }
 
@@ -997,7 +1031,7 @@ function buildDriftReport(repoRoot, packages) {
  * Not from Micropolis C; this is operator visibility for checklist work.
  */
 function printQueue(repoRoot, packages) {
-  process.stdout.write(`Plan queue status (${PLAN_PATH}):\n`);
+  writeStdoutMessage(`Plan queue status (${PLAN_PATH}):\n`);
   for (const pkg of packages) {
     const statusRoot = resolveStatusRepoRoot(repoRoot, pkg);
     const status = getPackagePlanStatus(statusRoot, pkg);
@@ -1005,7 +1039,7 @@ function printQueue(repoRoot, packages) {
       ? `${status.nextTask.id ?? 'task'} @ line ${status.nextTask.lineNumber}: ${status.nextTask.text}`
       : 'DONE';
 
-    process.stdout.write(
+    writeStdoutMessage(
       `- ${pkg.id} (${pkg.stageLabel}): ${status.tasks.length} remaining; next=${nextLabel}\n`,
     );
   }
@@ -1018,17 +1052,17 @@ function printQueue(repoRoot, packages) {
  */
 function printDriftReport(rows) {
   let issueCount = 0;
-  process.stdout.write('Plan drift audit:\n');
+  writeStdoutMessage('Plan drift audit:\n');
   for (const row of rows) {
-    process.stdout.write(
+    writeStdoutMessage(
       `- ${row.stageId} (${row.stageLabel}): ${row.uncheckedCount} unchecked, ${row.checkedCount}/${row.totalTasks} checked\n`,
     );
     for (const issue of row.issues) {
       issueCount += 1;
-      process.stdout.write(`  ! ${issue}\n`);
+      writeStdoutMessage(`  ! ${issue}\n`);
     }
   }
-  process.stdout.write(`Total drift issues: ${issueCount}\n`);
+  writeStdoutMessage(`Total drift issues: ${issueCount}\n`);
   return issueCount;
 }
 
@@ -1196,13 +1230,13 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
   const wasTaskUncheckedAtStart = isTaskStillUnchecked(worktreeRoot, pkg, task);
 
   if (isFileReferenceTask(worktreeRoot, task)) {
-    process.stdout.write(
+    writeStdoutMessage(
       `[auto] ${pkg.id} ${taskId}: file-reference checklist task detected; checking plan item directly.\n`,
     );
 
     const marked = markTaskCheckedAtLine(worktreeRoot, pkg, task);
     if (!marked) {
-      process.stdout.write(
+      writeStdoutMessage(
         `[auto] ${pkg.id} ${taskId}: could not mark via direct line update; falling back to Codex.\n`,
       );
     } else {
@@ -1254,7 +1288,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
       logDir,
       `${pkg.id}-${logTaskId}-${timestamp}-attempt${attempt}.jsonl`,
     );
-    process.stdout.write(`\n[codex] ${pkg.id} ${taskId} attempt ${attempt}\n`);
+    writeStdoutMessage(`\n[codex] ${pkg.id} ${taskId} attempt ${attempt}\n`);
 
     // eslint-disable-next-line no-await-in-loop
     const codexResult = await runCodexExec(worktreeRoot, prompt, logPath, args.model);
@@ -1268,7 +1302,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
 
     if (codexResult.code !== 0 && changedFiles.length === 0) {
       const reason = `Codex exited with code ${codexResult.code} and produced no file changes.`;
-      process.stdout.write(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
+      writeStdoutMessage(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
       prompt = buildRepairPrompt(
         pkg,
         task,
@@ -1279,7 +1313,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
 
     if (changedFiles.length === 0) {
       const reason = 'No file changes detected.';
-      process.stdout.write(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
+      writeStdoutMessage(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
       prompt = buildRepairPrompt(
         pkg,
         task,
@@ -1290,7 +1324,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
 
     if (isTaskStillUnchecked(worktreeRoot, pkg, task)) {
       const reason = 'Target task is still unchecked in PLAN.md.';
-      process.stdout.write(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
+      writeStdoutMessage(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
       prompt = buildRepairPrompt(
         pkg,
         task,
@@ -1301,7 +1335,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
 
     if (wasTaskUncheckedAtStart && !changedFiles.includes(pkg.planPath)) {
       const reason = `${pkg.planPath} was not updated while this task started unchecked.`;
-      process.stdout.write(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
+      writeStdoutMessage(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
       prompt = buildRepairPrompt(
         pkg,
         task,
@@ -1311,14 +1345,14 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
     }
 
     if (codexExitWarning) {
-      process.stdout.write(`[warn] ${codexExitWarning}\n`);
+      writeStdoutMessage(`[warn] ${codexExitWarning}\n`);
     }
 
     // eslint-disable-next-line no-await-in-loop
     const checkFailures = await runChecks(worktreeRoot, args.checks);
     if (checkFailures.length > 0) {
       const failedCheckNames = checkFailures.map((failure) => failure.command).join(', ');
-      process.stdout.write(
+      writeStdoutMessage(
         `[retry] ${pkg.id} ${taskId} attempt ${attempt}: checks failed (${failedCheckNames})\n`,
       );
       const summary = checkFailures
@@ -1335,7 +1369,7 @@ async function runTaskIteration(mainRepoRoot, worktreeRoot, pkg, task, args, log
     const commitMessage = await commitChanges(worktreeRoot, pkg, task, args.dryRun);
     if (commitMessage === null) {
       const reason = 'Nothing to commit after checks passed.';
-      process.stdout.write(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
+      writeStdoutMessage(`[retry] ${pkg.id} ${taskId} attempt ${attempt}: ${reason}\n`);
       prompt = buildRepairPrompt(
         pkg,
         task,
@@ -1378,7 +1412,7 @@ async function syncPendingRemote(mainRepoRoot, packages, args, state) {
     return;
   }
 
-  process.stdout.write(
+  writeStdoutMessage(
     `\n[remote-sync] Retrying ${pendingEntries.length} pending remote sync item(s).\n`,
   );
 
@@ -1407,7 +1441,7 @@ async function syncPendingRemote(mainRepoRoot, packages, args, state) {
 
     if (syncResult.remoteSyncErrors.length === 0) {
       delete state.pendingRemote[pkg.id];
-      process.stdout.write(`[remote-sync] ${pkg.id} synchronized.\n`);
+      writeStdoutMessage(`[remote-sync] ${pkg.id} synchronized.\n`);
       continue;
     }
 
@@ -1422,11 +1456,11 @@ async function syncPendingRemote(mainRepoRoot, packages, args, state) {
       updatedAt: new Date().toISOString(),
       errors: syncResult.remoteSyncErrors,
     };
-    process.stdout.write(
+    writeStdoutMessage(
       `[remote-sync] ${pkg.id} still pending (${syncResult.remoteSyncErrors.length} issue(s)).\n`,
     );
     for (const warning of syncResult.remoteSyncErrors) {
-      process.stdout.write(`[warn] ${warning}\n`);
+      writeStdoutMessage(`[warn] ${warning}\n`);
     }
   }
 }
@@ -1451,13 +1485,13 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
 
   while (iterations < args.maxIterations) {
     if (existsSync(stopPath)) {
-      process.stdout.write(`\nStop file found at ${stopPath}; exiting.\n`);
+      writeStdoutMessage(`\nStop file found at ${stopPath}; exiting.\n`);
       break;
     }
 
     const elapsedMinutes = (Date.now() - startedAt) / 60000;
     if (elapsedMinutes >= args.maxRuntimeMinutes) {
-      process.stdout.write(`\nReached runtime limit (${args.maxRuntimeMinutes} min); exiting.\n`);
+      writeStdoutMessage(`\nReached runtime limit (${args.maxRuntimeMinutes} min); exiting.\n`);
       break;
     }
 
@@ -1474,12 +1508,12 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
     const pick = pickNextCandidate(packageStatuses);
 
     if (!pick) {
-      process.stdout.write('\nNo actionable plan tasks remaining.\n');
+      writeStdoutMessage('\nNo actionable plan tasks remaining.\n');
       break;
     }
 
     const selected = packageStatuses[pick.index];
-    process.stdout.write(
+    writeStdoutMessage(
       `\n[queue] Selected ${selected.pkg.id} (${selected.pkg.stageLabel}): ${selected.status.nextTask.id ?? 'task'} :: ${selected.status.nextTask.text}\n`,
     );
 
@@ -1514,13 +1548,13 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       } else {
         delete state.pendingRemote[selected.pkg.id];
       }
-      process.stdout.write(
+      writeStdoutMessage(
         `[done] ${selected.pkg.id} ${selected.status.nextTask.id ?? 'task'} committed${
           result.prUrl ? ` | PR: ${result.prUrl}` : ''
         }\n`,
       );
       for (const warning of result.remoteSyncErrors) {
-        process.stdout.write(`[warn] ${warning}\n`);
+        writeStdoutMessage(`[warn] ${warning}\n`);
       }
 
       if (args.once) {
@@ -1531,7 +1565,7 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       const key = taskKey(selected.pkg, selected.status.nextTask);
       const failureCount = Number(state.failures[key] ?? 0) + 1;
       state.failures[key] = failureCount;
-      process.stdout.write(
+      writeStdoutMessage(
         `[fail] ${selected.pkg.id} ${selected.status.nextTask.id ?? 'task'} failed after ${args.maxRetriesPerTask} attempt(s). failureCount=${failureCount}\n`,
       );
     }
@@ -1543,19 +1577,19 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
   await syncPendingRemote(mainRepoRoot, packages, args, state);
   writeState(statePath, state);
 
-  process.stdout.write('\nOrchestrator summary:\n');
+  writeStdoutMessage('\nOrchestrator summary:\n');
   for (const pkg of packages) {
     const prUrl = state.prUrls[pkg.id] ?? null;
-    process.stdout.write(`- ${pkg.id}: ${prUrl ? `PR ${prUrl}` : 'no PR recorded yet'}\n`);
+    writeStdoutMessage(`- ${pkg.id}: ${prUrl ? `PR ${prUrl}` : 'no PR recorded yet'}\n`);
   }
 
   const pendingRemoteEntries = Object.values(state.pendingRemote ?? {});
   if (pendingRemoteEntries.length > 0) {
-    process.stdout.write('\nPending remote sync:\n');
+    writeStdoutMessage('\nPending remote sync:\n');
     for (const entry of pendingRemoteEntries) {
       const lastError =
         Array.isArray(entry.errors) && entry.errors.length > 0 ? entry.errors[0] : null;
-      process.stdout.write(
+      writeStdoutMessage(
         `- ${entry.package}: branch=${entry.branch} updated=${entry.updatedAt}${
           lastError ? ` | lastError=${lastError}` : ''
         }\n`,
@@ -1595,7 +1629,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(
+  writeStderrMessage(
     `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
   );
   process.exit(1);

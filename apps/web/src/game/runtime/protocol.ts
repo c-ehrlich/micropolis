@@ -570,11 +570,23 @@ export interface HostSequencingFields {
 }
 
 /**
+ * Shared authoritative sound-delta section for sequenced host envelopes.
+ * Mirrors unified sound-intent dispatch through `MakeSound` / `MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: this schema is transport-level metadata so any sequenced
+ * envelope kind can carry sound deltas without coupling sounds to patch-only
+ * payloads.
+ */
+export interface HostSequencedSoundDeltaSchema {
+  soundDeltas?: readonly HostSoundDeltaPayload[];
+}
+
+/**
  * Host acknowledgement for a previously submitted command.
  * Mirrors command completion signaling around `sim` command dispatch in
  * `ref/micropolis/src/sim/w_sim.c`, adapted to bridge envelopes.
  */
-export interface HostAckEnvelope extends HostSequencingFields {
+export interface HostAckEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'ack';
   commandId: string;
 }
@@ -584,7 +596,7 @@ export interface HostAckEnvelope extends HostSequencingFields {
  * Mirrors expected-denial split from Micropolis command processing in
  * `ref/micropolis/src/sim/w_sim.c`, adapted to explicit reject envelopes.
  */
-export interface HostRejectEnvelope extends HostSequencingFields {
+export interface HostRejectEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'reject';
   commandId: string;
   reason: string;
@@ -897,7 +909,7 @@ export interface HostPatchPayload extends Record<string, unknown> {
  * Mirrors post-command/update propagation intent from
  * `ref/micropolis/src/sim/w_update.c`, including Playable Runtime map tile-word deltas.
  */
-export interface HostPatchEnvelope extends HostSequencingFields {
+export interface HostPatchEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'patch';
   payload: HostPatchPayload;
 }
@@ -907,7 +919,7 @@ export interface HostPatchEnvelope extends HostSequencingFields {
  * Mirrors full city state refresh intent in Micropolis update loops from
  * `ref/micropolis/src/sim/w_update.c`, adapted to bridge snapshots.
  */
-export interface HostSnapshotEnvelope extends HostSequencingFields {
+export interface HostSnapshotEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'snapshot';
   payload: HostSnapshotPayload;
 }
@@ -917,7 +929,7 @@ export interface HostSnapshotEnvelope extends HostSequencingFields {
  * Mirrors recover/resync intent discussed in bridge plans, aligned with
  * `ref/micropolis/src/sim/w_sim.c` deterministic command processing order.
  */
-export interface HostResyncEnvelope extends HostSequencingFields {
+export interface HostResyncEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'resync';
   reason: string;
 }
@@ -926,7 +938,7 @@ export interface HostResyncEnvelope extends HostSequencingFields {
  * Host unexpected-fault envelope.
  * Mirrors fatal/runtime error surfacing patterns in `ref/micropolis/src/sim/w_sim.c`.
  */
-export interface HostErrorEnvelope extends HostSequencingFields {
+export interface HostErrorEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'error';
   message: string;
 }

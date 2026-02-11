@@ -4,6 +4,12 @@ import {
   fromCanonicalBridgeToolName,
   getPlayableBridgeCommandType,
   getPlayableToolSpec,
+  type HostAckEnvelope,
+  type HostErrorEnvelope,
+  type HostPatchEnvelope,
+  type HostRejectEnvelope,
+  type HostResyncEnvelope,
+  type HostSnapshotEnvelope,
   type HostSoundDeltaPayload,
   isPlayableBridgeCommandType,
   isPlayableScenarioCommand,
@@ -207,5 +213,78 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
       channel: 'edit',
       soundSpec: 'UhUh',
     });
+  });
+
+  it('supports shared sound deltas on every sequenced host envelope kind', () => {
+    const soundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+    ];
+
+    const ackEnvelope: HostAckEnvelope = {
+      kind: 'ack',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 100,
+      commandId: 'cmd-ack',
+      soundDeltas,
+    };
+    const rejectEnvelope: HostRejectEnvelope = {
+      kind: 'reject',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 101,
+      commandId: 'cmd-reject',
+      reason: 'no-funds',
+      soundDeltas,
+    };
+    const patchEnvelope: HostPatchEnvelope = {
+      kind: 'patch',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 102,
+      payload: {},
+      soundDeltas,
+    };
+    const snapshotEnvelope: HostSnapshotEnvelope = {
+      kind: 'snapshot',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 103,
+      payload: {},
+      soundDeltas,
+    };
+    const resyncEnvelope: HostResyncEnvelope = {
+      kind: 'resync',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 104,
+      reason: 'sequence-gap',
+      soundDeltas,
+    };
+    const errorEnvelope: HostErrorEnvelope = {
+      kind: 'error',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 105,
+      message: 'fatal',
+      soundDeltas,
+    };
+
+    expect(ackEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(rejectEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(patchEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(snapshotEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(resyncEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(errorEnvelope.soundDeltas).toEqual(soundDeltas);
   });
 });
