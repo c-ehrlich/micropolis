@@ -140,7 +140,7 @@ function RuntimePanel() {
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
-  const [disasterStatus, setDisasterStatus] = useState<string>('');
+  const [_disasterStatus, setDisasterStatus] = useState<string>('');
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
@@ -235,15 +235,7 @@ function RuntimePanel() {
   const activeToolSpec = getPlayableToolSpec(activeTool);
   const isSimulationRunning = state.hudState.speed > 0;
   const runtimePhaseStatus = formatRuntimePhaseStatus(state.phase);
-  const topStatusLine =
-    cityIoError !== ''
-      ? cityIoError
-      : disasterStatus !== ''
-        ? disasterStatus
-        : lastSaveStatus !== ''
-          ? lastSaveStatus
-          : runtimePhaseStatus;
-  const topStatusColor = cityIoError !== '' ? '#fca5a5' : '#cbd5e1';
+  const topStatusLine = `${runtimePhaseStatus} phase=${state.phase} seq=${state.lastAppliedServerSeq} tick=${state.lastAppliedTick}`;
 
   return (
     <section
@@ -287,10 +279,11 @@ function RuntimePanel() {
       <header
         ref={menubarRef}
         style={{
-          alignItems: 'stretch',
+          alignItems: 'center',
           background: 'rgba(226, 232, 240, 0.96)',
           borderBottom: '1px solid rgba(15, 23, 42, 0.55)',
           display: 'flex',
+          flexWrap: 'wrap',
           gap: 8,
           left: 0,
           minHeight: 34,
@@ -315,9 +308,8 @@ function RuntimePanel() {
           }}
         >
           <span>Micropolis</span>
-          <span style={{ color: '#64748b', fontSize: 11 }}>HUD</span>
         </div>
-        <div style={{ display: 'flex', gap: 2 }}>
+        <div style={{ alignItems: 'center', display: 'flex', gap: 2 }}>
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => {
@@ -550,17 +542,15 @@ function RuntimePanel() {
         </div>
         <div
           style={{
-            color: topStatusColor,
-            display: 'grid',
+            alignItems: 'center',
+            color: '#334155',
+            display: 'flex',
             fontFamily: 'monospace',
             fontSize: 11,
             marginLeft: 'auto',
-            textAlign: 'right',
+            minHeight: 24,
           }}
         >
-          <span style={{ color: '#475569' }}>
-            phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
-          </span>
           <span>{topStatusLine}</span>
         </div>
       </header>
@@ -749,16 +739,7 @@ function RuntimePanel() {
           >
             Zoom
           </strong>
-          <div
-            ref={setMapCameraControlsContainer}
-            style={{
-              background: 'rgba(15, 23, 42, 0.78)',
-              border: '1px solid rgba(148, 163, 184, 0.55)',
-              borderRadius: 4,
-              minHeight: 70,
-              padding: 6,
-            }}
-          />
+          <div ref={setMapCameraControlsContainer} />
         </section>
       </section>
 
