@@ -48,6 +48,8 @@ const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
     return [basenameMatch?.[1] ?? modulePath, moduleUrl];
   }),
 );
+type TopMenubarSection = 'game' | 'disasters' | 'runtime';
+type GameDialogKind = 'save' | 'load' | 'scenario';
 
 /**
  * Triggers one playable-route manual disaster control click and returns status text.
@@ -139,8 +141,14 @@ function RuntimePanel() {
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
+  const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
+  const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
+  const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
+  const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
+  const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
   const [mapCameraControlsContainer, setMapCameraControlsContainer] =
     useState<HTMLDivElement | null>(null);
+  const menubarRef = useRef<HTMLElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const commandCounter = useRef(1);
 
@@ -183,6 +191,37 @@ function RuntimePanel() {
     };
   }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (openMenubarSection === null) {
+        return;
+      }
+      const menuRoot = menubarRef.current;
+      if (menuRoot === null) {
+        return;
+      }
+      if (event.target instanceof Node && menuRoot.contains(event.target)) {
+        return;
+      }
+      setOpenMenubarSection(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      setOpenMenubarSection(null);
+      setGameDialog(null);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenubarSection]);
+
   const controlsDisabled = state.phase !== 'ready';
   const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
   const reconnectDisabled =
@@ -195,6 +234,16 @@ function RuntimePanel() {
     state.phase === 'failed';
   const activeToolSpec = getPlayableToolSpec(activeTool);
   const isSimulationRunning = state.hudState.speed > 0;
+  const runtimePhaseStatus = formatRuntimePhaseStatus(state.phase);
+  const topStatusLine =
+    cityIoError !== ''
+      ? cityIoError
+      : disasterStatus !== ''
+        ? disasterStatus
+        : lastSaveStatus !== ''
+          ? lastSaveStatus
+          : runtimePhaseStatus;
+  const topStatusColor = cityIoError !== '' ? '#fca5a5' : '#cbd5e1';
 
   return (
     <section
@@ -235,6 +284,287 @@ function RuntimePanel() {
         />
       </div>
 
+      <header
+        ref={menubarRef}
+        style={{
+          alignItems: 'stretch',
+          background: 'rgba(226, 232, 240, 0.96)',
+          borderBottom: '1px solid rgba(15, 23, 42, 0.55)',
+          display: 'flex',
+          gap: 8,
+          left: 0,
+          minHeight: 34,
+          padding: '4px 8px',
+          pointerEvents: 'auto',
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div
+          style={{
+            alignItems: 'center',
+            color: '#0f172a',
+            display: 'flex',
+            fontFamily: 'monospace',
+            fontSize: 12,
+            fontWeight: 700,
+            gap: 6,
+            minWidth: 86,
+          }}
+        >
+          <span>Micropolis</span>
+          <span style={{ color: '#64748b', fontSize: 11 }}>HUD</span>
+        </div>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
+              }}
+              style={{
+                background: openMenubarSection === 'game' ? '#bfdbfe' : 'transparent',
+                border: '1px solid rgba(15, 23, 42, 0.35)',
+                borderRadius: 3,
+                color: '#0f172a',
+                fontFamily: 'monospace',
+                fontSize: 12,
+                minWidth: 72,
+                padding: '4px 8px',
+                textAlign: 'left',
+              }}
+              type="button"
+            >
+              Game
+            </button>
+            {openMenubarSection !== 'game' ? null : (
+              <section
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid rgba(15, 23, 42, 0.55)',
+                  borderRadius: 4,
+                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
+                  color: '#0f172a',
+                  display: 'grid',
+                  gap: 2,
+                  left: 0,
+                  minWidth: 204,
+                  padding: 6,
+                  position: 'absolute',
+                  top: 'calc(100% + 3px)',
+                  zIndex: 12,
+                }}
+              >
+                <button
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setHasStartedPlayableSession(true);
+                    setSaveFileName('newcity.cty');
+                    runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                      kind: 'city-lifecycle',
+                      action: 'new-city',
+                    });
+                    setOpenMenubarSection(null);
+                  }}
+                  style={{ textAlign: 'left' }}
+                  type="button"
+                >
+                  New
+                </button>
+                <button
+                  disabled={sessionControlsDisabled}
+                  onClick={() => {
+                    setSaveFileNameDraft(saveFileName);
+                    setGameDialog('save');
+                    setOpenMenubarSection(null);
+                  }}
+                  style={{ textAlign: 'left' }}
+                  type="button"
+                >
+                  Save...
+                </button>
+                <button
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setPendingLoadFile(null);
+                    setGameDialog('load');
+                    setOpenMenubarSection(null);
+                  }}
+                  style={{ textAlign: 'left' }}
+                  type="button"
+                >
+                  Load...
+                </button>
+                <button
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setGameDialog('scenario');
+                    setOpenMenubarSection(null);
+                  }}
+                  style={{ textAlign: 'left' }}
+                  type="button"
+                >
+                  Scenario...
+                </button>
+              </section>
+            )}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
+              }}
+              style={{
+                background: openMenubarSection === 'disasters' ? '#bfdbfe' : 'transparent',
+                border: '1px solid rgba(15, 23, 42, 0.35)',
+                borderRadius: 3,
+                color: '#0f172a',
+                fontFamily: 'monospace',
+                fontSize: 12,
+                minWidth: 84,
+                padding: '4px 8px',
+                textAlign: 'left',
+              }}
+              type="button"
+            >
+              Disasters
+            </button>
+            {openMenubarSection !== 'disasters' ? null : (
+              <section
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid rgba(15, 23, 42, 0.55)',
+                  borderRadius: 4,
+                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
+                  color: '#0f172a',
+                  display: 'grid',
+                  gap: 4,
+                  left: 0,
+                  minWidth: 204,
+                  padding: 6,
+                  position: 'absolute',
+                  top: 'calc(100% + 3px)',
+                  zIndex: 12,
+                }}
+              >
+                {PLAYABLE_DISASTER_CHOICES.map((choice) => (
+                  <button
+                    key={choice.id}
+                    disabled={sessionControlsDisabled}
+                    onClick={() => {
+                      setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
+                      setOpenMenubarSection(null);
+                    }}
+                    style={{ textAlign: 'left' }}
+                    type="button"
+                  >
+                    {choice.label.replace('Trigger ', '')}
+                  </button>
+                ))}
+              </section>
+            )}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
+              }}
+              style={{
+                background: openMenubarSection === 'runtime' ? '#bfdbfe' : 'transparent',
+                border: '1px solid rgba(15, 23, 42, 0.35)',
+                borderRadius: 3,
+                color: '#0f172a',
+                fontFamily: 'monospace',
+                fontSize: 12,
+                minWidth: 80,
+                padding: '4px 8px',
+                textAlign: 'left',
+              }}
+              type="button"
+            >
+              Runtime
+            </button>
+            {openMenubarSection !== 'runtime' ? null : (
+              <section
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid rgba(15, 23, 42, 0.55)',
+                  borderRadius: 4,
+                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
+                  color: '#0f172a',
+                  display: 'grid',
+                  gap: 6,
+                  left: 0,
+                  minWidth: 290,
+                  padding: 8,
+                  position: 'absolute',
+                  top: 'calc(100% + 3px)',
+                  zIndex: 12,
+                }}
+              >
+                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{runtimePhaseStatus}</div>
+                {state.lastRejectReason === null ? null : (
+                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
+                    {`last reject: ${state.lastRejectReason}`}
+                  </div>
+                )}
+                {cityIoError === '' ? null : (
+                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
+                    {cityIoError}
+                  </div>
+                )}
+                {lastSaveStatus === '' ? null : (
+                  <div style={{ color: '#166534', fontFamily: 'monospace', fontSize: 12 }}>
+                    {lastSaveStatus}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <button
+                    disabled={reconnectDisabled}
+                    onClick={() => {
+                      runtime.reconnect();
+                      setCityIoError('');
+                      setLastSaveStatus('');
+                    }}
+                    type="button"
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    disabled={resyncDisabled}
+                    onClick={() => {
+                      runtime.requestSnapshot('resync');
+                    }}
+                    type="button"
+                  >
+                    Resync Snapshot
+                  </button>
+                </div>
+              </section>
+            )}
+          </div>
+        </div>
+        <div
+          style={{
+            color: topStatusColor,
+            display: 'grid',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            marginLeft: 'auto',
+            textAlign: 'right',
+          }}
+        >
+          <span style={{ color: '#475569' }}>
+            phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
+          </span>
+          <span>{topStatusLine}</span>
+        </div>
+      </header>
+
       <section
         style={{
           backdropFilter: 'blur(3px)',
@@ -244,14 +574,14 @@ function RuntimePanel() {
           display: 'grid',
           gap: 6,
           left: 12,
-          maxHeight: 'calc(100vh - 220px)',
+          maxHeight: 'calc(100vh - 240px)',
           overflowY: 'auto',
           padding: 8,
           pointerEvents: 'auto',
           position: 'absolute',
           top: '50%',
           transform: 'translateY(-50%)',
-          width: 104,
+          width: 170,
           zIndex: 6,
         }}
       >
@@ -406,6 +736,30 @@ function RuntimePanel() {
             ))}
           </div>
         </section>
+        <section style={{ display: 'grid', gap: 4 }}>
+          <strong
+            style={{
+              color: '#f8fafc',
+              fontFamily: 'monospace',
+              fontSize: 11,
+              letterSpacing: 0.4,
+              textAlign: 'center',
+              textTransform: 'uppercase',
+            }}
+          >
+            Zoom
+          </strong>
+          <div
+            ref={setMapCameraControlsContainer}
+            style={{
+              background: 'rgba(15, 23, 42, 0.78)',
+              border: '1px solid rgba(148, 163, 184, 0.55)',
+              borderRadius: 4,
+              minHeight: 70,
+              padding: 6,
+            }}
+          />
+        </section>
       </section>
 
       <section
@@ -465,233 +819,220 @@ function RuntimePanel() {
         </strong>
         <MessageFeed messages={state.hudState.messages} />
       </section>
-
-      <aside
-        style={{
-          backdropFilter: 'blur(6px)',
-          background: 'rgba(15, 23, 42, 0.82)',
-          border: '1px solid rgba(148, 163, 184, 0.65)',
-          borderRadius: 8,
-          display: 'grid',
-          gap: 12,
-          maxHeight: 'calc(100vh - 24px)',
-          overflowY: 'auto',
-          padding: 10,
-          pointerEvents: 'auto',
-          position: 'absolute',
-          right: 12,
-          top: 12,
-          width: 'min(360px, calc(100vw - 24px))',
-          zIndex: 5,
+      <input
+        accept=".cty,application/octet-stream"
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const file = input.files?.[0] ?? null;
+          input.value = '';
+          setPendingLoadFile(file);
+          if (file !== null) {
+            setCityIoError('');
+          }
         }}
-      >
-        <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Micropolis</strong>
+        ref={loadInputRef}
+        style={{ display: 'none' }}
+        type="file"
+      />
 
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>Map View</strong>
-          <div
-            ref={setMapCameraControlsContainer}
+      {gameDialog === null ? null : (
+        <div
+          onClick={() => {
+            if (!isLoadingCityFile) {
+              setGameDialog(null);
+            }
+          }}
+          style={{
+            alignItems: 'center',
+            background: 'rgba(15, 23, 42, 0.62)',
+            display: 'flex',
+            inset: 0,
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            position: 'absolute',
+            zIndex: 15,
+          }}
+        >
+          <section
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
             style={{
-              background: 'rgba(15, 23, 42, 0.78)',
-              border: '1px solid rgba(148, 163, 184, 0.55)',
-              borderRadius: 4,
-              minHeight: 60,
-              padding: 8,
+              background: '#f8fafc',
+              border: '1px solid rgba(15, 23, 42, 0.45)',
+              borderRadius: 6,
+              color: '#0f172a',
+              display: 'grid',
+              gap: 10,
+              minWidth: 320,
+              padding: 12,
+              width: 'min(420px, calc(100vw - 24px))',
             }}
-          />
-        </section>
-
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>City</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <button
-              disabled={controlsDisabled}
-              onClick={() => {
-                setHasStartedPlayableSession(true);
-                setSaveFileName('newcity.cty');
-                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                  kind: 'city-lifecycle',
-                  action: 'new-city',
-                });
-              }}
-              type="button"
-            >
-              New City
-            </button>
-            <button
-              disabled={sessionControlsDisabled}
-              onClick={() => {
-                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                  kind: 'city-io',
-                  action: 'save-city',
-                  fileName: saveFileName,
-                });
-              }}
-              type="button"
-            >
-              Save .cty
-            </button>
-            <button
-              disabled={controlsDisabled}
-              onClick={() => {
-                loadInputRef.current?.click();
-              }}
-              type="button"
-            >
-              Load .cty
-            </button>
-          </div>
-          <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
-            Save file name
-            <input
-              disabled={controlsDisabled}
-              onChange={(event) => {
-                setSaveFileName(event.target.value);
-              }}
-              type="text"
-              value={saveFileName}
-            />
-          </label>
-          <input
-            accept=".cty,application/octet-stream"
-            onChange={async (event) => {
-              const input = event.currentTarget;
-              const file = input.files?.[0];
-              input.value = '';
-
-              if (file === undefined || controlsDisabled) {
-                return;
-              }
-
-              try {
-                const cityBytes = new Uint8Array(await file.arrayBuffer());
-                setHasStartedPlayableSession(true);
-                setSaveFileName(file.name);
-                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                  kind: 'city-io',
-                  action: 'load-city',
-                  fileName: file.name,
-                  cityBytes,
-                });
-                setCityIoError('');
-              } catch {
-                setCityIoError('Failed to read selected city file.');
-              }
-            }}
-            ref={loadInputRef}
-            style={{ display: 'none' }}
-            type="file"
-          />
-        </section>
-
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Scenario</strong>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <select
-              disabled={controlsDisabled}
-              onChange={(event) => {
-                setSelectedScenarioId(Number.parseInt(event.target.value, 10));
-              }}
-              value={selectedScenarioId}
-            >
-              {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
-                <option key={scenario.id} value={scenario.id}>
-                  {scenario.id}. {scenario.name} ({scenario.startYear})
-                </option>
-              ))}
-            </select>
-            <button
-              disabled={controlsDisabled}
-              onClick={() => {
-                setHasStartedPlayableSession(true);
-                const scenario = PLAYABLE_SCENARIO_CHOICES.find(
-                  (entry) => entry.id === selectedScenarioId,
-                );
-                if (scenario !== undefined) {
-                  setSaveFileName(`${scenario.fileName}.cty`);
-                }
-
-                runtime.sendCommand(nextCommandId(commandCounter, 'scenario'), {
-                  kind: 'scenario',
-                  action: 'load-scenario',
-                  scenarioId: selectedScenarioId,
-                });
-              }}
-              type="button"
-            >
-              Start Scenario
-            </button>
-          </div>
-        </section>
-
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {PLAYABLE_DISASTER_CHOICES.map((choice) => (
-              <button
-                key={choice.id}
-                disabled={sessionControlsDisabled}
-                onClick={() => {
-                  setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
+          >
+            {gameDialog !== 'save' ? null : (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (sessionControlsDisabled) {
+                    return;
+                  }
+                  const fileName = normalizeCitySaveFileName(saveFileNameDraft);
+                  setSaveFileName(fileName);
+                  runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                    kind: 'city-io',
+                    action: 'save-city',
+                    fileName,
+                  });
+                  setGameDialog(null);
                 }}
-                type="button"
+                style={{ display: 'grid', gap: 10 }}
               >
-                {choice.label.replace('Trigger ', '')}
-              </button>
-            ))}
-          </div>
-          <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-            {disasterStatus}
-          </div>
-        </section>
+                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Save City</strong>
+                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                  File name
+                  <input
+                    autoFocus
+                    disabled={sessionControlsDisabled}
+                    onChange={(event) => {
+                      setSaveFileNameDraft(event.target.value);
+                    }}
+                    type="text"
+                    value={saveFileNameDraft}
+                  />
+                </label>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button disabled={sessionControlsDisabled} type="submit">
+                    Save
+                  </button>
+                </div>
+              </form>
+            )}
 
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Runtime</strong>
-          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-            phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
-          </div>
-          {state.lastRejectReason === null ? null : (
-            <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12 }}>
-              {`last reject: ${state.lastRejectReason}`}
-            </div>
-          )}
-          {cityIoError === '' ? null : (
-            <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12 }}>
-              {cityIoError}
-            </div>
-          )}
-          {lastSaveStatus === '' ? null : (
-            <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12 }}>
-              {lastSaveStatus}
-            </div>
-          )}
-          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-            {formatRuntimePhaseStatus(state.phase)}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <button
-              disabled={reconnectDisabled}
-              onClick={() => {
-                runtime.reconnect();
-                setCityIoError('');
-                setLastSaveStatus('');
-              }}
-              type="button"
-            >
-              Reconnect
-            </button>
-            <button
-              disabled={resyncDisabled}
-              onClick={() => {
-                runtime.requestSnapshot('resync');
-              }}
-              type="button"
-            >
-              Resync Snapshot
-            </button>
-          </div>
-        </section>
-      </aside>
+            {gameDialog !== 'load' ? null : (
+              <section style={{ display: 'grid', gap: 10 }}>
+                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Load City</strong>
+                <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+                  {pendingLoadFile === null
+                    ? 'No file selected.'
+                    : `Selected: ${pendingLoadFile.name}`}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <button
+                    disabled={controlsDisabled || isLoadingCityFile}
+                    onClick={() => {
+                      loadInputRef.current?.click();
+                    }}
+                    type="button"
+                  >
+                    Choose .cty File...
+                  </button>
+                  <button
+                    disabled={controlsDisabled || pendingLoadFile === null || isLoadingCityFile}
+                    onClick={async () => {
+                      if (pendingLoadFile === null || controlsDisabled) {
+                        return;
+                      }
+
+                      setIsLoadingCityFile(true);
+                      try {
+                        const cityBytes = new Uint8Array(await pendingLoadFile.arrayBuffer());
+                        setHasStartedPlayableSession(true);
+                        setSaveFileName(pendingLoadFile.name);
+                        runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                          kind: 'city-io',
+                          action: 'load-city',
+                          fileName: pendingLoadFile.name,
+                          cityBytes,
+                        });
+                        setCityIoError('');
+                        setPendingLoadFile(null);
+                        setGameDialog(null);
+                      } catch {
+                        setCityIoError('Failed to read selected city file.');
+                      } finally {
+                        setIsLoadingCityFile(false);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {isLoadingCityFile ? 'Loading...' : 'Load'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    disabled={isLoadingCityFile}
+                    onClick={() => {
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Close
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {gameDialog !== 'scenario' ? null : (
+              <section style={{ display: 'grid', gap: 10 }}>
+                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Scenario</strong>
+                <select
+                  autoFocus
+                  disabled={controlsDisabled}
+                  onChange={(event) => {
+                    setSelectedScenarioId(Number.parseInt(event.target.value, 10));
+                  }}
+                  value={selectedScenarioId}
+                >
+                  {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>
+                      {scenario.id}. {scenario.name} ({scenario.startYear})
+                    </option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={controlsDisabled}
+                    onClick={() => {
+                      setHasStartedPlayableSession(true);
+                      const scenario = PLAYABLE_SCENARIO_CHOICES.find(
+                        (entry) => entry.id === selectedScenarioId,
+                      );
+                      if (scenario !== undefined) {
+                        setSaveFileName(`${scenario.fileName}.cty`);
+                      }
+                      runtime.sendCommand(nextCommandId(commandCounter, 'scenario'), {
+                        kind: 'scenario',
+                        action: 'load-scenario',
+                        scenarioId: selectedScenarioId,
+                      });
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Start Scenario
+                  </button>
+                </div>
+              </section>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   );
 }
@@ -841,6 +1182,23 @@ function resolveDemandBarStyle({
     top,
     width: 7,
   };
+}
+
+/**
+ * Normalizes Save dialog file-name input to one classic `.cty` target.
+ * Mirrors `SaveCityAs` naming flow in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: browser UI keeps user-entered names but appends `.cty`
+ * when no extension is provided.
+ */
+function normalizeCitySaveFileName(fileNameInput: string): string {
+  const trimmedName = fileNameInput.trim();
+  if (trimmedName === '') {
+    return 'newcity.cty';
+  }
+  if (trimmedName.toLowerCase().endsWith('.cty')) {
+    return trimmedName;
+  }
+  return `${trimmedName}.cty`;
 }
 
 /**
