@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
 import {
-  resolveMicropolisSoundTokenForToolAck,
-  resolveMicropolisSoundTokenForToolRejectReason,
   SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from '../game/audio/micropolis-soundboard.ts';
@@ -131,11 +129,9 @@ function RuntimePanel() {
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
-  const pendingToolAckSoundByCommandId = useRef<Map<string, string>>(new Map());
   const commandCounter = useRef(1);
 
   useEffect(() => {
-    const pendingToolAckSoundTokensByCommandId = pendingToolAckSoundByCommandId.current;
     const unsubscribe = runtime.subscribe((event) => {
       stateCommitDispatcher.queue(event.state);
 
@@ -160,32 +156,6 @@ function RuntimePanel() {
         }
       }
 
-      if (runtimeEnvelope.kind === 'ack') {
-        const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
-        if (toolSoundToken !== undefined) {
-          pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-          if (shouldAttemptEnvelopePlayback && (runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
-            void gameplayAudioConsumer.playSoundSpec(toolSoundToken).catch(() => undefined);
-          }
-        }
-        return;
-      }
-
-      if (runtimeEnvelope.kind === 'reject') {
-        pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-        const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
-          runtimeEnvelope.reason,
-        );
-        if (
-          shouldAttemptEnvelopePlayback &&
-          rejectSoundToken !== null &&
-          (runtimeEnvelope.soundDeltas?.length ?? 0) === 0
-        ) {
-          void gameplayAudioConsumer.playSoundSpec(rejectSoundToken).catch(() => undefined);
-        }
-        return;
-      }
-
       if (runtimeEnvelope.kind !== 'patch') {
         return;
       }
@@ -202,7 +172,6 @@ function RuntimePanel() {
     runtime.connect();
     return () => {
       unsubscribe();
-      pendingToolAckSoundTokensByCommandId.clear();
       stateCommitDispatcher.dispose();
       runtime.disconnect();
       gameplayAudioConsumer.dispose();
@@ -346,11 +315,6 @@ function RuntimePanel() {
                 }
 
                 const commandId = nextCommandId(commandCounter, 'tool');
-                const toolAckSoundToken = resolveMicropolisSoundTokenForToolAck(activeTool);
-                if (toolAckSoundToken !== null) {
-                  pendingToolAckSoundByCommandId.current.set(commandId, toolAckSoundToken);
-                }
-
                 runtime.sendCommand(commandId, {
                   kind: 'tool',
                   tool: activeTool,

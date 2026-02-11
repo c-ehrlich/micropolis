@@ -83,7 +83,7 @@ describe('routes/index default gameplay path', () => {
     expect(routeSource).toContain('gameplayAudioConsumer.playSoundSpec(');
   });
 
-  test('plays gameplay message sounds from host sound deltas instead of route message-id mapping', () => {
+  test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
     const routeSource = readFileSync(
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
       'utf8',
@@ -91,6 +91,9 @@ describe('routes/index default gameplay path', () => {
 
     expect(routeSource).toContain('if (isSequencedHostEnvelope(runtimeEnvelope))');
     expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+    expect(routeSource).not.toContain('resolveMicropolisSoundTokenForToolAck');
+    expect(routeSource).not.toContain('resolveMicropolisSoundTokenForToolRejectReason');
+    expect(routeSource).not.toContain('pendingToolAckSoundByCommandId');
     expect(routeSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
     expect(routeSource).not.toContain('readMessageIdsFromPatchPayload');
   });
