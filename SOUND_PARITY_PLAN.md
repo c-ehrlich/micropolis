@@ -148,7 +148,7 @@ Deliverable: single authoritative sound path from host envelopes.
 - [x] Produce a traceable sound inventory doc/table:
   - [x] token/spec
   - [x] wav file name
-  - [ ] C/Tcl source location
+  - [x] C/Tcl source location
   - [ ] human-readable gameplay usage note
 - [ ] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
 - [ ] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
