@@ -4,25 +4,25 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Plan automation metadata for the sim-core envelope host migration rollout.
+ * Plan automation metadata for the sound parity rollout.
  *
  * This orchestrator is intentionally different from Micropolis C runtime code:
  * it automates Codex task execution over markdown migration plans rather than
  * implementing simulation behavior directly.
  */
-const SHIPPING_PLAN_PATH = 'apps/web/SIM_CORE_ENVELOPE_HOST_MIGRATION_PLAN.md';
+const SHIPPING_PLAN_PATH = 'SOUND_PARITY_PLAN.md';
 
 /**
- * Plan stream definitions for the single migration plan document.
+ * Plan stream definitions for the single sound parity plan document.
  *
  * Not from Micropolis C sources; this maps one plan-level checklist stream
  * to an isolated automation worktree/branch.
  */
 const DEFAULT_PACKAGES = [
   {
-    id: 'sim-core-envelope',
+    id: 'sound-parity',
     stageNumber: null,
-    stageLabel: 'Sim-Core Envelope Host Migration',
+    stageLabel: 'Sound Parity Plan',
     packagePath: 'repo',
     planPath: SHIPPING_PLAN_PATH,
     branch: null,
