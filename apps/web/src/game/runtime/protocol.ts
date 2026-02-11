@@ -772,6 +772,20 @@ export interface HostSoundDeltaPayload {
   scope?: HostSoundScopePayload;
 }
 
+const HOST_SOUND_SCOPE_ALLOWED_KEYS = new Set(['kind', 'target']);
+const HOST_SOUND_DELTA_ALLOWED_KEYS = new Set(['channel', 'soundSpec', 'scope']);
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasOnlyAllowedKeys(
+  record: Record<string, unknown>,
+  allowedKeys: ReadonlySet<string>,
+): boolean {
+  return Object.keys(record).every((key) => allowedKeys.has(key));
+}
+
 /**
  * One authoritative realtime object entry carried by snapshot/patch envelopes.
  * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
@@ -1136,6 +1150,43 @@ export function isPlayableScenarioCommand(command: unknown): command is Playable
     Number.isFinite(candidate.scenarioId) &&
     Number.isInteger(candidate.scenarioId)
   );
+}
+
+/**
+ * Returns true when payload matches the locked host sound scope metadata shape.
+ * Mirrors `MakeSoundOn` scope intent in `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: only `kind` plus optional `target` are accepted so transport
+ * metadata stays constrained to the agreed bridge payload contract.
+ */
+export function isHostSoundScopePayload(payload: unknown): payload is HostSoundScopePayload {
+  if (!isObjectRecord(payload) || !hasOnlyAllowedKeys(payload, HOST_SOUND_SCOPE_ALLOWED_KEYS)) {
+    return false;
+  }
+
+  if (payload.kind !== 'view' && payload.kind !== 'global') {
+    return false;
+  }
+
+  return payload.target === undefined || typeof payload.target === 'string';
+}
+
+/**
+ * Returns true when payload matches the locked host sound-delta shape.
+ * Mirrors unified `MakeSound` / `MakeSoundOn` dispatch ownership in
+ * `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: `soundSpec` remains the full Micropolis sound spec string,
+ * and this gate rejects out-of-contract fields to keep runtime transport stable.
+ */
+export function isHostSoundDeltaPayload(payload: unknown): payload is HostSoundDeltaPayload {
+  if (!isObjectRecord(payload) || !hasOnlyAllowedKeys(payload, HOST_SOUND_DELTA_ALLOWED_KEYS)) {
+    return false;
+  }
+
+  if (typeof payload.channel !== 'string' || typeof payload.soundSpec !== 'string') {
+    return false;
+  }
+
+  return payload.scope === undefined || isHostSoundScopePayload(payload.scope);
 }
 
 /**

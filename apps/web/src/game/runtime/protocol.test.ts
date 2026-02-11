@@ -11,6 +11,8 @@ import {
   type HostResyncEnvelope,
   type HostSnapshotEnvelope,
   type HostSoundDeltaPayload,
+  isHostSoundDeltaPayload,
+  isHostSoundScopePayload,
   isPlayableBridgeCommandType,
   isPlayableScenarioCommand,
   PLAYABLE_BRIDGE_COMMAND_TYPES,
@@ -213,6 +215,52 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
       channel: 'edit',
       soundSpec: 'UhUh',
     });
+  });
+
+  it('accepts only locked scope metadata shape for sound deltas', () => {
+    expect(isHostSoundScopePayload({ kind: 'view', target: '.playMap' })).toBe(true);
+    expect(isHostSoundScopePayload({ kind: 'global' })).toBe(true);
+
+    expect(isHostSoundScopePayload({ kind: 'view', target: 100 })).toBe(false);
+    expect(isHostSoundScopePayload({ kind: 'local' })).toBe(false);
+    expect(isHostSoundScopePayload({ kind: 'view', target: '.playMap', extra: true })).toBe(false);
+  });
+
+  it('accepts only locked channel/soundSpec/scope shape for sound deltas', () => {
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      }),
+    ).toBe(true);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'warning',
+        soundSpec: 'Explosion-High -speed [expr 100 * $sound_high_quality]',
+      }),
+    ).toBe(true);
+
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 123,
+      }),
+    ).toBe(false);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: 55 },
+      }),
+    ).toBe(false);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        extra: 'not-allowed',
+      }),
+    ).toBe(false);
   });
 
   it('supports shared sound deltas on every sequenced host envelope kind', () => {

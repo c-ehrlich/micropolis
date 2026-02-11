@@ -80,10 +80,10 @@ Target outcome:
 
 - [x] Add protocol payload types for sound deltas in `apps/web/src/game/runtime/protocol.ts`.
 - [x] Add a shared sound delta schema usable by any sequenced envelope.
-- [ ] Lock parity payload shape:
-  - [ ] `channel` (e.g., `city`, `edit`, `warning`, etc.)
-  - [ ] `soundSpec` (full Micropolis spec string, not pre-normalized)
-  - [ ] `scope` metadata (`view`/`global` + optional target)
+- [x] Lock parity payload shape:
+  - [x] `channel` (e.g., `city`, `edit`, `warning`, etc.)
+  - [x] `soundSpec` (full Micropolis spec string, not pre-normalized)
+  - [x] `scope` metadata (`view`/`global` + optional target)
 - [ ] Lock replay semantics:
   - [ ] Preserve sound deltas through replay tail/resync payload data.
   - [ ] Keep client playback policy independent from transport inclusion.
