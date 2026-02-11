@@ -84,9 +84,9 @@ Target outcome:
   - [x] `channel` (e.g., `city`, `edit`, `warning`, etc.)
   - [x] `soundSpec` (full Micropolis spec string, not pre-normalized)
   - [x] `scope` metadata (`view`/`global` + optional target)
-- [ ] Lock replay semantics:
-  - [ ] Preserve sound deltas through replay tail/resync payload data.
-  - [ ] Keep client playback policy independent from transport inclusion.
+- [x] Lock replay semantics:
+  - [x] Preserve sound deltas through replay tail/resync payload data.
+  - [x] Keep client playback policy independent from transport inclusion.
 
 Deliverable: protocol/test updates that compile and document sound envelope semantics.
 

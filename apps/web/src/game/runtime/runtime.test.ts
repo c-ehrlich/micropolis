@@ -10,6 +10,7 @@ import {
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
   type HostPatchPayload,
+  type HostSoundDeltaPayload,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -131,6 +132,89 @@ describe('createWebHostRuntime', () => {
       reason: 'sequence-gap',
       fromServerSeq: 2,
     });
+  });
+
+  it('keeps sound transport data on runtime events regardless of reducer outcome', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const routed: Array<{
+      outcome: string;
+      kind: HostEnvelope['kind'];
+      soundDeltas: readonly HostSoundDeltaPayload[] | null;
+    }> = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope === undefined || event.envelope.kind === 'hello') {
+        return;
+      }
+      routed.push({
+        outcome: event.outcome,
+        kind: event.envelope.kind,
+        soundDeltas: event.envelope.soundDeltas ?? null,
+      });
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 6 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 4 }] },
+      },
+      soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+    });
+
+    expect(routed).toEqual([
+      {
+        outcome: 'applied',
+        kind: 'snapshot',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+      },
+      {
+        outcome: 'gap-detected',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+      },
+      {
+        outcome: 'dropped-stale',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+      },
+    ]);
   });
 
   it('creates pending visuals on sendCommand and settles them on ack/reject', () => {

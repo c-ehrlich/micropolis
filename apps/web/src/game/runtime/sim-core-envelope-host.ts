@@ -81,6 +81,7 @@ import type {
   HostRealtimeObjectDeltaPayload,
   HostRealtimeObjectPayload,
   HostSnapshotPayload,
+  HostSoundDeltaPayload,
   PlayableClientCommand,
 } from './protocol.ts';
 
@@ -2386,14 +2387,35 @@ function cloneHostPatchPayload(payload: HostPatchPayload): HostPatchPayload {
 }
 
 /**
+ * Clones one sound-delta list before envelope emission/replay storage.
+ * Mirrors sound-intent ownership from `MakeSound`/`MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`, adapted to deterministic bridge replay
+ * retention in `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function cloneHostSoundDeltaPayloadList(
+  soundDeltas: readonly HostSoundDeltaPayload[],
+): HostSoundDeltaPayload[] {
+  return soundDeltas.map((soundDelta) => ({
+    ...soundDelta,
+    ...(soundDelta.scope === undefined ? {} : { scope: { ...soundDelta.scope } }),
+  }));
+}
+
+/**
  * Clones one sequenced host envelope before replay-log persistence.
  * Mirrors deterministic bridge replay history ownership from
  * `ref/micropolis/spec/integration/SPEC.md`.
  */
 function cloneReplaySequencedEnvelope(envelope: SequencedHostEnvelope): SequencedHostEnvelope {
+  const soundDeltas =
+    envelope.soundDeltas === undefined
+      ? undefined
+      : cloneHostSoundDeltaPayloadList(envelope.soundDeltas);
+
   if (envelope.kind === 'patch') {
     return {
       ...envelope,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
       payload: cloneHostPatchPayload(envelope.payload),
     };
   }
@@ -2401,11 +2423,15 @@ function cloneReplaySequencedEnvelope(envelope: SequencedHostEnvelope): Sequence
   if (envelope.kind === 'snapshot') {
     return {
       ...envelope,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
       payload: cloneHostSnapshotPayload(envelope.payload),
     };
   }
 
-  return { ...envelope };
+  return {
+    ...envelope,
+    ...(soundDeltas === undefined ? {} : { soundDeltas }),
+  };
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   type HostPatchPayload,
   type HostRealtimePayload,
   type HostSnapshotPayload,
+  type HostSoundDeltaPayload,
   PLAYABLE_TOOL_SPECS,
 } from './protocol.ts';
 import { createInitialWebRuntimeState, reduceHostEnvelope } from './reducer.ts';
@@ -218,6 +219,21 @@ function readRealtimePayloadFromEnvelope(envelope: HostEnvelope): HostRealtimePa
   }
 
   return realtimePayload as HostRealtimePayload;
+}
+
+/**
+ * Reads optional sound-delta payload entries from sequenced host envelopes.
+ * Mirrors `MakeSound`/`MakeSoundOn` transport ownership from
+ * `ref/micropolis/src/sim/w_sound.c`.
+ */
+function readSoundDeltasFromEnvelope(
+  envelope: HostEnvelope,
+): readonly HostSoundDeltaPayload[] | null {
+  if (envelope.kind === 'hello' || envelope.soundDeltas === undefined) {
+    return null;
+  }
+
+  return envelope.soundDeltas;
 }
 
 /**
@@ -3053,6 +3069,134 @@ describe('SimCoreEnvelopeHost', () => {
         },
       },
     });
+  });
+
+  it('preserves replay-tail sound deltas even if a previously emitted envelope is mutated', () => {
+    const roomId = 'room-sound-replay-tail';
+    const clientId = 'client-sound-replay-tail';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      emitSequencedEnvelope(envelope: {
+        kind: 'ack';
+        roomId: string;
+        clientId: string;
+        tick: number;
+        commandId: string;
+        soundDeltas?: readonly HostSoundDeltaPayload[];
+      }): void;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const emittedSoundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+    ];
+    const expectedReplaySoundDeltas = structuredClone(emittedSoundDeltas);
+    hostInternals.emitSequencedEnvelope({
+      kind: 'ack',
+      roomId,
+      clientId,
+      tick: 1,
+      commandId: 'cmd-sound-replay-tail',
+      soundDeltas: emittedSoundDeltas,
+    });
+
+    const liveAck = captured.envelopes[2];
+    if (liveAck === undefined || liveAck.kind !== 'ack') {
+      throw new Error('expected live ack envelope');
+    }
+    const liveSoundDeltas = readSoundDeltasFromEnvelope(liveAck);
+    if (liveSoundDeltas === null || liveSoundDeltas.length === 0) {
+      throw new Error('expected live ack sound deltas');
+    }
+    const firstLiveSoundDelta = liveSoundDeltas[0];
+    if (firstLiveSoundDelta === undefined) {
+      throw new Error('expected first live sound delta');
+    }
+    firstLiveSoundDelta.soundSpec = 'mutated-live-sound';
+    if (firstLiveSoundDelta.scope !== undefined) {
+      firstLiveSoundDelta.scope.target = 'mutated-live-target';
+    }
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: 1,
+      reason: 'manual',
+    });
+
+    const replayAck = captured.envelopes[4];
+    if (replayAck === undefined || replayAck.kind !== 'ack') {
+      throw new Error('expected replay ack envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(replayAck)).toEqual(expectedReplaySoundDeltas);
+  });
+
+  it('keeps resync sound deltas in request_snapshot replay tails', () => {
+    const roomId = 'room-sound-replay-resync';
+    const clientId = 'client-sound-replay-resync';
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      emitSequencedEnvelope(envelope: {
+        kind: 'resync';
+        roomId: string;
+        clientId: string;
+        tick: number;
+        reason: string;
+        soundDeltas?: readonly HostSoundDeltaPayload[];
+      }): void;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId,
+      clientId,
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const expectedSoundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'warning',
+        soundSpec: 'Explosion High',
+        scope: { kind: 'global' },
+      },
+    ];
+    hostInternals.emitSequencedEnvelope({
+      kind: 'resync',
+      roomId,
+      clientId,
+      tick: 1,
+      reason: 'server-gap',
+      soundDeltas: expectedSoundDeltas,
+    });
+
+    captured.send({
+      kind: 'request_snapshot',
+      roomId,
+      clientId,
+      fromServerSeq: 1,
+      reason: 'resync',
+    });
+
+    const replayResync = captured.envelopes[4];
+    if (replayResync === undefined || replayResync.kind !== 'resync') {
+      throw new Error('expected replay resync envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(replayResync)).toEqual(expectedSoundDeltas);
   });
 
   it('reconstructs map/HUD/messages/realtime deterministically from snapshot baseline plus replay tail', () => {
