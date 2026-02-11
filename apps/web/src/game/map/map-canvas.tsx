@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
@@ -323,6 +324,8 @@ export function zoomMapCanvasCameraOffsetAtAnchor({
  * `ref/micropolis/src/sim/g_bigmap.c`.
  * Parity note: Sprite Atlas uses Micropolis-derived tile sprites from canonical
  * `tiles.xpm` identity and treats missing atlas images as explicit fallback.
+ * Difference: browser-only pan/zoom controls can render either in-map (default)
+ * or in an external UI container supplied by the route.
  */
 export function MapCanvas({
   mapState,
@@ -330,12 +333,14 @@ export function MapCanvas({
   realtimeObjects = [],
   onTileClick,
   tileSize = 4,
+  cameraControlsContainer,
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
   realtimeObjects?: readonly RuntimeRealtimeObject[];
   onTileClick?: (x: number, y: number) => void;
   tileSize?: number;
+  cameraControlsContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mapCanvasRootRef = useRef<HTMLDivElement>(null);
@@ -691,6 +696,40 @@ export function MapCanvas({
 
   const zoomPercent = truncateTowardZero(cameraZoom * 100);
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
+  const cameraControlsContent = (
+    <>
+      <span>Pan: middle-drag or two-finger scroll.</span>
+      <span>Zoom: pinch/ctrl+wheel or buttons.</span>
+      <button
+        onClick={() => {
+          applyCameraZoomStep(1 / MAP_CANVAS_BUTTON_ZOOM_STEP);
+        }}
+        type="button"
+      >
+        -
+      </button>
+      <button
+        onClick={() => {
+          applyCameraZoomAt(1, {
+            x: viewportWidthPx / 2,
+            y: viewportHeightPx / 2,
+          });
+        }}
+        type="button"
+      >
+        100%
+      </button>
+      <button
+        onClick={() => {
+          applyCameraZoomStep(MAP_CANVAS_BUTTON_ZOOM_STEP);
+        }}
+        type="button"
+      >
+        +
+      </button>
+      <span>zoom={zoomPercent}%</span>
+    </>
+  );
 
   if (!mapState.hasSnapshot) {
     return (
@@ -724,57 +763,47 @@ export function MapCanvas({
         width: '100%',
       }}
     >
-      <div
-        style={{
-          backdropFilter: 'blur(4px)',
-          background: 'rgba(15, 23, 42, 0.8)',
-          border: '1px solid rgba(148, 163, 184, 0.65)',
-          borderRadius: 6,
-          left: 10,
-          padding: '6px 8px',
-          position: 'absolute',
-          top: 10,
-          zIndex: getMapCanvasLayerZIndex('realtime-overlay') + 1,
-          alignItems: 'center',
-          color: '#e2e8f0',
-          display: 'flex',
-          flexWrap: 'wrap',
-          fontFamily: 'monospace',
-          fontSize: 11,
-          gap: 8,
-        }}
-      >
-        <span>Pan: middle-drag or two-finger scroll.</span>
-        <span>Zoom: pinch/ctrl+wheel or buttons.</span>
-        <button
-          onClick={() => {
-            applyCameraZoomStep(1 / MAP_CANVAS_BUTTON_ZOOM_STEP);
+      {cameraControlsContainer === undefined ? (
+        <div
+          style={{
+            backdropFilter: 'blur(4px)',
+            background: 'rgba(15, 23, 42, 0.8)',
+            border: '1px solid rgba(148, 163, 184, 0.65)',
+            borderRadius: 6,
+            left: 10,
+            padding: '6px 8px',
+            position: 'absolute',
+            top: 10,
+            zIndex: getMapCanvasLayerZIndex('realtime-overlay') + 1,
+            alignItems: 'center',
+            color: '#e2e8f0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            gap: 8,
           }}
-          type="button"
         >
-          -
-        </button>
-        <button
-          onClick={() => {
-            applyCameraZoomAt(1, {
-              x: viewportWidthPx / 2,
-              y: viewportHeightPx / 2,
-            });
-          }}
-          type="button"
-        >
-          100%
-        </button>
-        <button
-          onClick={() => {
-            applyCameraZoomStep(MAP_CANVAS_BUTTON_ZOOM_STEP);
-          }}
-          type="button"
-        >
-          +
-        </button>
-        <span>zoom={zoomPercent}%</span>
-      </div>
+          {cameraControlsContent}
+        </div>
+      ) : cameraControlsContainer === null ? null : (
+        createPortal(
+          <div
+            style={{
+              alignItems: 'center',
+              color: '#e2e8f0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              fontFamily: 'monospace',
+              fontSize: 11,
+              gap: 8,
+            }}
+          >
+            {cameraControlsContent}
+          </div>,
+          cameraControlsContainer,
+        )
+      )}
       <div
         ref={mapViewportRef}
         onPointerCancel={(event) => {

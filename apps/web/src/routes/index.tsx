@@ -139,6 +139,8 @@ function RuntimePanel() {
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
+  const [mapCameraControlsContainer, setMapCameraControlsContainer] =
+    useState<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const commandCounter = useRef(1);
 
@@ -192,6 +194,7 @@ function RuntimePanel() {
     state.phase === 'reconnecting' ||
     state.phase === 'failed';
   const activeToolSpec = getPlayableToolSpec(activeTool);
+  const isSimulationRunning = state.hudState.speed > 0;
 
   return (
     <section
@@ -211,6 +214,7 @@ function RuntimePanel() {
         }}
       >
         <MapCanvas
+          cameraControlsContainer={mapCameraControlsContainer}
           mapState={state.mapState}
           onTileClick={(x, y) => {
             if (sessionControlsDisabled) {
@@ -263,7 +267,7 @@ function RuntimePanel() {
         >
           Build
         </strong>
-        <MicropolisStatusSprite isRunning={state.hudState.speed > 0} />
+        <MicropolisStatusSprite isRunning={isSimulationRunning} />
         <div
           style={{
             display: 'grid',
@@ -351,6 +355,57 @@ function RuntimePanel() {
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
         />
+        <div
+          style={{
+            color: '#f8fafc',
+            display: 'grid',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            gap: 2,
+            textAlign: 'center',
+          }}
+        >
+          <div>{state.hudState.fundsLabel}</div>
+          <div>{state.hudState.dateDisplayLabel}</div>
+        </div>
+        <section style={{ display: 'grid', gap: 4 }}>
+          <button
+            disabled={sessionControlsDisabled}
+            onClick={() => {
+              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                kind: 'sim-control',
+                control: isSimulationRunning ? 'pause' : 'play',
+              });
+            }}
+            style={{ justifySelf: 'center', width: '68%' }}
+            type="button"
+          >
+            {isSimulationRunning ? 'Pause' : 'Play'}
+          </button>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+            {[1, 2, 3].map((speed) => (
+              <button
+                key={speed}
+                disabled={sessionControlsDisabled}
+                onClick={() => {
+                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    kind: 'sim-control',
+                    control: 'set-speed',
+                    speed: speed as PlayableSimSpeed,
+                  });
+                }}
+                style={{
+                  fontWeight: state.hudState.speed === speed ? 700 : 400,
+                  padding: '2px 0',
+                  width: 26,
+                }}
+                type="button"
+              >
+                x{speed}
+              </button>
+            ))}
+          </div>
+        </section>
       </section>
 
       <section
@@ -378,6 +433,39 @@ function RuntimePanel() {
         </div>
       </section>
 
+      <section
+        style={{
+          backdropFilter: 'blur(3px)',
+          background: 'rgba(107, 114, 128, 0.9)',
+          border: '2px solid rgba(15, 23, 42, 0.75)',
+          borderRadius: 6,
+          bottom: 12,
+          display: 'grid',
+          gap: 4,
+          left: '50%',
+          padding: 8,
+          pointerEvents: 'auto',
+          position: 'absolute',
+          transform: 'translateX(-50%)',
+          width: 'min(420px, calc(100vw - 24px))',
+          zIndex: 6,
+        }}
+      >
+        <strong
+          style={{
+            color: '#f8fafc',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textAlign: 'center',
+            textTransform: 'uppercase',
+          }}
+        >
+          Message Feed
+        </strong>
+        <MessageFeed messages={state.hudState.messages} />
+      </section>
+
       <aside
         style={{
           backdropFilter: 'blur(6px)',
@@ -400,63 +488,17 @@ function RuntimePanel() {
         <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Micropolis</strong>
 
         <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
-          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-            <div>{state.hudState.fundsLabel}</div>
-            <div>{state.hudState.dateDisplayLabel}</div>
-            <div>{state.hudState.speedLabel}</div>
-          </div>
-          <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>Message Feed</strong>
-          <MessageFeed messages={state.hudState.messages} />
-        </section>
-
-        <section style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Simulation</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <button
-              disabled={sessionControlsDisabled}
-              onClick={() => {
-                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                  kind: 'sim-control',
-                  control: 'pause',
-                });
-              }}
-              type="button"
-            >
-              Pause
-            </button>
-            <button
-              disabled={sessionControlsDisabled}
-              onClick={() => {
-                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                  kind: 'sim-control',
-                  control: 'play',
-                });
-              }}
-              type="button"
-            >
-              Play
-            </button>
-            {[1, 2, 3].map((speed) => (
-              <button
-                key={speed}
-                disabled={sessionControlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'set-speed',
-                    speed: speed as PlayableSimSpeed,
-                  });
-                }}
-                style={{
-                  fontWeight: state.hudState.speed === speed ? 700 : 400,
-                }}
-                type="button"
-              >
-                x{speed}
-              </button>
-            ))}
-          </div>
+          <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>Map View</strong>
+          <div
+            ref={setMapCameraControlsContainer}
+            style={{
+              background: 'rgba(15, 23, 42, 0.78)',
+              border: '1px solid rgba(148, 163, 184, 0.55)',
+              borderRadius: 4,
+              minHeight: 60,
+              padding: 8,
+            }}
+          />
         </section>
 
         <section style={{ display: 'grid', gap: 6 }}>
@@ -865,39 +907,44 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
  * `ref/micropolis/src/sim/s_msg.c`, with a bounded reverse-chronological list.
  */
 function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
-  if (messages.length === 0) {
-    return <div style={{ fontFamily: 'monospace', fontSize: 12 }}>No messages yet.</div>;
-  }
-
   return (
     <div
       style={{
-        background: 'rgba(15, 23, 42, 0.78)',
-        border: '1px solid rgba(148, 163, 184, 0.55)',
+        background: 'rgba(15, 23, 42, 0.32)',
+        border: '1px solid rgba(15, 23, 42, 0.58)',
         borderRadius: 4,
         color: '#e2e8f0',
         fontFamily: 'monospace',
         fontSize: 12,
-        maxHeight: 180,
+        height: 58,
         overflowY: 'auto',
-        padding: 8,
+        padding: '4px 6px',
       }}
     >
-      {[...messages].reverse().map((message) => {
-        const coordinateSuffix =
-          message.dispatch === 'sendMesAt' && message.x !== null && message.y !== null
-            ? ` @ (${message.x}, ${message.y})`
-            : '';
-        return (
-          <div
-            key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
-            style={{ marginBottom: 4 }}
-          >
-            <span style={{ color: '#93c5fd' }}>[{message.serverSeq}]</span> {message.text}
-            {coordinateSuffix}
-          </div>
-        );
-      })}
+      {messages.length === 0 ? (
+        <div style={{ color: '#cbd5e1', lineHeight: '16px' }}>No messages yet.</div>
+      ) : (
+        [...messages].reverse().map((message) => {
+          const coordinateSuffix =
+            message.dispatch === 'sendMesAt' && message.x !== null && message.y !== null
+              ? ` @ (${message.x}, ${message.y})`
+              : '';
+          return (
+            <div
+              key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
+              style={{
+                lineHeight: '16px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ color: '#bfdbfe' }}>[{message.serverSeq}]</span> {message.text}
+              {coordinateSuffix}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
