@@ -1,6 +1,7 @@
 # Gameplay Sound Inventory (Micropolis Traceability)
 
 This table inventories gameplay-triggered sound specs currently used by the sound parity pathway.
+Each `C/Tcl source location` cell includes both a C trigger callsite and the Tcl dispatch path used to deliver the sound.
 
 Normalization/parity boundary for all rows:
 - `MakeSound` / `MakeSoundOn`: `ref/micropolis/src/sim/w_sound.c:93`, `ref/micropolis/src/sim/w_sound.c:105`
