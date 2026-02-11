@@ -179,6 +179,7 @@ describe('routes/index default gameplay path', () => {
     expect(markup).toContain('Disconnected.');
     expect(markup).toContain('Build');
     expect(markup).toContain('Road: $10');
+    expect(markup).toContain('Demand heads R 0, C 0, I 0');
     expect(markup).toContain('HUD');
     expect(markup).toContain('Micropolis');
   });

@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 
+import demandGaugeBackgroundUrl from '../../../../packages/sim-assets/generated-images/images/demandg.png';
+import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
+import micropolisPausedIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropoliss.png';
 import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
@@ -328,6 +331,12 @@ function RuntimePanel() {
             );
           })}
         </div>
+        <DemandHeadsWidget
+          demandC={state.hudState.demandC}
+          demandI={state.hudState.demandI}
+          demandR={state.hudState.demandR}
+          isRunning={state.hudState.speed > 0}
+        />
       </section>
 
       <section
@@ -381,7 +390,6 @@ function RuntimePanel() {
           <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
             <div>{state.hudState.fundsLabel}</div>
             <div>{state.hudState.dateDisplayLabel}</div>
-            <div>{state.hudState.demandLabel}</div>
             <div>{state.hudState.speedLabel}</div>
           </div>
           <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>Message Feed</strong>
@@ -630,6 +638,132 @@ function RuntimePanel() {
       </aside>
     </section>
   );
+}
+
+/**
+ * Demand heads widget shown in the Build tool rail.
+ * Mirrors demand canvas composition in `ref/micropolis/res/whead.tcl` and
+ * bar updates from `UISetDemand` in `ref/micropolis/res/micropolis.tcl`.
+ * Parity note: this uses PNG conversions of the original XPM art and CSS
+ * absolutely positioned bars instead of Tk canvas primitives.
+ */
+function DemandHeadsWidget({
+  demandR,
+  demandC,
+  demandI,
+  isRunning,
+}: {
+  demandR: number;
+  demandC: number;
+  demandI: number;
+  isRunning: boolean;
+}) {
+  const micropolisStatusUrl = isRunning
+    ? micropolisRunningIndicatorUrl
+    : micropolisPausedIndicatorUrl;
+  const demandBars = [
+    { channel: 'r', demand: demandR, left: 49, fillColor: '#00ff00' },
+    { channel: 'c', demand: demandC, left: 58, fillColor: '#0000ff' },
+    { channel: 'i', demand: demandI, left: 67, fillColor: '#ffff00' },
+  ] as const;
+
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        background: '#bfbfbf',
+        border: '1px solid rgba(15, 23, 42, 0.72)',
+        borderRadius: 2,
+        display: 'flex',
+        justifyContent: 'center',
+        minHeight: 55,
+      }}
+      title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
+    >
+      <div
+        aria-label={`Demand heads R ${demandR}, C ${demandC}, I ${demandI}`}
+        role="img"
+        style={{
+          height: 55,
+          position: 'relative',
+          width: 80,
+        }}
+      >
+        <img
+          alt=""
+          aria-hidden
+          draggable={false}
+          src={micropolisStatusUrl}
+          style={{
+            display: 'block',
+            height: 47,
+            imageRendering: 'pixelated',
+            left: 0,
+            pointerEvents: 'none',
+            position: 'absolute',
+            top: 4,
+            width: 37,
+          }}
+        />
+        <img
+          alt=""
+          aria-hidden
+          draggable={false}
+          src={demandGaugeBackgroundUrl}
+          style={{
+            display: 'block',
+            height: 47,
+            imageRendering: 'pixelated',
+            left: 41,
+            pointerEvents: 'none',
+            position: 'absolute',
+            top: 4,
+            width: 39,
+          }}
+        />
+        {demandBars.map((bar) => (
+          <div
+            key={bar.channel}
+            style={resolveDemandBarStyle({
+              demand: bar.demand,
+              fillColor: bar.fillColor,
+              left: bar.left,
+            })}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Computes one vertical demand-bar segment style.
+ * Mirrors the Tcl `UISetDemand` branch and coordinate math in
+ * `ref/micropolis/res/micropolis.tcl` (1:1 baseline and endpoint behavior).
+ */
+function resolveDemandBarStyle({
+  demand,
+  left,
+  fillColor,
+}: {
+  demand: number;
+  left: number;
+  fillColor: string;
+}): CSSProperties {
+  const clampedDemand = Math.max(-15, Math.min(15, Math.trunc(demand)));
+  const baseline = clampedDemand <= 0 ? 32 : 24;
+  const endpoint = baseline - clampedDemand;
+  const top = Math.min(baseline, endpoint);
+  const bottom = Math.max(baseline, endpoint);
+  return {
+    background: fillColor,
+    height: Math.max(1, bottom - top),
+    left,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top,
+    width: 7,
+  };
 }
 
 /**
