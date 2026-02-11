@@ -247,17 +247,30 @@ describe('doMessage parity', () => {
 });
 
 describe('resolveDoMessageHookSoundIntent', () => {
-  it('maps doMessage makeSound ids to canonical Micropolis channel/spec strings', () => {
-    // `doMessage` in `ref/micropolis/src/sim/s_msg.c` emits
-    // `MakeSound("city", "Siren")` and `MakeSound("city", "Explosion-Low")`.
-    expect(resolveDoMessageHookSoundIntent(0, 4)).toEqual({
-      channel: 'city',
-      soundSpec: 'Siren',
-    });
-    expect(resolveDoMessageHookSoundIntent(0, 6)).toEqual({
-      channel: 'city',
-      soundSpec: 'Explosion-Low',
-    });
+  it('maps every doMessage first-display makeSound id to canonical Micropolis channel/spec strings', () => {
+    // Source of ids/specs: `doMessage` first-display switch cases in
+    // `ref/micropolis/src/sim/s_msg.c`:
+    // - case 12: HonkHonk-Med / HonkHonk-Low / HonkHonk-High
+    // - case 11/20/22/23/24/25/26/27/44: Siren
+    // - case 21: Monster -speed [MonsterSpeed]
+    // - case 30: Explosion-Low, Siren
+    // - case 43: Explosion-High, Explosion-Low, Siren
+    const expectedSpecsBySoundId = [
+      [1, 'HonkHonk-Med'],
+      [2, 'HonkHonk-Low'],
+      [3, 'HonkHonk-High'],
+      [4, 'Siren'],
+      [5, 'Monster -speed [MonsterSpeed]'],
+      [6, 'Explosion-Low'],
+      [7, 'Explosion-High'],
+    ] as const;
+
+    for (const [soundId, soundSpec] of expectedSpecsBySoundId) {
+      expect(resolveDoMessageHookSoundIntent(0, soundId)).toEqual({
+        channel: 'city',
+        soundSpec,
+      });
+    }
   });
 
   it('returns null for unknown channel/sound ids', () => {

@@ -96,6 +96,32 @@ const MESSAGE_SOUND_SPEC_BY_ID: Readonly<Record<number, string>> = {
 };
 
 /**
+ * Direct table port of the non-random `doMessage` first-display sound switch cases.
+ * Mirrors `switch ((MesNum < 0) ? -MesNum : MesNum)` in
+ * `ref/micropolis/src/sim/s_msg.c` (`case 11/20/22/23/24/25/26/27/44`, `21`, `30`, `43`).
+ *
+ * Parity note: message `12` is intentionally excluded here because C uses
+ * chained `Rand(5)` calls; sim-core mirrors that branch directly in
+ * `playFirstDisplaySound`.
+ */
+const DO_MESSAGE_FIRST_DISPLAY_SOUND_IDS_BY_MESSAGE_ID: Readonly<
+  Record<number, readonly number[]>
+> = {
+  11: [MESSAGE_SOUND_SIREN],
+  20: [MESSAGE_SOUND_SIREN],
+  21: [MESSAGE_SOUND_MONSTER],
+  22: [MESSAGE_SOUND_SIREN],
+  23: [MESSAGE_SOUND_SIREN],
+  24: [MESSAGE_SOUND_SIREN],
+  25: [MESSAGE_SOUND_SIREN],
+  26: [MESSAGE_SOUND_SIREN],
+  27: [MESSAGE_SOUND_SIREN],
+  30: [MESSAGE_SOUND_EXPLOSION_LOW, MESSAGE_SOUND_SIREN],
+  43: [MESSAGE_SOUND_EXPLOSION_HIGH, MESSAGE_SOUND_EXPLOSION_LOW, MESSAGE_SOUND_SIREN],
+  44: [MESSAGE_SOUND_SIREN],
+};
+
+/**
  * One resolved message-sound intent from sim-core `makeSound(channel, sound)` ids.
  * Mirrors the `doMessage` first-display `MakeSound("city", "...")` switch in
  * `ref/micropolis/src/sim/s_msg.c`.
@@ -143,39 +169,25 @@ export function resolveDoMessageHookSoundIntent(
 function playFirstDisplaySound(state: SimState, context: SimContext): void {
   const messageId = state.MesNum < 0 ? -state.MesNum : state.MesNum;
 
-  switch (messageId) {
-    case 12:
-      if (context.rng.rand(5) === 1) {
-        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_MED);
-      } else if (context.rng.rand(5) === 1) {
-        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_LOW);
-      } else if (context.rng.rand(5) === 1) {
-        context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_HIGH);
-      }
-      return;
-    case 11:
-    case 20:
-    case 22:
-    case 23:
-    case 24:
-    case 25:
-    case 26:
-    case 27:
-    case 44:
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
-      return;
-    case 21:
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_MONSTER);
-      return;
-    case 30:
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
-      return;
-    case 43:
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_HIGH);
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_EXPLOSION_LOW);
-      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_SIREN);
-      return;
+  // `s_msg.c doMessage` first-display switch `case 12`: chained `Rand(5)` checks.
+  if (messageId === 12) {
+    if (context.rng.rand(5) === 1) {
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_MED);
+    } else if (context.rng.rand(5) === 1) {
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_LOW);
+    } else if (context.rng.rand(5) === 1) {
+      context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, MESSAGE_SOUND_HONK_HIGH);
+    }
+    return;
+  }
+
+  const soundIds = DO_MESSAGE_FIRST_DISPLAY_SOUND_IDS_BY_MESSAGE_ID[messageId];
+  if (soundIds === undefined) {
+    return;
+  }
+
+  for (const soundId of soundIds) {
+    context.hooks.makeSound(MESSAGE_SOUND_CHANNEL_CITY, soundId);
   }
 }
 

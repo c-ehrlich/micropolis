@@ -111,7 +111,7 @@ Deliverable: protocol/test updates that compile and document sound envelope sema
 
 - [x] Replace route-side message-id sound mapping with host-emitted sound deltas only.
 - [x] Use sim-core `SimHooks.makeSound` capture as message sound source-of-truth (`doMessage` parity).
-- [ ] Keep mapping source-traceable to `s_msg.c` first-display switch.
+- [x] Keep mapping source-traceable to `s_msg.c` first-display switch.
 
 Deliverable: host emits authoritative sound deltas for tool/message/realtime sources.
 
