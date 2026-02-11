@@ -149,6 +149,7 @@ Deliverable: single authoritative sound path from host envelopes.
   - [x] token/spec
   - [x] wav file name
   - [x] C/Tcl source location
+    - [x] Inventory rows include line-level C trigger references plus Tcl dispatch entry references.
   - [ ] human-readable gameplay usage note
 - [ ] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
 - [ ] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
