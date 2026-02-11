@@ -130,6 +130,7 @@ type HudUiSetKey =
   | 'demandR'
   | 'demandC'
   | 'demandI'
+  | 'speed'
   | 'optionAutoBudget'
   | 'optionAutoGo'
   | 'optionAutoBulldoze'
@@ -159,7 +160,8 @@ const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
 const NEW_CITY_CURVE_LEVEL = -1;
 const NEW_CITY_CREATE_ISLAND = -1;
-const DEFAULT_PATCH_INTERVAL_MS = 180;
+// C runtime timer default from `sim_delay = 50` in `ref/micropolis/src/sim/sim.c`.
+const DEFAULT_PATCH_INTERVAL_MS = 50;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
@@ -962,6 +964,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * C integer and clamp behavior.
    */
   private setSimulationSpeed(candidate: number): void {
+    const previousVisibleSpeed = this.authorityState.simState.SimSpeed;
     let speed = normalizePlayableSpeed(candidate);
     this.authorityState.simState.SimMetaSpeed = speed;
 
@@ -971,6 +974,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.authorityState.simState.SimSpeed = speed;
+    const nextVisibleSpeed = this.authorityState.simState.SimSpeed;
+    if (nextVisibleSpeed !== previousVisibleSpeed) {
+      this.pendingHudUiSetKeys.add('speed');
+    }
     this.refreshAmbientInterval();
   }
 
@@ -1984,6 +1991,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.pendingHudUiSetKeys.has('demandR') ||
       this.pendingHudUiSetKeys.has('demandC') ||
       this.pendingHudUiSetKeys.has('demandI');
+    const hasSpeed = this.pendingHudUiSetKeys.has('speed');
     const hasOptions =
       this.pendingHudUiSetKeys.has('optionAutoBudget') ||
       this.pendingHudUiSetKeys.has('optionAutoGo') ||
@@ -1994,7 +2002,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.pendingHudUiSetKeys.has('optionDoMessages') ||
       this.pendingHudUiSetKeys.has('optionDoNotices');
 
-    if (!hasFunds && !hasDate && !hasDemand && !hasOptions) {
+    if (!hasFunds && !hasDate && !hasDemand && !hasSpeed && !hasOptions) {
       return undefined;
     }
 
@@ -2016,6 +2024,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
         c: this.hookHudState.demandC,
         i: this.hookHudState.demandI,
       };
+    }
+    if (hasSpeed) {
+      hudPayload.speed = this.simPaused ? 0 : this.authorityState.simState.SimMetaSpeed;
     }
     if (hasOptions) {
       hudPayload.options = { ...this.hookHudState.options };

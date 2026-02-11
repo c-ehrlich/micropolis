@@ -1249,6 +1249,55 @@ describe('createPlayableRuntimeHost', () => {
     }
   });
 
+  test('advances HUD date heads during ambient simulation without commands', () => {
+    vi.useFakeTimers();
+    const host = createPlayableRuntimeHost();
+    const hostEnvelopes: HostEnvelope[] = [];
+    const roomId = 'playable-cert-ambient-hud-date-room';
+    const clientId = 'playable-cert-ambient-hud-date-client';
+    const connection = host.connect((envelope) => {
+      hostEnvelopes.push(envelope);
+    });
+
+    try {
+      connection.send({
+        kind: 'hello',
+        roomId,
+        clientId,
+        protocolVersion: 'bridge-v1',
+        coreVersion: 'sim-core',
+      });
+
+      const initialSnapshot = hostEnvelopes.find(
+        (envelope): envelope is HostSnapshotEnvelope => envelope.kind === 'snapshot',
+      );
+      if (initialSnapshot === undefined) {
+        throw new Error('expected initial snapshot before ambient HUD progression');
+      }
+      const initialDateLabel = initialSnapshot.payload.hud?.date?.label;
+      if (typeof initialDateLabel !== 'string') {
+        throw new Error('expected initial snapshot HUD date label');
+      }
+
+      vi.advanceTimersByTime(5_000);
+
+      const ambientDatePatch = [...hostEnvelopes]
+        .reverse()
+        .find(
+          (envelope): envelope is HostPatchEnvelope =>
+            envelope.kind === 'patch' && typeof envelope.payload.hud?.date?.label === 'string',
+        );
+      if (ambientDatePatch === undefined) {
+        throw new Error('expected ambient HUD date patch');
+      }
+
+      expect(ambientDatePatch.payload.hud?.date?.label).not.toBe(initialDateLabel);
+    } finally {
+      connection.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   test('certifies new-city snapshot loads authoritative map and HUD heads', async () => {
     const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];

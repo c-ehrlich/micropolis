@@ -995,7 +995,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-a',
       tick: 3,
       serverSeq: 6,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 0,
+        },
+      },
     });
     expect(captured.envelopes[7]).toEqual({
       kind: 'ack',
@@ -1027,7 +1031,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-a',
       tick: 5,
       serverSeq: 10,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 2,
+        },
+      },
     });
     expect(captured.envelopes[11]).toEqual({
       kind: 'ack',
@@ -2865,7 +2873,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 4,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 0,
+        },
+      },
     });
     expect(secondSessionEnvelopes[4]).toMatchObject({
       kind: 'snapshot',
@@ -2880,7 +2892,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 6,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 0,
+        },
+      },
     });
 
     secondSession.disconnect();
@@ -2962,7 +2978,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-snapshot-cursor-clamp',
       tick: 1,
       serverSeq: 7,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 0,
+        },
+      },
     });
   });
 
@@ -3027,7 +3047,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-snapshot-replay-tail',
       tick: 2,
       serverSeq: 8,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 3,
+        },
+      },
     });
   });
 
@@ -3288,7 +3312,11 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-command-ordering',
       tick: 2,
       serverSeq: 5,
-      payload: {},
+      payload: {
+        hud: {
+          speed: 0,
+        },
+      },
     });
     expect(captured.envelopes[6]).toEqual({
       kind: 'reject',
