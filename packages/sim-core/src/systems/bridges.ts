@@ -26,6 +26,9 @@ const {
 } = Tile;
 
 const SHAPE_MASK = 15;
+const SHIP_SPRITE_TYPE = 4;
+const OPEN_DISTANCE_THRESHOLD = 300;
+const CLOSE_DISTANCE_THRESHOLD = 340;
 
 const HDX = [-2, 2, -2, -1, 0, 1, 2] as const;
 const HDY = [-1, -1, 0, 0, 0, 0, 0] as const;
@@ -75,21 +78,111 @@ const indexFor = (x: number, y: number) => x * WORLD_Y + y;
 
 const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < WORLD_X && y < WORLD_Y;
 
+interface ShipSpriteState {
+  x: number;
+  y: number;
+  x_hot: number;
+  y_hot: number;
+  frame: number;
+}
+
+/**
+ * Runtime ship-sprite shape guard used by bridge proximity checks.
+ * Mirrors `GetSprite(SHI)` object access in `ref/micropolis/src/sim/w_sprite.c`
+ * and `GetBoatDis` field usage in `ref/micropolis/src/sim/s_sim.c`.
+ */
+const isShipSpriteState = (value: unknown): value is ShipSpriteState => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const sprite = value as Partial<ShipSpriteState>;
+  return (
+    typeof sprite.x === 'number' &&
+    typeof sprite.y === 'number' &&
+    typeof sprite.x_hot === 'number' &&
+    typeof sprite.y_hot === 'number' &&
+    typeof sprite.frame === 'number'
+  );
+};
+
+/**
+ * Ship distance probe for one scanned bridge tile.
+ * Mirrors `GetBoatDis` in `ref/micropolis/src/sim/s_sim.c`:
+ * computes Manhattan distance from current map-tile center to active ship hotspot.
+ *
+ * Port note:
+ * - C iterates a sprite linked-list.
+ * - sim-core keeps one active sprite per type (`GetSprite` parity), so this reads
+ *   the current `SHI` sprite slot directly.
+ */
+const getBoatDistanceFromSprite = (scan: MapScanContext, context: SimContext): number => {
+  const sprite = context.hooks.getSprite(SHIP_SPRITE_TYPE);
+  if (!isShipSpriteState(sprite) || sprite.frame === 0) {
+    return DEFAULT_BOAT_DISTANCE;
+  }
+
+  const mx = (scan.x << 4) + 8;
+  const my = (scan.y << 4) + 8;
+
+  let dx = sprite.x + sprite.x_hot - mx;
+  if (dx < 0) {
+    dx = -dx;
+  }
+  let dy = sprite.y + sprite.y_hot - my;
+  if (dy < 0) {
+    dy = -dy;
+  }
+
+  return dx + dy;
+};
+
+/**
+ * Resolves bridge boat-distance input with C-compatible fallback semantics.
+ * Mirrors `GetBoatDis` use sites in `DoBridge` (`ref/micropolis/src/sim/s_sim.c`).
+ *
+ * Port note:
+ * - Existing host hooks default `getBoatDistance` to sentinel `99999`.
+ * - When that default is detected, this falls back to sprite-derived distance
+ *   so bridges still react to nearby ships like the C runtime.
+ */
+const resolveBoatDistance = (
+  scan: MapScanContext,
+  context: SimContext,
+  override?: () => number,
+): number => {
+  if (override) {
+    return override();
+  }
+
+  const hookDistance = context.hooks.getBoatDistance();
+  if (hookDistance !== DEFAULT_BOAT_DISTANCE) {
+    return hookDistance;
+  }
+
+  return getBoatDistanceFromSprite(scan, context);
+};
+
 export interface BridgeHandlerOptions {
   getBoatDistance?: () => number;
 }
 
+/**
+ * Bridge handler factory for road-map scan dispatch.
+ * Mirrors `DoRoad` -> `DoBridge` call wiring in `ref/micropolis/src/sim/s_sim.c`.
+ */
 export function createBridgeHandler(
   _state: SimState,
   context: SimContext,
   options: BridgeHandlerOptions = {},
 ): BridgeHandler {
-  const getBoatDistance =
-    options.getBoatDistance ?? context.hooks.getBoatDistance ?? (() => DEFAULT_BOAT_DISTANCE);
-
-  return (scan) => doBridge(scan, context, getBoatDistance);
+  return (scan) =>
+    doBridge(scan, context, () => resolveBoatDistance(scan, context, options.getBoatDistance));
 }
 
+/**
+ * Bridge open/close transition logic for road scan tiles.
+ * Mirrors `DoBridge` in `ref/micropolis/src/sim/s_sim.c` (1:1 tables/conditions).
+ */
 export function doBridge(
   scan: MapScanContext,
   context: SimContext,
@@ -100,7 +193,7 @@ export function doBridge(
   const baseY = scan.y;
 
   if (scan.tileId === BRWV) {
-    if ((context.rng.next16() & 3) === 0 && getBoatDistance() > 340) {
+    if ((context.rng.next16() & 3) === 0 && getBoatDistance() > CLOSE_DISTANCE_THRESHOLD) {
       for (let z = 0; z < 7; z += 1) {
         const vdx = VDX[z];
         const vdy = VDY[z];
@@ -125,7 +218,7 @@ export function doBridge(
   }
 
   if (scan.tileId === BRWH) {
-    if ((context.rng.next16() & 3) === 0 && getBoatDistance() > 340) {
+    if ((context.rng.next16() & 3) === 0 && getBoatDistance() > CLOSE_DISTANCE_THRESHOLD) {
       for (let z = 0; z < 7; z += 1) {
         const hdx = HDX[z];
         const hdy = HDY[z];
@@ -150,7 +243,7 @@ export function doBridge(
   }
 
   const boatDistance = getBoatDistance();
-  if (boatDistance < 300 || (context.rng.next16() & 7) === 0) {
+  if (boatDistance < OPEN_DISTANCE_THRESHOLD || (context.rng.next16() & 7) === 0) {
     if ((scan.tileId & 1) !== 0) {
       if (baseX < WORLD_X - 1) {
         const channelIndex = indexFor(baseX + 1, baseY);

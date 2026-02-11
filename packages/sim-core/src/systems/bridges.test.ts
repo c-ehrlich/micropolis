@@ -6,7 +6,7 @@ import { createClassicMapStore } from '../core/map-store.ts';
 import { MicropolisRng } from '../core/rng.ts';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
-import { doBridge } from './bridges.ts';
+import { createBridgeHandler, doBridge } from './bridges.ts';
 import type { MapScanContext } from './map-scan.ts';
 
 const { WORLD_Y } = World;
@@ -231,6 +231,113 @@ describe('DoBridge', () => {
 
     const scan = makeScan(context, state, baseX, baseY);
     const result = doBridge(scan, context, () => 200);
+
+    expect(result).toBe(false);
+
+    const map = store.getLayer('map') as Uint16Array;
+    for (let z = 0; z < 7; z += 1) {
+      const dxz = HDX[z];
+      const dyz = HDY[z];
+      assertDefined(dxz);
+      assertDefined(dyz);
+      const x = baseX + dxz;
+      const y = baseY + dyz;
+      const tile = map[indexFor(x, y)];
+      assertDefined(tile);
+      const expected = HBRTAB2[z];
+      assertDefined(expected);
+      expect(tile).toBe(expected);
+    }
+  });
+
+  it('opens near ships even when the random-open gate does not match', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    const context = createSimContext({
+      store,
+      // C parity: in `DoBridge` (`s_sim.c`), if `GetBoatDis() < 300`,
+      // opening does not depend on `Rand16() & 7`.
+      rng: new StubRng([1]),
+      hooks: {
+        getSprite: (type) => {
+          if (type !== 4) {
+            return null;
+          }
+          return {
+            // C parity source: `GetBoatDis` measures from tile center to ship hotspot.
+            // Here `x + x_hot` / `y + y_hot` lands exactly on the scan tile center.
+            x: 152,
+            y: 232,
+            x_hot: 48,
+            y_hot: 0,
+            frame: 1,
+          };
+        },
+      },
+    });
+
+    const baseX = 12;
+    const baseY = 14;
+    setPattern(store, baseX, baseY, HDX, HDY, HBRTAB2);
+    store.write('map', indexFor(baseX, baseY - 1), CHANNEL);
+
+    const scan = makeScan(context, state, baseX, baseY);
+    const bridgeHandler = createBridgeHandler(state, context);
+    const result = bridgeHandler(scan, state, context);
+
+    expect(result).toBe(true);
+
+    const map = store.getLayer('map') as Uint16Array;
+    for (let z = 0; z < 7; z += 1) {
+      const dxz = HDX[z];
+      const dyz = HDY[z];
+      assertDefined(dxz);
+      assertDefined(dyz);
+      const x = baseX + dxz;
+      const y = baseY + dyz;
+      const tile = map[indexFor(x, y)];
+      assertDefined(tile);
+      const expected = HBRTAB[z];
+      assertDefined(expected);
+      expect(tile).toBe(expected);
+    }
+  });
+
+  it('does not force open when ships are far and random-open gate misses', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    const context = createSimContext({
+      store,
+      // C parity: with `GetBoatDis() >= 300`, opening falls back to `!(Rand16() & 7)`.
+      rng: new StubRng([1]),
+      hooks: {
+        getSprite: (type) => {
+          if (type !== 4) {
+            return null;
+          }
+          return {
+            x: 0,
+            y: 0,
+            x_hot: 48,
+            y_hot: 0,
+            frame: 1,
+          };
+        },
+      },
+    });
+
+    const baseX = 12;
+    const baseY = 14;
+    setPattern(store, baseX, baseY, HDX, HDY, HBRTAB2);
+    store.write('map', indexFor(baseX, baseY - 1), CHANNEL);
+
+    const scan = makeScan(context, state, baseX, baseY);
+    const bridgeHandler = createBridgeHandler(state, context);
+    const result = bridgeHandler(scan, state, context);
 
     expect(result).toBe(false);
 
