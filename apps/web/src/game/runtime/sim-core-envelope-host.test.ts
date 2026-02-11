@@ -3291,7 +3291,11 @@ describe('SimCoreEnvelopeHost', () => {
       // `doMessage` first-display sound switch in `ref/micropolis/src/sim/s_msg.c`:
       // `case 20` (Siren), `case 21` (Monster), `case 30` (Explosion-Low + Siren).
       expect(
-        sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, messageId),
+        sendMes(
+          hostInternals.authorityState.simState,
+          hostInternals.authorityState.simContext,
+          messageId,
+        ),
       ).toBe(true);
       captured.send({
         kind: 'command',
