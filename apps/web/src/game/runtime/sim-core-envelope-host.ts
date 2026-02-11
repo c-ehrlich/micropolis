@@ -122,6 +122,7 @@ interface EmitSequencedEnvelopeOptions {
 interface SessionCommandQueueState {
   pending: SessionQueueItem[];
   draining: boolean;
+  pendingAmbientTicks: number;
 }
 interface ToolCommandOutcome {
   rejectReason: string | undefined;
@@ -374,6 +375,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.sessionCommandQueues.set(sessionId, {
       pending: [],
       draining: false,
+      pendingAmbientTicks: 0,
     });
     return sessionId;
   }
@@ -417,7 +419,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     const sessionQueue = this.readOrCreateSessionCommandQueue(sessionId);
+    // C timer ticks are periodic but not "must replay every missed interval";
+    // keep one pending ambient tick to avoid unbounded backlog growth.
+    if (sessionQueue.pendingAmbientTicks > 0) {
+      return;
+    }
     sessionQueue.pending.push({ kind: 'ambient-tick' });
+    sessionQueue.pendingAmbientTicks += 1;
     this.drainSessionCommandQueue(sessionId, sessionQueue);
   }
 
@@ -436,6 +444,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const queue: SessionCommandQueueState = {
       pending: [],
       draining: false,
+      pendingAmbientTicks: 0,
     };
     this.sessionCommandQueues.set(sessionId, queue);
     return queue;
@@ -479,6 +488,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
           continue;
         }
 
+        if (queue.pendingAmbientTicks > 0) {
+          queue.pendingAmbientTicks -= 1;
+        }
         this.handleAmbientTick(sessionId);
       }
     } finally {

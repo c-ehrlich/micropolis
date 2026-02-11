@@ -4466,6 +4466,65 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('coalesces ambient ticks while queue draining is in progress', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      lifecycle:
+        | {
+            phase: 'disconnected';
+          }
+        | {
+            phase: 'awaiting-hello';
+            sessionId: number;
+          }
+        | {
+            phase: 'ready';
+            sessionId: number;
+            roomId: string;
+            clientId: string;
+          };
+      hasStartedCitySession: boolean;
+      authorityState: {
+        simState: {
+          SimSpeed: number;
+        };
+      };
+      readOrCreateSessionCommandQueue(sessionId: number): {
+        pending: Array<{ kind: string }>;
+        draining: boolean;
+        pendingAmbientTicks: number;
+      };
+      enqueueAmbientTick(sessionId: number): void;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-ambient-coalesce',
+      clientId: 'client-ambient-coalesce',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    if (hostInternals.lifecycle.phase !== 'ready') {
+      throw new Error('expected ready lifecycle');
+    }
+
+    const sessionQueue = hostInternals.readOrCreateSessionCommandQueue(
+      hostInternals.lifecycle.sessionId,
+    );
+    hostInternals.hasStartedCitySession = true;
+    hostInternals.authorityState.simState.SimSpeed = 3;
+    sessionQueue.draining = true;
+
+    for (let i = 0; i < 2_000; i += 1) {
+      hostInternals.enqueueAmbientTick(hostInternals.lifecycle.sessionId);
+    }
+
+    expect(sessionQueue.pendingAmbientTicks).toBe(1);
+    expect(sessionQueue.pending.filter((item) => item.kind === 'ambient-tick')).toHaveLength(1);
+  });
+
   it('keeps serverSeq strictly increasing across sync and async sequenced envelope emission', async () => {
     const scenario = getScenarioDefinition(2);
     let resolveScenarioBytes: ((value: Uint8Array) => void) | undefined;
