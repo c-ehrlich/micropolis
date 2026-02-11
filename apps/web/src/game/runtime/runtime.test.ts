@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { createMicropolisGameplayAudioConsumer } from '../audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../audio/micropolis-gameplay-sound-playback-policy.ts';
 import {
   type ClientEnvelope,
@@ -516,6 +517,104 @@ describe('createWebHostRuntime', () => {
     expect(routedOutcomesWithSound).toEqual(['applied', 'gap-detected', 'dropped-stale']);
     expect(playedSoundSpecs).toEqual(['Siren']);
     expect(suppressedPlaybackOutcomes).toEqual(['gap-detected', 'dropped-stale']);
+  });
+
+  it('warns and skips missing-asset host sound playback without blocking runtime state updates', async () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const createAudioElement = vi.fn(() => {
+      return {
+        currentTime: 0,
+        preload: '',
+        src: '',
+        pause: () => undefined,
+        play: async () => undefined,
+      };
+    });
+    const gameplayAudioConsumer = createMicropolisGameplayAudioConsumer({
+      createAudioElement,
+      resolveWavAssetAvailability: async () => false,
+    });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const pendingPlayback: Promise<void>[] = [];
+
+    try {
+      runtime.subscribe((event) => {
+        const runtimeEnvelope = event.envelope;
+        if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+          return;
+        }
+
+        const shouldPlaySoundDeltas = playbackPolicy({
+          defaultShouldAttemptPlayback: event.outcome === 'applied',
+          reducerOutcome: event.outcome,
+          userSoundOn: event.state.hudState.options.userSoundOn,
+          envelopeKind: runtimeEnvelope.kind,
+        });
+        if (!shouldPlaySoundDeltas) {
+          return;
+        }
+
+        for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+          // Sugar `play_sound` catches missing wav errors and continues runtime execution
+          // (`ref/micropolis/micropolisactivity.py`), so web playback must warn+skip only.
+          pendingPlayback.push(
+            gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined),
+          );
+        }
+      });
+
+      runtime.connect();
+      host.emit({
+        kind: 'hello',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        protocolVersion: DEFAULT_PROTOCOL_VERSION,
+        coreVersion: DEFAULT_CORE_VERSION,
+        accepted: true,
+      });
+      host.emit({
+        kind: 'snapshot',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        tick: 1,
+        serverSeq: 1,
+        payload: {
+          map: { width: 1, height: 1, tileWords: [7] },
+        },
+        soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed 120' }],
+      });
+      host.emit({
+        kind: 'patch',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        tick: 2,
+        serverSeq: 2,
+        payload: {
+          map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        },
+      });
+
+      await Promise.all(pendingPlayback);
+
+      expect(createAudioElement).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Micropolis gameplay sound asset missing; skipping playback.',
+        {
+          token: 'monster',
+          soundSpec: 'Monster -speed 120',
+          wavPath: '/sounds/monster.wav',
+        },
+      );
+      expect(runtime.getState().lastAppliedServerSeq).toBe(2);
+      expect(runtime.getState().mapState.tiles[0]).toBe(9);
+    } finally {
+      warnSpy.mockRestore();
+      gameplayAudioConsumer.dispose();
+    }
   });
 
   it('creates pending visuals on sendCommand and settles them on ack/reject', () => {
