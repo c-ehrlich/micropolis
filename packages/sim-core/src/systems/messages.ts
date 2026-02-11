@@ -82,6 +82,55 @@ const MESSAGE_SOUND_SIREN = 4;
 const MESSAGE_SOUND_MONSTER = 5;
 const MESSAGE_SOUND_EXPLOSION_LOW = 6;
 const MESSAGE_SOUND_EXPLOSION_HIGH = 7;
+const MESSAGE_SOUND_CHANNEL_NAME_BY_ID: Readonly<Record<number, string>> = {
+  [MESSAGE_SOUND_CHANNEL_CITY]: 'city',
+};
+const MESSAGE_SOUND_SPEC_BY_ID: Readonly<Record<number, string>> = {
+  [MESSAGE_SOUND_HONK_MED]: 'HonkHonk-Med',
+  [MESSAGE_SOUND_HONK_LOW]: 'HonkHonk-Low',
+  [MESSAGE_SOUND_HONK_HIGH]: 'HonkHonk-High',
+  [MESSAGE_SOUND_SIREN]: 'Siren',
+  [MESSAGE_SOUND_MONSTER]: 'Monster -speed [MonsterSpeed]',
+  [MESSAGE_SOUND_EXPLOSION_LOW]: 'Explosion-Low',
+  [MESSAGE_SOUND_EXPLOSION_HIGH]: 'Explosion-High',
+};
+
+/**
+ * One resolved message-sound intent from sim-core `makeSound(channel, sound)` ids.
+ * Mirrors the `doMessage` first-display `MakeSound("city", "...")` switch in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: C routes named channel/spec strings directly, while sim-core emits
+ * numeric hook ids; this structure is the canonical id->string bridge for consumers.
+ */
+export interface DoMessageHookSoundIntent {
+  readonly channel: string;
+  readonly soundSpec: string;
+}
+
+/**
+ * Resolves one sim-core `SimHooks.makeSound(channel, sound)` payload to the
+ * Micropolis channel/spec pair used by `doMessage` first-display sounds.
+ * Mirrors `MakeSound("city", "...")` callsites in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: unknown ids intentionally return `null` so non-message callers
+ * can coexist on the same hook without accidental remapping.
+ */
+export function resolveDoMessageHookSoundIntent(
+  channel: number,
+  sound: number,
+): DoMessageHookSoundIntent | null {
+  const normalizedChannel = Math.trunc(channel);
+  const normalizedSound = Math.trunc(sound);
+  const channelName = MESSAGE_SOUND_CHANNEL_NAME_BY_ID[normalizedChannel];
+  const soundSpec = MESSAGE_SOUND_SPEC_BY_ID[normalizedSound];
+  if (channelName === undefined || soundSpec === undefined) {
+    return null;
+  }
+  return {
+    channel: channelName,
+    soundSpec,
+  };
+}
 
 /**
  * First-display sound effects for queued messages.

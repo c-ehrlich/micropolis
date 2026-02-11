@@ -44,6 +44,7 @@ import {
   ptlScan,
   type RealtimeContext,
   resetForNewCityFromSeed,
+  resolveDoMessageHookSoundIntent,
   runMapScanPhase,
   runRealtimeTick,
   runSimLoop,
@@ -167,10 +168,6 @@ const NEW_CITY_CREATE_ISLAND = -1;
 const DEFAULT_PATCH_INTERVAL_MS = 50;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
-const SIM_CORE_SOUND_CHANNEL_CITY = 0;
-const SIM_CORE_SOUND_CHANNEL_BY_ID: Readonly<Record<number, string>> = {
-  [SIM_CORE_SOUND_CHANNEL_CITY]: 'city',
-};
 const TOOL_SOUND_CHANNEL = 'edit';
 const TOOL_SOUND_SCOPE_TARGET = '.playMap';
 const TOOL_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
@@ -181,16 +178,6 @@ const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
   'out-of-bounds': 'UhUh',
   'no-funds': 'Sorry',
 } satisfies Record<'out-of-bounds' | 'no-funds', string>);
-const SIM_CORE_SOUND_SPEC_BY_ID: Readonly<Record<number, string>> = {
-  // `doMessage` first-display sound specs in `ref/micropolis/src/sim/s_msg.c`.
-  1: 'HonkHonk-Med',
-  2: 'HonkHonk-Low',
-  3: 'HonkHonk-High',
-  4: 'Siren',
-  5: 'Monster -speed [MonsterSpeed]',
-  6: 'Explosion-Low',
-  7: 'Explosion-High',
-};
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -2003,11 +1990,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * emitted by sim-core message paths from `ref/micropolis/src/sim/s_msg.c`.
    */
   private captureSimCoreHookSound(channel: number, sound: number): void {
-    const soundDelta = mapSimCoreHookSoundToHostSoundDelta(channel, sound);
-    if (soundDelta === null) {
+    const soundIntent = resolveDoMessageHookSoundIntent(channel, sound);
+    if (soundIntent === null) {
       return;
     }
-    this.enqueuePendingSoundDeltaForTick(this.tick, soundDelta);
+    this.enqueuePendingSoundDeltaForTick(this.tick, soundIntent);
   }
 
   /**
@@ -2604,29 +2591,6 @@ function cloneHostSoundDeltaPayloadList(
   soundDeltas: readonly HostSoundDeltaPayload[],
 ): HostSoundDeltaPayload[] {
   return soundDeltas.map((soundDelta) => cloneHostSoundDeltaPayload(soundDelta));
-}
-
-/**
- * Maps sim-core numeric `makeSound(channel,sound)` hook ids to Micropolis
- * channel/spec transport payloads.
- * Mirrors `doMessage` first-display `MakeSound("city", "...")` switch in
- * `ref/micropolis/src/sim/s_msg.c`, adapted from sim-core numeric hook ids.
- */
-function mapSimCoreHookSoundToHostSoundDelta(
-  channel: number,
-  sound: number,
-): HostSoundDeltaPayload | null {
-  const normalizedChannel = Math.trunc(channel);
-  const normalizedSound = Math.trunc(sound);
-  const channelName = SIM_CORE_SOUND_CHANNEL_BY_ID[normalizedChannel];
-  const soundSpec = SIM_CORE_SOUND_SPEC_BY_ID[normalizedSound];
-  if (channelName === undefined || soundSpec === undefined) {
-    return null;
-  }
-  return {
-    channel: channelName,
-    soundSpec,
-  };
 }
 
 /**

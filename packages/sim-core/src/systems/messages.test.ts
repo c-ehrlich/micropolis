@@ -8,7 +8,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
 import { updateDate } from './date-time.ts';
-import { checkGrowth, doScenarioScore, sendMes, sendMesAt, sendMessages } from './messages.ts';
+import {
+  checkGrowth,
+  doScenarioScore,
+  resolveDoMessageHookSoundIntent,
+  sendMes,
+  sendMesAt,
+  sendMessages,
+} from './messages.ts';
 
 describe('SendMes', () => {
   it('gates positive messages until the port is consumed', () => {
@@ -236,6 +243,26 @@ describe('doMessage parity', () => {
     // stay de-duplicated (SetMessageField parity in s_msg.c).
     updateDate(state, context);
     expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveDoMessageHookSoundIntent', () => {
+  it('maps doMessage makeSound ids to canonical Micropolis channel/spec strings', () => {
+    // `doMessage` in `ref/micropolis/src/sim/s_msg.c` emits
+    // `MakeSound("city", "Siren")` and `MakeSound("city", "Explosion-Low")`.
+    expect(resolveDoMessageHookSoundIntent(0, 4)).toEqual({
+      channel: 'city',
+      soundSpec: 'Siren',
+    });
+    expect(resolveDoMessageHookSoundIntent(0, 6)).toEqual({
+      channel: 'city',
+      soundSpec: 'Explosion-Low',
+    });
+  });
+
+  it('returns null for unknown channel/sound ids', () => {
+    expect(resolveDoMessageHookSoundIntent(99, 4)).toBeNull();
+    expect(resolveDoMessageHookSoundIntent(0, 99)).toBeNull();
   });
 });
 
