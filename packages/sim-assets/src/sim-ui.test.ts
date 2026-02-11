@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   listSimUiToolAssetHelpers,
   resolveSimUiDidToolSoundIntent,
+  resolveSimUiPlayableToolDidToolSoundIntent,
   resolveSimUiToolAssetHelper,
   resolveSimUiToolHelpDocId,
   resolveSimUiToolHelpHtmlFileName,
@@ -127,6 +128,37 @@ describe('sim-ui helper parity', () => {
       channel: 'edit',
       soundSpec: 'A -speed 50',
     });
+  });
+
+  it('maps every playable tool name to UIDidTool token and Tcl sound spec', () => {
+    // `UIDidTool*` procedure suffixes and `UIMakeSoundOn` specs come from
+    // `ref/micropolis/res/micropolis.tcl` callback bodies.
+    const expectedByTool = {
+      res: { didToolToken: 'Res', channel: 'edit', soundSpec: 'O -speed 140' },
+      com: { didToolToken: 'Com', channel: 'edit', soundSpec: 'A -speed 140' },
+      ind: { didToolToken: 'Ind', channel: 'edit', soundSpec: 'E -speed 140' },
+      fire: { didToolToken: 'Fire', channel: 'edit', soundSpec: 'O -speed 130' },
+      query: { didToolToken: 'Qry', channel: 'edit', soundSpec: 'E -speed 200' },
+      police: { didToolToken: 'Pol', channel: 'edit', soundSpec: 'E -speed 130' },
+      wire: { didToolToken: 'Wire', channel: 'edit', soundSpec: 'O -speed 120' },
+      bulldoze: { didToolToken: 'Dozr', channel: 'edit', soundSpec: 'Rumble' },
+      rail: { didToolToken: 'Rail', channel: 'edit', soundSpec: 'O -speed 100' },
+      road: { didToolToken: 'Road', channel: 'edit', soundSpec: 'E -speed 100' },
+      stadium: { didToolToken: 'Stad', channel: 'edit', soundSpec: 'O -speed 90' },
+      park: { didToolToken: 'Park', channel: 'edit', soundSpec: 'A -speed 130' },
+      seaport: { didToolToken: 'Seap', channel: 'edit', soundSpec: 'E -speed 90' },
+      coal: { didToolToken: 'Coal', channel: 'edit', soundSpec: 'O -speed 75' },
+      nuclear: { didToolToken: 'Nuc', channel: 'edit', soundSpec: 'E -speed 75' },
+      airport: { didToolToken: 'Airp', channel: 'edit', soundSpec: 'A -speed 50' },
+    } as const;
+
+    for (const [tool, expectedIntent] of Object.entries(expectedByTool)) {
+      expect(resolveSimUiPlayableToolDidToolSoundIntent(tool)).toEqual(expectedIntent);
+    }
+
+    expect(resolveSimUiPlayableToolDidToolSoundIntent('chalk')).toBeUndefined();
+    expect(resolveSimUiPlayableToolDidToolSoundIntent('eraser')).toBeUndefined();
+    expect(resolveSimUiPlayableToolDidToolSoundIntent('network')).toBeUndefined();
   });
 
   it('resolves canonical icon asset keys with optional derived png overlays', () => {

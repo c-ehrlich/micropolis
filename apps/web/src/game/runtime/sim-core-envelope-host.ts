@@ -1,7 +1,7 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
-import { resolveSimUiDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
+import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
   cityEvaluation,
@@ -55,7 +55,6 @@ import {
   type SimSprite,
   take2Census,
   takeCensus,
-  TOOL_STATE,
   type ToolResult,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
@@ -2062,8 +2061,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (!this.isHostSoundEmissionEnabled()) {
       return [];
     }
-    const toolState = TOOL_STATE[tool];
-    const soundIntent = resolveSimUiDidToolSoundIntent(toolState);
+    const soundIntent = resolveSimUiPlayableToolDidToolSoundIntent(tool);
     if (soundIntent === undefined) {
       return [];
     }
