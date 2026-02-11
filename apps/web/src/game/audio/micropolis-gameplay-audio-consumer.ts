@@ -123,6 +123,7 @@ export function createMicropolisGameplayAudioConsumer(
         audioElement.src = '';
       }
       audioByPath.clear();
+      wavAssetAvailabilityByPath.clear();
     },
   };
 }

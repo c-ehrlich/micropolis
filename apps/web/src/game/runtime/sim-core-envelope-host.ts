@@ -386,6 +386,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.stopAmbientInterval();
+    this.pendingSoundDeltasByTick.clear();
     this.onEnvelope = undefined;
     this.lifecycle = { phase: 'disconnected' };
     this.sessionCommandQueues.delete(sessionId);
