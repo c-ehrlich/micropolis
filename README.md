@@ -8,7 +8,7 @@ I wanted to push how long I can run the current generation of LLMs unattended if
 
 I used exclusively `gpt-5.3-codex` with thinking set to high. After 4 days of work (most of it just letting Codex run unattended), this is what I ended up with.
 
-My main innovation was creating a harness that calls the C code and uses `fast-check` to assert that my code behaves the same as the source for arbitray input.
+My main innovation was creating a harness that calls the C code and uses `fast-check` to assert that my code behaves the same as the source for arbitray input, allowing the model to work unattended until it reaches a complete solution.
 
 Surprisingly this got a lot of attention on Twitter, including
 
