@@ -233,6 +233,13 @@ export interface PlayableToolCommand {
  */
 export type PlayableSimSpeed = Extract<CitySimSpeedV1, 1 | 2 | 3>;
 
+/**
+ * Playable Runtime game difficulty level id.
+ * Mirrors `GameLevel` and `SetGameLevelFunds(short)` level domain in
+ * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
+ */
+export type PlayableGameLevel = 0 | 1 | 2;
+
 const PLAYABLE_TO_CANONICAL_TOOL_NAME: Record<PlayableToolName, PlayableCanonicalToolName> = {
   res: 'residential',
   com: 'commercial',
@@ -318,6 +325,7 @@ export type PlayableSimControlCommand =
 export interface PlayableNewCityCommand {
   kind: 'city-lifecycle';
   action: 'new-city';
+  gameLevel?: PlayableGameLevel;
 }
 
 /**
@@ -365,6 +373,7 @@ export interface PlayableLoadScenarioCommand {
   kind: 'scenario';
   action: 'load-scenario';
   scenarioId: number;
+  gameLevel?: PlayableGameLevel;
 }
 
 /**
@@ -1113,6 +1122,15 @@ export function isPlayableSimControlCommand(
 }
 
 /**
+ * Returns true when one candidate matches C game-level domain `0..2`.
+ * Mirrors `SimCmdGameLevel` range checks and `SetGameLevelFunds(short)` level
+ * switching in `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_util.c`.
+ */
+function isPlayableGameLevel(value: unknown): value is PlayableGameLevel {
+  return value === 0 || value === 1 || value === 2;
+}
+
+/**
  * Returns true when a client payload is a Playable Runtime city lifecycle command.
  * Mirrors city lifecycle command gatekeeping in `ref/micropolis/src/sim/w_sim.c`.
  */
@@ -1124,7 +1142,11 @@ export function isPlayableCityLifecycleCommand(
   }
 
   const candidate = command as Partial<PlayableCityLifecycleCommand>;
-  return candidate.kind === 'city-lifecycle' && candidate.action === 'new-city';
+  return (
+    candidate.kind === 'city-lifecycle' &&
+    candidate.action === 'new-city' &&
+    (candidate.gameLevel === undefined || isPlayableGameLevel(candidate.gameLevel))
+  );
 }
 
 /**
@@ -1169,7 +1191,8 @@ export function isPlayableScenarioCommand(command: unknown): command is Playable
     candidate.action === 'load-scenario' &&
     typeof candidate.scenarioId === 'number' &&
     Number.isFinite(candidate.scenarioId) &&
-    Number.isInteger(candidate.scenarioId)
+    Number.isInteger(candidate.scenarioId) &&
+    (candidate.gameLevel === undefined || isPlayableGameLevel(candidate.gameLevel))
   );
 }
 

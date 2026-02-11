@@ -28,7 +28,7 @@ import {
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
-import { type CoreHost } from '../game/runtime/protocol.ts';
+import { type CoreHost, type PlayableGameLevel } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -49,7 +49,16 @@ const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
   }),
 );
 type TopMenubarSection = 'game' | 'disasters' | 'runtime';
-type GameDialogKind = 'save' | 'load' | 'scenario';
+type GameDialogKind = 'new' | 'save' | 'load' | 'scenario';
+const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
+  id: PlayableGameLevel;
+  label: 'Easy' | 'Medium' | 'Hard';
+  startingFundsLabel: string;
+}> = [
+  { id: 0, label: 'Easy', startingFundsLabel: '$20,000' },
+  { id: 1, label: 'Medium', startingFundsLabel: '$10,000' },
+  { id: 2, label: 'Hard', startingFundsLabel: '$5,000' },
+];
 
 /**
  * Triggers one playable-route manual disaster control click and returns status text.
@@ -138,6 +147,7 @@ function RuntimePanel() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
     PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
   );
+  const [selectedGameLevel, setSelectedGameLevel] = useState<PlayableGameLevel>(0);
   const [hasStartedPlayableSession, setHasStartedPlayableSession] = useState(false);
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
@@ -356,12 +366,7 @@ function RuntimePanel() {
                 <button
                   disabled={controlsDisabled}
                   onClick={() => {
-                    setHasStartedPlayableSession(true);
-                    setSaveFileName('newcity.cty');
-                    runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                      kind: 'city-lifecycle',
-                      action: 'new-city',
-                    });
+                    setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
                   style={{ textAlign: 'left' }}
@@ -940,6 +945,58 @@ function RuntimePanel() {
               </form>
             )}
 
+            {gameDialog !== 'new' ? null : (
+              <section style={{ display: 'grid', gap: 10 }}>
+                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>New Game</strong>
+                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                  Difficulty
+                  <select
+                    autoFocus
+                    disabled={controlsDisabled}
+                    onChange={(event) => {
+                      const level = Number.parseInt(event.target.value, 10);
+                      if (level === 0 || level === 1 || level === 2) {
+                        setSelectedGameLevel(level);
+                      }
+                    }}
+                    value={selectedGameLevel}
+                  >
+                    {PLAYABLE_GAME_LEVEL_CHOICES.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label} (Starting Funds: {choice.startingFundsLabel})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => {
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={controlsDisabled}
+                    onClick={() => {
+                      setHasStartedPlayableSession(true);
+                      setSaveFileName('newcity.cty');
+                      runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                        kind: 'city-lifecycle',
+                        action: 'new-city',
+                        gameLevel: selectedGameLevel,
+                      });
+                      setGameDialog(null);
+                    }}
+                    type="button"
+                  >
+                    Start New City
+                  </button>
+                </div>
+              </section>
+            )}
+
             {gameDialog !== 'load' ? null : (
               <section style={{ display: 'grid', gap: 10 }}>
                 <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Load City</strong>
@@ -1007,20 +1064,42 @@ function RuntimePanel() {
             {gameDialog !== 'scenario' ? null : (
               <section style={{ display: 'grid', gap: 10 }}>
                 <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Scenario</strong>
-                <select
-                  autoFocus
-                  disabled={controlsDisabled}
-                  onChange={(event) => {
-                    setSelectedScenarioId(Number.parseInt(event.target.value, 10));
-                  }}
-                  value={selectedScenarioId}
-                >
-                  {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
-                    <option key={scenario.id} value={scenario.id}>
-                      {scenario.id}. {scenario.name} ({scenario.startYear})
-                    </option>
-                  ))}
-                </select>
+                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                  Scenario
+                  <select
+                    autoFocus
+                    disabled={controlsDisabled}
+                    onChange={(event) => {
+                      setSelectedScenarioId(Number.parseInt(event.target.value, 10));
+                    }}
+                    value={selectedScenarioId}
+                  >
+                    {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
+                      <option key={scenario.id} value={scenario.id}>
+                        {scenario.id}. {scenario.name} ({scenario.startYear})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                  Difficulty
+                  <select
+                    disabled={controlsDisabled}
+                    onChange={(event) => {
+                      const level = Number.parseInt(event.target.value, 10);
+                      if (level === 0 || level === 1 || level === 2) {
+                        setSelectedGameLevel(level);
+                      }
+                    }}
+                    value={selectedGameLevel}
+                  >
+                    {PLAYABLE_GAME_LEVEL_CHOICES.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label} (Starting Funds: {choice.startingFundsLabel})
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button
                     onClick={() => {
@@ -1044,6 +1123,7 @@ function RuntimePanel() {
                         kind: 'scenario',
                         action: 'load-scenario',
                         scenarioId: selectedScenarioId,
+                        gameLevel: selectedGameLevel,
                       });
                       setGameDialog(null);
                     }}

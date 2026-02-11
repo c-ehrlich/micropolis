@@ -1107,6 +1107,86 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('applies selected game level when starting new-city and scenario sessions', async () => {
+    const scenario = getScenarioDefinition(2);
+    const scenarioBytes = new Uint8Array(
+      readFileSync(
+        new URL(`../../../../../ref/micropolis/res/${scenario.fileName}`, import.meta.url),
+      ),
+    );
+    const host = new SimCoreEnvelopeHost({
+      scenarioResourceLoader: async (_fileName: string) => scenarioBytes,
+    });
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          GameLevel: number;
+          TotalFunds: number;
+        };
+      };
+    };
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-game-level',
+      clientId: 'client-game-level',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-game-level',
+      clientId: 'client-game-level',
+      commandId: 'cmd-new-city-hard',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        gameLevel: 2,
+      },
+    });
+
+    // Magic-number source: `SetGameLevelFunds(short)` in `ref/micropolis/src/sim/w_util.c`
+    // maps hard (`2`) to `SetFunds(5000)` and medium (`1`) to `SetFunds(10000)`.
+    expect(hostInternals.authorityState.simState.GameLevel).toBe(2);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(5_000);
+
+    const newCitySnapshot = captured.envelopes.at(-1);
+    if (newCitySnapshot === undefined || newCitySnapshot.kind !== 'snapshot') {
+      throw new Error('expected new-city snapshot envelope');
+    }
+    expect(newCitySnapshot.payload.hud?.funds).toBe(5_000);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-game-level',
+      clientId: 'client-game-level',
+      commandId: 'cmd-scenario-medium',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: scenario.id,
+        gameLevel: 1,
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(hostInternals.authorityState.simState.GameLevel).toBe(1);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(10_000);
+
+    const scenarioAckIndex = captured.envelopes.findIndex(
+      (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-scenario-medium',
+    );
+    expect(scenarioAckIndex).toBeGreaterThanOrEqual(0);
+    const scenarioSnapshot = captured.envelopes[scenarioAckIndex + 1];
+    if (scenarioSnapshot === undefined || scenarioSnapshot.kind !== 'snapshot') {
+      throw new Error('expected scenario snapshot envelope');
+    }
+    expect(scenarioSnapshot.payload.hud?.funds).toBe(10_000);
+  });
+
   it('captures makeSound/sendMes/sendMesAt hooks into patch deltas and preserves replay metadata on snapshots', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);

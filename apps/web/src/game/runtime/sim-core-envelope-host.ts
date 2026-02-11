@@ -162,7 +162,12 @@ const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
 const MESSAGE_LOG_LIMIT = 24;
 const REPLAY_HISTORY_LIMIT = 1024;
-const NEW_CITY_STARTING_FUNDS = 20_000;
+const EASY_GAME_LEVEL = 0;
+const MEDIUM_GAME_LEVEL = 1;
+const HARD_GAME_LEVEL = 2;
+const EASY_GAME_LEVEL_STARTING_FUNDS = 20_000;
+const MEDIUM_GAME_LEVEL_STARTING_FUNDS = 10_000;
+const HARD_GAME_LEVEL_STARTING_FUNDS = 5_000;
 const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
 const NEW_CITY_CURVE_LEVEL = -1;
@@ -1017,6 +1022,32 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Applies C-style game-level + starting-funds mapping on authoritative state.
+   * Mirrors `SetGameLevelFunds(short)` in `ref/micropolis/src/sim/w_util.c`:
+   * - easy (`0`) => `$20,000`
+   * - medium (`1`) => `$10,000`
+   * - hard (`2`) => `$5,000`
+   *
+   * Parity note: this helper is used as an opt-in on scenario start, since the
+   * base `LoadScenario` path in C initializes its own scenario-specific funds.
+   */
+  private applyGameLevelFunds(level: 0 | 1 | 2): void {
+    switch (level) {
+      case MEDIUM_GAME_LEVEL:
+        setFunds(this.authorityState.simState, MEDIUM_GAME_LEVEL_STARTING_FUNDS);
+        break;
+      case HARD_GAME_LEVEL:
+        setFunds(this.authorityState.simState, HARD_GAME_LEVEL_STARTING_FUNDS);
+        break;
+      default:
+        setFunds(this.authorityState.simState, EASY_GAME_LEVEL_STARTING_FUNDS);
+        break;
+    }
+
+    this.authorityState.simState.GameLevel = level;
+  }
+
+  /**
    * Starts the authority-owned ambient simulation timer for one ready session.
    * Mirrors `StartMicropolisTimer()` start ownership in `ref/micropolis/src/sim/w_util.c`.
    */
@@ -1073,7 +1104,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * regenerate terrain, re-run init lifecycle, and reset city metadata to defaults.
    * Parity note: host-only UI/eval calls in C remain outside this envelope host.
    */
-  private applyCityLifecycleCommand(_command: PlayableCityLifecycleCommand): void {
+  private applyCityLifecycleCommand(command: PlayableCityLifecycleCommand): void {
     const terrainSeed = this.authorityState.simContext.rng.next16();
     resetForNewCityFromSeed(this.authorityState.simState, this.authorityState.simContext, {
       seed: terrainSeed,
@@ -1083,7 +1114,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       createIsland: NEW_CITY_CREATE_ISLAND,
     });
 
-    setFunds(this.authorityState.simState, NEW_CITY_STARTING_FUNDS);
+    const gameLevel = command.gameLevel ?? EASY_GAME_LEVEL;
+    this.applyGameLevelFunds(gameLevel);
     this.authorityState.simState.SimMetaSpeed = 3;
     this.authorityState.simState.SimSpeed = 3;
     this.cityFileName = DEFAULT_CITY_FILE_NAME;
@@ -1233,6 +1265,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
       }
       this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
       return;
+    }
+
+    if (command.gameLevel !== undefined) {
+      this.applyGameLevelFunds(command.gameLevel);
     }
 
     this.cityFileName = `${loadResult.scenario.fileName}.cty`;

@@ -14,6 +14,7 @@ import {
   isHostSoundDeltaPayload,
   isHostSoundScopePayload,
   isPlayableBridgeCommandType,
+  isPlayableCityLifecycleCommand,
   isPlayableScenarioCommand,
   PLAYABLE_BRIDGE_COMMAND_TYPES,
   PLAYABLE_TOOL_SPECS,
@@ -198,6 +199,43 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         kind: 'scenario',
         action: 'load-scenario',
         scenarioId: 1.5,
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts only 0..2 game level ids on new-city/scenario command gates', () => {
+    // Magic-number source: `SetGameLevelFunds(short)` and `SimCmdGameLevel`
+    // in `ref/micropolis/src/sim/w_util.c` / `ref/micropolis/src/sim/w_sim.c`
+    // define game level domain as Easy=0, Medium=1, Hard=2.
+    expect(
+      isPlayableCityLifecycleCommand({
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        gameLevel: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableCityLifecycleCommand({
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        gameLevel: 3,
+      }),
+    ).toBe(false);
+
+    expect(
+      isPlayableScenarioCommand({
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 1,
+        gameLevel: 2,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableScenarioCommand({
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: 1,
+        gameLevel: -1,
       }),
     ).toBe(false);
   });
