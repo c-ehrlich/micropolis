@@ -39,11 +39,20 @@ describe('micropolis gameplay audio consumer', () => {
     expect(normalizeMicropolisGameplaySoundToken('  HonkHonk-Low   -speed 80 ')).toBe(
       'honkhonk-low',
     );
+    expect(
+      normalizeMicropolisGameplaySoundToken(
+        ' Explosion-High -speed [expr 100 * $sound_high_quality]',
+      ),
+    ).toBe('explosion-high');
+    expect(normalizeMicropolisGameplaySoundToken('\tSIREN\n-speed 90')).toBe('siren');
   });
 
   it('builds gameplay wav path from normalized token stem', () => {
     expect(toMicropolisGameplaySoundWavPath('Explosion-High')).toBe('/sounds/explosion-high.wav');
     expect(toMicropolisGameplaySoundWavPath('Siren')).toBe('/sounds/siren.wav');
+    expect(toMicropolisGameplaySoundWavPath('HonkHonk-Low   -speed 80')).toBe(
+      '/sounds/honkhonk-low.wav',
+    );
   });
 
   it('caches one audio element per normalized wav path and rewinds on replay', async () => {

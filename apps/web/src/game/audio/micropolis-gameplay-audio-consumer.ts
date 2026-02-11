@@ -43,7 +43,16 @@ export interface CreateMicropolisGameplayAudioConsumerOptions {
  * Difference: none; this is a 1:1 normalization rule.
  */
 export function normalizeMicropolisGameplaySoundToken(soundSpec: string): string {
-  const firstToken = soundSpec.trim().split(/\s+/, 1)[0] ?? '';
+  const trimmedSoundSpec = soundSpec.trimStart();
+  if (trimmedSoundSpec === '') {
+    return '';
+  }
+
+  const firstWhitespaceIndex = trimmedSoundSpec.search(/\s/);
+  const firstToken =
+    firstWhitespaceIndex === -1
+      ? trimmedSoundSpec
+      : trimmedSoundSpec.slice(0, firstWhitespaceIndex);
   return firstToken.toLowerCase();
 }
 
