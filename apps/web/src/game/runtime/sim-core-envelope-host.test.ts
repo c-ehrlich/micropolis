@@ -3071,6 +3071,61 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('queues pending sound events by authoritative tick and drains one tick at a time', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      tick: number;
+      captureRealtimeSound(channel: string, soundSpec: string): void;
+      captureSimCoreHookSound(channel: number, sound: number): void;
+      drainPendingSoundDeltasForTick(tick?: number): HostSoundDeltaPayload[];
+    };
+
+    hostInternals.tick = 3;
+    hostInternals.captureRealtimeSound('city', 'Siren');
+    // sim-core message sound hook ids:
+    // channel `0` (city) and sound `6` (`Explosion-Low`) from
+    // `packages/sim-core/src/systems/messages.ts`, mirroring `doMessage` in `s_msg.c`.
+    hostInternals.captureSimCoreHookSound(0, 6);
+
+    hostInternals.tick = 4;
+    hostInternals.captureRealtimeSound('warning', 'UhUh');
+
+    expect(hostInternals.drainPendingSoundDeltasForTick(3)).toEqual([
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+      },
+      {
+        channel: 'city',
+        soundSpec: 'Explosion-Low',
+      },
+    ]);
+    expect(hostInternals.drainPendingSoundDeltasForTick(3)).toEqual([]);
+    expect(hostInternals.drainPendingSoundDeltasForTick(4)).toEqual([
+      {
+        channel: 'warning',
+        soundSpec: 'UhUh',
+      },
+    ]);
+  });
+
+  it('drops unknown sim-core numeric sound ids from the pending tick queue', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      tick: number;
+      captureSimCoreHookSound(channel: number, sound: number): void;
+      drainPendingSoundDeltasForTick(tick?: number): HostSoundDeltaPayload[];
+    };
+
+    hostInternals.tick = 8;
+    // `99` channel/sound ids are outside the current sim-core message sound id domain
+    // in `packages/sim-core/src/systems/messages.ts` and therefore should not queue.
+    hostInternals.captureSimCoreHookSound(99, 4);
+    hostInternals.captureSimCoreHookSound(0, 99);
+
+    expect(hostInternals.drainPendingSoundDeltasForTick(8)).toEqual([]);
+  });
+
   it('preserves replay-tail sound deltas even if a previously emitted envelope is mutated', () => {
     const roomId = 'room-sound-replay-tail';
     const clientId = 'client-sound-replay-tail';

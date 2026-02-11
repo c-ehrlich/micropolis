@@ -165,6 +165,20 @@ const NEW_CITY_CREATE_ISLAND = -1;
 const DEFAULT_PATCH_INTERVAL_MS = 50;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
+const SIM_CORE_SOUND_CHANNEL_CITY = 0;
+const SIM_CORE_SOUND_CHANNEL_BY_ID: Readonly<Record<number, string>> = {
+  [SIM_CORE_SOUND_CHANNEL_CITY]: 'city',
+};
+const SIM_CORE_SOUND_SPEC_BY_ID: Readonly<Record<number, string>> = {
+  // `doMessage` first-display sound specs in `ref/micropolis/src/sim/s_msg.c`.
+  1: 'HonkHonk-Med',
+  2: 'HonkHonk-Low',
+  3: 'HonkHonk-High',
+  4: 'Siren',
+  5: 'Monster -speed [MonsterSpeed]',
+  6: 'Explosion-Low',
+  7: 'Explosion-High',
+};
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -262,6 +276,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
   private pendingHookMessages: HostHudMessagePayload[] = [];
+  private readonly pendingSoundDeltasByTick = new Map<number, HostSoundDeltaPayload[]>();
   private readonly messageLog: HostHudMessagePayload[] = [];
   private readonly realtimeContext: RealtimeContext;
   private readonly realtimeObjectIds = new WeakMap<SimSprite, string>();
@@ -1924,6 +1939,67 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Captures one sim-core numeric `makeSound` hook event into the authoritative
+   * pending per-tick sound queue.
+   * Mirrors `MakeSound("channel", "spec")` routing in
+   * `ref/micropolis/src/sim/w_sound.c`, with numeric channel/sound ids currently
+   * emitted by sim-core message paths from `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private captureSimCoreHookSound(channel: number, sound: number): void {
+    const soundDelta = mapSimCoreHookSoundToHostSoundDelta(channel, sound);
+    if (soundDelta === null) {
+      return;
+    }
+    this.enqueuePendingSoundDeltaForTick(this.tick, soundDelta);
+  }
+
+  /**
+   * Captures one realtime callback sound event into the authoritative pending
+   * per-tick sound queue.
+   * Mirrors realtime `MakeSound("city", "...")` call sites in
+   * `ref/micropolis/src/sim/w_sprite.c`, preserving full `soundSpec`.
+   */
+  private captureRealtimeSound(channel: string, soundSpec: string): void {
+    this.enqueuePendingSoundDeltaForTick(this.tick, {
+      channel,
+      soundSpec,
+    });
+  }
+
+  /**
+   * Queues one pending sound delta for one authoritative tick.
+   * Mirrors per-cycle sound dispatch ownership around `MakeSound` /
+   * `MakeSoundOn` in `ref/micropolis/src/sim/w_sound.c`, adapted to staged
+   * bridge envelope transport.
+   */
+  private enqueuePendingSoundDeltaForTick(tick: number, soundDelta: HostSoundDeltaPayload): void {
+    const normalizedTick = normalizeSoundQueueTick(tick, this.tick);
+    const pendingSoundDeltas = this.pendingSoundDeltasByTick.get(normalizedTick);
+    const queuedSoundDelta = cloneHostSoundDeltaPayload(soundDelta);
+    if (pendingSoundDeltas === undefined) {
+      this.pendingSoundDeltasByTick.set(normalizedTick, [queuedSoundDelta]);
+      return;
+    }
+    pendingSoundDeltas.push(queuedSoundDelta);
+  }
+
+  /**
+   * Drains queued pending sound deltas for one authoritative tick.
+   * Mirrors tick-bounded update cycle ownership in `ref/micropolis/src/sim/w_update.c`,
+   * while retaining the `MakeSound` dispatch boundary from
+   * `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private drainPendingSoundDeltasForTick(tick = this.tick): HostSoundDeltaPayload[] {
+    const normalizedTick = normalizeSoundQueueTick(tick, this.tick);
+    const pendingSoundDeltas = this.pendingSoundDeltasByTick.get(normalizedTick);
+    if (pendingSoundDeltas === undefined || pendingSoundDeltas.length === 0) {
+      return [];
+    }
+    this.pendingSoundDeltasByTick.delete(normalizedTick);
+    return cloneHostSoundDeltaPayloadList(pendingSoundDeltas);
+  }
+
+  /**
    * Drains pending hook-delivered messages for the next host payload.
    * Mirrors one-heads-cycle message dispatch ownership in
    * `ref/micropolis/src/sim/s_msg.c`.
@@ -2387,6 +2463,18 @@ function cloneHostPatchPayload(payload: HostPatchPayload): HostPatchPayload {
 }
 
 /**
+ * Clones one sound-delta payload before queueing/emission/replay storage.
+ * Mirrors sound intent value-copy boundaries around `MakeSound` / `MakeSoundOn`
+ * in `ref/micropolis/src/sim/w_sound.c`.
+ */
+function cloneHostSoundDeltaPayload(soundDelta: HostSoundDeltaPayload): HostSoundDeltaPayload {
+  return {
+    ...soundDelta,
+    ...(soundDelta.scope === undefined ? {} : { scope: { ...soundDelta.scope } }),
+  };
+}
+
+/**
  * Clones one sound-delta list before envelope emission/replay storage.
  * Mirrors sound-intent ownership from `MakeSound`/`MakeSoundOn` in
  * `ref/micropolis/src/sim/w_sound.c`, adapted to deterministic bridge replay
@@ -2395,10 +2483,44 @@ function cloneHostPatchPayload(payload: HostPatchPayload): HostPatchPayload {
 function cloneHostSoundDeltaPayloadList(
   soundDeltas: readonly HostSoundDeltaPayload[],
 ): HostSoundDeltaPayload[] {
-  return soundDeltas.map((soundDelta) => ({
-    ...soundDelta,
-    ...(soundDelta.scope === undefined ? {} : { scope: { ...soundDelta.scope } }),
-  }));
+  return soundDeltas.map((soundDelta) => cloneHostSoundDeltaPayload(soundDelta));
+}
+
+/**
+ * Maps sim-core numeric `makeSound(channel,sound)` hook ids to Micropolis
+ * channel/spec transport payloads.
+ * Mirrors `doMessage` first-display `MakeSound("city", "...")` switch in
+ * `ref/micropolis/src/sim/s_msg.c`, adapted from sim-core numeric hook ids.
+ */
+function mapSimCoreHookSoundToHostSoundDelta(
+  channel: number,
+  sound: number,
+): HostSoundDeltaPayload | null {
+  const normalizedChannel = Math.trunc(channel);
+  const normalizedSound = Math.trunc(sound);
+  const channelName = SIM_CORE_SOUND_CHANNEL_BY_ID[normalizedChannel];
+  const soundSpec = SIM_CORE_SOUND_SPEC_BY_ID[normalizedSound];
+  if (channelName === undefined || soundSpec === undefined) {
+    return null;
+  }
+  return {
+    channel: channelName,
+    soundSpec,
+  };
+}
+
+/**
+ * Normalizes one pending-sound queue tick key.
+ * Mirrors non-negative monotonic sim tick assumptions from
+ * `ref/micropolis/src/sim/s_sim.c`, adapted to bridge queue bookkeeping.
+ */
+function normalizeSoundQueueTick(candidateTick: number, fallbackTick: number): number {
+  const normalizedFallback =
+    Number.isFinite(fallbackTick) && fallbackTick >= 0 ? Math.trunc(fallbackTick) : 0;
+  if (!Number.isFinite(candidateTick) || candidateTick < 0) {
+    return normalizedFallback;
+  }
+  return Math.trunc(candidateTick);
 }
 
 /**
