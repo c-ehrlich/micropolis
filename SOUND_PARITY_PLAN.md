@@ -101,7 +101,7 @@ Deliverable: protocol/test updates that compile and document sound envelope sema
 ### Tool parity sub-phase
 
 - [x] Mirror C tool error sounds in host command handling (not route):
-  - [ ] reject `out-of-bounds` -> `UhUh`
+  - [x] reject `out-of-bounds` -> `UhUh`
   - [ ] reject `no-funds` -> `Sorry`
 - [ ] Mirror C tool success `DidTool` sound intent at host level:
   - [ ] map every playable tool -> `UIDidTool*` sound token/spec from `micropolis.tcl`
