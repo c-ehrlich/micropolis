@@ -79,8 +79,11 @@ describe('routes/index default gameplay path', () => {
     );
 
     expect(routeSource).toContain("from '../game/audio/micropolis-gameplay-audio-consumer.ts'");
+    expect(routeSource).toContain(
+      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
+    );
     expect(routeSource).toContain('const gameplayAudioConsumer = useMemo(');
-    expect(routeSource).toContain('gameplayAudioConsumer.playSoundSpec(');
+    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
   });
 
   test('keeps "/" Sound Test as manual verification-only preview UI', () => {
@@ -138,27 +141,39 @@ describe('routes/index default gameplay path', () => {
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
       'utf8',
     );
-
-    expect(routeSource).toContain('if (isSequencedHostEnvelope(runtimeEnvelope))');
-    expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
-    expect(routeSource).not.toContain('resolveMicropolisSoundTokenForToolAck');
-    expect(routeSource).not.toContain('resolveMicropolisSoundTokenForToolRejectReason');
-    expect(routeSource).not.toContain('pendingToolAckSoundByCommandId');
-    expect(routeSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
-    expect(routeSource).not.toContain('readMessageIdsFromPatchPayload');
-  });
-
-  test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
       'utf8',
     );
 
     expect(routeSource).toContain(
-      "const shouldAttemptEnvelopePlayback = event.outcome === 'applied';",
+      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
     );
-    expect(routeSource).toContain('event.state.hudState.options.userSoundOn');
-    expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
+    expect(soundRoutingSource).toContain('if (!isSequencedHostEnvelope(runtimeEnvelope))');
+    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolAck');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolRejectReason');
+    expect(soundRoutingSource).not.toContain('pendingToolAckSoundByCommandId');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
+    expect(soundRoutingSource).not.toContain('readMessageIdsFromPatchPayload');
+  });
+
+  test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(soundRoutingSource).toContain(
+      "const shouldAttemptEnvelopePlayback = context.reducerOutcome === 'applied';",
+    );
+    expect(soundRoutingSource).toContain('userSoundOn: context.userSoundOn');
+    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
   });
 
   test('keeps sequenced sound transport separate from configurable playback policy', () => {
@@ -166,11 +181,21 @@ describe('routes/index default gameplay path', () => {
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
       'utf8',
     );
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
+      'utf8',
+    );
 
     expect(routeSource).toContain('createMicropolisGameplaySoundPlaybackPolicy');
     expect(routeSource).toContain("mode: 'applied-only'");
-    expect(routeSource).toContain('const shouldPlaySoundDeltas = gameplaySoundPlaybackPolicy({');
-    expect(routeSource).toContain('for (const soundDelta of runtimeEnvelope.soundDeltas ?? [])');
+    expect(soundRoutingSource).toContain(
+      'const shouldPlaySoundDeltas = context.gameplaySoundPlaybackPolicy({',
+    );
+    expect(soundRoutingSource).toContain(
+      'for (const soundDelta of runtimeEnvelope.soundDeltas ?? [])',
+    );
   });
 
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {

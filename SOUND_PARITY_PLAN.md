@@ -195,6 +195,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 - [x] All playable tool success sounds come from authoritative host sound deltas.
 - [x] Message-driven siren/monster/explosion/honk sounds come from authoritative host sound deltas.
 - [x] Route no longer infers gameplay sounds from reject/message state.
+  - Regression guard: `/` delegates gameplay envelope audio routing to `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.ts`, which consumes only `soundDeltas` (no reject/message inference); covered by `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.test.ts`.
 - [ ] Missing assets warn and skip without corrupting runtime state.
 - [ ] Replay/resync preserves sound deltas in transport data.
 - [ ] Behavior is traceable to C sources listed in this document.

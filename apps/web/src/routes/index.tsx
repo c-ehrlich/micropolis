@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
+import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
 import { MicropolisSoundPreviewPanel } from '../game/audio/micropolis-sound-preview-panel.tsx';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
@@ -23,7 +24,7 @@ import {
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
-import { type CoreHost, isSequencedHostEnvelope } from '../game/runtime/protocol.ts';
+import { type CoreHost } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -135,21 +136,13 @@ function RuntimePanel() {
         return;
       }
 
-      const shouldAttemptEnvelopePlayback = event.outcome === 'applied';
-
-      if (isSequencedHostEnvelope(runtimeEnvelope)) {
-        const shouldPlaySoundDeltas = gameplaySoundPlaybackPolicy({
-          defaultShouldAttemptPlayback: shouldAttemptEnvelopePlayback,
-          reducerOutcome: event.outcome,
-          userSoundOn: event.state.hudState.options.userSoundOn,
-          envelopeKind: runtimeEnvelope.kind,
-        });
-        if (shouldPlaySoundDeltas) {
-          for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
-            void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
-          }
-        }
-      }
+      routeMicropolisGameplaySoundDeltas({
+        envelope: runtimeEnvelope,
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        gameplayAudioConsumer,
+        gameplaySoundPlaybackPolicy,
+      });
 
       if (runtimeEnvelope.kind !== 'patch') {
         return;
