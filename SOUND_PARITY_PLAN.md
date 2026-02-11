@@ -188,6 +188,28 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 - [x] add coverage that the required gameplay token set has corresponding `/sounds/*.wav` files.
 - [x] add coverage that the token inventory doc remains in sync with shipped assets.
 
+## Traceability Matrix (C -> Runtime Behavior)
+
+- Tool success/error pathways:
+  - C/Tcl sources: `ref/micropolis/src/sim/w_tool.c:890`, `ref/micropolis/src/sim/w_tool.c:1544`, `ref/micropolis/res/micropolis.tcl:2733`.
+  - Runtime ownership: `apps/web/src/game/runtime/sim-core-envelope-host.ts` captures tool command outcomes and emits authoritative `soundDeltas`; tool callback mapping comes from `packages/sim-assets/src/sim-ui.ts`.
+  - Regression coverage: `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates `Sorry`/`UhUh` reject parity and full `UIDidTool*` success sound mapping.
+- Message first-display pathways:
+  - C source: `ref/micropolis/src/sim/s_msg.c:320`.
+  - Runtime ownership: `packages/sim-core/src/systems/messages.ts` resolves `doMessage` first-display sound intents; `apps/web/src/game/runtime/sim-core-envelope-host.ts` captures hook `makeSound` intents and transports them as authoritative `soundDeltas`.
+  - Regression coverage: `packages/sim-core/src/systems/messages.test.ts` validates first-display message-id to sound-spec mapping; `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates host envelope emission.
+- Realtime/sprite pathways:
+  - C source: `ref/micropolis/src/sim/w_sprite.c:768`.
+  - Runtime ownership: `apps/web/src/game/runtime/sim-core-envelope-host.ts` wires realtime `onSound` from `createRealtimeContext(...)` and emits those intents on sequenced envelopes.
+  - Regression coverage: `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates realtime-emitted sound specs and `userSoundOn` host gating.
+- Dispatch boundary + token/wav parity:
+  - C/Tcl/Sugar sources: `ref/micropolis/src/sim/w_sound.c:93`, `ref/micropolis/res/micropolis.tcl:939`, `ref/micropolis/micropolisactivity.py:194`.
+  - Runtime ownership: `apps/web/src/game/runtime/protocol.ts` carries sequenced `soundDeltas`; `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.ts` consumes only authoritative deltas; `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.ts` applies first-token lowercase wav normalization.
+  - Regression coverage: `apps/web/src/game/runtime/protocol.test.ts`, `apps/web/src/game/runtime/runtime.ordering-resync.test.ts`, `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.test.ts`, and `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.test.ts`.
+- Inventory-level source traceability:
+  - Authoritative inventory: `SOUND_GAMEPLAY_INVENTORY.md` maps gameplay token/spec rows to line-level C/Tcl callsites and shipped wav stems.
+  - Known non-reachable gameplay callsites and follow-up actions remain explicitly tracked under `Unreachable Original Gameplay Sound Pathways (2026-02-11)`.
+
 ## Acceptance Criteria
 
 - [x] Building with insufficient funds plays `Sorry` via host-emitted sound delta.
@@ -199,7 +221,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 - [x] Missing assets warn and skip without corrupting runtime state.
   - Regression guard: `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.test.ts` verifies missing wav logs warning and skips playback element creation; `apps/web/src/game/runtime/runtime.test.ts` verifies runtime state continues applying envelopes after missing-asset playback attempts.
 - [x] Replay/resync preserves sound deltas in transport data.
-- [ ] Behavior is traceable to C sources listed in this document.
+- [x] Behavior is traceable to C sources listed in this document.
 
 ## Execution Commands (final gate)
 
