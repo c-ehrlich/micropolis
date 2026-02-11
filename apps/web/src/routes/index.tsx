@@ -137,7 +137,6 @@ function RuntimePanel() {
   const [cityIoError, setCityIoError] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
-  const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const commandCounter = useRef(1);
 
   useEffect(() => {
@@ -178,32 +177,6 @@ function RuntimePanel() {
       gameplayAudioConsumer.dispose();
     };
   }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
-
-  useEffect(() => {
-    if (hasStartedPlayableSession) {
-      return;
-    }
-
-    const canvas = scenarioIntroCanvasRef.current;
-    if (canvas === null) {
-      return;
-    }
-
-    const context = canvas.getContext('2d');
-    if (context === null) {
-      return;
-    }
-
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = '#f8fafc';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    context.fillStyle = '#0f172a';
-    context.font = '24px monospace';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText('Micropolis', canvas.width / 2, canvas.height / 2);
-  }, [hasStartedPlayableSession]);
 
   const controlsDisabled = state.phase !== 'ready';
   const reconnectDisabled =
@@ -253,30 +226,6 @@ function RuntimePanel() {
           tileSize={MAP_TILE_SIZE}
         />
       </div>
-
-      {hasStartedPlayableSession ? null : (
-        <canvas
-          aria-label="Scenario start prompt"
-          height={480}
-          ref={scenarioIntroCanvasRef}
-          role="img"
-          style={{
-            border: '1px solid rgba(148, 163, 184, 0.8)',
-            borderRadius: 8,
-            boxShadow: '0 14px 30px rgba(15, 23, 42, 0.5)',
-            left: '50%',
-            maxWidth: 'calc(100vw - 24px)',
-            pointerEvents: 'none',
-            position: 'absolute',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 3,
-          }}
-          width={640}
-        >
-          Select a scenario to start.
-        </canvas>
-      )}
 
       <section
         style={{
