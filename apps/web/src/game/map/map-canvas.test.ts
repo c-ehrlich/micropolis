@@ -13,6 +13,7 @@ import {
   projectRealtimeOverlaySprites,
   scaleMapPanDeltaToWorldPixels,
   scaleWorldPanDeltaToCanvasPixels,
+  selectMapCanvasBaseTileAtlasCanonicalIdentityKey,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
   startMapCanvasPanDrag,
@@ -22,6 +23,8 @@ import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   lookupTileSprite,
 } from './tile-sprite-atlas.ts';
+
+const MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = 'ref/micropolis/images/tilessm.xpm';
 
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
@@ -67,6 +70,26 @@ function applyPatchTileVisualTokens({
 }
 
 describe('map canvas draw-mode selection', () => {
+  it('uses map-class tiles for compact runtime tile sizes', () => {
+    // `GetViewTiles` in `g_setup.c` selects `tilessm.xpm` for `Map_Class` color mode.
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(6)).toBe(
+      MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(7)).toBe(
+      MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
+  it('uses editor-class tiles once runtime tile size reaches editor readability', () => {
+    // `GetViewTiles` in `g_setup.c` selects `tiles.xpm` for `Editor_Class` color mode.
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(8)).toBe(
+      DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16)).toBe(
+      DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
   it('consumes queued frames as single-use entries to avoid stale redraw coalescing', () => {
     const queuedFrameRef: { current: { epoch: number } | null } = {
       current: { epoch: 7 },
@@ -458,6 +481,22 @@ describe('map canvas camera metrics', () => {
     expect(metrics.maxCameraOffsetX).toBe(0);
     expect(metrics.maxCameraOffsetY).toBe(0);
   });
+
+  it('clips viewport using runtime container bounds when provided', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 120,
+      mapHeight: 100,
+      tileSize: 16,
+      zoom: 1,
+      viewportMaxWidthPx: 1024,
+      viewportMaxHeightPx: 720,
+    });
+
+    expect(metrics.viewportWidthPx).toBe(1024);
+    expect(metrics.viewportHeightPx).toBe(720);
+    expect(metrics.maxCameraOffsetX).toBe(896);
+    expect(metrics.maxCameraOffsetY).toBe(880);
+  });
 });
 
 describe('map canvas wheel and zoom controls', () => {
@@ -541,10 +580,10 @@ describe('map canvas wheel and zoom controls', () => {
     ).toBe(4);
     expect(
       computeMapCanvasZoomFromWheel({
-        currentZoom: 0.6,
+        currentZoom: 0.3,
         wheelDeltaYPx: 1000,
       }),
-    ).toBe(0.5);
+    ).toBe(0.2);
   });
 
   it('keeps the same map point under the zoom anchor during zoom transitions', () => {

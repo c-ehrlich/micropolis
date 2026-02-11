@@ -1046,11 +1046,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-a',
       tick: 3,
       serverSeq: 6,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
     expect(captured.envelopes[7]).toEqual({
       kind: 'ack',
@@ -1180,7 +1176,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(pauseMessageDeltas).toContainEqual({
       id: 14,
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       x: 7,
       y: 9,
       tick: 1,
@@ -1197,7 +1193,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(playMessageDeltas).toContainEqual({
       id: 16,
-      text: 'City taxes are too high.',
+      text: 'Citizens upset. The tax rate is too high.',
       tick: 2,
       serverSeq: 5,
     });
@@ -1231,6 +1227,77 @@ describe('SimCoreEnvelopeHost', () => {
     expect(sendMesMessage).toMatchObject({
       tick: 2,
       serverSeq: 5,
+    });
+  });
+
+  it('keeps doMessage picture/text resend ids text-equivalent in message feed payloads', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+        simContext: Parameters<typeof sendMes>[1];
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // `SendMessages` in `ref/micropolis/src/sim/s_msg.c` emits `SendMes(-11)`
+    // for high crime (`case 42`). `doMessage` then requeues `MessagePort = 11`
+    // so the next heads cycle emits the positive text id.
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, -11),
+    ).toBe(true);
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      commandId: 'cmd-message-sign-parity-pause',
+      command: {
+        kind: 'sim-control',
+        control: 'pause',
+      },
+    });
+
+    const picturePatch = captured.envelopes.at(-1);
+    if (picturePatch === undefined) {
+      throw new Error('expected picture-message patch envelope');
+    }
+    const pictureMessage = readMessageDeltasFromEnvelope(picturePatch)?.find(
+      (message) => message.id === -11,
+    );
+    expect(pictureMessage).toMatchObject({
+      id: -11,
+      text: 'Crime very high.',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-message-sign-parity',
+      clientId: 'client-message-sign-parity',
+      commandId: 'cmd-message-sign-parity-play',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const textPatch = captured.envelopes.at(-1);
+    if (textPatch === undefined) {
+      throw new Error('expected text-message patch envelope');
+    }
+    const textMessage = readMessageDeltasFromEnvelope(textPatch)?.find(
+      (message) => message.id === 11,
+    );
+    expect(textMessage).toMatchObject({
+      id: 11,
+      text: 'Crime very high.',
     });
   });
 
@@ -1314,7 +1381,7 @@ describe('SimCoreEnvelopeHost', () => {
       (message) => message.id === 14 && message.x === 7 && message.y === 9,
     );
     expect(secondReplayMessage).toMatchObject({
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       tick: 1,
       serverSeq: 3,
     });
@@ -2066,10 +2133,12 @@ describe('SimCoreEnvelopeHost', () => {
 
     // Source of magic numbers:
     // - `setSpeed(short)` clamps playable speed into `0..3` in `ref/micropolis/src/sim/w_util.c`.
-    // - default `SimSpeed` starts at `3` in sim-core (`createSimState` parity baseline).
-    expect(hostInternals.authorityState.simState.SimSpeed).toBe(3);
+    // - this host starts paused (`SimSpeed=0`, `simPaused=true`) until `new-city` / `load-city` /
+    //   `load-scenario` starts a playable session, while preserving default `SimMetaSpeed=3`
+    //   as the resume target speed.
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
     expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
-    expect(hostInternals.simPaused).toBe(false);
+    expect(hostInternals.simPaused).toBe(true);
 
     captured.send({
       kind: 'command',
@@ -2082,7 +2151,7 @@ describe('SimCoreEnvelopeHost', () => {
       },
     });
     expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
-    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(0);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
     expect(hostInternals.simPaused).toBe(true);
     expect(hostInternals.simPausedSpeed).toBe(3);
 
@@ -2503,7 +2572,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(messageDeltas).toContainEqual({
       id: 14,
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       x: 7,
       y: 9,
       tick: 2,
@@ -3129,11 +3198,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 4,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
     expect(secondSessionEnvelopes[4]).toMatchObject({
       kind: 'snapshot',
@@ -3148,11 +3213,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 6,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
 
     secondSession.disconnect();
@@ -3234,11 +3295,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-snapshot-cursor-clamp',
       tick: 1,
       serverSeq: 7,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
   });
 

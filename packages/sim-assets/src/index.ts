@@ -8,6 +8,7 @@ export * from './catalog.ts';
 export * from './derived-images.ts';
 export * from './help-docs.ts';
 export * from './legacy.ts';
+export * from './message-table.ts';
 export * from './resource-loader.ts';
 export * from './resource-roots.ts';
 export * from './sim-ui.ts';

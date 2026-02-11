@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
@@ -20,18 +21,24 @@ import {
   resolveMicropolisTileSheetCanonicalIdentityKey,
 } from './tile-sprite-atlas.ts';
 
-const BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+const EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
   resolveMicropolisTileSheetCanonicalIdentityKey({
     viewClass: 'editor',
     color: true,
   }) ?? DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+const MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  resolveMicropolisTileSheetCanonicalIdentityKey({
+    viewClass: 'map',
+    color: true,
+  }) ?? DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+const MAP_CANVAS_EDITOR_ART_MIN_TILE_SIZE = 8;
 
 const DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX = 640;
 const DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX = 480;
 const MICROPOLIS_EDITOR_WORLD_PIXELS_PER_TILE = 16;
 const MICROPOLIS_MAP_PAN_SCALE_NUMERATOR = 16;
 const MICROPOLIS_MAP_PAN_SCALE_DENOMINATOR = 3;
-const MAP_CANVAS_MIN_ZOOM = 0.5;
+const MAP_CANVAS_MIN_ZOOM = 0.2;
 const MAP_CANVAS_MAX_ZOOM = 4;
 const MAP_CANVAS_BUTTON_ZOOM_STEP = 1.25;
 const MAP_CANVAS_WHEEL_ZOOM_SENSITIVITY = 0.0015;
@@ -45,6 +52,22 @@ const MAP_CANVAS_WHEEL_LINE_DELTA_PX = 16;
 export interface MapCanvasPanDragState {
   readonly lastX: number;
   readonly lastY: number;
+}
+
+/**
+ * Chooses the base map tile atlas identity for one runtime tile-size mode.
+ * Mirrors `GetViewTiles` atlas identities in `ref/micropolis/src/sim/g_setup.c`:
+ * `Editor_Class` (`tiles.xpm`) and `Map_Class` color (`tilessm.xpm`).
+ * Parity note: C selects view class per widget; TypeScript selects map-class
+ * art for compact square tiles to avoid severe downscale aliasing artifacts
+ * from 16x16 editor rails rendered at small runtime tile sizes.
+ */
+export function selectMapCanvasBaseTileAtlasCanonicalIdentityKey(
+  tileSize: number,
+): CanonicalImageIdentityKey {
+  return tileSize >= MAP_CANVAS_EDITOR_ART_MIN_TILE_SIZE
+    ? EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY
+    : MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
 }
 
 /**
@@ -138,6 +161,17 @@ export interface MapCanvasCameraMetrics {
 }
 
 /**
+ * Runtime viewport bounds applied to map camera clipping.
+ * Mirrors Micropolis `DoAdjustPan` clip-window ownership in `ref/micropolis/src/sim/w_x.c`.
+ * Difference: browser host layout can resize continuously, so Authoritative Runtime
+ * accepts dynamic viewport bounds from a measured DOM container.
+ */
+export interface MapCanvasViewportBounds {
+  viewportMaxWidthPx: number;
+  viewportMaxHeightPx: number;
+}
+
+/**
  * Compute map viewport and pan bounds for one zoom level.
  * Mirrors `DoAdjustPan`-style viewport clipping in `ref/micropolis/src/sim/w_x.c`.
  * Difference: Authoritative Runtime applies browser scale (`zoom`) before viewport clipping.
@@ -147,18 +181,22 @@ export function getMapCanvasCameraMetrics({
   mapHeight,
   tileSize,
   zoom,
+  viewportMaxWidthPx = DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
+  viewportMaxHeightPx = DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
 }: {
   mapWidth: number;
   mapHeight: number;
   tileSize: number;
   zoom: number;
+  viewportMaxWidthPx?: number;
+  viewportMaxHeightPx?: number;
 }): MapCanvasCameraMetrics {
   const mapWidthPx = mapWidth * tileSize;
   const mapHeightPx = mapHeight * tileSize;
   const scaledMapWidthPx = mapWidthPx * zoom;
   const scaledMapHeightPx = mapHeightPx * zoom;
-  const viewportWidthPx = Math.min(scaledMapWidthPx, DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX);
-  const viewportHeightPx = Math.min(scaledMapHeightPx, DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX);
+  const viewportWidthPx = Math.min(scaledMapWidthPx, Math.max(1, viewportMaxWidthPx));
+  const viewportHeightPx = Math.min(scaledMapHeightPx, Math.max(1, viewportMaxHeightPx));
   return {
     mapWidthPx,
     mapHeightPx,
@@ -286,6 +324,8 @@ export function zoomMapCanvasCameraOffsetAtAnchor({
  * `ref/micropolis/src/sim/g_bigmap.c`.
  * Parity note: Sprite Atlas uses Micropolis-derived tile sprites from canonical
  * `tiles.xpm` identity and treats missing atlas images as explicit fallback.
+ * Difference: browser-only pan/zoom controls can render either in-map (default)
+ * or in an external UI container supplied by the route.
  */
 export function MapCanvas({
   mapState,
@@ -293,14 +333,17 @@ export function MapCanvas({
   realtimeObjects = [],
   onTileClick,
   tileSize = 4,
+  cameraControlsContainer,
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
   realtimeObjects?: readonly RuntimeRealtimeObject[];
   onTileClick?: (x: number, y: number) => void;
   tileSize?: number;
+  cameraControlsContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mapCanvasRootRef = useRef<HTMLDivElement>(null);
   const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
     ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
   >(new Map());
@@ -318,13 +361,20 @@ export function MapCanvas({
     x: 0,
     y: 0,
   });
+  const [viewportBounds, setViewportBounds] = useState<MapCanvasViewportBounds>({
+    viewportMaxWidthPx: DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
+    viewportMaxHeightPx: DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
+  });
+  const baseTileAtlasCanonicalIdentityKey = useMemo(
+    () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize),
+    [tileSize],
+  );
 
   useEffect(() => {
-    const atlas = getTileAtlasSourceByCanonicalIdentityKey(
-      BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-    );
+    const atlas = getTileAtlasSourceByCanonicalIdentityKey(baseTileAtlasCanonicalIdentityKey);
     if (atlas === undefined) {
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      lastRenderedEpochRef.current = 0;
       return;
     }
 
@@ -338,6 +388,8 @@ export function MapCanvas({
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map([
         [atlas.canonicalIdentityKey, image],
       ]);
+      // Force one full redraw when atlas identity changes.
+      lastRenderedEpochRef.current = 0;
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -346,6 +398,7 @@ export function MapCanvas({
         return;
       }
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      lastRenderedEpochRef.current = 0;
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -353,7 +406,7 @@ export function MapCanvas({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [baseTileAtlasCanonicalIdentityKey]);
 
   useEffect(() => {
     if (!mapState.hasSnapshot) {
@@ -370,7 +423,7 @@ export function MapCanvas({
       mapState,
       tileSize,
       tileRenderer: {
-        baseTileAtlasCanonicalIdentityKey: BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+        baseTileAtlasCanonicalIdentityKey,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
@@ -399,7 +452,7 @@ export function MapCanvas({
         lastRenderedEpoch: lastRenderedEpochRef.current,
       });
     });
-  }, [mapState, tileAtlasRenderVersion, tileSize]);
+  }, [baseTileAtlasCanonicalIdentityKey, mapState, tileAtlasRenderVersion, tileSize]);
 
   useEffect(() => {
     return () => {
@@ -410,11 +463,53 @@ export function MapCanvas({
     };
   }, []);
 
+  useEffect(() => {
+    const rootElement = mapCanvasRootRef.current;
+    if (rootElement === null) {
+      return;
+    }
+
+    const updateViewportBounds = (): void => {
+      const rect = rootElement.getBoundingClientRect();
+      const nextBounds: MapCanvasViewportBounds = {
+        viewportMaxWidthPx: Math.max(1, Math.floor(rect.width)),
+        viewportMaxHeightPx: Math.max(1, Math.floor(rect.height)),
+      };
+      setViewportBounds((currentBounds) => {
+        if (
+          currentBounds.viewportMaxWidthPx === nextBounds.viewportMaxWidthPx &&
+          currentBounds.viewportMaxHeightPx === nextBounds.viewportMaxHeightPx
+        ) {
+          return currentBounds;
+        }
+        return nextBounds;
+      });
+    };
+
+    updateViewportBounds();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateViewportBounds);
+      return () => {
+        window.removeEventListener('resize', updateViewportBounds);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateViewportBounds();
+    });
+    observer.observe(rootElement);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   const cameraMetrics = getMapCanvasCameraMetrics({
     mapWidth: mapState.width,
     mapHeight: mapState.height,
     tileSize,
     zoom: cameraZoom,
+    viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+    viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
   });
   const widthPx = cameraMetrics.mapWidthPx;
   const heightPx = cameraMetrics.mapHeightPx;
@@ -482,12 +577,16 @@ export function MapCanvas({
           mapHeight: mapState.height,
           tileSize,
           zoom: currentZoom,
+          viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+          viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
         });
         const nextMetrics = getMapCanvasCameraMetrics({
           mapWidth: mapState.width,
           mapHeight: mapState.height,
           tileSize,
           zoom: clampedNextZoom,
+          viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+          viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
         });
 
         setCameraOffsetPx((currentOffset) => {
@@ -512,7 +611,13 @@ export function MapCanvas({
         return clampedNextZoom;
       });
     },
-    [mapState.height, mapState.width, tileSize],
+    [
+      mapState.height,
+      mapState.width,
+      tileSize,
+      viewportBounds.viewportMaxHeightPx,
+      viewportBounds.viewportMaxWidthPx,
+    ],
   );
 
   /**
@@ -589,33 +694,10 @@ export function MapCanvas({
     viewportWidthPx,
   ]);
 
-  const zoomPercent = truncateTowardZero(cameraZoom * 100);
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
-
-  if (!mapState.hasSnapshot) {
-    return <div>No map snapshot received yet.</div>;
-  }
-
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gap: 6,
-      }}
-    >
-      <div
-        style={{
-          alignItems: 'center',
-          color: '#334155',
-          display: 'flex',
-          flexWrap: 'wrap',
-          fontFamily: 'monospace',
-          fontSize: 11,
-          gap: 8,
-        }}
-      >
-        <span>Pan: middle-drag or two-finger scroll.</span>
-        <span>Zoom: pinch/ctrl+wheel or buttons.</span>
+  const cameraControlsContent = (
+    <>
+      <div style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
         <button
           onClick={() => {
             applyCameraZoomStep(1 / MAP_CANVAS_BUTTON_ZOOM_STEP);
@@ -643,8 +725,50 @@ export function MapCanvas({
         >
           +
         </button>
-        <span>zoom={zoomPercent}%</span>
       </div>
+    </>
+  );
+
+  if (!mapState.hasSnapshot) {
+    return (
+      <div
+        ref={mapCanvasRootRef}
+        style={{
+          alignItems: 'center',
+          background: '#0b1020',
+          color: '#e2e8f0',
+          display: 'flex',
+          fontFamily: 'monospace',
+          fontSize: 12,
+          height: '100%',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        No map snapshot received yet.
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={mapCanvasRootRef}
+      style={{
+        background: '#0b1020',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+        width: '100%',
+      }}
+    >
+      {cameraControlsContainer === undefined ? (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>{cameraControlsContent}</div>
+      ) : cameraControlsContainer === null ? null : (
+        createPortal(
+          <div style={{ display: 'flex', flexDirection: 'column' }}>{cameraControlsContent}</div>,
+          cameraControlsContainer,
+        )
+      )}
       <div
         ref={mapViewportRef}
         onPointerCancel={(event) => {
@@ -686,10 +810,13 @@ export function MapCanvas({
           }
         }}
         style={{
-          border: '1px solid #333',
+          border: '1px solid rgba(15, 23, 42, 0.9)',
+          left: '50%',
           height: viewportHeightPx,
           overflow: 'hidden',
           position: 'relative',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
           width: viewportWidthPx,
         }}
       >
@@ -879,7 +1006,6 @@ function drawMapCanvasFrame({
   if (context === null) {
     return lastRenderedEpoch;
   }
-  context.imageSmoothingEnabled = false;
 
   const widthPx = frame.mapState.width * frame.tileSize;
   const heightPx = frame.mapState.height * frame.tileSize;
@@ -892,6 +1018,9 @@ function drawMapCanvasFrame({
     canvas.height = heightPx;
     resized = true;
   }
+  // Canvas width/height writes reset 2D context state, so keep pixel-art sampling
+  // disabled after any backing-store resize before tile blits.
+  context.imageSmoothingEnabled = false;
 
   const drawMode = selectMapCanvasDrawMode({
     mapDrawMode: frame.mapState.drawMode,

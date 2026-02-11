@@ -120,8 +120,9 @@ describe('tile sprite atlas', () => {
 
     expect(sprite.atlasCanonicalIdentityKey).toBe(mapColorKey);
     expect(sprite.tileId).toBe(7);
-    // `tilessm.xpm` header in `packages/sim-assets/src/tiles.ts` is `"4 2880 14 1"`.
-    expect(sprite.sourceWidth).toBe(4);
+    // `GetViewTiles` in `ref/micropolis/src/sim/g_setup.c` documents map-class
+    // tiles as "4 pixels wide per 3 pixel wide tile" (4th column is spacing).
+    expect(sprite.sourceWidth).toBe(3);
     expect(sprite.sourceHeight).toBe(3);
     expect(sprite.sourceY).toBe(7 * 3);
   });

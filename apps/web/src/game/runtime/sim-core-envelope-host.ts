@@ -1,6 +1,7 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
+import { lookupDoMessageText } from '../../../../../packages/sim-assets/src/message-table.ts';
 import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
@@ -180,46 +181,6 @@ const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
   'invalid-placement': 'UhUh',
 } satisfies Record<'out-of-bounds' | 'no-funds' | 'invalid-placement', string>);
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
-const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
-  1: 'Need more residential zones.',
-  2: 'Need more commercial zones.',
-  3: 'Need more industrial zones.',
-  4: 'Build more roads.',
-  5: 'Build more rail.',
-  6: 'Need power plants.',
-  13: 'Residents demand fire stations.',
-  14: 'Residents demand police stations.',
-  16: 'City taxes are too high.',
-  17: 'Road maintenance is low.',
-  18: 'Fire coverage is low.',
-  19: 'Police coverage is low.',
-  20: 'Fire reported.',
-  21: 'Monster sighted.',
-  22: 'Tornado sighted.',
-  23: 'Earthquake reported.',
-  24: 'Plane crash reported.',
-  25: 'Shipwreck reported.',
-  26: 'Train crash reported.',
-  27: 'Helicopter crash reported.',
-  30: 'Explosion reported.',
-  32: 'Explosion reported.',
-  41: 'Heavy traffic reported.',
-  42: 'Flooding reported.',
-  [-20]: 'Fire reported.',
-  [-21]: 'Monster sighted.',
-  [-22]: 'Tornado sighted.',
-  [-23]: 'Earthquake reported.',
-  [-24]: 'Plane crash reported.',
-  [-25]: 'Shipwreck reported.',
-  [-26]: 'Train crash reported.',
-  [-27]: 'Helicopter crash reported.',
-  [-30]: 'Explosion reported.',
-  [-41]: 'Heavy traffic reported.',
-  [-42]: 'Flooding reported.',
-  [-10]: 'Pollution has reached dangerous levels.',
-  [-11]: 'Crime is out of control.',
-  [-12]: 'Traffic is congested.',
-};
 type NodeFsPromisesModule = {
   readFile: typeof nodeReadFile;
 };
@@ -260,7 +221,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private lastEmittedServerSeq = 0;
   private tick = 0;
   private lastEmittedTick = 0;
-  private simPaused = false;
+  private simPaused = true;
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
   private cityName = DEFAULT_CITY_NAME;
@@ -271,6 +232,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly simPhaseSystems: SimPhaseSystems;
   private readonly enableAmbientTicks: boolean;
   private readonly patchIntervalMs: number | undefined;
+  private hasStartedCitySession = false;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
@@ -296,6 +258,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.mapWidth = mapLayerInfo.width;
     this.mapHeight = mapLayerInfo.height;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
+    this.authorityState.simState.SimSpeed = 0;
     this.realtimeContext = createRealtimeContext({
       store: this.authorityState.simContext.store,
       rng: this.authorityState.simContext.rng,
@@ -446,6 +409,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (
       !this.isSessionActive(sessionId) ||
       this.lifecycle.phase !== 'ready' ||
+      !this.hasStartedCitySession ||
       this.authorityState.simState.SimSpeed === 0
     ) {
       return;
@@ -678,7 +642,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (
       !this.isSessionActive(sessionId) ||
       this.lifecycle.phase !== 'ready' ||
-      this.onEnvelope === undefined
+      this.onEnvelope === undefined ||
+      !this.hasStartedCitySession
     ) {
       return;
     }
@@ -1039,6 +1004,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.patchIntervalMs === undefined ||
       this.onEnvelope === undefined ||
       this.lifecycle.phase !== 'ready' ||
+      !this.hasStartedCitySession ||
       this.authorityState.simState.SimSpeed === 0
     ) {
       this.stopAmbientInterval();
@@ -1265,6 +1231,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/s_gen.c`.
    */
   private syncHostStateAfterLoadLikeCommand(): void {
+    this.hasStartedCitySession = true;
     this.simPaused = false;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
     this.syncToolContextFromState();
@@ -2486,14 +2453,15 @@ function normalizeReplayCursor(candidate: number, highestKnown: number): number 
 
 /**
  * Resolves message text for one message id.
- * Mirrors `GetIndString` lookup intent from `ref/micropolis/src/sim/s_msg.c`.
- * Parity note: this host currently keeps the same compact bridge-side subset
- * used during migration and falls back to `Message <id>`.
+ * Mirrors `GetIndString(..., 301, ...)` lookup intent from
+ * `ref/micropolis/src/sim/s_msg.c`, using the bundled TypeScript copy of
+ * `stri.301` from `packages/sim-assets/src/message-table.ts`.
+ * Parity note: unknown ids still fall back to `Message <id>`.
  */
 function messageTextForId(id: number): string {
-  const text = RUNTIME_MESSAGE_TEXT[id];
-  if (text !== undefined) {
-    return text;
+  const mirroredSignText = lookupDoMessageText(id);
+  if (mirroredSignText !== undefined) {
+    return mirroredSignText;
   }
 
   return `Message ${id}`;

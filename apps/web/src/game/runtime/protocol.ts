@@ -10,6 +10,7 @@ import {
   type CoreHostEnvelope as CoreBridgeHostEnvelopeContract,
 } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  TOOL_COST,
   TOOL_OFFSET,
   TOOL_SIZE,
   TOOL_STATE,
@@ -448,8 +449,10 @@ export function fromCanonicalBridgeToolName(tool: PlayableCanonicalToolName): Pl
 export interface PlayableToolSpec {
   tool: PlayableToolName;
   label: string;
+  toolState: number;
   size: number;
   offset: number;
+  baseCost: number;
   pendingColor: string;
 }
 
@@ -498,20 +501,26 @@ const PLAYABLE_TOOL_VISUAL_SPECS: readonly PlayableToolVisualSpec[] = [
 ] as const;
 
 /**
- * Looks up playable tool footprint dimensions from C-parity tool-state tables.
- * Mirrors `toolSize[]` and `toolOffset[]` indexing in
+ * Looks up playable tool metadata from C-parity tool-state tables.
+ * Mirrors `toolSize[]`, `toolOffset[]`, and `CostOf[]` indexing in
  * `ref/micropolis/src/sim/w_tool.c` (1:1 state-id lookup).
  */
 function playableFootprintFromToolTables(
   tool: PlayableToolName,
-): Pick<PlayableToolSpec, 'size' | 'offset'> {
+): Pick<PlayableToolSpec, 'toolState' | 'size' | 'offset' | 'baseCost'> {
   const stateId = PLAYABLE_TOOL_STATE_ID[tool];
   const size = TOOL_SIZE[stateId];
   const offset = TOOL_OFFSET[stateId];
-  if (size === undefined || offset === undefined) {
+  const baseCost = TOOL_COST[stateId];
+  if (size === undefined || offset === undefined || baseCost === undefined) {
     throw new Error(`Missing tool footprint table entry for playable tool "${tool}"`);
   }
-  return { size, offset };
+  return {
+    toolState: stateId,
+    size,
+    offset,
+    baseCost,
+  };
 }
 
 /**

@@ -33,12 +33,17 @@ const EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIden
 const MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
   'ref/micropolis/images/tilessm.xpm',
 );
+const EDITOR_COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.color);
+const EDITOR_MONOCHROME_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.monochrome);
+const MAP_COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.small);
 
 interface TileAtlasDefinition {
   readonly canonicalIdentityKey: CanonicalImageIdentityKey;
   readonly expectedDerivedPngPath: string;
   readonly spriteSheetUrl: string;
   readonly tileSheetHeader: TileSheetHeader;
+  readonly drawTileWidth: number;
+  readonly drawTileHeight: number;
 }
 
 const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
@@ -48,7 +53,9 @@ const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
       EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
     spriteSheetUrl: EDITOR_COLOR_TILE_ATLAS_URL,
-    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.color),
+    tileSheetHeader: EDITOR_COLOR_TILE_SHEET_HEADER,
+    drawTileWidth: EDITOR_COLOR_TILE_SHEET_HEADER.width,
+    drawTileHeight: EDITOR_COLOR_TILE_SHEET_HEADER.height / Tile.TILE_COUNT,
   }),
   Object.freeze({
     canonicalIdentityKey: EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
@@ -56,7 +63,9 @@ const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
       EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
     spriteSheetUrl: EDITOR_MONOCHROME_TILE_ATLAS_URL,
-    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.monochrome),
+    tileSheetHeader: EDITOR_MONOCHROME_TILE_SHEET_HEADER,
+    drawTileWidth: EDITOR_MONOCHROME_TILE_SHEET_HEADER.width,
+    drawTileHeight: EDITOR_MONOCHROME_TILE_SHEET_HEADER.height / Tile.TILE_COUNT,
   }),
   Object.freeze({
     canonicalIdentityKey: MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
@@ -64,7 +73,11 @@ const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
       MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     ),
     spriteSheetUrl: MAP_COLOR_TILE_ATLAS_URL,
-    tileSheetHeader: parseTileSheetHeader(TILE_SHEET_HEADERS.small),
+    tileSheetHeader: MAP_COLOR_TILE_SHEET_HEADER,
+    // `GetViewTiles` in `g_setup.c` documents small-map tiles as
+    // "4 pixels wide per 3 pixel wide tile"; the 4th column is spacing.
+    drawTileWidth: 3,
+    drawTileHeight: MAP_COLOR_TILE_SHEET_HEADER.height / Tile.TILE_COUNT,
   }),
 ]);
 
@@ -286,8 +299,8 @@ function createTileSpriteLookupByCanonicalIdentityKey(): ReadonlyMap<
         tileId,
         sourceX: 0,
         sourceY: tileId * tileHeight,
-        sourceWidth: definition.tileSheetHeader.width,
-        sourceHeight: tileHeight,
+        sourceWidth: definition.drawTileWidth,
+        sourceHeight: definition.drawTileHeight,
         debugFallbackColor: getTileDebugColor(tileId),
       });
     }
