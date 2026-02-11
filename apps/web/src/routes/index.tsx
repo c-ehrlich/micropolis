@@ -109,6 +109,8 @@ function RuntimePanel() {
     [],
   );
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
+  const [isGameplayMuted, setIsGameplayMuted] = useState(false);
+  const isGameplayMutedRef = useRef(isGameplayMuted);
   /**
    * Coalesces host-driven runtime projections to one browser paint commit.
    * Mirrors Micropolis cadence where map/head updates are consumed on UI update
@@ -153,6 +155,10 @@ function RuntimePanel() {
   const commandCounter = useRef(1);
 
   useEffect(() => {
+    isGameplayMutedRef.current = isGameplayMuted;
+  }, [isGameplayMuted]);
+
+  useEffect(() => {
     const unsubscribe = runtime.subscribe((event) => {
       stateCommitDispatcher.queue(event.state);
 
@@ -164,7 +170,7 @@ function RuntimePanel() {
       routeMicropolisGameplaySoundDeltas({
         envelope: runtimeEnvelope,
         reducerOutcome: event.outcome,
-        userSoundOn: event.state.hudState.options.userSoundOn,
+        userSoundOn: event.state.hudState.options.userSoundOn && !isGameplayMutedRef.current,
         gameplayAudioConsumer,
         gameplaySoundPlaybackPolicy,
       });
@@ -539,6 +545,55 @@ function RuntimePanel() {
             )}
           </div>
         </div>
+        <button
+          aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
+          onClick={() => {
+            setIsGameplayMuted((current) => {
+              const nextMuted = !current;
+              if (nextMuted) {
+                gameplayAudioConsumer.dispose();
+              }
+              return nextMuted;
+            });
+          }}
+          style={{
+            alignItems: 'center',
+            background: isGameplayMuted ? '#fee2e2' : 'transparent',
+            border: '1px solid rgba(15, 23, 42, 0.35)',
+            borderRadius: 3,
+            color: isGameplayMuted ? '#b91c1c' : '#0f172a',
+            display: 'inline-flex',
+            height: 26,
+            justifyContent: 'center',
+            marginLeft: 'auto',
+            padding: 0,
+            width: 32,
+          }}
+          title={isGameplayMuted ? 'Unmute' : 'Mute'}
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.7"
+            viewBox="0 0 24 24"
+            width="16"
+          >
+            <path d="M3 9h4l5-4v14l-5-4H3z" />
+            {isGameplayMuted ? (
+              <path d="M15 9l6 6M21 9l-6 6" />
+            ) : (
+              <>
+                <path d="M15 9.5a4 4 0 0 1 0 5" />
+                <path d="M17.5 7a7.5 7.5 0 0 1 0 10" />
+              </>
+            )}
+          </svg>
+        </button>
       </header>
 
       <section
