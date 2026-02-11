@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatMicropolisNoticeBody,
   lookupDoMessageText,
+  lookupMicropolisNoticeMessage,
+  lookupMicropolisNoticeTemplate,
   lookupStri301MessageText,
+  MICROPOLIS_NOTICE_TEMPLATES,
   MICROPOLIS_STRI_301_LINES,
 } from './message-table.ts';
 
@@ -38,5 +42,30 @@ describe('stri.301 message table parity', () => {
     expect(lookupStri301MessageText(65)).toBeUndefined();
     expect(lookupDoMessageText(0)).toBeUndefined();
     expect(lookupDoMessageText(Number.NaN)).toBeUndefined();
+  });
+});
+
+describe('micropolis.tcl notice-table parity', () => {
+  it('bundles notice entries from the Tcl Message table used by UIShowPicture', () => {
+    // Canonical source: `Message <id> ...` declarations in
+    // `ref/micropolis/res/micropolis.tcl`, consumed by `UIShowPictureOn`.
+    expect(MICROPOLIS_NOTICE_TEMPLATES.length).toBeGreaterThan(0);
+    // Magic ids come from Tcl `Message 100` (win) and `Message 200` (lose).
+    expect(lookupMicropolisNoticeTemplate(100)?.title).toBe("YOU'RE A WINNER!");
+    expect(lookupMicropolisNoticeTemplate(200)?.title).toBe('IMPEACHMENT NOTICE!');
+  });
+
+  it('formats Tcl-style %s body placeholders in notice messages', () => {
+    // Magic id `49` comes from `Message 49` body `"This city was saved... %s"`
+    // in `ref/micropolis/res/micropolis.tcl`.
+    expect(lookupMicropolisNoticeMessage(49, ['newcity.cty'])?.body).toBe(
+      'This city was saved in the file named: newcity.cty',
+    );
+    expect(formatMicropolisNoticeBody('A=%s B=%s', ['x', 42])).toBe('A=x B=42');
+  });
+
+  it('keeps placeholders when parameters are missing and returns undefined for unknown ids', () => {
+    expect(lookupMicropolisNoticeMessage(46)?.body).toContain('%s');
+    expect(lookupMicropolisNoticeTemplate(999)).toBeUndefined();
   });
 });

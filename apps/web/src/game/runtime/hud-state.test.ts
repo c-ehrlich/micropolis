@@ -379,4 +379,91 @@ describe('runtime HUD projection', () => {
       },
     ]);
   });
+
+  it('projects notice payloads from snapshots and patches with replay metadata defaults', () => {
+    const snapshot = projectRuntimeHudState(createInitialRuntimeHudState(), {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 30,
+      serverSeq: 9,
+      payload: {
+        // Magic id `100` comes from `Message 100` in `ref/micropolis/res/micropolis.tcl`.
+        notice: {
+          id: 100,
+          title: "YOU'RE A WINNER!",
+          body: 'Victory!',
+          color: '#7fff7f',
+        },
+      },
+    });
+
+    expect(snapshot.notice).toEqual({
+      id: 100,
+      title: "YOU'RE A WINNER!",
+      body: 'Victory!',
+      color: '#7fff7f',
+      tick: 30,
+      serverSeq: 9,
+    });
+
+    const patch = projectRuntimeHudState(snapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 31,
+      serverSeq: 10,
+      payload: {
+        // Magic id `200` comes from `Message 200` in `ref/micropolis/res/micropolis.tcl`.
+        notice: {
+          id: 200,
+          title: 'IMPEACHMENT NOTICE!',
+          body: 'Lose condition.',
+          color: '#ff4f4f',
+          tick: 12,
+          serverSeq: 5,
+        },
+      },
+    });
+
+    expect(patch.notice).toEqual({
+      id: 200,
+      title: 'IMPEACHMENT NOTICE!',
+      body: 'Lose condition.',
+      color: '#ff4f4f',
+      tick: 12,
+      serverSeq: 5,
+    });
+  });
+
+  it('clears active notice when patch notice is explicitly null', () => {
+    const withNotice = projectRuntimeHudState(createInitialRuntimeHudState(), {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        notice: {
+          id: 48,
+          title: 'Start a New City',
+          body: 'Bootstrap notice.',
+          color: '#7f7fff',
+        },
+      },
+    });
+
+    const cleared = projectRuntimeHudState(withNotice, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      payload: {
+        notice: null,
+      },
+    });
+
+    expect(cleared.notice).toBeNull();
+  });
 });

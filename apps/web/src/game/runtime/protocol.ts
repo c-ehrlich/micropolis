@@ -757,6 +757,30 @@ export interface HostHudMessagePayload {
 }
 
 /**
+ * One authoritative notice payload emitted by host snapshot/patch envelopes.
+ * Mirrors `UIShowPicture` notice display state in `ref/micropolis/res/micropolis.tcl`.
+ * Parity note: this carries fully resolved title/body/color content so web clients
+ * do not need to execute Tcl `Messages($id)` lookups.
+ */
+export interface HostHudNoticePayload {
+  id: number;
+  title: string;
+  body: string;
+  color: string;
+  /**
+   * Optional original authority tick for replay-stable notice baselines.
+   * Mirrors ordered notice progression from `UIShowPicture` call ordering in
+   * `ref/micropolis/src/sim/s_msg.c` and `ref/micropolis/res/micropolis.tcl`.
+   */
+  tick?: number;
+  /**
+   * Optional original authority sequence for replay-stable notice baselines.
+   * Mirrors ordered bridge delivery intent in `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  serverSeq?: number;
+}
+
+/**
  * One incremental HUD message delta in Playable Runtime patch payloads.
  * Mirrors incremental message dispatch in `ref/micropolis/src/sim/s_msg.c`.
  * Parity note: this is append-only for Playable Runtime feed projection.
@@ -905,6 +929,12 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
   map?: HostMapSnapshotPayload | LegacyHostMapSnapshotPayload;
   hud?: HostHudPayload;
   /**
+   * Snapshot notice baseline (single active notice state).
+   * Mirrors current notice ownership via `ShowingPicture` in
+   * `ref/micropolis/res/micropolis.tcl`.
+   */
+  notice?: HostHudNoticePayload | null;
+  /**
    * Optional realtime object baseline for overlay projection.
    * Mirrors sprite snapshot ownership in `ref/micropolis/src/sim/w_sprite.c`.
    */
@@ -931,6 +961,12 @@ export interface HostSnapshotPayload extends Record<string, unknown> {
 export interface HostPatchPayload extends Record<string, unknown> {
   map?: HostMapPatchPayload | LegacyHostMapPatchPayload;
   hud?: HostHudPayload;
+  /**
+   * Incremental active-notice replacement for patch projection.
+   * Mirrors `UIShowPicture` replacement behavior in
+   * `ref/micropolis/res/micropolis.tcl`.
+   */
+  notice?: HostHudNoticePayload | null;
   /**
    * Optional realtime object delta/snapshot payload for staged overlay support.
    * Mirrors per-frame sprite update intent from `ref/micropolis/src/sim/w_sprite.c`.

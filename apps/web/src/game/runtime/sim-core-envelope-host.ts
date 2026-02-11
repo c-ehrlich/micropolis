@@ -1,7 +1,10 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
-import { lookupDoMessageText } from '../../../../../packages/sim-assets/src/message-table.ts';
+import {
+  lookupDoMessageText,
+  lookupMicropolisNoticeMessage,
+} from '../../../../../packages/sim-assets/src/message-table.ts';
 import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
@@ -76,6 +79,7 @@ import type {
   CoreHostConnection,
   HostEnvelope,
   HostHudMessagePayload,
+  HostHudNoticePayload,
   HostHudOptionsPayload,
   HostHudPayload,
   HostMapPatchTileWordDelta,
@@ -157,6 +161,7 @@ interface HookHudState {
   options: HostHudOptionsPayload;
 }
 type HostRealtimeObjectWithIdPayload = HostRealtimeObjectPayload & { id: string };
+type PendingNoticeUpdate = HostHudNoticePayload | null | undefined;
 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
@@ -247,6 +252,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private lastHudCityPopulation = 0;
   private lastHudCityClass = 0;
   private pendingHookMessages: HostHudMessagePayload[] = [];
+  private activeNotice: HostHudNoticePayload | null = null;
+  private pendingNoticeUpdate: PendingNoticeUpdate = undefined;
   private readonly pendingSoundDeltasByTick = new Map<number, HostSoundDeltaPayload[]>();
   private readonly messageLog: HostHudMessagePayload[] = [];
   private readonly realtimeContext: RealtimeContext;
@@ -261,6 +268,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
         makeSound: (channel, sound) => this.captureSimCoreHookSound(channel, sound),
         sendMes: (id) => this.captureMessage(id),
         sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
+        doLoseGame: () => this.captureLoseGame(),
+        doWinGame: () => this.captureWinGame(),
       },
     });
     const mapLayerInfo = this.authorityState.store.layerInfo('map');
@@ -810,6 +819,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
       payload.messages = cloneHostHudMessagePayloadList(canonicalMessageDeltas);
       payload.hud = withLegacyHudMessageCompatibility(payload.hud, canonicalMessageDeltas);
     }
+    const pendingNotice = this.drainPendingNoticeUpdate();
+    if (pendingNotice !== undefined) {
+      payload.notice = cloneHostHudNoticePayload(pendingNotice);
+    }
     const realtimePayload = this.buildRealtimeDeltaPayload();
     if (realtimePayload !== undefined) {
       payload.realtime = realtimePayload;
@@ -1121,6 +1134,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.cityFileName = DEFAULT_CITY_FILE_NAME;
     this.cityName = DEFAULT_CITY_NAME;
     this.syncHostStateAfterLoadLikeCommand();
+    // Tcl `DoNewCity` in `micropolis.tcl` calls `UIShowPicture 48`.
+    this.captureNoticeById(48);
   }
 
   /**
@@ -1208,6 +1223,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.cityFileName = loadResult.cityFileName;
     this.cityName = loadResult.cityName;
     this.syncHostStateAfterLoadLikeCommand();
+    // Tcl `UIDidLoadCity` notice path shows message 49 with file name interpolation.
+    this.captureNoticeById(49, [this.cityFileName]);
     return {
       kind: 'load',
     };
@@ -1274,6 +1291,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.cityFileName = `${loadResult.scenario.fileName}.cty`;
     this.cityName = loadResult.scenario.name;
     this.syncHostStateAfterLoadLikeCommand();
+    // Tcl `DoScenario`/`UIStartScenario` call `UIShowPicture <scenario-id>`.
+    this.captureNoticeById(loadResult.scenario.id);
 
     if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
       return;
@@ -1481,12 +1500,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Stamps message payload entries with deterministic replay metadata.
-   * Mirrors ordered message delivery ownership in `doMessage` from
-   * `ref/micropolis/src/sim/s_msg.c` and bridge replay ordering invariants from
-   * `ref/micropolis/spec/integration/SPEC.md`.
-   * Parity note: C message payloads do not include tick/sequence fields; this host
-   * writes transport metadata so snapshot replay preserves original message order.
+   * Stamps message/notice payload entries with deterministic replay metadata.
+   * Mirrors ordered message and notice delivery ownership in `doMessage` from
+   * `ref/micropolis/src/sim/s_msg.c` and `UIShowPicture` in
+   * `ref/micropolis/res/micropolis.tcl`, plus bridge replay ordering invariants
+   * from `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: C payloads do not include tick/sequence fields; this host writes
+   * transport metadata so snapshot replay preserves original ordering context.
    */
   private applyReplayMetadataToEnvelopeMessages(
     envelope: SequencedHostEnvelope,
@@ -1502,20 +1522,30 @@ export class SimCoreEnvelopeHost implements CoreHost {
         envelope.tick,
         envelope.serverSeq,
       );
-      if (normalized.length === 0) {
+      const normalizedNotice = normalizeNoticeReplayMetadata(
+        envelope.payload.notice,
+        envelope.tick,
+        envelope.serverSeq,
+      );
+      if (normalized.length === 0 && normalizedNotice === undefined) {
         return envelope;
       }
 
-      this.appendMessageLog(normalized);
-      const canonicalMessageDeltas = cloneHostHudMessagePayloadList(normalized);
+      const payload = { ...envelope.payload };
+      if (normalized.length > 0) {
+        this.appendMessageLog(normalized);
+        const canonicalMessageDeltas = cloneHostHudMessagePayloadList(normalized);
+        payload.hud = withLegacyHudMessageCompatibility(payload.hud, canonicalMessageDeltas);
+        payload.messageDeltas = canonicalMessageDeltas;
+        payload.messages = cloneHostHudMessagePayloadList(canonicalMessageDeltas);
+      }
+      if (normalizedNotice !== undefined) {
+        payload.notice = cloneHostHudNoticePayload(normalizedNotice);
+      }
+
       return {
         ...envelope,
-        payload: {
-          ...envelope.payload,
-          hud: withLegacyHudMessageCompatibility(envelope.payload.hud, canonicalMessageDeltas),
-          messageDeltas: canonicalMessageDeltas,
-          messages: cloneHostHudMessagePayloadList(canonicalMessageDeltas),
-        },
+        payload,
       };
     }
 
@@ -1528,21 +1558,39 @@ export class SimCoreEnvelopeHost implements CoreHost {
       envelope.tick,
       envelope.serverSeq,
     );
+    const normalizedNotice = normalizeNoticeReplayMetadata(
+      envelope.payload.notice,
+      envelope.tick,
+      envelope.serverSeq,
+    );
     if (normalized.length === 0) {
       this.replaceMessageLog([]);
-      return envelope;
+      if (normalizedNotice === undefined) {
+        return envelope;
+      }
+      return {
+        ...envelope,
+        payload: {
+          ...envelope.payload,
+          notice: cloneHostHudNoticePayload(normalizedNotice),
+        },
+      };
     }
 
     this.replaceMessageLog(normalized);
     const canonicalSnapshotMessages = cloneHostHudMessagePayloadList(normalized);
+    const payload = {
+      ...envelope.payload,
+      hud: withLegacyHudMessageCompatibility(envelope.payload.hud, canonicalSnapshotMessages),
+      messages: canonicalSnapshotMessages,
+      messageDeltas: cloneHostHudMessagePayloadList(canonicalSnapshotMessages),
+      ...(normalizedNotice === undefined
+        ? {}
+        : { notice: cloneHostHudNoticePayload(normalizedNotice) }),
+    };
     return {
       ...envelope,
-      payload: {
-        ...envelope.payload,
-        hud: withLegacyHudMessageCompatibility(envelope.payload.hud, canonicalSnapshotMessages),
-        messages: canonicalSnapshotMessages,
-        messageDeltas: cloneHostHudMessagePayloadList(canonicalSnapshotMessages),
-      },
+      payload,
     };
   }
 
@@ -1732,6 +1780,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     const tileWords = buildSnapshotTileWordsFromSimCoreMap(mapLayer, this.mapWidth, this.mapHeight);
     const hud = this.buildHudSnapshotPayload();
+    const notice = this.activeNotice === null ? null : cloneHostHudNoticePayload(this.activeNotice);
     if (this.messageLog.length === 0) {
       return {
         map: {
@@ -1740,6 +1789,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
           tileWords,
         },
         hud,
+        notice,
         realtime: this.buildRealtimeSnapshotPayload(),
       };
     }
@@ -1752,6 +1802,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
         tileWords,
       },
       hud: withLegacyHudMessageCompatibility(hud, snapshotMessages),
+      notice,
       realtime: this.buildRealtimeSnapshotPayload(),
       messages: snapshotMessages,
       messageDeltas: cloneHostHudMessagePayloadList(snapshotMessages),
@@ -2052,10 +2103,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors `SendMes` dispatch ownership in `ref/micropolis/src/sim/s_msg.c`.
    */
   private captureMessage(id: number): void {
-    this.pendingHookMessages.push({
-      id,
-      text: messageTextForId(id),
-    });
+    if (shouldProjectHudMessageToFeed(id)) {
+      this.pendingHookMessages.push({
+        id,
+        text: messageTextForId(id),
+      });
+    }
+    if (id < 0) {
+      this.captureNoticeById(-id);
+    }
   }
 
   /**
@@ -2063,12 +2119,71 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors `SendMesAt` dispatch ownership in `ref/micropolis/src/sim/s_msg.c`.
    */
   private captureMessageAt(id: number, x: number, y: number): void {
-    this.pendingHookMessages.push({
-      id,
-      text: messageTextForId(id),
-      x: Math.trunc(x),
-      y: Math.trunc(y),
-    });
+    if (shouldProjectHudMessageToFeed(id)) {
+      this.pendingHookMessages.push({
+        id,
+        text: messageTextForId(id),
+        x: Math.trunc(x),
+        y: Math.trunc(y),
+      });
+    }
+    if (id < 0) {
+      this.captureNoticeById(-id);
+    }
+  }
+
+  /**
+   * Captures one `DoLoseGame` hook from sim-core and applies host-side lose flow.
+   * Mirrors `DoLoseGame -> UILoseGame -> UIPickScenarioMode + UIShowPicture 200` in
+   * `ref/micropolis/src/sim/s_msg.c` and `ref/micropolis/res/micropolis.tcl`.
+   */
+  private captureLoseGame(): void {
+    this.pauseSimulation();
+    this.captureNoticeById(200);
+  }
+
+  /**
+   * Captures one `DoWinGame` hook from sim-core and applies host-side win flow.
+   * Mirrors `DoWinGame -> UIWinGame -> UIShowPicture 100` in
+   * `ref/micropolis/src/sim/s_msg.c` and `ref/micropolis/res/micropolis.tcl`.
+   */
+  private captureWinGame(): void {
+    this.captureNoticeById(100);
+  }
+
+  /**
+   * Resolves one notice-table id into active notice payload state.
+   * Mirrors `UIShowPictureOn` `Messages($id)` lookup + optional `format` interpolation
+   * in `ref/micropolis/res/micropolis.tcl`.
+   */
+  private captureNoticeById(id: number, parameters: readonly (string | number)[] = []): void {
+    const notice = lookupMicropolisNoticeMessage(id, parameters);
+    if (notice === undefined) {
+      return;
+    }
+
+    const activeNotice: HostHudNoticePayload = {
+      id: notice.id,
+      title: notice.title,
+      body: notice.body,
+      color: notice.color,
+    };
+    this.activeNotice = activeNotice;
+    this.pendingNoticeUpdate = activeNotice;
+  }
+
+  /**
+   * Drains one pending notice update for the next emitted payload.
+   * Mirrors latest-notice replacement ownership from `UIShowPictureOn` in
+   * `ref/micropolis/res/micropolis.tcl`.
+   */
+  private drainPendingNoticeUpdate(): PendingNoticeUpdate {
+    const pendingUpdate = this.pendingNoticeUpdate;
+    this.pendingNoticeUpdate = undefined;
+    if (pendingUpdate === undefined) {
+      return undefined;
+    }
+    return cloneHostHudNoticePayload(pendingUpdate);
   }
 
   /**
@@ -2220,6 +2335,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * adapted to bridge snapshot full-feed payload semantics.
    */
   private applyPendingHookMessagesToSnapshotPayload(payload: HostSnapshotPayload): void {
+    const pendingNotice = this.drainPendingNoticeUpdate();
+    if (pendingNotice !== undefined) {
+      payload.notice = cloneHostHudNoticePayload(pendingNotice);
+    }
+
     const pendingMessages = this.drainPendingHookMessages();
     if (pendingMessages.length === 0) {
       return;
@@ -2617,6 +2737,17 @@ function messageTextForId(id: number): string {
 }
 
 /**
+ * Returns whether one message id should project into the status-line feed.
+ * Mirrors `doMessage` text-path behavior in `ref/micropolis/src/sim/s_msg.c`
+ * where only ids backed by `GetIndString(...,301,...)` become status text.
+ * Parity note: picture-only notice ids (for example 100/200) stay in notice
+ * payloads and are intentionally omitted from message-feed entries.
+ */
+function shouldProjectHudMessageToFeed(id: number): boolean {
+  return lookupDoMessageText(id) !== undefined;
+}
+
+/**
  * Stamps one message array with replay-stable tick/server-seq metadata.
  * Mirrors ordered message progression intent from
  * `ref/micropolis/src/sim/s_msg.c` plus bridge replay ordering in
@@ -2638,6 +2769,30 @@ function normalizeMessageReplayMetadata(
     tick: message.tick ?? fallbackTick,
     serverSeq: message.serverSeq ?? fallbackServerSeq,
   }));
+}
+
+/**
+ * Stamps one notice payload with replay-stable tick/server-seq metadata.
+ * Mirrors notice ordering intent from `UIShowPicture` in
+ * `ref/micropolis/res/micropolis.tcl` plus bridge replay ordering in
+ * `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: C notice payloads do not carry this metadata; this host adds
+ * deterministic transport fields for replay-stable snapshots.
+ */
+function normalizeNoticeReplayMetadata(
+  notice: HostHudNoticePayload | null | undefined,
+  fallbackTick: number,
+  fallbackServerSeq: number,
+): HostHudNoticePayload | null | undefined {
+  if (notice === undefined || notice === null) {
+    return notice;
+  }
+
+  return {
+    ...notice,
+    tick: notice.tick ?? fallbackTick,
+    serverSeq: notice.serverSeq ?? fallbackServerSeq,
+  };
 }
 
 /**
@@ -2671,6 +2826,20 @@ function cloneHostHudMessagePayloadList(
   messages: readonly HostHudMessagePayload[],
 ): HostHudMessagePayload[] {
   return messages.map((message) => ({ ...message }));
+}
+
+/**
+ * Clones one notice payload before envelope emission/replay storage.
+ * Mirrors value-copy transport boundaries around `UIShowPicture` payload
+ * projection in `ref/micropolis/res/micropolis.tcl`.
+ */
+function cloneHostHudNoticePayload(
+  notice: HostHudNoticePayload | null,
+): HostHudNoticePayload | null {
+  if (notice === null) {
+    return null;
+  }
+  return { ...notice };
 }
 
 /**

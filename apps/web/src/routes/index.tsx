@@ -18,6 +18,7 @@ import {
   type PlayableSimSpeed,
   type PlayableToolName,
   type RuntimeHudMessageEvent,
+  type RuntimeHudNoticeEvent,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
 import {
@@ -155,6 +156,7 @@ function RuntimePanel() {
   const [_disasterStatus, setDisasterStatus] = useState<string>('');
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
+  const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
@@ -162,6 +164,7 @@ function RuntimePanel() {
     useState<HTMLDivElement | null>(null);
   const menubarRef = useRef<HTMLElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const handledLoseNoticeServerSeq = useRef(0);
   const commandCounter = useRef(1);
 
   useEffect(() => {
@@ -251,6 +254,29 @@ function RuntimePanel() {
   const activeToolSpec = getPlayableToolSpec(activeTool);
   const isSimulationRunning = state.hudState.speed > 0;
   const runtimePhaseStatus = formatRuntimePhaseStatus(state.phase);
+  const activeNotice = state.hudState.notice;
+  const activeNoticeSignature =
+    activeNotice === null ? null : `${activeNotice.serverSeq}:${activeNotice.id}`;
+  const visibleNotice =
+    !state.hudState.options.doNotices ||
+    activeNotice === null ||
+    activeNoticeSignature === dismissedNoticeSignature
+      ? null
+      : activeNotice;
+
+  useEffect(() => {
+    const notice = state.hudState.notice;
+    if (notice === null || notice.id !== 200) {
+      return;
+    }
+    if (notice.serverSeq <= handledLoseNoticeServerSeq.current) {
+      return;
+    }
+    handledLoseNoticeServerSeq.current = notice.serverSeq;
+    setHasStartedPlayableSession(false);
+    setOpenMenubarSection(null);
+    setGameDialog('scenario');
+  }, [state.hudState.notice]);
 
   return (
     <section
@@ -601,6 +627,14 @@ function RuntimePanel() {
           </svg>
         </button>
       </header>
+      {visibleNotice === null ? null : (
+        <NoticePanel
+          notice={visibleNotice}
+          onDismiss={() => {
+            setDismissedNoticeSignature(activeNoticeSignature);
+          }}
+        />
+      )}
 
       <section
         style={{
@@ -1138,6 +1172,79 @@ function RuntimePanel() {
           </section>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Authoritative Runtime notice panel.
+ * Mirrors `UIShowPictureOn` + `NoticeMessageOn` rendering and local dismiss behavior
+ * in `ref/micropolis/res/micropolis.tcl` and `ref/micropolis/res/wnotice.tcl`.
+ * Parity note: dismiss is UI-only and does not send a simulation command.
+ */
+function NoticePanel({
+  notice,
+  onDismiss,
+}: {
+  notice: RuntimeHudNoticeEvent;
+  onDismiss: () => void;
+}) {
+  return (
+    <section
+      style={{
+        background: 'rgba(248, 250, 252, 0.96)',
+        border: '1px solid rgba(15, 23, 42, 0.75)',
+        borderRadius: 6,
+        color: '#0f172a',
+        display: 'grid',
+        gap: 10,
+        maxHeight: 'min(45vh, 320px)',
+        maxWidth: 'min(520px, calc(100vw - 24px))',
+        overflow: 'hidden',
+        padding: 10,
+        pointerEvents: 'auto',
+        position: 'absolute',
+        right: 12,
+        top: 46,
+        width: 'min(520px, calc(100vw - 24px))',
+        zIndex: 13,
+      }}
+    >
+      <header
+        style={{
+          alignItems: 'center',
+          background: notice.color,
+          border: '1px solid rgba(15, 23, 42, 0.35)',
+          borderRadius: 4,
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '6px 8px',
+        }}
+      >
+        <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>{notice.title}</strong>
+        <span style={{ fontFamily: 'monospace', fontSize: 11 }}>#{notice.id}</span>
+      </header>
+      <pre
+        style={{
+          background: 'rgba(241, 245, 249, 0.9)',
+          border: '1px solid rgba(148, 163, 184, 0.45)',
+          borderRadius: 4,
+          fontFamily: 'monospace',
+          fontSize: 12,
+          lineHeight: '18px',
+          margin: 0,
+          overflow: 'auto',
+          padding: 8,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {notice.body}
+      </pre>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={onDismiss} type="button">
+          Dismiss
+        </button>
+      </div>
     </section>
   );
 }
