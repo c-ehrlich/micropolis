@@ -144,7 +144,7 @@ Deliverable: single authoritative sound path from host envelopes.
   - `apps/web/public/sounds`: 7 `.wav` stems.
   - Present in web (7/49): `bulldozer`, `explosion-high`, `honkhonk-low`, `monster`, `siren`, `sorry`, `uhuh`.
   - Missing in web (42): `a`, `aaah`, `airport`, `beep`, `boing`, `bop`, `build`, `chalk`, `coal`, `com`, `computer`, `cuckoo`, `e`, `eraser`, `explosion-hi`, `explosion-low`, `fire`, `heavytraffic`, `honkhonk-hi`, `honkhonk-high`, `honkhonk-med`, `ignition`, `ind`, `nuclear`, `o`, `oop`, `park`, `police`, `quack`, `quackquack`, `query`, `rail`, `res`, `road`, `rumble`, `seaport`, `skid`, `stadium`, `whip`, `wire`, `woosh`, `zone`.
-- [ ] Add missing wav assets for all C-triggered gameplay sounds (tool/message/realtime/disaster pathways).
+- [x] Add missing wav assets for all C-triggered gameplay sounds (tool/message/realtime/disaster pathways).
 - [ ] Produce a traceable sound inventory doc/table:
   - [ ] token/spec
   - [ ] wav file name
