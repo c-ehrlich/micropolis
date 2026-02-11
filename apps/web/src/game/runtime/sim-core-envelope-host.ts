@@ -177,7 +177,8 @@ const TOOL_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
 const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
   'out-of-bounds': 'UhUh',
   'no-funds': 'Sorry',
-} satisfies Record<'out-of-bounds' | 'no-funds', string>);
+  'invalid-placement': 'UhUh',
+} satisfies Record<'out-of-bounds' | 'no-funds' | 'invalid-placement', string>);
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -2016,13 +2017,17 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/w_tool.c` (`result == -1` / `result == -2`), with
    * scope metadata mapped from `MakeSoundOn` view-target semantics in
    * `ref/micropolis/src/sim/w_sound.c`.
+   * Parity note: host-level `invalid-placement` rejects currently map to the
+   * same `UhUh` feedback used by C `result == -1` tool failures.
    */
   private buildToolRejectSoundDeltas(rejectReason: string): HostSoundDeltaPayload[] {
     if (!this.isHostSoundEmissionEnabled()) {
       return [];
     }
     const soundSpec =
-      rejectReason === 'out-of-bounds' || rejectReason === 'no-funds'
+      rejectReason === 'out-of-bounds' ||
+      rejectReason === 'no-funds' ||
+      rejectReason === 'invalid-placement'
         ? TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON[rejectReason]
         : undefined;
     if (soundSpec === undefined) {

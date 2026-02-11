@@ -191,7 +191,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 ## Acceptance Criteria
 
 - [x] Building with insufficient funds plays `Sorry` via host-emitted sound delta.
-- [ ] Invalid placement plays `UhUh` via host-emitted sound delta.
+- [x] Invalid placement plays `UhUh` via host-emitted sound delta.
 - [ ] All playable tool success sounds come from authoritative host sound deltas.
 - [ ] Message-driven siren/monster/explosion/honk sounds come from authoritative host sound deltas.
 - [ ] Route no longer infers gameplay sounds from reject/message state.

@@ -2595,6 +2595,13 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-wire-road-reject',
       reason: 'invalid-placement',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'UhUh',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
 
     const mapAfter = hostInternals.authorityState.store.snapshot('map');
