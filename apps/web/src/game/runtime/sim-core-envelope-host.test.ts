@@ -1176,7 +1176,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(pauseMessageDeltas).toContainEqual({
       id: 14,
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       x: 7,
       y: 9,
       tick: 1,
@@ -1193,7 +1193,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(playMessageDeltas).toContainEqual({
       id: 16,
-      text: 'City taxes are too high.',
+      text: 'Citizens upset. The tax rate is too high.',
       tick: 2,
       serverSeq: 5,
     });
@@ -1274,7 +1274,7 @@ describe('SimCoreEnvelopeHost', () => {
     );
     expect(pictureMessage).toMatchObject({
       id: -11,
-      text: 'Crime is out of control.',
+      text: 'Crime very high.',
     });
 
     captured.send({
@@ -1297,7 +1297,7 @@ describe('SimCoreEnvelopeHost', () => {
     );
     expect(textMessage).toMatchObject({
       id: 11,
-      text: 'Crime is out of control.',
+      text: 'Crime very high.',
     });
   });
 
@@ -1381,7 +1381,7 @@ describe('SimCoreEnvelopeHost', () => {
       (message) => message.id === 14 && message.x === 7 && message.y === 9,
     );
     expect(secondReplayMessage).toMatchObject({
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       tick: 1,
       serverSeq: 3,
     });
@@ -2572,7 +2572,7 @@ describe('SimCoreEnvelopeHost', () => {
     }
     expect(messageDeltas).toContainEqual({
       id: 14,
-      text: 'Residents demand police stations.',
+      text: 'Citizens demand a Police Department.',
       x: 7,
       y: 9,
       tick: 2,
