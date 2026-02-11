@@ -27,7 +27,7 @@ import {
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
-import type { CoreHost } from '../game/runtime/protocol.ts';
+import { type CoreHost, isSequencedHostEnvelope } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -139,11 +139,19 @@ function RuntimePanel() {
         return;
       }
 
+      if (isSequencedHostEnvelope(runtimeEnvelope)) {
+        for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+          void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
+        }
+      }
+
       if (runtimeEnvelope.kind === 'ack') {
         const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
         if (toolSoundToken !== undefined) {
           pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-          void gameplayAudioConsumer.playSoundSpec(toolSoundToken).catch(() => undefined);
+          if ((runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
+            void gameplayAudioConsumer.playSoundSpec(toolSoundToken).catch(() => undefined);
+          }
         }
         return;
       }
@@ -153,7 +161,7 @@ function RuntimePanel() {
         const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
           runtimeEnvelope.reason,
         );
-        if (rejectSoundToken !== null) {
+        if (rejectSoundToken !== null && (runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
           void gameplayAudioConsumer.playSoundSpec(rejectSoundToken).catch(() => undefined);
         }
         return;
@@ -161,10 +169,6 @@ function RuntimePanel() {
 
       if (runtimeEnvelope.kind !== 'patch') {
         return;
-      }
-
-      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
-        void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
       }
 
       const savePayload = readCityExportPayload(runtimeEnvelope.payload);

@@ -89,6 +89,7 @@ describe('routes/index default gameplay path', () => {
       'utf8',
     );
 
+    expect(routeSource).toContain('if (isSequencedHostEnvelope(runtimeEnvelope))');
     expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
     expect(routeSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
     expect(routeSource).not.toContain('readMessageIdsFromPatchPayload');
