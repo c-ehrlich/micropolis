@@ -300,6 +300,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       store: this.authorityState.simContext.store,
       rng: this.authorityState.simContext.rng,
       toolContext: this.authorityState.toolContext,
+      onSound: (channel, soundSpec) => this.captureRealtimeSound(channel, soundSpec),
       simSpeed: this.authorityState.simState.SimSpeed,
       doAnimation: this.authorityState.simState.doAnimation,
       noDisasters: this.authorityState.simState.NoDisasters,

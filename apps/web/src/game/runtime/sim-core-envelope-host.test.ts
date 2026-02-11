@@ -3087,13 +3087,18 @@ describe('SimCoreEnvelopeHost', () => {
     const host = new SimCoreEnvelopeHost();
     const hostInternals = host as unknown as {
       tick: number;
+      realtimeContext: {
+        onSound?: (channel: string, id: string) => void;
+      };
       captureRealtimeSound(channel: string, soundSpec: string): void;
       captureSimCoreHookSound(channel: number, sound: number): void;
       drainPendingSoundDeltasForTick(tick?: number): HostSoundDeltaPayload[];
     };
 
     hostInternals.tick = 3;
-    hostInternals.captureRealtimeSound('city', 'Siren');
+    // Realtime sprite paths call `MakeSound("city", ...)` in `w_sprite.c`; sim-core
+    // emits this through `createRealtimeContext(...).onSound(...)`.
+    hostInternals.realtimeContext.onSound?.('city', 'Siren');
     // sim-core message sound hook ids:
     // channel `0` (city) and sound `6` (`Explosion-Low`) from
     // `packages/sim-core/src/systems/messages.ts`, mirroring `doMessage` in `s_msg.c`.
