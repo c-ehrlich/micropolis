@@ -270,6 +270,11 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         soundSpec: 'Siren',
         scope: { kind: 'view', target: '.playMap' },
       },
+      {
+        channel: 'warning',
+        soundSpec: 'Explosion High',
+        scope: { kind: 'global' },
+      },
     ];
 
     const ackEnvelope: HostAckEnvelope = {
@@ -334,5 +339,9 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
     expect(snapshotEnvelope.soundDeltas).toEqual(soundDeltas);
     expect(resyncEnvelope.soundDeltas).toEqual(soundDeltas);
     expect(errorEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(ackEnvelope.soundDeltas?.map((soundDelta) => soundDelta.soundSpec)).toEqual([
+      'Siren',
+      'Explosion High',
+    ]);
   });
 });

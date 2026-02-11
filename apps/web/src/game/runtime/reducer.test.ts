@@ -170,6 +170,78 @@ describe('reduceHostEnvelope', () => {
     expect(gap.state.mapState.tiles[0]).toBe(3);
   });
 
+  it('keeps sequenced ordering rules unchanged when envelopes carry sound deltas', () => {
+    const state = createInitialWebRuntimeState();
+    const afterHello = reduceHostEnvelope(state, createAcceptedHelloEnvelope()).state;
+    const baselineSnapshot = reduceHostEnvelope(afterHello, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      // `w_update.c` update sequencing is monotonic; bridge state must enforce
+      // the same `serverSeq` ordering even when `MakeSound` payloads are attached.
+      tick: 8,
+      serverSeq: 20,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [11] },
+      },
+      soundDeltas: [
+        { channel: 'city', soundSpec: 'Siren' },
+        { channel: 'warning', soundSpec: 'Explosion High' },
+      ],
+    });
+    expect(baselineSnapshot.outcome).toBe('applied');
+    expect(baselineSnapshot.state.lastAppliedServerSeq).toBe(20);
+
+    const inOrder = reduceHostEnvelope(baselineSnapshot.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 21,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 12 }] },
+      },
+      soundDeltas: [{ channel: 'edit', soundSpec: 'Bulldozer' }],
+    });
+    expect(inOrder.outcome).toBe('applied');
+    expect(inOrder.state.lastAppliedServerSeq).toBe(21);
+    expect(inOrder.state.mapState.tiles[0]).toBe(12);
+
+    const stale = reduceHostEnvelope(inOrder.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 21,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 13 }] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'HonkHonk-Med' }],
+    });
+    expect(stale.outcome).toBe('dropped-stale');
+    expect(stale.state.lastAppliedServerSeq).toBe(21);
+    expect(stale.state.mapState.tiles[0]).toBe(12);
+
+    const gap = reduceHostEnvelope(inOrder.state, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 23,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 14 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+    });
+    expect(gap.outcome).toBe('gap-detected');
+    expect(gap.state.lastAppliedServerSeq).toBe(21);
+    expect(gap.effect).toEqual({
+      kind: 'request_snapshot',
+      reason: 'sequence-gap',
+      fromServerSeq: 22,
+    });
+  });
+
   it('uses canonical hello `message` when the host rejects handshake', () => {
     const state = createInitialWebRuntimeState();
     const rejected = reduceHostEnvelope(state, {

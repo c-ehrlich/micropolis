@@ -171,7 +171,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 
 ## Protocol/runtime tests
 
-- [ ] `protocol.test.ts` / reducer tests validate sound payload shape and ordering behavior.
+- [x] `protocol.test.ts` / reducer tests validate sound payload shape and ordering behavior.
 - [ ] tests validate sound transport on any sequenced envelope type (not patch-only coupling).
 - [ ] replay/resync tests confirm sound deltas are preserved in replay payload data.
 - [ ] runtime tests confirm playback is suppressed for non-`applied` envelope outcomes.
