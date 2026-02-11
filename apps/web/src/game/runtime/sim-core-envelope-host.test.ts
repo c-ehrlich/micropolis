@@ -3415,6 +3415,14 @@ describe('SimCoreEnvelopeHost', () => {
         { channel: 'city', soundSpec: 'Siren' },
       ],
     },
+    {
+      messageId: 43,
+      expectedSoundDeltas: [
+        { channel: 'city', soundSpec: 'Explosion-High' },
+        { channel: 'city', soundSpec: 'Explosion-Low' },
+        { channel: 'city', soundSpec: 'Siren' },
+      ],
+    },
   ])(
     'emits C doMessage first-display sound specs for message id $messageId',
     ({ messageId, expectedSoundDeltas }) => {
@@ -3436,7 +3444,8 @@ describe('SimCoreEnvelopeHost', () => {
       });
 
       // `doMessage` first-display sound switch in `ref/micropolis/src/sim/s_msg.c`:
-      // `case 20` (Siren), `case 21` (Monster), `case 30` (Explosion-Low + Siren).
+      // `case 20` (Siren), `case 21` (Monster), `case 30` (Explosion-Low + Siren),
+      // `case 43` (Explosion-High + Explosion-Low + Siren).
       expect(
         sendMes(
           hostInternals.authorityState.simState,
@@ -3460,6 +3469,81 @@ describe('SimCoreEnvelopeHost', () => {
         throw new Error('expected message patch envelope');
       }
       expect(readSoundDeltasFromEnvelope(messagePatch)).toEqual(expectedSoundDeltas);
+    },
+  );
+
+  it.each([
+    {
+      variant: 'med',
+      randRolls: [1],
+      expectedSoundSpec: 'HonkHonk-Med',
+    },
+    {
+      variant: 'low',
+      randRolls: [0, 1],
+      expectedSoundSpec: 'HonkHonk-Low',
+    },
+    {
+      variant: 'high',
+      randRolls: [0, 0, 1],
+      expectedSoundSpec: 'HonkHonk-High',
+    },
+  ])(
+    'emits message-driven honk sound deltas from doMessage case 12 ($variant branch)',
+    ({ randRolls, expectedSoundSpec }) => {
+      const host = new SimCoreEnvelopeHost();
+      const captured = connectAndCapture(host);
+      const hostInternals = host as unknown as {
+        authorityState: {
+          simState: Parameters<typeof sendMes>[0];
+          simContext: Parameters<typeof sendMes>[1];
+        };
+      };
+      const pendingRolls = [...randRolls];
+      const randSpy = vi
+        .spyOn(hostInternals.authorityState.simContext.rng, 'rand')
+        .mockImplementation((range: number) => {
+          // `doMessage` in `s_msg.c` `case 12` uses chained `Rand(5)` calls.
+          expect(range).toBe(5);
+          const roll = pendingRolls.shift();
+          if (roll === undefined) {
+            throw new Error('missing deterministic roll for doMessage case 12');
+          }
+          return roll;
+        });
+
+      captured.send({
+        kind: 'hello',
+        roomId: 'room-message-honk-first-display-sounds',
+        clientId: 'client-message-honk-first-display-sounds',
+        protocolVersion: 'core-bridge/v1',
+        coreVersion: 'test-core',
+      });
+      expect(
+        sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, 12),
+      ).toBe(true);
+      captured.send({
+        kind: 'command',
+        roomId: 'room-message-honk-first-display-sounds',
+        clientId: 'client-message-honk-first-display-sounds',
+        commandId: `cmd-message-honk-${expectedSoundSpec}`,
+        command: {
+          kind: 'sim-control',
+          control: 'pause',
+        },
+      });
+      randSpy.mockRestore();
+
+      const messagePatch = captured.envelopes[captured.envelopes.length - 1];
+      if (messagePatch === undefined || messagePatch.kind !== 'patch') {
+        throw new Error('expected message patch envelope');
+      }
+      expect(readSoundDeltasFromEnvelope(messagePatch)).toEqual([
+        {
+          channel: 'city',
+          soundSpec: expectedSoundSpec,
+        },
+      ]);
     },
   );
 
