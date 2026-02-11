@@ -287,6 +287,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.authorityState = new SimCoreRuntimeState({
       hooks: {
         uiSet: (key, value) => this.captureUiSet(key, value),
+        makeSound: (channel, sound) => this.captureSimCoreHookSound(channel, sound),
         sendMes: (id) => this.captureMessage(id),
         sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
       },

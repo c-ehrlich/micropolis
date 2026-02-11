@@ -93,7 +93,7 @@ Deliverable: protocol/test updates that compile and document sound envelope sema
 ## Phase 1: Authoritative Host Sound Emission
 
 - [x] Extend `SimCoreEnvelopeHost` to capture and queue pending sound events per tick.
-- [ ] Wire `SimHooks.makeSound` in host constructor (currently only `uiSet/sendMes/sendMesAt` are wired).
+- [x] Wire `SimHooks.makeSound` in host constructor (currently only `uiSet/sendMes/sendMesAt` are wired).
 - [ ] Wire realtime `onSound` callback from `createRealtimeContext(...)` into host sound queue.
 - [ ] Emit queued sounds on authoritative sequenced envelopes in the same command/tick cycle.
 - [ ] Gate host sound emission by `simState.userSoundOn` parity with `w_sound.c` `UserSoundOn` check.

@@ -1070,10 +1070,12 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
-  it('captures sendMes/sendMesAt hooks into patch deltas and preserves replay metadata on snapshots', () => {
+  it('captures makeSound/sendMes/sendMesAt hooks into patch deltas and preserves replay metadata on snapshots', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);
     const hostInternals = host as unknown as {
+      tick: number;
+      drainPendingSoundDeltasForTick(tick?: number): HostSoundDeltaPayload[];
       authorityState: {
         simState: Parameters<typeof sendMes>[0];
         simContext: Parameters<typeof sendMes>[1];
@@ -1098,6 +1100,16 @@ describe('SimCoreEnvelopeHost', () => {
         9,
       ),
     ).toBe(true);
+    // sim-core numeric `makeSound(channel,sound)` ids from
+    // `packages/sim-core/src/systems/messages.ts`, mirroring `doMessage`
+    // `MakeSound("city", "Siren")` in `ref/micropolis/src/sim/s_msg.c`.
+    hostInternals.authorityState.simContext.hooks.makeSound(0, 4);
+    expect(hostInternals.drainPendingSoundDeltasForTick(hostInternals.tick)).toEqual([
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+      },
+    ]);
     captured.send({
       kind: 'command',
       roomId: 'room-message-hooks',
