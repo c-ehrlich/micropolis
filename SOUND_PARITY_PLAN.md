@@ -154,7 +154,8 @@ Deliverable: single authoritative sound path from host envelopes.
 - [x] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
   - Unreachable callsites and causes documented in `SOUND_GAMEPLAY_INVENTORY.md` under `Unreachable Original Gameplay Sound Pathways (2026-02-11)`.
   - Follow-up tasks for bulldozer-zone explosions, earthquake-start boom parity, and `w_keys.c` cheat-sequence sound policy are tracked there.
-- [ ] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
+- [x] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
+  - Explicit deferred stem inventory and source-backed rationale are documented in `SOUND_GAMEPLAY_INVENTORY.md` under `Explicitly Deferred Menu/Non-Gameplay Sound Stems (2026-02-11)`.
 
 Deliverable: gameplay-triggered C sound tokens resolve to available browser assets.
 
