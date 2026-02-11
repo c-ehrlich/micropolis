@@ -13,6 +13,7 @@ import {
   projectRealtimeOverlaySprites,
   scaleMapPanDeltaToWorldPixels,
   scaleWorldPanDeltaToCanvasPixels,
+  selectMapCanvasBaseTileAtlasCanonicalIdentityKey,
   selectMapCanvasDrawMode,
   selectMapCanvasTileRenderMode,
   startMapCanvasPanDrag,
@@ -22,6 +23,8 @@ import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   lookupTileSprite,
 } from './tile-sprite-atlas.ts';
+
+const MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = 'ref/micropolis/images/tilessm.xpm';
 
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;
@@ -67,6 +70,26 @@ function applyPatchTileVisualTokens({
 }
 
 describe('map canvas draw-mode selection', () => {
+  it('uses map-class tiles for compact runtime tile sizes', () => {
+    // `GetViewTiles` in `g_setup.c` selects `tilessm.xpm` for `Map_Class` color mode.
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(6)).toBe(
+      MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(7)).toBe(
+      MAP_CLASS_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
+  it('uses editor-class tiles once runtime tile size reaches editor readability', () => {
+    // `GetViewTiles` in `g_setup.c` selects `tiles.xpm` for `Editor_Class` color mode.
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(8)).toBe(
+      DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16)).toBe(
+      DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
   it('consumes queued frames as single-use entries to avoid stale redraw coalescing', () => {
     const queuedFrameRef: { current: { epoch: number } | null } = {
       current: { epoch: 7 },

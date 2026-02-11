@@ -20,11 +20,17 @@ import {
   resolveMicropolisTileSheetCanonicalIdentityKey,
 } from './tile-sprite-atlas.ts';
 
-const BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+const EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
   resolveMicropolisTileSheetCanonicalIdentityKey({
     viewClass: 'editor',
     color: true,
   }) ?? DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+const MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
+  resolveMicropolisTileSheetCanonicalIdentityKey({
+    viewClass: 'map',
+    color: true,
+  }) ?? DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+const MAP_CANVAS_EDITOR_ART_MIN_TILE_SIZE = 8;
 
 const DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX = 640;
 const DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX = 480;
@@ -45,6 +51,22 @@ const MAP_CANVAS_WHEEL_LINE_DELTA_PX = 16;
 export interface MapCanvasPanDragState {
   readonly lastX: number;
   readonly lastY: number;
+}
+
+/**
+ * Chooses the base map tile atlas identity for one runtime tile-size mode.
+ * Mirrors `GetViewTiles` atlas identities in `ref/micropolis/src/sim/g_setup.c`:
+ * `Editor_Class` (`tiles.xpm`) and `Map_Class` color (`tilessm.xpm`).
+ * Parity note: C selects view class per widget; TypeScript selects map-class
+ * art for compact square tiles to avoid severe downscale aliasing artifacts
+ * from 16x16 editor rails rendered at small runtime tile sizes.
+ */
+export function selectMapCanvasBaseTileAtlasCanonicalIdentityKey(
+  tileSize: number,
+): CanonicalImageIdentityKey {
+  return tileSize >= MAP_CANVAS_EDITOR_ART_MIN_TILE_SIZE
+    ? EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY
+    : MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
 }
 
 /**
@@ -318,13 +340,16 @@ export function MapCanvas({
     x: 0,
     y: 0,
   });
+  const baseTileAtlasCanonicalIdentityKey = useMemo(
+    () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize),
+    [tileSize],
+  );
 
   useEffect(() => {
-    const atlas = getTileAtlasSourceByCanonicalIdentityKey(
-      BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-    );
+    const atlas = getTileAtlasSourceByCanonicalIdentityKey(baseTileAtlasCanonicalIdentityKey);
     if (atlas === undefined) {
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      lastRenderedEpochRef.current = 0;
       return;
     }
 
@@ -338,6 +363,8 @@ export function MapCanvas({
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map([
         [atlas.canonicalIdentityKey, image],
       ]);
+      // Force one full redraw when atlas identity changes.
+      lastRenderedEpochRef.current = 0;
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -346,6 +373,7 @@ export function MapCanvas({
         return;
       }
       tileAtlasImagesByCanonicalIdentityKeyRef.current = new Map();
+      lastRenderedEpochRef.current = 0;
       setTileAtlasRenderVersion((version) => version + 1);
     };
 
@@ -353,7 +381,7 @@ export function MapCanvas({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [baseTileAtlasCanonicalIdentityKey]);
 
   useEffect(() => {
     if (!mapState.hasSnapshot) {
@@ -370,7 +398,7 @@ export function MapCanvas({
       mapState,
       tileSize,
       tileRenderer: {
-        baseTileAtlasCanonicalIdentityKey: BASE_MAP_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+        baseTileAtlasCanonicalIdentityKey,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
@@ -399,7 +427,7 @@ export function MapCanvas({
         lastRenderedEpoch: lastRenderedEpochRef.current,
       });
     });
-  }, [mapState, tileAtlasRenderVersion, tileSize]);
+  }, [baseTileAtlasCanonicalIdentityKey, mapState, tileAtlasRenderVersion, tileSize]);
 
   useEffect(() => {
     return () => {
@@ -879,7 +907,6 @@ function drawMapCanvasFrame({
   if (context === null) {
     return lastRenderedEpoch;
   }
-  context.imageSmoothingEnabled = false;
 
   const widthPx = frame.mapState.width * frame.tileSize;
   const heightPx = frame.mapState.height * frame.tileSize;
@@ -892,6 +919,9 @@ function drawMapCanvasFrame({
     canvas.height = heightPx;
     resized = true;
   }
+  // Canvas width/height writes reset 2D context state, so keep pixel-art sampling
+  // disabled after any backing-store resize before tile blits.
+  context.imageSmoothingEnabled = false;
 
   const drawMode = selectMapCanvasDrawMode({
     mapDrawMode: frame.mapState.drawMode,
