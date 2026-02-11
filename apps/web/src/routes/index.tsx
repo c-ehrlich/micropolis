@@ -262,6 +262,7 @@ function RuntimePanel() {
         >
           Build
         </strong>
+        <MicropolisStatusSprite isRunning={state.hudState.speed > 0} />
         <div
           style={{
             display: 'grid',
@@ -335,7 +336,6 @@ function RuntimePanel() {
           demandC={state.hudState.demandC}
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
-          isRunning={state.hudState.speed > 0}
         />
       </section>
 
@@ -651,20 +651,17 @@ function DemandHeadsWidget({
   demandR,
   demandC,
   demandI,
-  isRunning,
 }: {
   demandR: number;
   demandC: number;
   demandI: number;
-  isRunning: boolean;
 }) {
-  const micropolisStatusUrl = isRunning
-    ? micropolisRunningIndicatorUrl
-    : micropolisPausedIndicatorUrl;
+  const scaledWidth = 39 * 2;
+  const scaledHeight = 55 * 2;
   const demandBars = [
-    { channel: 'r', demand: demandR, left: 49, fillColor: '#00ff00' },
-    { channel: 'c', demand: demandC, left: 58, fillColor: '#0000ff' },
-    { channel: 'i', demand: demandI, left: 67, fillColor: '#ffff00' },
+    { channel: 'r', demand: demandR, left: 8, fillColor: '#1b8f3a' },
+    { channel: 'c', demand: demandC, left: 17, fillColor: '#1b2fe0' },
+    { channel: 'i', demand: demandI, left: 26, fillColor: '#ff7a1a' },
   ] as const;
 
   return (
@@ -676,7 +673,8 @@ function DemandHeadsWidget({
         borderRadius: 2,
         display: 'flex',
         justifyContent: 'center',
-        minHeight: 55,
+        minHeight: scaledHeight + 8,
+        padding: 4,
       }}
       title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
     >
@@ -684,54 +682,87 @@ function DemandHeadsWidget({
         aria-label={`Demand heads R ${demandR}, C ${demandC}, I ${demandI}`}
         role="img"
         style={{
-          height: 55,
+          height: scaledHeight,
           position: 'relative',
-          width: 80,
+          width: scaledWidth,
         }}
       >
-        <img
-          alt=""
-          aria-hidden
-          draggable={false}
-          src={micropolisStatusUrl}
+        <div
           style={{
-            display: 'block',
-            height: 47,
-            imageRendering: 'pixelated',
+            height: 55,
             left: 0,
-            pointerEvents: 'none',
             position: 'absolute',
-            top: 4,
-            width: 37,
-          }}
-        />
-        <img
-          alt=""
-          aria-hidden
-          draggable={false}
-          src={demandGaugeBackgroundUrl}
-          style={{
-            display: 'block',
-            height: 47,
-            imageRendering: 'pixelated',
-            left: 41,
-            pointerEvents: 'none',
-            position: 'absolute',
-            top: 4,
+            top: 0,
+            transform: 'scale(2)',
+            transformOrigin: 'top left',
             width: 39,
           }}
-        />
-        {demandBars.map((bar) => (
-          <div
-            key={bar.channel}
-            style={resolveDemandBarStyle({
-              demand: bar.demand,
-              fillColor: bar.fillColor,
-              left: bar.left,
-            })}
+        >
+          <img
+            alt=""
+            aria-hidden
+            draggable={false}
+            src={demandGaugeBackgroundUrl}
+            style={{
+              display: 'block',
+              height: 47,
+              imageRendering: 'pixelated',
+              left: 0,
+              pointerEvents: 'none',
+              position: 'absolute',
+              top: 4,
+              width: 39,
+            }}
           />
-        ))}
+          {demandBars.map((bar) => (
+            <div
+              key={bar.channel}
+              style={resolveDemandBarStyle({
+                demand: bar.demand,
+                fillColor: bar.fillColor,
+                left: bar.left,
+              })}
+            />
+          ))}
+        </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Micropolis paused/running indicator shown above the Build tool palette.
+ * Mirrors `UIUpdateRunning` bitmap switching in `ref/micropolis/res/micropolis.tcl`.
+ * Parity note: this uses exported PNG assets instead of Tk bitmap paths.
+ */
+function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
+  const spriteUrl = isRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl;
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        background: '#bfbfbf',
+        border: '1px solid rgba(15, 23, 42, 0.72)',
+        borderRadius: 2,
+        display: 'flex',
+        justifyContent: 'center',
+        minHeight: 55 * 2 + 8,
+        padding: 4,
+      }}
+      title={isRunning ? 'Simulation running' : 'Simulation paused'}
+    >
+      <img
+        alt=""
+        aria-hidden
+        draggable={false}
+        src={spriteUrl}
+        style={{
+          display: 'block',
+          height: 47 * 2,
+          imageRendering: 'pixelated',
+          width: 37 * 2,
+        }}
+      />
     </div>
   );
 }

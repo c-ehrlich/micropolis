@@ -2066,8 +2066,9 @@ describe('SimCoreEnvelopeHost', () => {
 
     // Source of magic numbers:
     // - `setSpeed(short)` clamps playable speed into `0..3` in `ref/micropolis/src/sim/w_util.c`.
-    // - default `SimSpeed` starts at `3` in sim-core (`createSimState` parity baseline).
-    expect(hostInternals.authorityState.simState.SimSpeed).toBe(3);
+    // - this host keeps visible speed at `0` until `new-city` / `load-city` / `load-scenario`
+    //   starts a playable session, while preserving default `SimMetaSpeed` (`3`) as resume speed.
+    expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
     expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
     expect(hostInternals.simPaused).toBe(false);
 

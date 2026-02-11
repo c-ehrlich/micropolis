@@ -271,6 +271,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly simPhaseSystems: SimPhaseSystems;
   private readonly enableAmbientTicks: boolean;
   private readonly patchIntervalMs: number | undefined;
+  private hasStartedCitySession = false;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
@@ -296,6 +297,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.mapWidth = mapLayerInfo.width;
     this.mapHeight = mapLayerInfo.height;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
+    this.authorityState.simState.SimSpeed = 0;
     this.realtimeContext = createRealtimeContext({
       store: this.authorityState.simContext.store,
       rng: this.authorityState.simContext.rng,
@@ -446,6 +448,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (
       !this.isSessionActive(sessionId) ||
       this.lifecycle.phase !== 'ready' ||
+      !this.hasStartedCitySession ||
       this.authorityState.simState.SimSpeed === 0
     ) {
       return;
@@ -678,7 +681,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (
       !this.isSessionActive(sessionId) ||
       this.lifecycle.phase !== 'ready' ||
-      this.onEnvelope === undefined
+      this.onEnvelope === undefined ||
+      !this.hasStartedCitySession
     ) {
       return;
     }
@@ -1039,6 +1043,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.patchIntervalMs === undefined ||
       this.onEnvelope === undefined ||
       this.lifecycle.phase !== 'ready' ||
+      !this.hasStartedCitySession ||
       this.authorityState.simState.SimSpeed === 0
     ) {
       this.stopAmbientInterval();
@@ -1265,6 +1270,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/s_fileio.c` and `ref/micropolis/src/sim/s_gen.c`.
    */
   private syncHostStateAfterLoadLikeCommand(): void {
+    this.hasStartedCitySession = true;
     this.simPaused = false;
     this.simPausedSpeed = normalizePlayableSpeed(this.authorityState.simState.SimMetaSpeed);
     this.syncToolContextFromState();

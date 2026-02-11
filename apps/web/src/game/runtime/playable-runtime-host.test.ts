@@ -870,7 +870,10 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
     expect(bootSnapshot.payload.hud?.funds).toBe(20_000);
     expect(bootSnapshot.payload.map?.width).toBeGreaterThan(0);
     expect(bootSnapshot.payload.map?.height).toBeGreaterThan(0);
-    expect(bootSnapshot.payload.hud?.speed).toBeGreaterThan(0);
+    // Startup now holds simulation speed at `0` (paused) until a city session starts.
+    // C source for paused visible speed semantics: `UISetSpeed(0)` via `setSpeed(short)`
+    // in `ref/micropolis/src/sim/w_util.c`.
+    expect(bootSnapshot.payload.hud?.speed).toBe(0);
 
     connection.send({
       kind: 'command',
@@ -1207,7 +1210,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
  * Parity note: typed envelopes replace Tcl argv dispatch.
  */
 describe('createPlayableRuntimeHost', () => {
-  test('advances authoritative tick from ambient host timer without commands', () => {
+  test('keeps authoritative tick stable before city/session start commands', () => {
     vi.useFakeTimers();
     const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];
@@ -1241,15 +1244,15 @@ describe('createPlayableRuntimeHost', () => {
         }
         return highestTick;
       }, 0);
-      expect(latestTick).toBeGreaterThan(initialSnapshot.tick);
-      expect(hostEnvelopes.some((envelope) => envelope.kind === 'patch')).toBe(true);
+      expect(latestTick).toBe(initialSnapshot.tick);
+      expect(hostEnvelopes.some((envelope) => envelope.kind === 'patch')).toBe(false);
     } finally {
       connection.disconnect();
       vi.useRealTimers();
     }
   });
 
-  test('advances HUD date heads during ambient simulation without commands', () => {
+  test('advances HUD date heads only after new-city initializes a session', () => {
     vi.useFakeTimers();
     const host = createPlayableRuntimeHost();
     const hostEnvelopes: HostEnvelope[] = [];
@@ -1280,17 +1283,60 @@ describe('createPlayableRuntimeHost', () => {
       }
 
       vi.advanceTimersByTime(5_000);
+      expect(
+        hostEnvelopes.some(
+          (envelope) =>
+            envelope.kind === 'patch' && typeof envelope.payload.hud?.date?.label === 'string',
+        ),
+      ).toBe(false);
+
+      const commandId = 'playable-cert-ambient-hud-date-new-city';
+      connection.send({
+        kind: 'command',
+        roomId,
+        clientId,
+        commandId,
+        command: {
+          kind: 'city-lifecycle',
+          action: 'new-city',
+        },
+      });
+
+      const newCityAck = hostEnvelopes.find(
+        (envelope): envelope is HostAckEnvelope =>
+          envelope.kind === 'ack' && envelope.commandId === commandId,
+      );
+      if (newCityAck === undefined) {
+        throw new Error('expected new-city ack before ambient HUD progression');
+      }
+
+      const newCitySnapshot = hostEnvelopes.find(
+        (envelope): envelope is HostSnapshotEnvelope =>
+          envelope.kind === 'snapshot' && envelope.serverSeq > newCityAck.serverSeq,
+      );
+      if (newCitySnapshot === undefined) {
+        throw new Error('expected new-city snapshot before ambient HUD progression');
+      }
+      const startedDateLabel = newCitySnapshot.payload.hud?.date?.label;
+      if (typeof startedDateLabel !== 'string') {
+        throw new Error('expected new-city snapshot HUD date label');
+      }
+
+      vi.advanceTimersByTime(5_000);
 
       const ambientDatePatch = [...hostEnvelopes]
         .reverse()
         .find(
           (envelope): envelope is HostPatchEnvelope =>
-            envelope.kind === 'patch' && typeof envelope.payload.hud?.date?.label === 'string',
+            envelope.kind === 'patch' &&
+            envelope.serverSeq > newCitySnapshot.serverSeq &&
+            typeof envelope.payload.hud?.date?.label === 'string',
         );
       if (ambientDatePatch === undefined) {
         throw new Error('expected ambient HUD date patch');
       }
 
+      expect(ambientDatePatch.payload.hud?.date?.label).not.toBe(startedDateLabel);
       expect(ambientDatePatch.payload.hud?.date?.label).not.toBe(initialDateLabel);
     } finally {
       connection.disconnect();
