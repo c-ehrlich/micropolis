@@ -198,7 +198,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
   - Regression guard: `/` delegates gameplay envelope audio routing to `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.ts`, which consumes only `soundDeltas` (no reject/message inference); covered by `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.test.ts`.
 - [x] Missing assets warn and skip without corrupting runtime state.
   - Regression guard: `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.test.ts` verifies missing wav logs warning and skips playback element creation; `apps/web/src/game/runtime/runtime.test.ts` verifies runtime state continues applying envelopes after missing-asset playback attempts.
-- [ ] Replay/resync preserves sound deltas in transport data.
+- [x] Replay/resync preserves sound deltas in transport data.
 - [ ] Behavior is traceable to C sources listed in this document.
 
 ## Execution Commands (final gate)
