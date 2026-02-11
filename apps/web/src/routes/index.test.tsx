@@ -88,9 +88,9 @@ describe('routes/index default gameplay path', () => {
 
     const markup = renderToStaticMarkup(React.createElement(component));
     expect(markup).toContain('Sound Test');
-    expect(markup).toContain('surviving gameplay route is');
-    expect(markup).toContain('Envelope runtime contract for `/`');
-    expect(markup).toContain('apps/web/src/game/runtime/protocol.ts');
+    expect(markup).toContain('phase=disconnected seq=0 tick=0');
+    expect(markup).toContain('Disconnected.');
+    expect(markup).toContain('HUD');
     expect(markup).toContain('Micropolis');
   });
 

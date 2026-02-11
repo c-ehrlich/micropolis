@@ -2,6 +2,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  resolveMicropolisSoundTokenForToolAck,
+  resolveMicropolisSoundTokenForToolRejectReason,
+  resolveMicropolisSoundTokensForMessageId,
   SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from '../game/audio/micropolis-soundboard.ts';
@@ -122,30 +125,72 @@ function RuntimePanel() {
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const pendingToolAckSoundByCommandId = useRef<Map<string, string>>(new Map());
   const commandCounter = useRef(1);
 
   useEffect(() => {
+    const pendingToolAckSoundTokensByCommandId = pendingToolAckSoundByCommandId.current;
     const unsubscribe = runtime.subscribe((event) => {
       stateCommitDispatcher.queue(event.state);
 
-      if (event.envelope?.kind !== 'patch') {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined) {
         return;
       }
 
-      const savePayload = readCityExportPayload(event.envelope.payload);
-      if (savePayload === null) {
+      if (runtimeEnvelope.kind === 'ack') {
+        const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
+        if (toolSoundToken !== undefined) {
+          pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
+          void playMicropolisSoundPreview({
+            token: toolSoundToken,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
         return;
       }
 
-      downloadCityBytes(savePayload.fileName, savePayload.cityBytes);
-      setSaveFileName(savePayload.fileName);
-      setLastSaveStatus(`Saved ${savePayload.cityName} -> ${savePayload.fileName}`);
-      setCityIoError('');
+      if (runtimeEnvelope.kind === 'reject') {
+        pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
+        const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
+          runtimeEnvelope.reason,
+        );
+        if (rejectSoundToken !== null) {
+          void playMicropolisSoundPreview({
+            token: rejectSoundToken,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
+        return;
+      }
+
+      if (runtimeEnvelope.kind !== 'patch') {
+        return;
+      }
+
+      for (const messageId of readMessageIdsFromPatchPayload(runtimeEnvelope.payload)) {
+        const tokens = resolveMicropolisSoundTokensForMessageId(messageId);
+        for (const token of tokens) {
+          void playMicropolisSoundPreview({
+            token,
+            audioByPath: soundPreviewAudioByPath.current,
+          }).catch(() => undefined);
+        }
+      }
+
+      const savePayload = readCityExportPayload(runtimeEnvelope.payload);
+      if (savePayload !== null) {
+        downloadCityBytes(savePayload.fileName, savePayload.cityBytes);
+        setSaveFileName(savePayload.fileName);
+        setLastSaveStatus(`Saved ${savePayload.cityName} -> ${savePayload.fileName}`);
+        setCityIoError('');
+      }
     });
 
     runtime.connect();
     return () => {
       unsubscribe();
+      pendingToolAckSoundTokensByCommandId.clear();
       stateCommitDispatcher.dispose();
       runtime.disconnect();
     };
@@ -287,7 +332,13 @@ function RuntimePanel() {
                   return;
                 }
 
-                runtime.sendCommand(nextCommandId(commandCounter, 'tool'), {
+                const commandId = nextCommandId(commandCounter, 'tool');
+                const toolAckSoundToken = resolveMicropolisSoundTokenForToolAck(activeTool);
+                if (toolAckSoundToken !== null) {
+                  pendingToolAckSoundByCommandId.current.set(commandId, toolAckSoundToken);
+                }
+
+                runtime.sendCommand(commandId, {
                   kind: 'tool',
                   tool: activeTool,
                   x,
@@ -640,6 +691,44 @@ async function playMicropolisSoundPreview({
 
   audioElement.currentTime = 0;
   await audioElement.play();
+}
+
+/**
+ * Reads canonical HUD message ids from one patch payload for runtime SFX mapping.
+ * Mirrors `SendMes` / `SendMesAt` message-id ownership in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ * Parity note: prefers canonical `messageDeltas` and falls back to legacy
+ * `messages` compatibility arrays to avoid duplicate playback.
+ */
+function readMessageIdsFromPatchPayload(payload: unknown): readonly number[] {
+  if (payload === null || typeof payload !== 'object') {
+    return [];
+  }
+
+  const candidate = payload as {
+    messageDeltas?: unknown;
+    messages?: unknown;
+  };
+  const entries = Array.isArray(candidate.messageDeltas)
+    ? candidate.messageDeltas
+    : Array.isArray(candidate.messages)
+      ? candidate.messages
+      : null;
+  if (entries === null) {
+    return [];
+  }
+
+  const messageIds: number[] = [];
+  for (const entry of entries) {
+    if (entry === null || typeof entry !== 'object') {
+      continue;
+    }
+    const id = (entry as { id?: unknown }).id;
+    if (typeof id === 'number' && Number.isFinite(id) && Number.isInteger(id)) {
+      messageIds.push(id);
+    }
+  }
+  return messageIds;
 }
 
 /**
