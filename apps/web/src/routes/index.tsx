@@ -30,7 +30,7 @@ export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
-const MAP_TILE_SIZE = 6;
+const MAP_TILE_SIZE = 16;
 
 /**
  * Triggers one playable-route manual disaster control click and returns status text.
