@@ -1999,12 +1999,24 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Returns whether host-side sound intent capture is enabled.
+   * Mirrors `UserSoundOn` early-return checks in `MakeSound` / `MakeSoundOn`
+   * from `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private isHostSoundEmissionEnabled(): boolean {
+    return this.authorityState.simState.userSoundOn;
+  }
+
+  /**
    * Queues one pending sound delta for one authoritative tick.
    * Mirrors per-cycle sound dispatch ownership around `MakeSound` /
    * `MakeSoundOn` in `ref/micropolis/src/sim/w_sound.c`, adapted to staged
    * bridge envelope transport.
    */
   private enqueuePendingSoundDeltaForTick(tick: number, soundDelta: HostSoundDeltaPayload): void {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return;
+    }
     const normalizedTick = normalizeSoundQueueTick(tick, this.tick);
     const pendingSoundDeltas = this.pendingSoundDeltasByTick.get(normalizedTick);
     const queuedSoundDelta = cloneHostSoundDeltaPayload(soundDelta);

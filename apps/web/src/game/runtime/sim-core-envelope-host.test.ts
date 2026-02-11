@@ -3183,6 +3183,55 @@ describe('SimCoreEnvelopeHost', () => {
     expect(ackEnvelope.tick).toBe(patchEnvelope.tick);
   });
 
+  it('suppresses queued hook/realtime sound emission when simState.userSoundOn is false', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          userSoundOn: boolean;
+        };
+      };
+      captureRealtimeSound(channel: string, soundSpec: string): void;
+      captureSimCoreHookSound(channel: number, sound: number): void;
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-sound-user-off',
+      clientId: 'client-sound-user-off',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Mirrors `if (!UserSoundOn) return;` in `MakeSound` / `MakeSoundOn`
+    // (`ref/micropolis/src/sim/w_sound.c`): no host sound deltas should queue.
+    hostInternals.authorityState.simState.userSoundOn = false;
+    hostInternals.captureRealtimeSound('city', 'Siren');
+    // sim-core message hook ids `0` (city channel) + `4` (`Siren`) come from
+    // `packages/sim-core/src/systems/messages.ts`, mirroring `s_msg.c` message sounds.
+    hostInternals.captureSimCoreHookSound(0, 4);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-sound-user-off',
+      clientId: 'client-sound-user-off',
+      commandId: 'cmd-sound-user-off',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: 8,
+        y: 8,
+      },
+    });
+
+    const ackEnvelope = captured.envelopes[2];
+    if (ackEnvelope === undefined || ackEnvelope.kind !== 'ack') {
+      throw new Error('expected command ack envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(ackEnvelope)).toBeNull();
+  });
+
   it('drops unknown sim-core numeric sound ids from the pending tick queue', () => {
     const host = new SimCoreEnvelopeHost();
     const hostInternals = host as unknown as {
