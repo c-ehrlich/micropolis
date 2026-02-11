@@ -346,6 +346,90 @@ describe('createWebHostRuntime', () => {
     ]);
   });
 
+  it('drives playback from host sound deltas only, not reject/message envelope fields', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+
+      const shouldPlaySoundDeltas = playbackPolicy({
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        return;
+      }
+
+      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+    host.emit({
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-no-funds',
+      reason: 'no-funds',
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 3,
+      payload: {
+        // `doMessage` case `43` in `ref/micropolis/src/sim/s_msg.c` triggers
+        // explosion+siren audio in C; runtime must still only play host sound deltas.
+        messageDeltas: [{ id: 43, text: 'Major earthquake reported.' }],
+      },
+    });
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 4,
+      commandId: 'cmd-ack-sound',
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+
+    expect(runtime.getState().lastRejectReason).toBe('no-funds');
+    expect(runtime.getState().hudState.messages.some((message) => message.id === 43)).toBe(true);
+    expect(playedSoundSpecs).toEqual(['Siren']);
+  });
+
   it('suppresses playback for non-applied reducer outcomes while preserving sound transport', () => {
     const host = new FakeLocalHost();
     const runtime = createWebHostRuntime({ host });

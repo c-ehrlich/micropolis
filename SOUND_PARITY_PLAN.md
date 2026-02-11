@@ -178,7 +178,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 
 ## UI audio tests
 
-- [ ] route/runtime audio tests assert playback is driven by host sound deltas only.
+- [x] route/runtime audio tests assert playback is driven by host sound deltas only.
 - [ ] route/runtime audio tests assert missing-asset warn+skip behavior.
 - [ ] route/runtime audio tests assert `userSoundOn=false` suppresses playback even if deltas arrive.
 - [ ] verify Sound Test remains independent/manual.
