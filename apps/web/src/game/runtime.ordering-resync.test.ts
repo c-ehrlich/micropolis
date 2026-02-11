@@ -24,6 +24,9 @@ import {
 } from './runtime/protocol.ts';
 import { createWebHostRuntime, type WebRuntimeState } from './runtime/runtime.ts';
 
+// Runtime lifecycle diagnostics retention bound from `apps/web/src/game/runtime.ts`.
+const COMMAND_LIFECYCLE_LOG_LIMIT = 512;
+
 interface ScriptedHostOptions {
   readonly mode: HostMode;
   readonly onConnect?: (host: ScriptedHost) => void;
@@ -195,6 +198,31 @@ function createAcceptedPlayableHelloEnvelope(): PlayableHostEnvelope {
 }
 
 describe('runtime ordering/resync/reconnect invariants', () => {
+  test.each(['local', 'do'] as const)(
+    'caps command lifecycle diagnostics to the bounded retention window in %s mode',
+    (mode) => {
+      const eventCount = 700;
+      const host = new ScriptedHost({
+        mode,
+        onConnect(scriptHost) {
+          const events: CoreHostEvent[] = [];
+          for (let i = 1; i <= eventCount; i += 1) {
+            events.push(patchEvent(mode, `cmd-${i}`, i, i, 'road', i % 120, i % 100));
+          }
+          scriptHost.pushEvents(events);
+        },
+      });
+      const runtime = createGameRuntime(host);
+
+      runtime.start();
+
+      const state = runtime.getState();
+      expect(state.commandLifecycleLog).toHaveLength(COMMAND_LIFECYCLE_LOG_LIMIT);
+      expect(state.commandLifecycleLog[0]).toBe('patch:cmd-189:road@69,89');
+      expect(state.commandLifecycleLog.at(-1)).toBe('patch:cmd-700:road@100,0');
+    },
+  );
+
   test.each(['local', 'do'] as const)(
     'applies same-tick events by serverSeq via snapshot replay in %s mode',
     (mode) => {

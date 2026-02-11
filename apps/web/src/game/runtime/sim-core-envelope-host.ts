@@ -160,6 +160,7 @@ type HostRealtimeObjectWithIdPayload = HostRealtimeObjectPayload & { id: string 
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
 const MESSAGE_LOG_LIMIT = 24;
+const REPLAY_HISTORY_LIMIT = 1024;
 const NEW_CITY_STARTING_FUNDS = 20_000;
 const NEW_CITY_TREE_LEVEL = -1;
 const NEW_CITY_LAKE_LEVEL = -1;
@@ -529,8 +530,27 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    const replayCursor = normalizeReplayCursor(envelope.fromServerSeq, this.lastEmittedServerSeq);
+    const replayCursor = normalizeReplayCursor(
+      envelope.fromServerSeq,
+      this.lastEmittedServerSeq,
+      this.readOldestRetainedReplayCursor(),
+    );
     this.emitSnapshotReplay(envelope.roomId, envelope.clientId, replayCursor);
+  }
+
+  /**
+   * Reads the oldest retained replay cursor that can be reconstructed exactly.
+   * Mirrors recovery-window cursor ownership from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: unlike C (single-process state), browser replay retention is
+   * bounded to prevent unbounded memory growth during long sessions.
+   */
+  private readOldestRetainedReplayCursor(): number {
+    const oldestReplayEntry = this.sequencedReplayLog[0];
+    if (oldestReplayEntry !== undefined) {
+      return oldestReplayEntry.envelope.serverSeq;
+    }
+    return 0;
   }
 
   private handleCommandEnvelope(
@@ -1478,7 +1498,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/spec/integration/SPEC.md`.
    */
   private readSnapshotReplayBaseline(replayCursor: number): SnapshotReplayCheckpoint {
-    const checkpoint = this.snapshotReplayCheckpoints.get(replayCursor);
+    const checkpointServerSeq = this.readNearestRetainedReplayCheckpointServerSeq(replayCursor);
+    const checkpoint =
+      checkpointServerSeq === undefined
+        ? undefined
+        : this.snapshotReplayCheckpoints.get(checkpointServerSeq);
     if (checkpoint !== undefined) {
       return {
         tick: checkpoint.tick,
@@ -1490,6 +1514,24 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tick: this.tick,
       payload: this.buildSnapshotPayload(),
     };
+  }
+
+  /**
+   * Finds the nearest retained replay checkpoint at or before one replay cursor.
+   * Mirrors deterministic replay-baseline selection from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private readNearestRetainedReplayCheckpointServerSeq(replayCursor: number): number | undefined {
+    let bestServerSeq = Number.NEGATIVE_INFINITY;
+    for (const checkpointServerSeq of this.snapshotReplayCheckpoints.keys()) {
+      if (checkpointServerSeq <= replayCursor && checkpointServerSeq > bestServerSeq) {
+        bestServerSeq = checkpointServerSeq;
+      }
+    }
+    if (!Number.isFinite(bestServerSeq)) {
+      return undefined;
+    }
+    return Math.trunc(bestServerSeq);
   }
 
   /**
@@ -1540,6 +1582,31 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tick: envelope.tick,
       payload: cloneHostSnapshotPayload(this.buildSnapshotPayload()),
     });
+    this.pruneReplayHistory();
+  }
+
+  /**
+   * Prunes retained replay envelopes/checkpoints to a bounded recovery window.
+   * Mirrors recovery replay intent from `ref/micropolis/spec/integration/SPEC.md`,
+   * with a bounded browser-memory retention policy not needed in C.
+   */
+  private pruneReplayHistory(): void {
+    if (this.sequencedReplayLog.length <= REPLAY_HISTORY_LIMIT) {
+      return;
+    }
+
+    const overflowCount = this.sequencedReplayLog.length - REPLAY_HISTORY_LIMIT;
+    const prunedEntries = this.sequencedReplayLog.splice(0, overflowCount);
+    for (const entry of prunedEntries) {
+      this.snapshotReplayCheckpoints.delete(entry.envelope.serverSeq);
+    }
+    const oldestRetainedCursor = this.readOldestRetainedReplayCursor();
+    for (const checkpointServerSeq of [...this.snapshotReplayCheckpoints.keys()]) {
+      if (checkpointServerSeq >= oldestRetainedCursor || checkpointServerSeq === 0) {
+        continue;
+      }
+      this.snapshotReplayCheckpoints.delete(checkpointServerSeq);
+    }
   }
 
   /**
@@ -2435,14 +2502,19 @@ function normalizePlayableSpeed(candidate: number): number {
  * Mirrors bridge snapshot cursor recovery rules from
  * `ref/micropolis/spec/integration/SPEC.md`.
  */
-function normalizeReplayCursor(candidate: number, highestKnown: number): number {
+function normalizeReplayCursor(
+  candidate: number,
+  highestKnown: number,
+  lowestRetained: number,
+): number {
+  const lowerBound = Math.max(0, Math.min(Math.trunc(lowestRetained), highestKnown));
   if (!Number.isFinite(candidate)) {
-    return 0;
+    return lowerBound;
   }
 
   const truncatedCandidate = Math.trunc(candidate);
-  if (truncatedCandidate < 0) {
-    return 0;
+  if (truncatedCandidate < lowerBound) {
+    return lowerBound;
   }
   if (truncatedCandidate > highestKnown) {
     return highestKnown;

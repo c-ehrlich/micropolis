@@ -112,6 +112,8 @@ export interface GameRuntime {
   getState(): GameRuntimeState;
 }
 
+const COMMAND_LIFECYCLE_LOG_LIMIT = 512;
+
 /**
  * Convert runtime bootstrap state into user-facing text.
  * Mirrors Stage startup diagnostics mapping from
@@ -252,10 +254,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         lastAppliedServerSeq: event.baseServerSeq,
         lastAppliedTick: event.tick,
         isResyncing: false,
-        commandLifecycleLog: [
-          ...current.commandLifecycleLog,
+        commandLifecycleLog: appendCommandLifecycleLog(
+          current.commandLifecycleLog,
           `snapshot:${event.baseServerSeq}@${event.tick}`,
-        ],
+        ),
       }));
       return;
     }
@@ -265,7 +267,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         updateState((current) => ({
           ...current,
           isResyncing: true,
-          commandLifecycleLog: [...current.commandLifecycleLog, `resync:host:${event.reason}`],
+          commandLifecycleLog: appendCommandLifecycleLog(
+            current.commandLifecycleLog,
+            `resync:host:${event.reason}`,
+          ),
         }));
       }
       host.requestSnapshot(state.lastAppliedServerSeq);
@@ -287,10 +292,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
       if (sequenceDecision.action === CoreBridgeV1SequenceAction.DROP) {
         updateState((current) => ({
           ...current,
-          commandLifecycleLog: [
-            ...current.commandLifecycleLog,
+          commandLifecycleLog: appendCommandLifecycleLog(
+            current.commandLifecycleLog,
             `stale-drop:${event.type}:${event.serverSeq}@${event.tick}`,
-          ],
+          ),
         }));
         return;
       }
@@ -305,7 +310,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
           updateState((current) => ({
             ...current,
             isResyncing: true,
-            commandLifecycleLog: [...current.commandLifecycleLog, resyncLogEntry],
+            commandLifecycleLog: appendCommandLifecycleLog(
+              current.commandLifecycleLog,
+              resyncLogEntry,
+            ),
           }));
           host.requestSnapshot(state.lastAppliedServerSeq);
         }
@@ -325,7 +333,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         lastAppliedServerSeq: event.serverSeq,
         lastAppliedTick: event.tick,
         isResyncing: false,
-        commandLifecycleLog: [...current.commandLifecycleLog, `ack:${event.commandId}`],
+        commandLifecycleLog: appendCommandLifecycleLog(
+          current.commandLifecycleLog,
+          `ack:${event.commandId}`,
+        ),
       }));
       return;
     }
@@ -342,10 +353,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
         lastAppliedServerSeq: event.serverSeq,
         lastAppliedTick: event.tick,
         isResyncing: false,
-        commandLifecycleLog: [
-          ...current.commandLifecycleLog,
+        commandLifecycleLog: appendCommandLifecycleLog(
+          current.commandLifecycleLog,
           `reject:${event.commandId}:${event.code}`,
-        ],
+        ),
       }));
       return;
     }
@@ -353,7 +364,7 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
     if (event.type === 'patch') {
       updateState((current) => {
         const committedPlacements = [...current.committedPlacements];
-        const commandLifecycleLog = [...current.commandLifecycleLog];
+        const nextLogEntries: string[] = [];
         for (const placement of event.placements) {
           const placementKey = `${event.commandId}:${placement.tool}:${placement.x},${placement.y}`;
           if (appliedPatchPlacements.has(placementKey)) {
@@ -361,7 +372,7 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
           }
           appliedPatchPlacements.add(placementKey);
           committedPlacements.push({ ...placement, commandId: event.commandId });
-          commandLifecycleLog.push(
+          nextLogEntries.push(
             `patch:${event.commandId}:${placement.tool}@${placement.x},${placement.y}`,
           );
         }
@@ -372,7 +383,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
           lastAppliedServerSeq: event.serverSeq,
           lastAppliedTick: event.tick,
           isResyncing: false,
-          commandLifecycleLog,
+          commandLifecycleLog: appendCommandLifecycleLogEntries(
+            current.commandLifecycleLog,
+            nextLogEntries,
+          ),
         };
       });
       return;
@@ -447,10 +461,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
             pendingCommands: hasPendingCommand
               ? current.pendingCommands
               : [...current.pendingCommands, command.commandId],
-            commandLifecycleLog: [
-              ...current.commandLifecycleLog,
+            commandLifecycleLog: appendCommandLifecycleLog(
+              current.commandLifecycleLog,
               `pending:${command.commandId}:sim-control:${command.control}`,
-            ],
+            ),
           };
         });
         host.sendCommand(command);
@@ -479,10 +493,10 @@ export function createGameRuntime(host: CoreHost): GameRuntime {
                   y: command.y,
                 },
               ],
-          commandLifecycleLog: [
-            ...current.commandLifecycleLog,
+          commandLifecycleLog: appendCommandLifecycleLog(
+            current.commandLifecycleLog,
             `pending:${command.commandId}:${command.tool}@${command.x},${command.y}`,
-          ],
+          ),
         };
       });
       host.sendCommand(command);
@@ -516,6 +530,40 @@ function toPlacementKey(
   placement: CoreHostPlacement | CoreHostSnapshotPlacement,
 ): string {
   return `${commandId}:${placement.tool}:${placement.x},${placement.y}`;
+}
+
+/**
+ * Bounds lifecycle diagnostics retained by the browser runtime state.
+ * Mirrors C logging intent from `sim.c`/`w_update.c` while constraining browser
+ * memory growth. Difference: C emits transient logs; web stores UI-visible state.
+ */
+function appendCommandLifecycleLog(
+  log: ReadonlyArray<string>,
+  entry: string,
+): ReadonlyArray<string> {
+  const nextLog = [...log, entry];
+  if (nextLog.length <= COMMAND_LIFECYCLE_LOG_LIMIT) {
+    return nextLog;
+  }
+  return nextLog.slice(nextLog.length - COMMAND_LIFECYCLE_LOG_LIMIT);
+}
+
+/**
+ * Batch variant of lifecycle log append with the same bounded retention policy.
+ * Mirrors `appendCommandLifecycleLog` behavior for multi-placement patch events.
+ */
+function appendCommandLifecycleLogEntries(
+  log: ReadonlyArray<string>,
+  entries: readonly string[],
+): ReadonlyArray<string> {
+  if (entries.length === 0) {
+    return log;
+  }
+  const nextLog = [...log, ...entries];
+  if (nextLog.length <= COMMAND_LIFECYCLE_LOG_LIMIT) {
+    return nextLog;
+  }
+  return nextLog.slice(nextLog.length - COMMAND_LIFECYCLE_LOG_LIMIT);
 }
 
 function toCommittedPlacement(placement: CoreHostSnapshotPlacement): CommittedPlacement {
