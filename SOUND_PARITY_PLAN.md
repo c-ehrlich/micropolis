@@ -123,7 +123,7 @@ Deliverable: host emits authoritative sound deltas for tool/message/realtime sou
 - [x] Handle browser autoplay restrictions gracefully (best-effort playback, no state corruption).
 - [x] Respect runtime HUD sound option state (`userSoundOn`) when applying deltas (defensive client gate).
 - [x] Only attempt playback for envelopes with reducer outcome `applied`.
-- [ ] On missing wav assets: `console.warn` with token/spec context, then skip.
+- [x] On missing wav assets: `console.warn` with token/spec context, then skip.
 - [ ] Keep replay transport/playback split explicit (sound data always present; playback policy configurable).
 
 Deliverable: route plays only host-provided sound deltas.

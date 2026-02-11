@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   createMicropolisGameplayAudioConsumer,
@@ -111,5 +111,28 @@ describe('micropolis gameplay audio consumer', () => {
     expect(sirenAudioElement.playCalls).toBe(2);
     expect(sirenAudioElement.currentTime).toBe(0);
     expect(createdByPath.size).toBe(1);
+  });
+
+  it('warns with token/spec context and skips playback when wav asset is missing', async () => {
+    const createAudioElement = vi.fn<(wavPath: string) => FakeAudioElement>((wavPath) => {
+      return new FakeAudioElement(wavPath);
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const consumer = createMicropolisGameplayAudioConsumer({
+      createAudioElement,
+      resolveWavAssetAvailability: async () => false,
+    });
+
+    await expect(consumer.playSoundSpec('Monster -speed 120')).resolves.toBeUndefined();
+    expect(createAudioElement).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Micropolis gameplay sound asset missing; skipping playback.',
+      {
+        token: 'monster',
+        soundSpec: 'Monster -speed 120',
+        wavPath: '/sounds/monster.wav',
+      },
+    );
+    warnSpy.mockRestore();
   });
 });

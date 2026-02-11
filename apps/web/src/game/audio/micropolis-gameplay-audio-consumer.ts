@@ -31,6 +31,7 @@ export interface MicropolisGameplayAudioConsumer {
  */
 export interface CreateMicropolisGameplayAudioConsumerOptions {
   createAudioElement?: (wavPath: string) => MicropolisGameplayAudioElement;
+  resolveWavAssetAvailability?: (wavPath: string) => Promise<boolean>;
 }
 
 /**
@@ -76,11 +77,29 @@ export function createMicropolisGameplayAudioConsumer(
   options: CreateMicropolisGameplayAudioConsumerOptions = {},
 ): MicropolisGameplayAudioConsumer {
   const createAudioElement = options.createAudioElement ?? createBrowserAudioElement;
+  const resolveWavAssetAvailability =
+    options.resolveWavAssetAvailability ?? resolveWavAssetAvailabilityViaHeadRequest;
   const audioByPath = new Map<string, MicropolisGameplayAudioElement>();
+  const wavAssetAvailabilityByPath = new Map<string, Promise<boolean>>();
 
   return {
     async playSoundSpec(soundSpec: string): Promise<void> {
+      const token = normalizeMicropolisGameplaySoundToken(soundSpec);
       const wavPath = toMicropolisGameplaySoundWavPath(soundSpec);
+      const wavAssetAvailability = readWavAssetAvailability(
+        wavPath,
+        wavAssetAvailabilityByPath,
+        resolveWavAssetAvailability,
+      );
+      if (!(await wavAssetAvailability)) {
+        console.warn('Micropolis gameplay sound asset missing; skipping playback.', {
+          token,
+          soundSpec,
+          wavPath,
+        });
+        return;
+      }
+
       let audioElement = audioByPath.get(wavPath);
       if (audioElement === undefined) {
         audioElement = createAudioElement(wavPath);
@@ -119,6 +138,49 @@ function createBrowserAudioElement(wavPath: string): MicropolisGameplayAudioElem
   }
 
   return new Audio(wavPath);
+}
+
+function readWavAssetAvailability(
+  wavPath: string,
+  availabilityByPath: Map<string, Promise<boolean>>,
+  resolveWavAssetAvailability: (wavPath: string) => Promise<boolean>,
+): Promise<boolean> {
+  let availability = availabilityByPath.get(wavPath);
+  if (availability !== undefined) {
+    return availability;
+  }
+
+  availability = resolveWavAssetAvailability(wavPath);
+  availabilityByPath.set(wavPath, availability);
+  return availability;
+}
+
+/**
+ * Resolves one gameplay wav path availability using a browser `HEAD` request.
+ * Mirrors Micropolis/Sugar behavior where missing sound files are non-fatal to
+ * simulation progression (`ref/micropolis/micropolisactivity.py`), adapted so
+ * web runtime can log-and-skip deterministically before `Audio.play()`.
+ */
+async function resolveWavAssetAvailabilityViaHeadRequest(wavPath: string): Promise<boolean> {
+  if (typeof fetch !== 'function') {
+    return true;
+  }
+
+  try {
+    const headResponse = await fetch(wavPath, { method: 'HEAD' });
+    if (headResponse.ok) {
+      return true;
+    }
+
+    if (headResponse.status === 405 || headResponse.status === 501) {
+      const getResponse = await fetch(wavPath, { method: 'GET' });
+      return getResponse.ok;
+    }
+
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 /**
