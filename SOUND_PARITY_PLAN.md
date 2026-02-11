@@ -147,7 +147,7 @@ Deliverable: single authoritative sound path from host envelopes.
 - [x] Add missing wav assets for all C-triggered gameplay sounds (tool/message/realtime/disaster pathways).
 - [x] Produce a traceable sound inventory doc/table:
   - [x] token/spec
-  - [ ] wav file name
+  - [x] wav file name
   - [ ] C/Tcl source location
   - [ ] human-readable gameplay usage note
 - [ ] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
