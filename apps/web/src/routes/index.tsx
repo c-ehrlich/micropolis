@@ -139,8 +139,10 @@ function RuntimePanel() {
         return;
       }
 
+      const shouldAttemptEnvelopePlayback = event.outcome === 'applied';
+
       if (isSequencedHostEnvelope(runtimeEnvelope)) {
-        if (event.state.hudState.options.userSoundOn) {
+        if (shouldAttemptEnvelopePlayback && event.state.hudState.options.userSoundOn) {
           for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
             void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
           }
@@ -151,7 +153,7 @@ function RuntimePanel() {
         const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
         if (toolSoundToken !== undefined) {
           pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-          if ((runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
+          if (shouldAttemptEnvelopePlayback && (runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
             void gameplayAudioConsumer.playSoundSpec(toolSoundToken).catch(() => undefined);
           }
         }
@@ -163,7 +165,11 @@ function RuntimePanel() {
         const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
           runtimeEnvelope.reason,
         );
-        if (rejectSoundToken !== null && (runtimeEnvelope.soundDeltas?.length ?? 0) === 0) {
+        if (
+          shouldAttemptEnvelopePlayback &&
+          rejectSoundToken !== null &&
+          (runtimeEnvelope.soundDeltas?.length ?? 0) === 0
+        ) {
           void gameplayAudioConsumer.playSoundSpec(rejectSoundToken).catch(() => undefined);
         }
         return;

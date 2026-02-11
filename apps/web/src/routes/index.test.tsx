@@ -101,6 +101,9 @@ describe('routes/index default gameplay path', () => {
       'utf8',
     );
 
+    expect(routeSource).toContain(
+      "const shouldAttemptEnvelopePlayback = event.outcome === 'applied';",
+    );
     expect(routeSource).toContain('event.state.hudState.options.userSoundOn');
     expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
   });
