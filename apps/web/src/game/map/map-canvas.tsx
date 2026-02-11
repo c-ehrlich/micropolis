@@ -10,7 +10,11 @@ import {
 import { createPortal } from 'react-dom';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
-import { getPlayableToolSpec, type PendingToolCommandVisual } from '../runtime/index.ts';
+import {
+  getPlayableToolSpec,
+  type PendingToolCommandVisual,
+  type PlayableToolName,
+} from '../runtime/index.ts';
 import { coalesceQueuedRuntimeMapState, type RuntimeMapState } from '../runtime/map-state.ts';
 import type { RuntimeRealtimeObject } from '../runtime/realtime-state.ts';
 import { lookupObjectSpriteFrame } from './object-sprite-atlas.ts';
@@ -336,6 +340,45 @@ export function zoomMapCanvasCameraOffsetAtAnchor({
 }
 
 /**
+ * Axis-aligned tool-footprint rectangle projected into map-canvas pixel space.
+ * Mirrors editor cursor footprint anchoring in `DrawCursor` default branch from
+ * `ref/micropolis/src/sim/w_editor.c`, where `(tile - toolOffset) * 16` sets
+ * top-left and `toolSize * 16` sets side length.
+ * Difference: Authoritative Runtime scales by dynamic `tileSize` instead of fixed 16.
+ */
+export interface MapCanvasToolFootprintRect {
+  left: number;
+  top: number;
+  side: number;
+}
+
+/**
+ * Projects one Micropolis tool footprint from tile coordinates to canvas pixels.
+ * Mirrors `toolSize[]`/`toolOffset[]` footprint usage in
+ * `ref/micropolis/src/sim/w_tool.c` and `DrawCursor` placement math in
+ * `ref/micropolis/src/sim/w_editor.c`.
+ */
+export function projectMapCanvasToolFootprintRect({
+  tileX,
+  tileY,
+  size,
+  offset,
+  tileSize,
+}: {
+  tileX: number;
+  tileY: number;
+  size: number;
+  offset: number;
+  tileSize: number;
+}): MapCanvasToolFootprintRect {
+  return {
+    left: (tileX - offset) * tileSize,
+    top: (tileY - offset) * tileSize,
+    side: size * tileSize,
+  };
+}
+
+/**
  * Canvas renderer for authoritative Authoritative Runtime map snapshots and tile patches.
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
@@ -349,6 +392,8 @@ export function MapCanvas({
   mapState,
   pendingTools = [],
   realtimeObjects = [],
+  hoverTool,
+  showHoverToolPreview = true,
   onTileClick,
   tileSize = 4,
   cameraControlsContainer,
@@ -356,6 +401,8 @@ export function MapCanvas({
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
   realtimeObjects?: readonly RuntimeRealtimeObject[];
+  hoverTool?: PlayableToolName;
+  showHoverToolPreview?: boolean;
   onTileClick?: (x: number, y: number) => void;
   tileSize?: number;
   cameraControlsContainer?: HTMLElement | null;
@@ -387,6 +434,10 @@ export function MapCanvas({
     viewportMaxWidthPx: DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
     viewportMaxHeightPx: DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
   });
+  const [hoveredToolTile, setHoveredToolTile] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const baseTileAtlasCanonicalIdentityKey = useMemo(
     () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize),
     [tileSize],
@@ -569,6 +620,8 @@ export function MapCanvas({
   const viewportHeightPx = cameraMetrics.viewportHeightPx;
   const maxCameraOffsetX = cameraMetrics.maxCameraOffsetX;
   const maxCameraOffsetY = cameraMetrics.maxCameraOffsetY;
+  const isToolCursorPreviewEnabled =
+    showHoverToolPreview && hoverTool !== undefined && onTileClick !== undefined;
   const clampedCameraOffsetPx = clampMapCanvasCameraOffset(
     cameraOffsetPx,
     maxCameraOffsetX,
@@ -583,6 +636,55 @@ export function MapCanvas({
         mapHeight: mapState.height,
       }),
     [mapState.height, mapState.width, realtimeObjects, tileSize],
+  );
+  const hoverToolSpec = useMemo(
+    () => (hoverTool === undefined ? null : getPlayableToolSpec(hoverTool)),
+    [hoverTool],
+  );
+  const hoveredToolFootprint = useMemo(() => {
+    if (
+      !isToolCursorPreviewEnabled ||
+      hoveredToolTile === null ||
+      hoverToolSpec === null ||
+      !isTileInBounds(hoveredToolTile.x, hoveredToolTile.y, mapState)
+    ) {
+      return null;
+    }
+
+    return projectMapCanvasToolFootprintRect({
+      tileX: hoveredToolTile.x,
+      tileY: hoveredToolTile.y,
+      size: hoverToolSpec.size,
+      offset: hoverToolSpec.offset,
+      tileSize,
+    });
+  }, [hoverToolSpec, hoveredToolTile, isToolCursorPreviewEnabled, mapState, tileSize]);
+
+  const updateHoveredToolTileFromPointer = useCallback(
+    (event: PointerEvent<HTMLCanvasElement>): void => {
+      if (!isToolCursorPreviewEnabled) {
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (canvas === null) {
+        return;
+      }
+
+      const tile = getPointerTilePosition(event, canvas, tileSize);
+      if (tile === null || !isTileInBounds(tile.x, tile.y, mapState)) {
+        setHoveredToolTile(null);
+        return;
+      }
+
+      setHoveredToolTile((currentTile) => {
+        if (currentTile !== null && currentTile.x === tile.x && currentTile.y === tile.y) {
+          return currentTile;
+        }
+        return tile;
+      });
+    },
+    [isToolCursorPreviewEnabled, mapState, tileSize],
   );
 
   const applyCameraPanBy = useCallback(
@@ -825,6 +927,7 @@ export function MapCanvas({
         ref={mapViewportRef}
         onPointerCancel={(event) => {
           panDragStateRef.current = null;
+          setHoveredToolTile(null);
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
@@ -836,6 +939,7 @@ export function MapCanvas({
 
           const point = getElementRelativePointerPosition(event);
           panDragStateRef.current = startMapCanvasPanDrag(point.x, point.y);
+          setHoveredToolTile(null);
           event.currentTarget.setPointerCapture(event.pointerId);
           event.preventDefault();
         }}
@@ -885,6 +989,15 @@ export function MapCanvas({
         >
           <canvas
             ref={canvasRef}
+            onPointerEnter={(event) => {
+              updateHoveredToolTileFromPointer(event);
+            }}
+            onPointerMove={(event) => {
+              updateHoveredToolTileFromPointer(event);
+            }}
+            onPointerLeave={() => {
+              setHoveredToolTile(null);
+            }}
             onClick={(event) => {
               if (onTileClick === undefined) {
                 return;
@@ -912,11 +1025,31 @@ export function MapCanvas({
               zIndex: getMapCanvasLayerZIndex('map'),
             }}
           />
+          {hoveredToolFootprint === null || hoverToolSpec === null ? null : (
+            <div
+              style={{
+                background: `${hoverToolSpec.pendingColor}26`,
+                border: `2px dashed ${hoverToolSpec.pendingColor}`,
+                boxSizing: 'border-box',
+                height: hoveredToolFootprint.side,
+                left: hoveredToolFootprint.left,
+                pointerEvents: 'none',
+                position: 'absolute',
+                top: hoveredToolFootprint.top,
+                width: hoveredToolFootprint.side,
+                zIndex: getMapCanvasLayerZIndex('tool-cursor'),
+              }}
+            />
+          )}
           {pendingTools.map((pending) => {
             const spec = getPlayableToolSpec(pending.command.tool);
-            const left = (pending.command.x - spec.offset) * tileSize;
-            const top = (pending.command.y - spec.offset) * tileSize;
-            const side = spec.size * tileSize;
+            const footprint = projectMapCanvasToolFootprintRect({
+              tileX: pending.command.x,
+              tileY: pending.command.y,
+              size: spec.size,
+              offset: spec.offset,
+              tileSize,
+            });
 
             return (
               <div
@@ -924,12 +1057,12 @@ export function MapCanvas({
                 style={{
                   background: `${spec.pendingColor}4d`,
                   border: `1px dashed ${spec.pendingColor}`,
-                  height: side,
-                  left,
+                  height: footprint.side,
+                  left: footprint.left,
                   pointerEvents: 'none',
                   position: 'absolute',
-                  top,
-                  width: side,
+                  top: footprint.top,
+                  width: footprint.side,
                   zIndex: getMapCanvasLayerZIndex('pending-tool'),
                 }}
               />
@@ -998,7 +1131,7 @@ type MapCanvasDrawProc = (
   tileRenderer: MapCanvasTileRenderer,
 ) => void;
 
-type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay';
+type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay' | 'tool-cursor';
 
 interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
@@ -1096,7 +1229,8 @@ const MAP_CANVAS_MISSING_TILE_ATLAS_COLOR = '#111827';
 /**
  * Returns deterministic DOM stacking order for Authoritative Runtime map layers.
  * Mirrors `DoUpdateEditor` draw order in `ref/micropolis/src/sim/w_editor.c`:
- * `MemDrawBeegMapRect` base map, then `DrawPending`, then `DrawObjects`.
+ * `MemDrawBeegMapRect` base map, then `DrawPending`, then `DrawObjects`,
+ * and finally `DrawCursor`.
  * Parity note: browser rendering uses CSS z-index instead of a single X11 pixmap.
  */
 export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
@@ -1107,6 +1241,8 @@ export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
       return 1;
     case 'realtime-overlay':
       return 2;
+    case 'tool-cursor':
+      return 3;
     default:
       return assertNever(layer);
   }
@@ -1641,13 +1777,55 @@ function getClickedTilePosition(
   canvas: HTMLCanvasElement,
   tileSize: number,
 ): { x: number; y: number } | null {
+  return getCanvasTilePositionFromClientPoint({
+    canvas,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    tileSize,
+  });
+}
+
+/**
+ * Converts a canvas pointer sample into map tile coordinates.
+ * Mirrors tool-target tile resolution from `do_tool` in
+ * `ref/micropolis/src/sim/w_tool.c`, adapted for browser pointer events.
+ */
+function getPointerTilePosition(
+  event: PointerEvent<HTMLCanvasElement>,
+  canvas: HTMLCanvasElement,
+  tileSize: number,
+): { x: number; y: number } | null {
+  return getCanvasTilePositionFromClientPoint({
+    canvas,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    tileSize,
+  });
+}
+
+/**
+ * Converts one client-space sample over the canvas into map tile coordinates.
+ * Mirrors Micropolis editor pixel-to-tile targeting in `do_tool`
+ * (`ref/micropolis/src/sim/w_tool.c`) while accounting for browser canvas CSS scaling.
+ */
+function getCanvasTilePositionFromClientPoint({
+  canvas,
+  clientX,
+  clientY,
+  tileSize,
+}: {
+  canvas: HTMLCanvasElement;
+  clientX: number;
+  clientY: number;
+  tileSize: number;
+}): { x: number; y: number } | null {
   const bounds = canvas.getBoundingClientRect();
   if (bounds.width === 0 || bounds.height === 0) {
     return null;
   }
 
-  const canvasX = ((event.clientX - bounds.left) * canvas.width) / bounds.width;
-  const canvasY = ((event.clientY - bounds.top) * canvas.height) / bounds.height;
+  const canvasX = ((clientX - bounds.left) * canvas.width) / bounds.width;
+  const canvasY = ((clientY - bounds.top) * canvas.height) / bounds.height;
 
   return {
     x: Math.floor(canvasX / tileSize),

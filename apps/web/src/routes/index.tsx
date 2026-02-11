@@ -271,6 +271,7 @@ function RuntimePanel() {
       >
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
+          hoverTool={sessionControlsDisabled ? undefined : activeTool}
           mapState={state.mapState}
           onTileClick={(x, y) => {
             if (sessionControlsDisabled) {

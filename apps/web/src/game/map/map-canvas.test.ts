@@ -11,6 +11,7 @@ import {
   isMapCanvasUnpoweredZoneBlinkPhase,
   isMapCanvasZoomWheelGesture,
   normalizeMapCanvasWheelDeltaToPixels,
+  projectMapCanvasToolFootprintRect,
   projectRealtimeOverlaySprites,
   scaleMapPanDeltaToWorldPixels,
   scaleWorldPanDeltaToCanvasPixels,
@@ -751,13 +752,37 @@ describe('map canvas tile render mode selection', () => {
   });
 });
 
+describe('map canvas tool footprint projection', () => {
+  it('matches Micropolis toolSize/toolOffset anchoring for tool cursor footprints', () => {
+    // Magic-number source: `toolSize[]` and `toolOffset[]` in
+    // `ref/micropolis/src/sim/w_tool.c`, applied in `DrawCursor` default branch
+    // (`x = (x & ~15) - (offset << 4)`, `size <<= 4`) in `w_editor.c`.
+    expect(
+      projectMapCanvasToolFootprintRect({
+        tileX: 30,
+        tileY: 22,
+        size: 3,
+        offset: 1,
+        tileSize: 4,
+      }),
+    ).toEqual({
+      left: 116,
+      top: 84,
+      side: 12,
+    });
+  });
+});
+
 describe('map canvas layer ordering', () => {
-  it('keeps map, pending tool, and realtime overlays in Micropolis draw order', () => {
+  it('keeps map, pending tool, realtime overlays, and tool cursor in Micropolis draw order', () => {
     // `DoUpdateEditor` in `w_editor.c` draws map first, then pending tool preview,
-    // then realtime objects (`DrawObjects`) on top.
+    // then realtime objects (`DrawObjects`), then tool cursor (`DrawCursor`) on top.
     expect(getMapCanvasLayerZIndex('map')).toBeLessThan(getMapCanvasLayerZIndex('pending-tool'));
     expect(getMapCanvasLayerZIndex('pending-tool')).toBeLessThan(
       getMapCanvasLayerZIndex('realtime-overlay'),
+    );
+    expect(getMapCanvasLayerZIndex('realtime-overlay')).toBeLessThan(
+      getMapCanvasLayerZIndex('tool-cursor'),
     );
   });
 });
