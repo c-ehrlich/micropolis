@@ -117,7 +117,7 @@ Deliverable: host emits authoritative sound deltas for tool/message/realtime sou
 
 ## Phase 2: Web Runtime Audio Engine (Consumer)
 
-- [ ] Add dedicated gameplay audio consumer module (separate from manual sound-test module).
+- [x] Add dedicated gameplay audio consumer module (separate from manual sound-test module).
 - [ ] Consume sound deltas from sequenced runtime envelopes and play them via `Audio` API.
 - [ ] Keep token normalization + wav path behavior equivalent to Sugar (`first token`, lowercase).
 - [ ] Handle browser autoplay restrictions gracefully (best-effort playback, no state corruption).

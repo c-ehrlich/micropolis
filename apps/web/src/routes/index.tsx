@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import {
   resolveMicropolisSoundTokenForToolAck,
   resolveMicropolisSoundTokenForToolRejectReason,
@@ -87,6 +88,7 @@ function HomePage() {
 function RuntimePanel() {
   const host = useMemo(() => createPlayableRuntimeHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
+  const gameplayAudioConsumer = useMemo(() => createMicropolisGameplayAudioConsumer(), []);
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   /**
    * Coalesces host-driven runtime projections to one browser paint commit.
@@ -141,10 +143,7 @@ function RuntimePanel() {
         const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
         if (toolSoundToken !== undefined) {
           pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-          void playMicropolisSoundPreview({
-            token: toolSoundToken,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
+          void gameplayAudioConsumer.playSoundSpec(toolSoundToken).catch(() => undefined);
         }
         return;
       }
@@ -155,10 +154,7 @@ function RuntimePanel() {
           runtimeEnvelope.reason,
         );
         if (rejectSoundToken !== null) {
-          void playMicropolisSoundPreview({
-            token: rejectSoundToken,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
+          void gameplayAudioConsumer.playSoundSpec(rejectSoundToken).catch(() => undefined);
         }
         return;
       }
@@ -168,10 +164,7 @@ function RuntimePanel() {
       }
 
       for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
-        void playMicropolisSoundPreview({
-          token: soundDelta.soundSpec,
-          audioByPath: soundPreviewAudioByPath.current,
-        }).catch(() => undefined);
+        void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
       }
 
       const savePayload = readCityExportPayload(runtimeEnvelope.payload);
@@ -189,8 +182,9 @@ function RuntimePanel() {
       pendingToolAckSoundTokensByCommandId.clear();
       stateCommitDispatcher.dispose();
       runtime.disconnect();
+      gameplayAudioConsumer.dispose();
     };
-  }, [runtime, stateCommitDispatcher]);
+  }, [runtime, stateCommitDispatcher, gameplayAudioConsumer]);
 
   useEffect(() => {
     const soundPreviewAudioElementsByPath = soundPreviewAudioByPath.current;

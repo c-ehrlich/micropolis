@@ -72,6 +72,17 @@ describe('routes/index default gameplay path', () => {
     expect(playableRuntimeHostSource).not.toMatch(/from ['"]\.\.\/core-host(?:\.ts)?['"]/);
   });
 
+  test('routes gameplay audio through dedicated consumer module separate from Sound Test helpers', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain("from '../game/audio/micropolis-gameplay-audio-consumer.ts'");
+    expect(routeSource).toContain('const gameplayAudioConsumer = useMemo(');
+    expect(routeSource).toContain('gameplayAudioConsumer.playSoundSpec(');
+  });
+
   test('plays gameplay message sounds from host sound deltas instead of route message-id mapping', () => {
     const routeSource = readFileSync(
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
