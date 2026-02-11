@@ -194,7 +194,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 - [x] Invalid placement plays `UhUh` via host-emitted sound delta.
 - [x] All playable tool success sounds come from authoritative host sound deltas.
 - [x] Message-driven siren/monster/explosion/honk sounds come from authoritative host sound deltas.
-- [ ] Route no longer infers gameplay sounds from reject/message state.
+- [x] Route no longer infers gameplay sounds from reject/message state.
 - [ ] Missing assets warn and skip without corrupting runtime state.
 - [ ] Replay/resync preserves sound deltas in transport data.
 - [ ] Behavior is traceable to C sources listed in this document.
