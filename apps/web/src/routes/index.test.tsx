@@ -72,6 +72,132 @@ describe('routes/index default gameplay path', () => {
     expect(playableRuntimeHostSource).not.toMatch(/from ['"]\.\.\/core-host(?:\.ts)?['"]/);
   });
 
+  test('routes gameplay audio through dedicated consumer module separate from Sound Test helpers', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain("from '../game/audio/micropolis-gameplay-audio-consumer.ts'");
+    expect(routeSource).toContain(
+      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
+    );
+    expect(routeSource).toContain('const gameplayAudioConsumer = useMemo(');
+    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
+  });
+
+  test('keeps "/" Sound Test as manual verification-only preview UI', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+    const soundPreviewPanelSource = readFileSync(
+      fileURLToPath(new URL('../game/audio/micropolis-sound-preview-panel.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain("from '../game/audio/micropolis-sound-preview-panel.tsx'");
+    expect(routeSource).toContain('<MicropolisSoundPreviewPanel />');
+    expect(soundPreviewPanelSource).toContain(
+      'Manual verification only: preview Micropolis wav assets',
+    );
+    expect(soundPreviewPanelSource).toContain('playMicropolisSoundPreview({');
+    expect(soundPreviewPanelSource).toContain('Gameplay audio remains host-envelope driven.');
+  });
+
+  test('keeps Sound Test preview module independent from gameplay audio consumer plumbing', () => {
+    const soundPreviewPanelSource = readFileSync(
+      fileURLToPath(new URL('../game/audio/micropolis-sound-preview-panel.tsx', import.meta.url)),
+      'utf8',
+    );
+    const gameplayAudioConsumerSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-gameplay-audio-consumer.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(soundPreviewPanelSource).toContain("from './micropolis-soundboard.ts'");
+    expect(soundPreviewPanelSource).not.toContain("from './micropolis-gameplay-audio-consumer.ts'");
+    expect(gameplayAudioConsumerSource).not.toContain(
+      "from './micropolis-sound-preview-panel.tsx'",
+    );
+    expect(gameplayAudioConsumerSource).not.toContain("from './micropolis-soundboard.ts'");
+  });
+
+  test('keeps gameplay route free of preview-only sound mapping helper imports', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).not.toContain("from '../game/audio/micropolis-soundboard.ts'");
+    expect(routeSource).not.toContain('toMicropolisSoundPreviewWavPath');
+    expect(routeSource).not.toContain('normalizeMicropolisSoundTokenForWav');
+  });
+
+  test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(routeSource).toContain(
+      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
+    );
+    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
+    expect(soundRoutingSource).toContain('if (!isSequencedHostEnvelope(runtimeEnvelope))');
+    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolAck');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolRejectReason');
+    expect(soundRoutingSource).not.toContain('pendingToolAckSoundByCommandId');
+    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
+    expect(soundRoutingSource).not.toContain('readMessageIdsFromPatchPayload');
+  });
+
+  test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(soundRoutingSource).toContain(
+      "const shouldAttemptEnvelopePlayback = context.reducerOutcome === 'applied';",
+    );
+    expect(soundRoutingSource).toContain('userSoundOn: context.userSoundOn');
+    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+  });
+
+  test('keeps sequenced sound transport separate from configurable playback policy', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+    const soundRoutingSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(routeSource).toContain('createMicropolisGameplaySoundPlaybackPolicy');
+    expect(routeSource).toContain("mode: 'applied-only'");
+    expect(soundRoutingSource).toContain(
+      'const shouldPlaySoundDeltas = context.gameplaySoundPlaybackPolicy({',
+    );
+    expect(soundRoutingSource).toContain(
+      'for (const soundDelta of runtimeEnvelope.soundDeltas ?? [])',
+    );
+  });
+
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(
       fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),

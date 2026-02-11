@@ -1,13 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  resolveMicropolisSoundTokenForToolAck,
-  resolveMicropolisSoundTokenForToolRejectReason,
-  resolveMicropolisSoundTokensForMessageId,
-  SOUND_PREVIEW_SPECS,
-  toMicropolisSoundPreviewWavPath,
-} from '../game/audio/micropolis-soundboard.ts';
+import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
+import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
+import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
+import { MicropolisSoundPreviewPanel } from '../game/audio/micropolis-sound-preview-panel.tsx';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
@@ -27,7 +24,7 @@ import {
   readCityExportPayload,
   triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
-import type { CoreHost } from '../game/runtime/protocol.ts';
+import { type CoreHost } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -88,6 +85,11 @@ function HomePage() {
 function RuntimePanel() {
   const host = useMemo(() => createPlayableRuntimeHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
+  const gameplayAudioConsumer = useMemo(() => createMicropolisGameplayAudioConsumer(), []);
+  const gameplaySoundPlaybackPolicy = useMemo(
+    () => createMicropolisGameplaySoundPlaybackPolicy({ mode: 'applied-only' }),
+    [],
+  );
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   /**
    * Coalesces host-driven runtime projections to one browser paint commit.
@@ -120,16 +122,12 @@ function RuntimePanel() {
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
   const [cityIoError, setCityIoError] = useState<string>('');
-  const [soundStatus, setSoundStatus] = useState<string>('');
   const [disasterStatus, setDisasterStatus] = useState<string>('');
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const scenarioIntroCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const soundPreviewAudioByPath = useRef<Map<string, HTMLAudioElement>>(new Map());
-  const pendingToolAckSoundByCommandId = useRef<Map<string, string>>(new Map());
   const commandCounter = useRef(1);
 
   useEffect(() => {
-    const pendingToolAckSoundTokensByCommandId = pendingToolAckSoundByCommandId.current;
     const unsubscribe = runtime.subscribe((event) => {
       stateCommitDispatcher.queue(event.state);
 
@@ -138,44 +136,16 @@ function RuntimePanel() {
         return;
       }
 
-      if (runtimeEnvelope.kind === 'ack') {
-        const toolSoundToken = pendingToolAckSoundTokensByCommandId.get(runtimeEnvelope.commandId);
-        if (toolSoundToken !== undefined) {
-          pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-          void playMicropolisSoundPreview({
-            token: toolSoundToken,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
-        }
-        return;
-      }
-
-      if (runtimeEnvelope.kind === 'reject') {
-        pendingToolAckSoundTokensByCommandId.delete(runtimeEnvelope.commandId);
-        const rejectSoundToken = resolveMicropolisSoundTokenForToolRejectReason(
-          runtimeEnvelope.reason,
-        );
-        if (rejectSoundToken !== null) {
-          void playMicropolisSoundPreview({
-            token: rejectSoundToken,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
-        }
-        return;
-      }
+      routeMicropolisGameplaySoundDeltas({
+        envelope: runtimeEnvelope,
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        gameplayAudioConsumer,
+        gameplaySoundPlaybackPolicy,
+      });
 
       if (runtimeEnvelope.kind !== 'patch') {
         return;
-      }
-
-      for (const messageId of readMessageIdsFromPatchPayload(runtimeEnvelope.payload)) {
-        const tokens = resolveMicropolisSoundTokensForMessageId(messageId);
-        for (const token of tokens) {
-          void playMicropolisSoundPreview({
-            token,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
-        }
       }
 
       const savePayload = readCityExportPayload(runtimeEnvelope.payload);
@@ -190,22 +160,11 @@ function RuntimePanel() {
     runtime.connect();
     return () => {
       unsubscribe();
-      pendingToolAckSoundTokensByCommandId.clear();
       stateCommitDispatcher.dispose();
       runtime.disconnect();
+      gameplayAudioConsumer.dispose();
     };
-  }, [runtime, stateCommitDispatcher]);
-
-  useEffect(() => {
-    const soundPreviewAudioElementsByPath = soundPreviewAudioByPath.current;
-    return () => {
-      for (const audioElement of soundPreviewAudioElementsByPath.values()) {
-        audioElement.pause();
-        audioElement.src = '';
-      }
-      soundPreviewAudioElementsByPath.clear();
-    };
-  }, []);
+  }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
 
   useEffect(() => {
     if (hasStartedPlayableSession) {
@@ -333,11 +292,6 @@ function RuntimePanel() {
                 }
 
                 const commandId = nextCommandId(commandCounter, 'tool');
-                const toolAckSoundToken = resolveMicropolisSoundTokenForToolAck(activeTool);
-                if (toolAckSoundToken !== null) {
-                  pendingToolAckSoundByCommandId.current.set(commandId, toolAckSoundToken);
-                }
-
                 runtime.sendCommand(commandId, {
                   kind: 'tool',
                   tool: activeTool,
@@ -588,47 +542,7 @@ function RuntimePanel() {
         </aside>
       </section>
 
-      <section
-        style={{
-          border: '1px solid #334155',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 8,
-          padding: 10,
-        }}
-      >
-        <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Sound Test</strong>
-        <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
-          Manual Micropolis sound preview (`/sounds/*.wav`) from the Sugar-style token route.
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {SOUND_PREVIEW_SPECS.map((soundSpec) => (
-            <button
-              key={soundSpec.token}
-              onClick={() => {
-                void playMicropolisSoundPreview({
-                  token: soundSpec.token,
-                  audioByPath: soundPreviewAudioByPath.current,
-                })
-                  .then(() => {
-                    setSoundStatus(`Played ${soundSpec.label}`);
-                  })
-                  .catch((error: unknown) => {
-                    const detail =
-                      error instanceof Error ? error.message : 'unknown playback error';
-                    setSoundStatus(`Failed to play ${soundSpec.label}: ${detail}`);
-                  });
-              }}
-              type="button"
-            >
-              {soundSpec.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-          {soundStatus}
-        </div>
-      </section>
+      <MicropolisSoundPreviewPanel />
     </section>
   );
 }
@@ -662,73 +576,6 @@ function nextCommandId(counter: { current: number }, prefix: string): string {
   const nextValue = counter.current;
   counter.current = nextValue + 1;
   return `${prefix}-${nextValue}`;
-}
-
-/**
- * Plays one Micropolis preview sound via browser audio.
- * Mirrors the Micropolis Tcl/Python sound path:
- * `EchoPlaySound` emits a token and Sugar resolves `<token>.wav` in
- * `ref/micropolis/micropolisactivity.py`, adapted here to Vite public assets.
- */
-async function playMicropolisSoundPreview({
-  token,
-  audioByPath,
-}: {
-  token: string;
-  audioByPath: Map<string, HTMLAudioElement>;
-}): Promise<void> {
-  if (typeof Audio === 'undefined') {
-    throw new Error('Audio API unavailable in this environment.');
-  }
-
-  const wavPath = toMicropolisSoundPreviewWavPath(token);
-  let audioElement = audioByPath.get(wavPath);
-  if (audioElement === undefined) {
-    audioElement = new Audio(wavPath);
-    audioElement.preload = 'auto';
-    audioByPath.set(wavPath, audioElement);
-  }
-
-  audioElement.currentTime = 0;
-  await audioElement.play();
-}
-
-/**
- * Reads canonical HUD message ids from one patch payload for runtime SFX mapping.
- * Mirrors `SendMes` / `SendMesAt` message-id ownership in
- * `ref/micropolis/src/sim/s_msg.c`.
- * Parity note: prefers canonical `messageDeltas` and falls back to legacy
- * `messages` compatibility arrays to avoid duplicate playback.
- */
-function readMessageIdsFromPatchPayload(payload: unknown): readonly number[] {
-  if (payload === null || typeof payload !== 'object') {
-    return [];
-  }
-
-  const candidate = payload as {
-    messageDeltas?: unknown;
-    messages?: unknown;
-  };
-  const entries = Array.isArray(candidate.messageDeltas)
-    ? candidate.messageDeltas
-    : Array.isArray(candidate.messages)
-      ? candidate.messages
-      : null;
-  if (entries === null) {
-    return [];
-  }
-
-  const messageIds: number[] = [];
-  for (const entry of entries) {
-    if (entry === null || typeof entry !== 'object') {
-      continue;
-    }
-    const id = (entry as { id?: unknown }).id;
-    if (typeof id === 'number' && Number.isFinite(id) && Number.isInteger(id)) {
-      messageIds.push(id);
-    }
-  }
-  return messageIds;
 }
 
 /**

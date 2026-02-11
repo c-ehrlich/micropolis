@@ -1,0 +1,230 @@
+# Sound Parity Plan (Micropolis C Alignment)
+
+## Goal
+
+Implement gameplay sound as an authoritative runtime pathway that mirrors Micropolis C behavior, instead of route-side heuristics.
+
+Target outcome:
+
+- Sound events are produced by authority/host logic at the same points C triggers `MakeSound` / `MakeSoundOn`.
+- Web client plays host-emitted sound events only.
+- Index page "Sound Test" remains a manual test harness, not gameplay plumbing.
+
+## Source-Of-Truth C Pathways (must mirror)
+
+### 1. Tool success/error pathways
+
+- `DidTool(...)` emits `UIDidTool*` callback names in `ref/micropolis/src/sim/w_tool.c`.
+  - Reference: `ref/micropolis/src/sim/w_tool.c:890`
+- Tool failures emit message + sound directly in `DoTool` / `ToolDown`:
+  - out-of-bounds (`-1`) -> `SendMes(34)` + `MakeSoundOn(..., "UhUh")`
+  - no-funds (`-2`) -> `SendMes(33)` + `MakeSoundOn(..., "Sorry")`
+  - Reference: `ref/micropolis/src/sim/w_tool.c:1544`
+- Tool-specific success sounds are defined by `UIDidTool*` Tcl callbacks.
+  - Reference: `ref/micropolis/res/micropolis.tcl:2733`
+
+### 2. Message first-display sounds
+
+- `doMessage` plays first-time sound effects for specific message IDs.
+  - Reference: `ref/micropolis/src/sim/s_msg.c:320`
+
+### 3. Realtime/sprite sounds
+
+- Realtime systems call `MakeSound("city", ...)` for traffic, monster, explosions, etc.
+  - Reference: `ref/micropolis/src/sim/w_sprite.c:768`
+
+### 4. Sound dispatch boundary
+
+- All sound intent funnels through `MakeSound` / `MakeSoundOn` in C.
+  - Reference: `ref/micropolis/src/sim/w_sound.c:93`
+- Tcl forwards `EchoPlaySound` to the activity process as `PlaySound <token>`.
+  - Reference: `ref/micropolis/res/micropolis.tcl:939`
+- Activity wrapper lowercases token and loads `<name>.wav`.
+  - Reference: `ref/micropolis/micropolisactivity.py:194`
+
+## Current Divergence (to remove)
+
+1. `apps/web` gameplay route currently derives sound from reject/message state locally.
+2. `SimCoreEnvelopeHost` does not emit authoritative sound payloads.
+3. Runtime protocol has no sound delta payload.
+4. Sound test helper module is being used by gameplay path as a convenience layer.
+
+## Parity Constraints
+
+- Maintain deterministic envelope ordering (`tick` + `serverSeq`) for sound events.
+- Keep sound ownership in host authority, not route heuristics.
+- Respect C-style sound gating (`UserSoundOn`) as closely as possible.
+- Preserve Sugar token normalization semantics (`first token` + lowercase for wav lookup).
+- Preserve sound data through replay/resync envelope streams even if client playback policy differs.
+- Allow authoritative sound deltas on any sequenced host envelope (`ack`/`reject`/`patch`/`snapshot`/`resync`).
+
+## Decisions Locked (from discussion)
+
+- [x] Sound transport is generalized: sound play requests may be attached to any sequenced host event type, not patch-only.
+- [x] Replay/resync streams must include sound deltas in the data model.
+- [x] Sound payload shape will be:
+  - [x] `channel: string`
+  - [x] `soundSpec: string` (full Micropolis spec string, non-normalized)
+  - [x] `scope?: { kind: 'view' | 'global'; target?: string }` for `MakeSoundOn` parity metadata
+- [x] `MakeSoundOn` scope metadata will be included.
+- [x] Tool success parity covers all playable tools (`UIDidTool*` mapping), not a subset.
+- [x] Message sound authority comes from host-side `SimHooks.makeSound` capture, replacing route message-id inference.
+- [x] Asset coverage target is full gameplay parity: every original gameplay sound callsite should resolve in web runtime.
+- [x] Missing wav handling in runtime consumer: log warning + skip playback.
+- [x] Client playback default: only play sounds from envelopes accepted as reducer outcome `applied`.
+- [x] `userSoundOn` policy: host gates emission by sim state; client also gates playback defensively.
+
+## Implementation Plan
+
+## Phase 0: Contract And Semantics Lock
+
+- [x] Add protocol payload types for sound deltas in `apps/web/src/game/runtime/protocol.ts`.
+- [x] Add a shared sound delta schema usable by any sequenced envelope.
+- [x] Lock parity payload shape:
+  - [x] `channel` (e.g., `city`, `edit`, `warning`, etc.)
+  - [x] `soundSpec` (full Micropolis spec string, not pre-normalized)
+  - [x] `scope` metadata (`view`/`global` + optional target)
+- [x] Lock replay semantics:
+  - [x] Preserve sound deltas through replay tail/resync payload data.
+  - [x] Keep client playback policy independent from transport inclusion.
+
+Deliverable: protocol/test updates that compile and document sound envelope semantics.
+
+## Phase 1: Authoritative Host Sound Emission
+
+- [x] Extend `SimCoreEnvelopeHost` to capture and queue pending sound events per tick.
+- [x] Wire `SimHooks.makeSound` in host constructor (currently only `uiSet/sendMes/sendMesAt` are wired).
+- [x] Wire realtime `onSound` callback from `createRealtimeContext(...)` into host sound queue.
+- [x] Emit queued sounds on authoritative sequenced envelopes in the same command/tick cycle.
+- [x] Gate host sound emission by `simState.userSoundOn` parity with `w_sound.c` `UserSoundOn` check.
+
+### Tool parity sub-phase
+
+- [x] Mirror C tool error sounds in host command handling (not route):
+  - [x] reject `out-of-bounds` -> `UhUh`
+  - [x] reject `no-funds` -> `Sorry`
+- [x] Mirror C tool success `DidTool` sound intent at host level:
+  - [x] map every playable tool -> `UIDidTool*` sound token/spec from `micropolis.tcl`
+  - [x] prefer `packages/sim-assets` helpers where possible, extending as needed for full tool parity
+
+### Message parity sub-phase
+
+- [x] Replace route-side message-id sound mapping with host-emitted sound deltas only.
+- [x] Use sim-core `SimHooks.makeSound` capture as message sound source-of-truth (`doMessage` parity).
+- [x] Keep mapping source-traceable to `s_msg.c` first-display switch.
+
+Deliverable: host emits authoritative sound deltas for tool/message/realtime sources.
+
+## Phase 2: Web Runtime Audio Engine (Consumer)
+
+- [x] Add dedicated gameplay audio consumer module (separate from manual sound-test module).
+- [x] Consume sound deltas from sequenced runtime envelopes and play them via `Audio` API.
+- [x] Keep token normalization + wav path behavior equivalent to Sugar (`first token`, lowercase).
+- [x] Handle browser autoplay restrictions gracefully (best-effort playback, no state corruption).
+- [x] Respect runtime HUD sound option state (`userSoundOn`) when applying deltas (defensive client gate).
+- [x] Only attempt playback for envelopes with reducer outcome `applied`.
+- [x] On missing wav assets: `console.warn` with token/spec context, then skip.
+- [x] Keep replay transport/playback split explicit (sound data always present; playback policy configurable).
+
+Deliverable: route plays only host-provided sound deltas.
+
+## Phase 3: Remove Route Heuristics
+
+- [x] Remove gameplay sound derivation from route reject/message inspection.
+- [x] Keep `/` Sound Test section as manual verification only.
+- [x] Ensure no gameplay path imports mapping helpers intended only for sound preview UI.
+
+Deliverable: single authoritative sound path from host envelopes.
+
+## Phase 4: Asset Coverage Parity
+
+- [x] Audit `apps/web/public/sounds` vs Micropolis required tokens (`ref/micropolis/res/sounds`).
+  - Audit snapshot (2026-02-11):
+  - `ref/micropolis/res/sounds`: 49 `.wav` stems.
+  - `apps/web/public/sounds`: 7 `.wav` stems.
+  - Present in web (7/49): `bulldozer`, `explosion-high`, `honkhonk-low`, `monster`, `siren`, `sorry`, `uhuh`.
+  - Missing in web (42): `a`, `aaah`, `airport`, `beep`, `boing`, `bop`, `build`, `chalk`, `coal`, `com`, `computer`, `cuckoo`, `e`, `eraser`, `explosion-hi`, `explosion-low`, `fire`, `heavytraffic`, `honkhonk-hi`, `honkhonk-high`, `honkhonk-med`, `ignition`, `ind`, `nuclear`, `o`, `oop`, `park`, `police`, `quack`, `quackquack`, `query`, `rail`, `res`, `road`, `rumble`, `seaport`, `skid`, `stadium`, `whip`, `wire`, `woosh`, `zone`.
+- [x] Add missing wav assets for all C-triggered gameplay sounds (tool/message/realtime/disaster pathways).
+- [x] Produce a traceable sound inventory doc/table:
+  - [x] token/spec
+  - [x] wav file name
+  - [x] C/Tcl source location.
+    - [x] Inventory rows include line-level C trigger references plus Tcl dispatch entry references.
+  - [x] human-readable gameplay usage note
+- [x] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
+  - Unreachable callsites and causes documented in `SOUND_GAMEPLAY_INVENTORY.md` under `Unreachable Original Gameplay Sound Pathways (2026-02-11)`.
+  - Follow-up tasks for bulldozer-zone explosions, earthquake-start boom parity, and `w_keys.c` cheat-sequence sound policy are tracked there.
+- [x] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
+  - Explicit deferred stem inventory and source-backed rationale are documented in `SOUND_GAMEPLAY_INVENTORY.md` under `Explicitly Deferred Menu/Non-Gameplay Sound Stems (2026-02-11)`.
+
+Deliverable: gameplay-triggered C sound tokens resolve to available browser assets.
+
+## Test Plan
+
+## Host-level parity tests
+
+- [x] `sim-core-envelope-host.test.ts`:
+  - [x] tool no-funds/out-of-bounds emits expected sound token in same settlement cycle.
+  - [x] message first-time IDs emit C-matching sound specs.
+  - [x] realtime events emit expected sound specs.
+  - [x] `userSoundOn=false` suppresses sound deltas.
+
+## Protocol/runtime tests
+
+- [x] `protocol.test.ts` / reducer tests validate sound payload shape and ordering behavior.
+- [x] tests validate sound transport on any sequenced envelope type (not patch-only coupling).
+- [x] replay/resync tests confirm sound deltas are preserved in replay payload data.
+- [x] runtime tests confirm playback is suppressed for non-`applied` envelope outcomes.
+
+## UI audio tests
+
+- [x] route/runtime audio tests assert playback is driven by host sound deltas only.
+- [x] route/runtime audio tests assert missing-asset warn+skip behavior.
+- [x] route/runtime audio tests assert `userSoundOn=false` suppresses playback even if deltas arrive.
+- [x] verify Sound Test remains independent/manual.
+
+## Asset parity tests
+
+- [x] add coverage that the required gameplay token set has corresponding `/sounds/*.wav` files.
+- [x] add coverage that the token inventory doc remains in sync with shipped assets.
+
+## Traceability Matrix (C -> Runtime Behavior)
+
+- Tool success/error pathways:
+  - C/Tcl sources: `ref/micropolis/src/sim/w_tool.c:890`, `ref/micropolis/src/sim/w_tool.c:1544`, `ref/micropolis/res/micropolis.tcl:2733`.
+  - Runtime ownership: `apps/web/src/game/runtime/sim-core-envelope-host.ts` captures tool command outcomes and emits authoritative `soundDeltas`; tool callback mapping comes from `packages/sim-assets/src/sim-ui.ts`.
+  - Regression coverage: `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates `Sorry`/`UhUh` reject parity and full `UIDidTool*` success sound mapping.
+- Message first-display pathways:
+  - C source: `ref/micropolis/src/sim/s_msg.c:320`.
+  - Runtime ownership: `packages/sim-core/src/systems/messages.ts` resolves `doMessage` first-display sound intents; `apps/web/src/game/runtime/sim-core-envelope-host.ts` captures hook `makeSound` intents and transports them as authoritative `soundDeltas`.
+  - Regression coverage: `packages/sim-core/src/systems/messages.test.ts` validates first-display message-id to sound-spec mapping; `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates host envelope emission.
+- Realtime/sprite pathways:
+  - C source: `ref/micropolis/src/sim/w_sprite.c:768`.
+  - Runtime ownership: `apps/web/src/game/runtime/sim-core-envelope-host.ts` wires realtime `onSound` from `createRealtimeContext(...)` and emits those intents on sequenced envelopes.
+  - Regression coverage: `apps/web/src/game/runtime/sim-core-envelope-host.test.ts` validates realtime-emitted sound specs and `userSoundOn` host gating.
+- Dispatch boundary + token/wav parity:
+  - C/Tcl/Sugar sources: `ref/micropolis/src/sim/w_sound.c:93`, `ref/micropolis/res/micropolis.tcl:939`, `ref/micropolis/micropolisactivity.py:194`.
+  - Runtime ownership: `apps/web/src/game/runtime/protocol.ts` carries sequenced `soundDeltas`; `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.ts` consumes only authoritative deltas; `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.ts` applies first-token lowercase wav normalization.
+  - Regression coverage: `apps/web/src/game/runtime/protocol.test.ts`, `apps/web/src/game/runtime/runtime.ordering-resync.test.ts`, `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.test.ts`, and `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.test.ts`.
+- Inventory-level source traceability:
+  - Authoritative inventory: `SOUND_GAMEPLAY_INVENTORY.md` maps gameplay token/spec rows to line-level C/Tcl callsites and shipped wav stems.
+  - Known non-reachable gameplay callsites and follow-up actions remain explicitly tracked under `Unreachable Original Gameplay Sound Pathways (2026-02-11)`.
+
+## Acceptance Criteria
+
+- [x] Building with insufficient funds plays `Sorry` via host-emitted sound delta.
+- [x] Invalid placement plays `UhUh` via host-emitted sound delta.
+- [x] All playable tool success sounds come from authoritative host sound deltas.
+- [x] Message-driven siren/monster/explosion/honk sounds come from authoritative host sound deltas.
+- [x] Route no longer infers gameplay sounds from reject/message state.
+  - Regression guard: `/` delegates gameplay envelope audio routing to `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.ts`, which consumes only `soundDeltas` (no reject/message inference); covered by `apps/web/src/game/audio/micropolis-runtime-envelope-sound-routing.test.ts`.
+- [x] Missing assets warn and skip without corrupting runtime state.
+  - Regression guard: `apps/web/src/game/audio/micropolis-gameplay-audio-consumer.test.ts` verifies missing wav logs warning and skips playback element creation; `apps/web/src/game/runtime/runtime.test.ts` verifies runtime state continues applying envelopes after missing-asset playback attempts.
+- [x] Replay/resync preserves sound deltas in transport data.
+- [x] Behavior is traceable to C sources listed in this document.
+
+## Execution Commands (final gate)
+
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format`

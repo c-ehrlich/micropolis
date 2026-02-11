@@ -8,7 +8,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSimContext } from '../core/sim-context.ts';
 import { createSimState } from '../core/sim-state.ts';
 import { updateDate } from './date-time.ts';
-import { checkGrowth, doScenarioScore, sendMes, sendMesAt, sendMessages } from './messages.ts';
+import {
+  checkGrowth,
+  doScenarioScore,
+  resolveDoMessageHookSoundIntent,
+  sendMes,
+  sendMesAt,
+  sendMessages,
+} from './messages.ts';
 
 describe('SendMes', () => {
   it('gates positive messages until the port is consumed', () => {
@@ -236,6 +243,39 @@ describe('doMessage parity', () => {
     // stay de-duplicated (SetMessageField parity in s_msg.c).
     updateDate(state, context);
     expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveDoMessageHookSoundIntent', () => {
+  it('maps every doMessage first-display makeSound id to canonical Micropolis channel/spec strings', () => {
+    // Source of ids/specs: `doMessage` first-display switch cases in
+    // `ref/micropolis/src/sim/s_msg.c`:
+    // - case 12: HonkHonk-Med / HonkHonk-Low / HonkHonk-High
+    // - case 11/20/22/23/24/25/26/27/44: Siren
+    // - case 21: Monster -speed [MonsterSpeed]
+    // - case 30: Explosion-Low, Siren
+    // - case 43: Explosion-High, Explosion-Low, Siren
+    const expectedSpecsBySoundId = [
+      [1, 'HonkHonk-Med'],
+      [2, 'HonkHonk-Low'],
+      [3, 'HonkHonk-High'],
+      [4, 'Siren'],
+      [5, 'Monster -speed [MonsterSpeed]'],
+      [6, 'Explosion-Low'],
+      [7, 'Explosion-High'],
+    ] as const;
+
+    for (const [soundId, soundSpec] of expectedSpecsBySoundId) {
+      expect(resolveDoMessageHookSoundIntent(0, soundId)).toEqual({
+        channel: 'city',
+        soundSpec,
+      });
+    }
+  });
+
+  it('returns null for unknown channel/sound ids', () => {
+    expect(resolveDoMessageHookSoundIntent(99, 4)).toBeNull();
+    expect(resolveDoMessageHookSoundIntent(0, 99)).toBeNull();
   });
 });
 

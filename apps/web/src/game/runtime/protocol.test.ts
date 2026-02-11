@@ -4,6 +4,15 @@ import {
   fromCanonicalBridgeToolName,
   getPlayableBridgeCommandType,
   getPlayableToolSpec,
+  type HostAckEnvelope,
+  type HostErrorEnvelope,
+  type HostPatchEnvelope,
+  type HostRejectEnvelope,
+  type HostResyncEnvelope,
+  type HostSnapshotEnvelope,
+  type HostSoundDeltaPayload,
+  isHostSoundDeltaPayload,
+  isHostSoundScopePayload,
   isPlayableBridgeCommandType,
   isPlayableScenarioCommand,
   PLAYABLE_BRIDGE_COMMAND_TYPES,
@@ -172,5 +181,167 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         scenarioId: 1.5,
       }),
     ).toBe(false);
+  });
+
+  it('defines sound-delta payload shape for authoritative transport', () => {
+    const viewScopedDelta: HostSoundDeltaPayload = {
+      channel: 'city',
+      soundSpec: 'Siren',
+      scope: { kind: 'view', target: '.playMap' },
+    };
+
+    const globalDelta: HostSoundDeltaPayload = {
+      channel: 'warning',
+      soundSpec: 'Explosion High',
+      scope: { kind: 'global' },
+    };
+
+    const noScopeDelta: HostSoundDeltaPayload = {
+      channel: 'edit',
+      soundSpec: 'UhUh',
+    };
+
+    expect(viewScopedDelta).toEqual({
+      channel: 'city',
+      soundSpec: 'Siren',
+      scope: { kind: 'view', target: '.playMap' },
+    });
+    expect(globalDelta).toEqual({
+      channel: 'warning',
+      soundSpec: 'Explosion High',
+      scope: { kind: 'global' },
+    });
+    expect(noScopeDelta).toEqual({
+      channel: 'edit',
+      soundSpec: 'UhUh',
+    });
+  });
+
+  it('accepts only locked scope metadata shape for sound deltas', () => {
+    expect(isHostSoundScopePayload({ kind: 'view', target: '.playMap' })).toBe(true);
+    expect(isHostSoundScopePayload({ kind: 'global' })).toBe(true);
+
+    expect(isHostSoundScopePayload({ kind: 'view', target: 100 })).toBe(false);
+    expect(isHostSoundScopePayload({ kind: 'local' })).toBe(false);
+    expect(isHostSoundScopePayload({ kind: 'view', target: '.playMap', extra: true })).toBe(false);
+  });
+
+  it('accepts only locked channel/soundSpec/scope shape for sound deltas', () => {
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      }),
+    ).toBe(true);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'warning',
+        soundSpec: 'Explosion-High -speed [expr 100 * $sound_high_quality]',
+      }),
+    ).toBe(true);
+
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 123,
+      }),
+    ).toBe(false);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: 55 },
+      }),
+    ).toBe(false);
+    expect(
+      isHostSoundDeltaPayload({
+        channel: 'city',
+        soundSpec: 'Siren',
+        extra: 'not-allowed',
+      }),
+    ).toBe(false);
+  });
+
+  it('supports shared sound deltas on every sequenced host envelope kind', () => {
+    const soundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+      {
+        channel: 'warning',
+        soundSpec: 'Explosion High',
+        scope: { kind: 'global' },
+      },
+    ];
+
+    const ackEnvelope: HostAckEnvelope = {
+      kind: 'ack',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 100,
+      commandId: 'cmd-ack',
+      soundDeltas,
+    };
+    const rejectEnvelope: HostRejectEnvelope = {
+      kind: 'reject',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 101,
+      commandId: 'cmd-reject',
+      reason: 'no-funds',
+      soundDeltas,
+    };
+    const patchEnvelope: HostPatchEnvelope = {
+      kind: 'patch',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 102,
+      payload: {},
+      soundDeltas,
+    };
+    const snapshotEnvelope: HostSnapshotEnvelope = {
+      kind: 'snapshot',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 103,
+      payload: {},
+      soundDeltas,
+    };
+    const resyncEnvelope: HostResyncEnvelope = {
+      kind: 'resync',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 104,
+      reason: 'sequence-gap',
+      soundDeltas,
+    };
+    const errorEnvelope: HostErrorEnvelope = {
+      kind: 'error',
+      roomId: 'room-1',
+      clientId: 'client-1',
+      tick: 10,
+      serverSeq: 105,
+      message: 'fatal',
+      soundDeltas,
+    };
+
+    expect(ackEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(rejectEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(patchEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(snapshotEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(resyncEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(errorEnvelope.soundDeltas).toEqual(soundDeltas);
+    expect(ackEnvelope.soundDeltas?.map((soundDelta) => soundDelta.soundSpec)).toEqual([
+      'Siren',
+      'Explosion High',
+    ]);
   });
 });

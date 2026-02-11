@@ -1,6 +1,7 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
+import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
   cityEvaluation,
@@ -43,6 +44,7 @@ import {
   ptlScan,
   type RealtimeContext,
   resetForNewCityFromSeed,
+  resolveDoMessageHookSoundIntent,
   runMapScanPhase,
   runRealtimeTick,
   runSimLoop,
@@ -81,6 +83,7 @@ import type {
   HostRealtimeObjectDeltaPayload,
   HostRealtimeObjectPayload,
   HostSnapshotPayload,
+  HostSoundDeltaPayload,
   PlayableClientCommand,
 } from './protocol.ts';
 
@@ -113,6 +116,7 @@ interface ReplayLogEntry {
 interface EmitSequencedEnvelopeOptions {
   replayTailEligible?: boolean;
   recordMessages?: boolean;
+  includeQueuedSoundDeltas?: boolean;
 }
 interface SessionCommandQueueState {
   pending: SessionQueueItem[];
@@ -164,6 +168,17 @@ const NEW_CITY_CREATE_ISLAND = -1;
 const DEFAULT_PATCH_INTERVAL_MS = 50;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
+const TOOL_SOUND_CHANNEL = 'edit';
+const TOOL_SOUND_SCOPE_TARGET = '.playMap';
+const TOOL_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
+  kind: 'view',
+  target: TOOL_SOUND_SCOPE_TARGET,
+};
+const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
+  'out-of-bounds': 'UhUh',
+  'no-funds': 'Sorry',
+  'invalid-placement': 'UhUh',
+} satisfies Record<'out-of-bounds' | 'no-funds' | 'invalid-placement', string>);
 const SCENARIO_RESOURCE_URLS = createScenarioResourceUrlTable();
 const RUNTIME_MESSAGE_TEXT: Record<number, string> = {
   1: 'Need more residential zones.',
@@ -261,6 +276,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
   private pendingHookMessages: HostHudMessagePayload[] = [];
+  private readonly pendingSoundDeltasByTick = new Map<number, HostSoundDeltaPayload[]>();
   private readonly messageLog: HostHudMessagePayload[] = [];
   private readonly realtimeContext: RealtimeContext;
   private readonly realtimeObjectIds = new WeakMap<SimSprite, string>();
@@ -271,6 +287,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.authorityState = new SimCoreRuntimeState({
       hooks: {
         uiSet: (key, value) => this.captureUiSet(key, value),
+        makeSound: (channel, sound) => this.captureSimCoreHookSound(channel, sound),
         sendMes: (id) => this.captureMessage(id),
         sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
       },
@@ -283,6 +300,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       store: this.authorityState.simContext.store,
       rng: this.authorityState.simContext.rng,
       toolContext: this.authorityState.toolContext,
+      onSound: (channel, soundSpec) => this.captureRealtimeSound(channel, soundSpec),
       simSpeed: this.authorityState.simState.SimSpeed,
       doAnimation: this.authorityState.simState.doAnimation,
       noDisasters: this.authorityState.simState.NoDisasters,
@@ -567,16 +585,26 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (envelope.command.kind === 'tool') {
       const toolOutcome = this.applyToolCommand(envelope.command);
       if (toolOutcome.rejectReason !== undefined) {
+        const soundDeltas = this.buildToolRejectSoundDeltas(toolOutcome.rejectReason);
         this.emitReject(
           envelope.roomId,
           envelope.clientId,
           envelope.commandId,
           toolOutcome.rejectReason,
+          this.tick,
+          soundDeltas.length === 0 ? undefined : soundDeltas,
         );
         return undefined;
       }
 
-      this.emitAck(envelope.roomId, envelope.clientId, envelope.commandId);
+      const soundDeltas = this.buildToolSuccessSoundDeltas(envelope.command.tool);
+      this.emitAck(
+        envelope.roomId,
+        envelope.clientId,
+        envelope.commandId,
+        this.tick,
+        soundDeltas.length === 0 ? undefined : soundDeltas,
+      );
       this.emitPatch(
         envelope.roomId,
         envelope.clientId,
@@ -690,6 +718,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     clientId: string,
     commandId: string,
     tickOverride = this.tick,
+    soundDeltas?: readonly HostSoundDeltaPayload[],
   ): void {
     this.emitSequencedEnvelope({
       kind: 'ack',
@@ -697,6 +726,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       clientId,
       tick: tickOverride,
       commandId,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
     });
   }
 
@@ -711,6 +741,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     commandId: string,
     reason: string,
     tickOverride = this.tick,
+    soundDeltas?: readonly HostSoundDeltaPayload[],
   ): void {
     this.emitSequencedEnvelope({
       kind: 'reject',
@@ -719,6 +750,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tick: tickOverride,
       commandId,
       reason,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
     });
   }
 
@@ -1320,11 +1352,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick, {
       replayTailEligible: false,
       recordMessages: false,
+      includeQueuedSoundDeltas: false,
     });
     for (const envelope of replayTail) {
       this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
         replayTailEligible: false,
         recordMessages: false,
+        includeQueuedSoundDeltas: false,
       });
     }
   }
@@ -1366,16 +1400,43 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    const sequencedEnvelope = this.applyReplayMetadataToEnvelopeMessages(
-      {
-        ...envelope,
-        tick: this.nextEnvelopeTick(envelope.tick),
-        serverSeq: this.nextServerSeq(),
-      },
+    const sequencedEnvelope = this.applyQueuedSoundDeltasToEnvelope(
+      this.applyReplayMetadataToEnvelopeMessages(
+        {
+          ...envelope,
+          tick: this.nextEnvelopeTick(envelope.tick),
+          serverSeq: this.nextServerSeq(),
+        },
+        options,
+      ),
       options,
     );
     this.onEnvelope(sequencedEnvelope);
     this.recordReplayEnvelope(sequencedEnvelope, options);
+  }
+
+  /**
+   * Applies queued host sound deltas to one sequenced envelope when enabled.
+   * Mirrors tick-bounded sound dispatch ownership from `MakeSound`/`MakeSoundOn`
+   * in `ref/micropolis/src/sim/w_sound.c`, adapted to bridge envelope transport.
+   */
+  private applyQueuedSoundDeltasToEnvelope(
+    envelope: SequencedHostEnvelope,
+    options: EmitSequencedEnvelopeOptions,
+  ): SequencedHostEnvelope {
+    const explicitSoundDeltas = envelope.soundDeltas ?? [];
+    const queuedSoundDeltas =
+      options.includeQueuedSoundDeltas === false
+        ? []
+        : this.drainPendingSoundDeltasForTick(envelope.tick);
+    if (explicitSoundDeltas.length === 0 && queuedSoundDeltas.length === 0) {
+      return envelope;
+    }
+
+    return {
+      ...envelope,
+      soundDeltas: cloneHostSoundDeltaPayloadList([...explicitSoundDeltas, ...queuedSoundDeltas]),
+    };
   }
 
   /**
@@ -1923,6 +1984,134 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Captures one sim-core numeric `makeSound` hook event into the authoritative
+   * pending per-tick sound queue.
+   * Mirrors `MakeSound("channel", "spec")` routing in
+   * `ref/micropolis/src/sim/w_sound.c`, with numeric channel/sound ids currently
+   * emitted by sim-core message paths from `ref/micropolis/src/sim/s_msg.c`.
+   */
+  private captureSimCoreHookSound(channel: number, sound: number): void {
+    const soundIntent = resolveDoMessageHookSoundIntent(channel, sound);
+    if (soundIntent === null) {
+      return;
+    }
+    this.enqueuePendingSoundDeltaForTick(this.tick, soundIntent);
+  }
+
+  /**
+   * Captures one realtime callback sound event into the authoritative pending
+   * per-tick sound queue.
+   * Mirrors realtime `MakeSound("city", "...")` call sites in
+   * `ref/micropolis/src/sim/w_sprite.c`, preserving full `soundSpec`.
+   */
+  private captureRealtimeSound(channel: string, soundSpec: string): void {
+    this.enqueuePendingSoundDeltaForTick(this.tick, {
+      channel,
+      soundSpec,
+    });
+  }
+
+  /**
+   * Builds `DoTool`/`ToolDown` reject sound deltas for host-settled tool failures.
+   * Mirrors explicit `MakeSoundOn(view, "edit", "UhUh"/"Sorry")` branches in
+   * `ref/micropolis/src/sim/w_tool.c` (`result == -1` / `result == -2`), with
+   * scope metadata mapped from `MakeSoundOn` view-target semantics in
+   * `ref/micropolis/src/sim/w_sound.c`.
+   * Parity note: host-level `invalid-placement` rejects currently map to the
+   * same `UhUh` feedback used by C `result == -1` tool failures.
+   */
+  private buildToolRejectSoundDeltas(rejectReason: string): HostSoundDeltaPayload[] {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return [];
+    }
+    const soundSpec =
+      rejectReason === 'out-of-bounds' ||
+      rejectReason === 'no-funds' ||
+      rejectReason === 'invalid-placement'
+        ? TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON[rejectReason]
+        : undefined;
+    if (soundSpec === undefined) {
+      return [];
+    }
+    return [
+      {
+        channel: TOOL_SOUND_CHANNEL,
+        soundSpec,
+        scope: TOOL_SOUND_SCOPE,
+      },
+    ];
+  }
+
+  /**
+   * Builds `DidTool(...)` success sound deltas for acknowledged tool commands.
+   * Mirrors `DidTool` callback dispatch in `ref/micropolis/src/sim/w_tool.c`
+   * and `UIDidTool*` -> `UIMakeSoundOn` specs in `ref/micropolis/res/micropolis.tcl`,
+   * with scope metadata mapped from `MakeSoundOn(view, ...)` semantics in
+   * `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private buildToolSuccessSoundDeltas(tool: PlayableToolCommand['tool']): HostSoundDeltaPayload[] {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return [];
+    }
+    const soundIntent = resolveSimUiPlayableToolDidToolSoundIntent(tool);
+    if (soundIntent === undefined) {
+      return [];
+    }
+    return [
+      {
+        channel: soundIntent.channel,
+        soundSpec: soundIntent.soundSpec,
+        scope: TOOL_SOUND_SCOPE,
+      },
+    ];
+  }
+
+  /**
+   * Returns whether host-side sound intent capture is enabled.
+   * Mirrors `UserSoundOn` early-return checks in `MakeSound` / `MakeSoundOn`
+   * from `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private isHostSoundEmissionEnabled(): boolean {
+    return this.authorityState.simState.userSoundOn;
+  }
+
+  /**
+   * Queues one pending sound delta for one authoritative tick.
+   * Mirrors per-cycle sound dispatch ownership around `MakeSound` /
+   * `MakeSoundOn` in `ref/micropolis/src/sim/w_sound.c`, adapted to staged
+   * bridge envelope transport.
+   */
+  private enqueuePendingSoundDeltaForTick(tick: number, soundDelta: HostSoundDeltaPayload): void {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return;
+    }
+    const normalizedTick = normalizeSoundQueueTick(tick, this.tick);
+    const pendingSoundDeltas = this.pendingSoundDeltasByTick.get(normalizedTick);
+    const queuedSoundDelta = cloneHostSoundDeltaPayload(soundDelta);
+    if (pendingSoundDeltas === undefined) {
+      this.pendingSoundDeltasByTick.set(normalizedTick, [queuedSoundDelta]);
+      return;
+    }
+    pendingSoundDeltas.push(queuedSoundDelta);
+  }
+
+  /**
+   * Drains queued pending sound deltas for one authoritative tick.
+   * Mirrors tick-bounded update cycle ownership in `ref/micropolis/src/sim/w_update.c`,
+   * while retaining the `MakeSound` dispatch boundary from
+   * `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private drainPendingSoundDeltasForTick(tick = this.tick): HostSoundDeltaPayload[] {
+    const normalizedTick = normalizeSoundQueueTick(tick, this.tick);
+    const pendingSoundDeltas = this.pendingSoundDeltasByTick.get(normalizedTick);
+    if (pendingSoundDeltas === undefined || pendingSoundDeltas.length === 0) {
+      return [];
+    }
+    this.pendingSoundDeltasByTick.delete(normalizedTick);
+    return cloneHostSoundDeltaPayloadList(pendingSoundDeltas);
+  }
+
+  /**
    * Drains pending hook-delivered messages for the next host payload.
    * Mirrors one-heads-cycle message dispatch ownership in
    * `ref/micropolis/src/sim/s_msg.c`.
@@ -2386,14 +2575,58 @@ function cloneHostPatchPayload(payload: HostPatchPayload): HostPatchPayload {
 }
 
 /**
+ * Clones one sound-delta payload before queueing/emission/replay storage.
+ * Mirrors sound intent value-copy boundaries around `MakeSound` / `MakeSoundOn`
+ * in `ref/micropolis/src/sim/w_sound.c`.
+ */
+function cloneHostSoundDeltaPayload(soundDelta: HostSoundDeltaPayload): HostSoundDeltaPayload {
+  return {
+    ...soundDelta,
+    ...(soundDelta.scope === undefined ? {} : { scope: { ...soundDelta.scope } }),
+  };
+}
+
+/**
+ * Clones one sound-delta list before envelope emission/replay storage.
+ * Mirrors sound-intent ownership from `MakeSound`/`MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`, adapted to deterministic bridge replay
+ * retention in `ref/micropolis/spec/integration/SPEC.md`.
+ */
+function cloneHostSoundDeltaPayloadList(
+  soundDeltas: readonly HostSoundDeltaPayload[],
+): HostSoundDeltaPayload[] {
+  return soundDeltas.map((soundDelta) => cloneHostSoundDeltaPayload(soundDelta));
+}
+
+/**
+ * Normalizes one pending-sound queue tick key.
+ * Mirrors non-negative monotonic sim tick assumptions from
+ * `ref/micropolis/src/sim/s_sim.c`, adapted to bridge queue bookkeeping.
+ */
+function normalizeSoundQueueTick(candidateTick: number, fallbackTick: number): number {
+  const normalizedFallback =
+    Number.isFinite(fallbackTick) && fallbackTick >= 0 ? Math.trunc(fallbackTick) : 0;
+  if (!Number.isFinite(candidateTick) || candidateTick < 0) {
+    return normalizedFallback;
+  }
+  return Math.trunc(candidateTick);
+}
+
+/**
  * Clones one sequenced host envelope before replay-log persistence.
  * Mirrors deterministic bridge replay history ownership from
  * `ref/micropolis/spec/integration/SPEC.md`.
  */
 function cloneReplaySequencedEnvelope(envelope: SequencedHostEnvelope): SequencedHostEnvelope {
+  const soundDeltas =
+    envelope.soundDeltas === undefined
+      ? undefined
+      : cloneHostSoundDeltaPayloadList(envelope.soundDeltas);
+
   if (envelope.kind === 'patch') {
     return {
       ...envelope,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
       payload: cloneHostPatchPayload(envelope.payload),
     };
   }
@@ -2401,11 +2634,15 @@ function cloneReplaySequencedEnvelope(envelope: SequencedHostEnvelope): Sequence
   if (envelope.kind === 'snapshot') {
     return {
       ...envelope,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
       payload: cloneHostSnapshotPayload(envelope.payload),
     };
   }
 
-  return { ...envelope };
+  return {
+    ...envelope,
+    ...(soundDeltas === undefined ? {} : { soundDeltas }),
+  };
 }
 
 /**

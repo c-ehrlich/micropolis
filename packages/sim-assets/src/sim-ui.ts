@@ -137,6 +137,74 @@ const SIM_UI_TOOL_ASSET_HELPERS: readonly SimUiToolAssetHelper[] = Object.freeze
 );
 
 /**
+ * Tool-success sound intent emitted by one `UIDidTool*` callback.
+ * Source mapping:
+ * - callback dispatch: `DidTool` in `ref/micropolis/src/sim/w_tool.c`
+ * - callback specs: `UIDidTool*` `UIMakeSoundOn` calls in
+ *   `ref/micropolis/res/micropolis.tcl`.
+ * Parity notes: `channel`/`soundSpec` preserve Tcl callback intent; tool states
+ * without `UIMakeSoundOn` (`Chlk`, `Eraser`) intentionally map to `undefined`.
+ */
+export interface SimUiDidToolSoundIntent {
+  readonly channel: string;
+  readonly soundSpec: string;
+}
+
+const SIM_UI_DID_TOOL_SOUND_INTENT_BY_STATE = Object.freeze([
+  { channel: 'edit', soundSpec: 'O -speed 140' }, // Res
+  { channel: 'edit', soundSpec: 'A -speed 140' }, // Com
+  { channel: 'edit', soundSpec: 'E -speed 140' }, // Ind
+  { channel: 'edit', soundSpec: 'O -speed 130' }, // Fire
+  { channel: 'edit', soundSpec: 'E -speed 200' }, // Qry
+  { channel: 'edit', soundSpec: 'E -speed 130' }, // Pol
+  { channel: 'edit', soundSpec: 'O -speed 120' }, // Wire
+  { channel: 'edit', soundSpec: 'Rumble' }, // Dozr
+  { channel: 'edit', soundSpec: 'O -speed 100' }, // Rail
+  { channel: 'edit', soundSpec: 'E -speed 100' }, // Road
+  undefined, // Chlk
+  undefined, // Eraser
+  { channel: 'edit', soundSpec: 'O -speed 90' }, // Stad
+  { channel: 'edit', soundSpec: 'A -speed 130' }, // Park
+  { channel: 'edit', soundSpec: 'E -speed 90' }, // Seap
+  { channel: 'edit', soundSpec: 'O -speed 75' }, // Coal
+  { channel: 'edit', soundSpec: 'E -speed 75' }, // Nuc
+  { channel: 'edit', soundSpec: 'A -speed 50' }, // Airp
+] as const satisfies readonly (SimUiDidToolSoundIntent | undefined)[]);
+
+const SIM_UI_PLAYABLE_TOOL_DID_TOOL_BY_NAME = Object.freeze({
+  res: { toolState: 0, didToolToken: 'Res' },
+  com: { toolState: 1, didToolToken: 'Com' },
+  ind: { toolState: 2, didToolToken: 'Ind' },
+  fire: { toolState: 3, didToolToken: 'Fire' },
+  query: { toolState: 4, didToolToken: 'Qry' },
+  police: { toolState: 5, didToolToken: 'Pol' },
+  wire: { toolState: 6, didToolToken: 'Wire' },
+  bulldoze: { toolState: 7, didToolToken: 'Dozr' },
+  rail: { toolState: 8, didToolToken: 'Rail' },
+  road: { toolState: 9, didToolToken: 'Road' },
+  stadium: { toolState: 12, didToolToken: 'Stad' },
+  park: { toolState: 13, didToolToken: 'Park' },
+  seaport: { toolState: 14, didToolToken: 'Seap' },
+  coal: { toolState: 15, didToolToken: 'Coal' },
+  nuclear: { toolState: 16, didToolToken: 'Nuc' },
+  airport: { toolState: 17, didToolToken: 'Airp' },
+} as const);
+
+type SimUiPlayableToolName = keyof typeof SIM_UI_PLAYABLE_TOOL_DID_TOOL_BY_NAME;
+
+/**
+ * Tool-success intent for one playable tool name mapped through `UIDidTool*`.
+ * Source mapping:
+ * - callback names: `UIDidTool*` procedures in `ref/micropolis/res/micropolis.tcl`
+ * - callback dispatch: `DidTool` in `ref/micropolis/src/sim/w_tool.c`.
+ * Parity notes: this is a 1:1 mapping for the 16 playable route tools; editor-only
+ * `Chlk` and `Eraser` remain intentionally excluded from playable-tool input.
+ */
+export interface SimUiPlayableToolDidToolSoundIntent extends SimUiDidToolSoundIntent {
+  readonly didToolToken: string;
+}
+
+/**
  * Return the canonical editor tool helper rows in palette order.
  * Mirrors `EditorPalletImages` / `EditorPalletSounds` ordering in
  * `ref/micropolis/res/micropolis.tcl` (1:1 row order, TypeScript typed metadata).
@@ -242,6 +310,48 @@ export function resolveSimUiToolStringResource(
  */
 export function resolveSimUiToolSoundToken(toolState: number): string | undefined {
   return resolveSimUiToolAssetHelper(toolState)?.soundToken;
+}
+
+/**
+ * Resolve one tool-state `DidTool` success sound intent.
+ * Mirrors `DidTool` -> `UIDidTool*` callback flow from
+ * `ref/micropolis/src/sim/w_tool.c` and `ref/micropolis/res/micropolis.tcl`.
+ * Parity notes: returns `undefined` for out-of-range tool states and for valid
+ * tool states whose Tcl callbacks omit `UIMakeSoundOn` (`Chlk`, `Eraser`).
+ */
+export function resolveSimUiDidToolSoundIntent(
+  toolState: number,
+): SimUiDidToolSoundIntent | undefined {
+  if (!Number.isInteger(toolState) || toolState < 0 || toolState >= SIM_UI_TOOL_COUNT) {
+    return undefined;
+  }
+
+  return SIM_UI_DID_TOOL_SOUND_INTENT_BY_STATE[toolState];
+}
+
+/**
+ * Resolve one playable-tool command name to its `UIDidTool*` token and sound spec.
+ * Mirrors `DidTool(..., name, ...)` callback selection in `ref/micropolis/src/sim/w_tool.c`
+ * and the corresponding `UIDidTool*` `UIMakeSoundOn` specs in
+ * `ref/micropolis/res/micropolis.tcl`.
+ * Parity notes: returns `undefined` for non-playable tool names.
+ */
+export function resolveSimUiPlayableToolDidToolSoundIntent(
+  tool: string,
+): SimUiPlayableToolDidToolSoundIntent | undefined {
+  if (!Object.hasOwn(SIM_UI_PLAYABLE_TOOL_DID_TOOL_BY_NAME, tool)) {
+    return undefined;
+  }
+  const mapping = SIM_UI_PLAYABLE_TOOL_DID_TOOL_BY_NAME[tool as SimUiPlayableToolName];
+  const soundIntent = SIM_UI_DID_TOOL_SOUND_INTENT_BY_STATE[mapping.toolState];
+  if (soundIntent === undefined) {
+    return undefined;
+  }
+  return {
+    didToolToken: mapping.didToolToken,
+    channel: soundIntent.channel,
+    soundSpec: soundIntent.soundSpec,
+  };
 }
 
 /**

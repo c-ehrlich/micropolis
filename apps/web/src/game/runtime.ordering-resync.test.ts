@@ -20,6 +20,7 @@ import {
   DEFAULT_LOCAL_ROOM_ID as DEFAULT_LOCAL_ROOM_ID,
   DEFAULT_PROTOCOL_VERSION as DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope as PlayableHostEnvelope,
+  type HostSoundDeltaPayload,
 } from './runtime/protocol.ts';
 import { createWebHostRuntime, type WebRuntimeState } from './runtime/runtime.ts';
 
@@ -392,6 +393,20 @@ describe('runtime ordering/resync/reconnect invariants', () => {
 describe('playable ordering/resync with expanded payload projection', () => {
   test('recovers map/hud/messages/realtime from sequence-gap resync snapshots plus ordered patch tail', () => {
     const sentSnapshotRequests: PlayableClientEnvelope[] = [];
+    const replaySnapshotSoundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+    ];
+    const replayTailSoundDeltas: readonly HostSoundDeltaPayload[] = [
+      {
+        channel: 'warning',
+        soundSpec: 'Explosion High',
+        scope: { kind: 'global' },
+      },
+    ];
     const host = new ScriptedPlayableHost({
       onClientEnvelope(scriptHost, envelope) {
         if (envelope.kind !== 'request_snapshot' || envelope.reason !== 'sequence-gap') {
@@ -438,6 +453,7 @@ describe('playable ordering/resync with expanded payload projection', () => {
               objects: [{ name: 'TRA', type: 1, x: 96, y: 112, frame: 4 }],
             },
           },
+          soundDeltas: replaySnapshotSoundDeltas,
         });
         scriptHost.emit({
           kind: 'patch',
@@ -453,6 +469,7 @@ describe('playable ordering/resync with expanded payload projection', () => {
               objects: [{ name: 'TRA', type: 1, x: 112, y: 128, frame: 5 }],
             },
           },
+          soundDeltas: replayTailSoundDeltas,
         });
       },
     });
@@ -460,16 +477,20 @@ describe('playable ordering/resync with expanded payload projection', () => {
     const sequencedEvents: Array<{
       outcome: string;
       kind: PlayableHostEnvelope['kind'];
+      serverSeq: number;
+      soundDeltas: readonly HostSoundDeltaPayload[] | null;
       state: WebRuntimeState;
     }> = [];
     runtime.subscribe((event) => {
-      if (event.envelope === undefined) {
+      if (event.envelope === undefined || event.envelope.kind === 'hello') {
         return;
       }
 
       sequencedEvents.push({
         outcome: event.outcome,
         kind: event.envelope.kind,
+        serverSeq: event.envelope.serverSeq,
+        soundDeltas: event.envelope.soundDeltas ?? null,
         state: event.state,
       });
     });
@@ -608,5 +629,15 @@ describe('playable ordering/resync with expanded payload projection', () => {
       },
     ]);
     expect(host.sent.map((envelope) => envelope.kind)).toEqual(['hello', 'request_snapshot']);
+
+    const replaySnapshotEvent = sequencedEvents.find(
+      (entry) => entry.outcome === 'applied' && entry.kind === 'snapshot' && entry.serverSeq === 4,
+    );
+    expect(replaySnapshotEvent?.soundDeltas).toEqual(replaySnapshotSoundDeltas);
+
+    const replayTailPatchEvent = sequencedEvents.find(
+      (entry) => entry.outcome === 'applied' && entry.kind === 'patch' && entry.serverSeq === 5,
+    );
+    expect(replayTailPatchEvent?.soundDeltas).toEqual(replayTailSoundDeltas);
   });
 });

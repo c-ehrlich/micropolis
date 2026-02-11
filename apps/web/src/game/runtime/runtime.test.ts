@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { createMicropolisGameplayAudioConsumer } from '../audio/micropolis-gameplay-audio-consumer.ts';
+import { createMicropolisGameplaySoundPlaybackPolicy } from '../audio/micropolis-gameplay-sound-playback-policy.ts';
 import {
   type ClientEnvelope,
   type CoreHost,
@@ -10,8 +12,11 @@ import {
   DEFAULT_PROTOCOL_VERSION,
   type HostEnvelope,
   type HostPatchPayload,
+  type HostSoundDeltaPayload,
+  isSequencedHostEnvelope,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
+import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 /**
  * In-memory test host that captures outbound envelopes and emits host events.
@@ -131,6 +136,630 @@ describe('createWebHostRuntime', () => {
       reason: 'sequence-gap',
       fromServerSeq: 2,
     });
+  });
+
+  it('keeps sound transport data on runtime events regardless of reducer outcome', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const routed: Array<{
+      outcome: string;
+      kind: HostEnvelope['kind'];
+      soundDeltas: readonly HostSoundDeltaPayload[] | null;
+    }> = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope === undefined || event.envelope.kind === 'hello') {
+        return;
+      }
+      routed.push({
+        outcome: event.outcome,
+        kind: event.envelope.kind,
+        soundDeltas: event.envelope.soundDeltas ?? null,
+      });
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 6 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 4 }] },
+      },
+      soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+    });
+
+    expect(routed).toEqual([
+      {
+        outcome: 'applied',
+        kind: 'snapshot',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+      },
+      {
+        outcome: 'gap-detected',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+      },
+      {
+        outcome: 'dropped-stale',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+      },
+    ]);
+  });
+
+  it('routes sound deltas on every sequenced envelope kind, not only patch/snapshot payload envelopes', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const routed: Array<{
+      outcome: string;
+      kind: HostEnvelope['kind'];
+      soundDeltas: readonly HostSoundDeltaPayload[] | null;
+    }> = [];
+
+    runtime.subscribe((event) => {
+      if (event.envelope === undefined || event.envelope.kind === 'hello') {
+        return;
+      }
+
+      routed.push({
+        outcome: event.outcome,
+        kind: event.envelope.kind,
+        soundDeltas: event.envelope.soundDeltas ?? null,
+      });
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    // `w_sim.c`/`w_update.c` event transport is monotonic by sequence; this mirrors
+    // deterministic sequenced envelope ordering while asserting sound transport.
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [7] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-sound-ack',
+      soundDeltas: [{ channel: 'edit', soundSpec: 'Bulldozer' }],
+    });
+    host.emit({
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 3,
+      commandId: 'cmd-sound-reject',
+      reason: 'no-funds',
+      soundDeltas: [{ channel: 'edit', soundSpec: 'Sorry' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 4,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 8 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'resync',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 5,
+      reason: 'sequence-gap',
+      soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed [MonsterSpeed]' }],
+    });
+    host.emit({
+      kind: 'error',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 6,
+      message: 'fatal',
+      soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+    });
+
+    expect(routed).toEqual([
+      {
+        outcome: 'applied',
+        kind: 'snapshot',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'ack',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'Bulldozer' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'reject',
+        soundDeltas: [{ channel: 'edit', soundSpec: 'Sorry' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'patch',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'resync',
+        soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed [MonsterSpeed]' }],
+      },
+      {
+        outcome: 'applied',
+        kind: 'error',
+        soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+      },
+    ]);
+  });
+
+  it('drives playback from host sound deltas only, not reject/message envelope fields', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+
+      const shouldPlaySoundDeltas = playbackPolicy({
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        return;
+      }
+
+      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+    });
+    host.emit({
+      kind: 'reject',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-no-funds',
+      reason: 'no-funds',
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 3,
+      serverSeq: 3,
+      payload: {
+        // `doMessage` case `43` in `ref/micropolis/src/sim/s_msg.c` triggers
+        // explosion+siren audio in C; runtime must still only play host sound deltas.
+        messageDeltas: [{ id: 43, text: 'Major earthquake reported.' }],
+      },
+    });
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 4,
+      serverSeq: 4,
+      commandId: 'cmd-ack-sound',
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+
+    expect(runtime.getState().lastRejectReason).toBe('no-funds');
+    expect(runtime.getState().hudState.messages.some((message) => message.id === 43)).toBe(true);
+    expect(playedSoundSpecs).toEqual(['Siren']);
+  });
+
+  it('plays Sorry for insufficient-funds building rejects from host-emitted sound deltas', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+    let noFundsRejectSoundDeltas: readonly HostSoundDeltaPayload[] | undefined;
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+
+      if (runtimeEnvelope.kind === 'reject' && runtimeEnvelope.reason === 'no-funds') {
+        noFundsRejectSoundDeltas = runtimeEnvelope.soundDeltas;
+      }
+
+      const shouldPlaySoundDeltas = playbackPolicy({
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        return;
+      }
+
+      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`; forcing
+    // zero funds guarantees `DoTool` no-funds (`-2`) with `MakeSoundOn(..., "Sorry")`.
+    hostInternals.authorityState.simState.TotalFunds = 0;
+    hostInternals.authorityState.toolContext.funds = 0;
+
+    runtime.connect();
+    runtime.sendCommand('cmd-build-no-funds-sorry', {
+      kind: 'tool',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+
+    expect(runtime.getState().lastRejectReason).toBe('no-funds');
+    expect(noFundsRejectSoundDeltas).toEqual([
+      {
+        channel: 'edit',
+        soundSpec: 'Sorry',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+    ]);
+    expect(playedSoundSpecs).toContain('Sorry');
+  });
+
+  it('suppresses playback for non-applied reducer outcomes while preserving sound transport', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+    const suppressedPlaybackOutcomes: string[] = [];
+    const routedOutcomesWithSound: string[] = [];
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+      const soundDeltas = runtimeEnvelope.soundDeltas ?? [];
+      if (soundDeltas.length === 0) {
+        return;
+      }
+
+      routedOutcomesWithSound.push(event.outcome);
+      const shouldPlaySoundDeltas = playbackPolicy({
+        // Mirrors route playback gating; non-`applied` outcomes are transport-only.
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        suppressedPlaybackOutcomes.push(event.outcome);
+        return;
+      }
+
+      for (const soundDelta of soundDeltas) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      // Sequence gap mirrors non-applied envelope routing in `w_update.c`-mapped rules.
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 6 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 4 }] },
+      },
+      soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+    });
+
+    expect(routedOutcomesWithSound).toEqual(['applied', 'gap-detected', 'dropped-stale']);
+    expect(playedSoundSpecs).toEqual(['Siren']);
+    expect(suppressedPlaybackOutcomes).toEqual(['gap-detected', 'dropped-stale']);
+  });
+
+  it('suppresses playback when userSoundOn is false even if host sound deltas arrive', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+    const transportedSoundSpecs: string[] = [];
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+
+      const soundDeltas = runtimeEnvelope.soundDeltas ?? [];
+      for (const soundDelta of soundDeltas) {
+        transportedSoundSpecs.push(soundDelta.soundSpec);
+      }
+
+      const shouldPlaySoundDeltas = playbackPolicy({
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        // Mirrors `UserSoundOn` gating in `ref/micropolis/src/sim/w_sound.c`.
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        return;
+      }
+
+      for (const soundDelta of soundDeltas) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+        hud: {
+          options: {
+            userSoundOn: false,
+          },
+        },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'ack',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 2,
+      commandId: 'cmd-muted',
+      soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
+    });
+
+    expect(runtime.getState().hudState.options.userSoundOn).toBe(false);
+    expect(transportedSoundSpecs).toEqual(['Siren', 'UhUh']);
+    expect(playedSoundSpecs).toEqual([]);
+  });
+
+  it('warns and skips missing-asset host sound playback without blocking runtime state updates', async () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const createAudioElement = vi.fn(() => {
+      return {
+        currentTime: 0,
+        preload: '',
+        src: '',
+        pause: () => undefined,
+        play: async () => undefined,
+      };
+    });
+    const gameplayAudioConsumer = createMicropolisGameplayAudioConsumer({
+      createAudioElement,
+      resolveWavAssetAvailability: async () => false,
+    });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const pendingPlayback: Promise<void>[] = [];
+
+    try {
+      runtime.subscribe((event) => {
+        const runtimeEnvelope = event.envelope;
+        if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+          return;
+        }
+
+        const shouldPlaySoundDeltas = playbackPolicy({
+          defaultShouldAttemptPlayback: event.outcome === 'applied',
+          reducerOutcome: event.outcome,
+          userSoundOn: event.state.hudState.options.userSoundOn,
+          envelopeKind: runtimeEnvelope.kind,
+        });
+        if (!shouldPlaySoundDeltas) {
+          return;
+        }
+
+        for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+          // Sugar `play_sound` catches missing wav errors and continues runtime execution
+          // (`ref/micropolis/micropolisactivity.py`), so web playback must warn+skip only.
+          pendingPlayback.push(
+            gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined),
+          );
+        }
+      });
+
+      runtime.connect();
+      host.emit({
+        kind: 'hello',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        protocolVersion: DEFAULT_PROTOCOL_VERSION,
+        coreVersion: DEFAULT_CORE_VERSION,
+        accepted: true,
+      });
+      host.emit({
+        kind: 'snapshot',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        tick: 1,
+        serverSeq: 1,
+        payload: {
+          map: { width: 1, height: 1, tileWords: [7] },
+        },
+        soundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed 120' }],
+      });
+      host.emit({
+        kind: 'patch',
+        roomId: DEFAULT_LOCAL_ROOM_ID,
+        clientId: DEFAULT_LOCAL_CLIENT_ID,
+        tick: 2,
+        serverSeq: 2,
+        payload: {
+          map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 9 }] },
+        },
+      });
+
+      await Promise.all(pendingPlayback);
+
+      expect(createAudioElement).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Micropolis gameplay sound asset missing; skipping playback.',
+        {
+          token: 'monster',
+          soundSpec: 'Monster -speed 120',
+          wavPath: '/sounds/monster.wav',
+        },
+      );
+      expect(runtime.getState().lastAppliedServerSeq).toBe(2);
+      expect(runtime.getState().mapState.tiles[0]).toBe(9);
+    } finally {
+      warnSpy.mockRestore();
+      gameplayAudioConsumer.dispose();
+    }
   });
 
   it('creates pending visuals on sendCommand and settles them on ack/reject', () => {

@@ -570,11 +570,23 @@ export interface HostSequencingFields {
 }
 
 /**
+ * Shared authoritative sound-delta section for sequenced host envelopes.
+ * Mirrors unified sound-intent dispatch through `MakeSound` / `MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: this schema is transport-level metadata so any sequenced
+ * envelope kind can carry sound deltas without coupling sounds to patch-only
+ * payloads.
+ */
+export interface HostSequencedSoundDeltaSchema {
+  soundDeltas?: readonly HostSoundDeltaPayload[];
+}
+
+/**
  * Host acknowledgement for a previously submitted command.
  * Mirrors command completion signaling around `sim` command dispatch in
  * `ref/micropolis/src/sim/w_sim.c`, adapted to bridge envelopes.
  */
-export interface HostAckEnvelope extends HostSequencingFields {
+export interface HostAckEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'ack';
   commandId: string;
 }
@@ -584,7 +596,7 @@ export interface HostAckEnvelope extends HostSequencingFields {
  * Mirrors expected-denial split from Micropolis command processing in
  * `ref/micropolis/src/sim/w_sim.c`, adapted to explicit reject envelopes.
  */
-export interface HostRejectEnvelope extends HostSequencingFields {
+export interface HostRejectEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'reject';
   commandId: string;
   reason: string;
@@ -734,6 +746,47 @@ export interface HostHudMessagePayload {
 export type HostMessageDeltaPayload = HostHudMessagePayload;
 
 /**
+ * `MakeSoundOn` scope metadata projected onto bridge transport payloads.
+ * Mirrors local-vs-global sound dispatch intent in
+ * `ref/micropolis/src/sim/w_sound.c` (`MakeSound` and `MakeSoundOn`).
+ * Parity note: this preserves host routing context; browser runtime playback
+ * may ignore `target` while still retaining deterministic transport data.
+ */
+export interface HostSoundScopePayload {
+  kind: 'view' | 'global';
+  target?: string;
+}
+
+/**
+ * One authoritative gameplay sound delta carried by host envelopes.
+ * Mirrors sound-intent emission through `MakeSound` / `MakeSoundOn` in
+ * `ref/micropolis/src/sim/w_sound.c`, with Tcl/activity token forwarding in
+ * `ref/micropolis/res/micropolis.tcl` (`EchoPlaySound`) and
+ * `ref/micropolis/micropolisactivity.py` (`PlaySound` handling).
+ * Parity note: `soundSpec` is intentionally the full Micropolis sound spec
+ * string; normalization to wav token is a runtime playback concern.
+ */
+export interface HostSoundDeltaPayload {
+  channel: string;
+  soundSpec: string;
+  scope?: HostSoundScopePayload;
+}
+
+const HOST_SOUND_SCOPE_ALLOWED_KEYS = new Set(['kind', 'target']);
+const HOST_SOUND_DELTA_ALLOWED_KEYS = new Set(['channel', 'soundSpec', 'scope']);
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasOnlyAllowedKeys(
+  record: Record<string, unknown>,
+  allowedKeys: ReadonlySet<string>,
+): boolean {
+  return Object.keys(record).every((key) => allowedKeys.has(key));
+}
+
+/**
  * One authoritative realtime object entry carried by snapshot/patch envelopes.
  * Mirrors sprite field ownership in `ref/micropolis/src/sim/w_sprite.c`, as
  * represented by `SimSprite` in `packages/sim-core/src/sim/realtime.ts`.
@@ -870,7 +923,7 @@ export interface HostPatchPayload extends Record<string, unknown> {
  * Mirrors post-command/update propagation intent from
  * `ref/micropolis/src/sim/w_update.c`, including Playable Runtime map tile-word deltas.
  */
-export interface HostPatchEnvelope extends HostSequencingFields {
+export interface HostPatchEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'patch';
   payload: HostPatchPayload;
 }
@@ -880,7 +933,7 @@ export interface HostPatchEnvelope extends HostSequencingFields {
  * Mirrors full city state refresh intent in Micropolis update loops from
  * `ref/micropolis/src/sim/w_update.c`, adapted to bridge snapshots.
  */
-export interface HostSnapshotEnvelope extends HostSequencingFields {
+export interface HostSnapshotEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'snapshot';
   payload: HostSnapshotPayload;
 }
@@ -890,7 +943,7 @@ export interface HostSnapshotEnvelope extends HostSequencingFields {
  * Mirrors recover/resync intent discussed in bridge plans, aligned with
  * `ref/micropolis/src/sim/w_sim.c` deterministic command processing order.
  */
-export interface HostResyncEnvelope extends HostSequencingFields {
+export interface HostResyncEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'resync';
   reason: string;
 }
@@ -899,7 +952,7 @@ export interface HostResyncEnvelope extends HostSequencingFields {
  * Host unexpected-fault envelope.
  * Mirrors fatal/runtime error surfacing patterns in `ref/micropolis/src/sim/w_sim.c`.
  */
-export interface HostErrorEnvelope extends HostSequencingFields {
+export interface HostErrorEnvelope extends HostSequencingFields, HostSequencedSoundDeltaSchema {
   kind: 'error';
   message: string;
 }
@@ -1097,6 +1150,43 @@ export function isPlayableScenarioCommand(command: unknown): command is Playable
     Number.isFinite(candidate.scenarioId) &&
     Number.isInteger(candidate.scenarioId)
   );
+}
+
+/**
+ * Returns true when payload matches the locked host sound scope metadata shape.
+ * Mirrors `MakeSoundOn` scope intent in `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: only `kind` plus optional `target` are accepted so transport
+ * metadata stays constrained to the agreed bridge payload contract.
+ */
+export function isHostSoundScopePayload(payload: unknown): payload is HostSoundScopePayload {
+  if (!isObjectRecord(payload) || !hasOnlyAllowedKeys(payload, HOST_SOUND_SCOPE_ALLOWED_KEYS)) {
+    return false;
+  }
+
+  if (payload.kind !== 'view' && payload.kind !== 'global') {
+    return false;
+  }
+
+  return payload.target === undefined || typeof payload.target === 'string';
+}
+
+/**
+ * Returns true when payload matches the locked host sound-delta shape.
+ * Mirrors unified `MakeSound` / `MakeSoundOn` dispatch ownership in
+ * `ref/micropolis/src/sim/w_sound.c`.
+ * Parity note: `soundSpec` remains the full Micropolis sound spec string,
+ * and this gate rejects out-of-contract fields to keep runtime transport stable.
+ */
+export function isHostSoundDeltaPayload(payload: unknown): payload is HostSoundDeltaPayload {
+  if (!isObjectRecord(payload) || !hasOnlyAllowedKeys(payload, HOST_SOUND_DELTA_ALLOWED_KEYS)) {
+    return false;
+  }
+
+  if (typeof payload.channel !== 'string' || typeof payload.soundSpec !== 'string') {
+    return false;
+  }
+
+  return payload.scope === undefined || isHostSoundScopePayload(payload.scope);
 }
 
 /**
