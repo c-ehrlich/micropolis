@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
+import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
 import {
   resolveMicropolisSoundTokenForToolAck,
   resolveMicropolisSoundTokenForToolRejectReason,
@@ -89,6 +90,10 @@ function RuntimePanel() {
   const host = useMemo(() => createPlayableRuntimeHost(), []);
   const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
   const gameplayAudioConsumer = useMemo(() => createMicropolisGameplayAudioConsumer(), []);
+  const gameplaySoundPlaybackPolicy = useMemo(
+    () => createMicropolisGameplaySoundPlaybackPolicy({ mode: 'applied-only' }),
+    [],
+  );
   const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
   /**
    * Coalesces host-driven runtime projections to one browser paint commit.
@@ -142,7 +147,13 @@ function RuntimePanel() {
       const shouldAttemptEnvelopePlayback = event.outcome === 'applied';
 
       if (isSequencedHostEnvelope(runtimeEnvelope)) {
-        if (shouldAttemptEnvelopePlayback && event.state.hudState.options.userSoundOn) {
+        const shouldPlaySoundDeltas = gameplaySoundPlaybackPolicy({
+          defaultShouldAttemptPlayback: shouldAttemptEnvelopePlayback,
+          reducerOutcome: event.outcome,
+          userSoundOn: event.state.hudState.options.userSoundOn,
+          envelopeKind: runtimeEnvelope.kind,
+        });
+        if (shouldPlaySoundDeltas) {
           for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
             void gameplayAudioConsumer.playSoundSpec(soundDelta.soundSpec).catch(() => undefined);
           }
@@ -196,7 +207,7 @@ function RuntimePanel() {
       runtime.disconnect();
       gameplayAudioConsumer.dispose();
     };
-  }, [runtime, stateCommitDispatcher, gameplayAudioConsumer]);
+  }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
 
   useEffect(() => {
     const soundPreviewAudioElementsByPath = soundPreviewAudioByPath.current;

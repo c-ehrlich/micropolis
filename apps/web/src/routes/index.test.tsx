@@ -108,6 +108,18 @@ describe('routes/index default gameplay path', () => {
     expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
   });
 
+  test('keeps sequenced sound transport separate from configurable playback policy', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain('createMicropolisGameplaySoundPlaybackPolicy');
+    expect(routeSource).toContain("mode: 'applied-only'");
+    expect(routeSource).toContain('const shouldPlaySoundDeltas = gameplaySoundPlaybackPolicy({');
+    expect(routeSource).toContain('for (const soundDelta of runtimeEnvelope.soundDeltas ?? [])');
+  });
+
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(
       fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),
