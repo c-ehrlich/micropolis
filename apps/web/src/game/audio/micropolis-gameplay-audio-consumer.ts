@@ -89,7 +89,14 @@ export function createMicropolisGameplayAudioConsumer(
       }
 
       audioElement.currentTime = 0;
-      await audioElement.play();
+      try {
+        await audioElement.play();
+      } catch (error) {
+        if (isAutoplayBlockedPlaybackError(error)) {
+          return;
+        }
+        throw error;
+      }
     },
     dispose(): void {
       for (const audioElement of audioByPath.values()) {
@@ -112,4 +119,18 @@ function createBrowserAudioElement(wavPath: string): MicropolisGameplayAudioElem
   }
 
   return new Audio(wavPath);
+}
+
+/**
+ * Returns true when browser `Audio.play()` failed because autoplay is blocked.
+ * Mirrors a best-effort web adaptation around Micropolis `MakeSound` dispatch
+ * (`ref/micropolis/src/sim/w_sound.c`): C has no browser policy gate, so this
+ * adapter treats autoplay denial as non-fatal while preserving sound intent flow.
+ */
+function isAutoplayBlockedPlaybackError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('name' in error)) {
+    return false;
+  }
+
+  return error.name === 'NotAllowedError';
 }

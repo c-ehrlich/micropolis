@@ -120,7 +120,7 @@ Deliverable: host emits authoritative sound deltas for tool/message/realtime sou
 - [x] Add dedicated gameplay audio consumer module (separate from manual sound-test module).
 - [x] Consume sound deltas from sequenced runtime envelopes and play them via `Audio` API.
 - [x] Keep token normalization + wav path behavior equivalent to Sugar (`first token`, lowercase).
-- [ ] Handle browser autoplay restrictions gracefully (best-effort playback, no state corruption).
+- [x] Handle browser autoplay restrictions gracefully (best-effort playback, no state corruption).
 - [ ] Respect runtime HUD sound option state (`userSoundOn`) when applying deltas (defensive client gate).
 - [ ] Only attempt playback for envelopes with reducer outcome `applied`.
 - [ ] On missing wav assets: `console.warn` with token/spec context, then skip.

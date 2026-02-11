@@ -16,6 +16,7 @@ class FakeAudioElement {
   public src: string;
   public pauseCalls = 0;
   public playCalls = 0;
+  public playFailures: unknown[] = [];
 
   public constructor(src: string) {
     this.src = src;
@@ -27,6 +28,10 @@ class FakeAudioElement {
 
   public async play(): Promise<void> {
     this.playCalls += 1;
+    const nextFailure = this.playFailures.shift();
+    if (nextFailure !== undefined) {
+      throw nextFailure;
+    }
   }
 }
 
@@ -80,5 +85,31 @@ describe('micropolis gameplay audio consumer', () => {
     consumer.dispose();
     expect(monsterAudioElement.pauseCalls).toBe(1);
     expect(monsterAudioElement.src).toBe('');
+  });
+
+  it('treats autoplay-blocked browser playback as best-effort non-fatal', async () => {
+    const createdByPath = new Map<string, FakeAudioElement>();
+    const consumer = createMicropolisGameplayAudioConsumer({
+      createAudioElement: (wavPath) => {
+        const fakeAudioElement = new FakeAudioElement(wavPath);
+        if (wavPath === '/sounds/siren.wav') {
+          fakeAudioElement.playFailures.push({ name: 'NotAllowedError' });
+        }
+        createdByPath.set(wavPath, fakeAudioElement);
+        return fakeAudioElement;
+      },
+    });
+
+    await expect(consumer.playSoundSpec('Siren')).resolves.toBeUndefined();
+    const sirenAudioElement = createdByPath.get('/sounds/siren.wav');
+    if (sirenAudioElement === undefined) {
+      throw new Error('Expected siren audio element to be created');
+    }
+
+    sirenAudioElement.currentTime = 3;
+    await expect(consumer.playSoundSpec('Siren -speed 90')).resolves.toBeUndefined();
+    expect(sirenAudioElement.playCalls).toBe(2);
+    expect(sirenAudioElement.currentTime).toBe(0);
+    expect(createdByPath.size).toBe(1);
   });
 });
