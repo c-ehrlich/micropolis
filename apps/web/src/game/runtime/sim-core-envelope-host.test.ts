@@ -35,6 +35,27 @@ const CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(World.WORLD_X, World.
 // C `LoadScenario` always applies `CityTax = 7` and `setSpeed(3)` in `s_fileio.c`.
 const LOAD_SCENARIO_CITY_TAX = 7;
 const LOAD_SCENARIO_SIM_SPEED = 3;
+// `DidTool(..., name, ...)` in `ref/micropolis/src/sim/w_tool.c` dispatches
+// `UIDidTool*` callbacks in `ref/micropolis/res/micropolis.tcl`; each callback's
+// `UIMakeSoundOn ... edit ...` argument is the expected tool-success soundSpec.
+const EXPECTED_DID_TOOL_SOUND_SPEC_BY_PLAYABLE_TOOL = {
+  res: 'O -speed 140',
+  com: 'A -speed 140',
+  ind: 'E -speed 140',
+  fire: 'O -speed 130',
+  query: 'E -speed 200',
+  police: 'E -speed 130',
+  wire: 'O -speed 120',
+  bulldoze: 'Rumble',
+  rail: 'O -speed 100',
+  road: 'E -speed 100',
+  stadium: 'O -speed 90',
+  park: 'A -speed 130',
+  seaport: 'E -speed 90',
+  coal: 'O -speed 75',
+  nuclear: 'E -speed 75',
+  airport: 'A -speed 50',
+} as const satisfies Record<(typeof PLAYABLE_TOOL_SPECS)[number]['tool'], string>;
 
 /**
  * Captures host envelopes from one connected runtime host instance.
@@ -2183,35 +2204,154 @@ describe('SimCoreEnvelopeHost', () => {
         tool: (typeof PLAYABLE_TOOL_SPECS)[number]['tool'],
       ): HostSoundDeltaPayload[];
     };
-    const expectedSoundSpecByTool = {
-      res: 'O -speed 140',
-      com: 'A -speed 140',
-      ind: 'E -speed 140',
-      fire: 'O -speed 130',
-      query: 'E -speed 200',
-      police: 'E -speed 130',
-      wire: 'O -speed 120',
-      bulldoze: 'Rumble',
-      rail: 'O -speed 100',
-      road: 'E -speed 100',
-      stadium: 'O -speed 90',
-      park: 'A -speed 130',
-      seaport: 'E -speed 90',
-      coal: 'O -speed 75',
-      nuclear: 'E -speed 75',
-      airport: 'A -speed 50',
-    } as const satisfies Record<(typeof PLAYABLE_TOOL_SPECS)[number]['tool'], string>;
-
-    // `DidTool(..., name, ...)` in `w_tool.c` dispatches `UIDidTool*` callbacks in
-    // `micropolis.tcl`; each callback sound comes from `UIMakeSoundOn ... edit ...`.
     for (const spec of PLAYABLE_TOOL_SPECS) {
       expect(hostInternals.buildToolSuccessSoundDeltas(spec.tool)).toEqual([
         {
           channel: 'edit',
-          soundSpec: expectedSoundSpecByTool[spec.tool],
+          soundSpec: EXPECTED_DID_TOOL_SOUND_SPEC_BY_PLAYABLE_TOOL[spec.tool],
           scope: { kind: 'view', target: '.playMap' },
         },
       ]);
+    }
+  });
+
+  it('emits authoritative ack sound deltas for every playable tool success', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        toolContext: {
+          funds: number;
+        };
+        store: {
+          beginTick(): void;
+          commitTick(): void;
+          getLayer(layer: 'map'): Uint16Array | unknown;
+        };
+      };
+    };
+    const successPlacementByTool = {
+      res: { x: 10, y: 10 },
+      com: { x: 20, y: 10 },
+      ind: { x: 30, y: 10 },
+      fire: { x: 40, y: 10 },
+      query: { x: 50, y: 10 },
+      police: { x: 60, y: 10 },
+      wire: { x: 70, y: 10 },
+      bulldoze: { x: 90, y: 10 },
+      rail: { x: 80, y: 10 },
+      road: { x: 90, y: 10 },
+      stadium: { x: 20, y: 30 },
+      park: { x: 30, y: 30 },
+      seaport: { x: 40, y: 30 },
+      coal: { x: 50, y: 30 },
+      nuclear: { x: 60, y: 30 },
+      airport: { x: 80, y: 30 },
+    } as const satisfies Record<
+      (typeof PLAYABLE_TOOL_SPECS)[number]['tool'],
+      {
+        x: number;
+        y: number;
+      }
+    >;
+
+    hostInternals.authorityState.simState.TotalFunds = 1_000_000;
+    hostInternals.authorityState.toolContext.funds = 1_000_000;
+    hostInternals.authorityState.store.beginTick();
+    try {
+      const mapLayer = hostInternals.authorityState.store.getLayer('map');
+      if (!(mapLayer instanceof Uint16Array)) {
+        throw new Error('expected map layer Uint16Array');
+      }
+      for (const spec of PLAYABLE_TOOL_SPECS) {
+        if (spec.tool === 'bulldoze') {
+          continue;
+        }
+        const placement = successPlacementByTool[spec.tool];
+        const startX = placement.x - spec.offset;
+        const startY = placement.y - spec.offset;
+        for (let dx = 0; dx < spec.size; dx += 1) {
+          for (let dy = 0; dy < spec.size; dy += 1) {
+            mapLayer[(startX + dx) * World.WORLD_Y + (startY + dy)] = Tile.DIRT;
+          }
+        }
+      }
+      const roadPlacement = successPlacementByTool.road;
+      mapLayer[roadPlacement.x * World.WORLD_Y + roadPlacement.y] = Tile.DIRT;
+    } finally {
+      hostInternals.authorityState.store.commitTick();
+    }
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-tool-success-sound-parity',
+      clientId: 'client-tool-success-sound-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const commandOrder = [
+      'road',
+      'bulldoze',
+      'res',
+      'com',
+      'ind',
+      'fire',
+      'query',
+      'police',
+      'wire',
+      'rail',
+      'stadium',
+      'park',
+      'seaport',
+      'coal',
+      'nuclear',
+      'airport',
+    ] as const satisfies readonly (typeof PLAYABLE_TOOL_SPECS)[number]['tool'][];
+    for (const tool of commandOrder) {
+      const startEnvelopeCount = captured.envelopes.length;
+      const commandId = `cmd-tool-success-sound-${tool}`;
+      const placement = successPlacementByTool[tool];
+      captured.send({
+        kind: 'command',
+        roomId: 'room-tool-success-sound-parity',
+        clientId: 'client-tool-success-sound-parity',
+        commandId,
+        command: {
+          kind: 'tool',
+          tool,
+          x: placement.x,
+          y: placement.y,
+        },
+      });
+
+      const settlement = captured.envelopes[startEnvelopeCount];
+      if (settlement === undefined) {
+        throw new Error(`missing settlement envelope for ${tool}`);
+      }
+      expect(settlement.kind).toBe('ack');
+      if (settlement.kind !== 'ack') {
+        continue;
+      }
+      expect(settlement.commandId).toBe(commandId);
+      expect(readSoundDeltasFromEnvelope(settlement)).toEqual([
+        {
+          channel: 'edit',
+          soundSpec: EXPECTED_DID_TOOL_SOUND_SPEC_BY_PLAYABLE_TOOL[tool],
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ]);
+
+      const patchEnvelope = captured.envelopes[startEnvelopeCount + 1];
+      expect(patchEnvelope).toBeDefined();
+      expect(patchEnvelope?.kind).toBe('patch');
+      if (patchEnvelope === undefined || patchEnvelope.kind !== 'patch') {
+        continue;
+      }
+      expect(readSoundDeltasFromEnvelope(patchEnvelope)).toBeNull();
     }
   });
 
