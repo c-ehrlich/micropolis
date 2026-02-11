@@ -190,7 +190,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 
 ## Acceptance Criteria
 
-- [ ] Building with insufficient funds plays `Sorry` via host-emitted sound delta.
+- [x] Building with insufficient funds plays `Sorry` via host-emitted sound delta.
 - [ ] Invalid placement plays `UhUh` via host-emitted sound delta.
 - [ ] All playable tool success sounds come from authoritative host sound deltas.
 - [ ] Message-driven siren/monster/explosion/honk sounds come from authoritative host sound deltas.

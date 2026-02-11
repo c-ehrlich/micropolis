@@ -16,6 +16,7 @@ import {
   isSequencedHostEnvelope,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
+import { SimCoreEnvelopeHost } from './sim-core-envelope-host.ts';
 
 /**
  * In-memory test host that captures outbound envelopes and emits host events.
@@ -429,6 +430,74 @@ describe('createWebHostRuntime', () => {
     expect(runtime.getState().lastRejectReason).toBe('no-funds');
     expect(runtime.getState().hudState.messages.some((message) => message.id === 43)).toBe(true);
     expect(playedSoundSpecs).toEqual(['Siren']);
+  });
+
+  it('plays Sorry for insufficient-funds building rejects from host-emitted sound deltas', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+    let noFundsRejectSoundDeltas: readonly HostSoundDeltaPayload[] | undefined;
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+
+      if (runtimeEnvelope.kind === 'reject' && runtimeEnvelope.reason === 'no-funds') {
+        noFundsRejectSoundDeltas = runtimeEnvelope.soundDeltas;
+      }
+
+      const shouldPlaySoundDeltas = playbackPolicy({
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        return;
+      }
+
+      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`; forcing
+    // zero funds guarantees `DoTool` no-funds (`-2`) with `MakeSoundOn(..., "Sorry")`.
+    hostInternals.authorityState.simState.TotalFunds = 0;
+    hostInternals.authorityState.toolContext.funds = 0;
+
+    runtime.connect();
+    runtime.sendCommand('cmd-build-no-funds-sorry', {
+      kind: 'tool',
+      tool: 'road',
+      x: 12,
+      y: 12,
+    });
+
+    expect(runtime.getState().lastRejectReason).toBe('no-funds');
+    expect(noFundsRejectSoundDeltas).toEqual([
+      {
+        channel: 'edit',
+        soundSpec: 'Sorry',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+    ]);
+    expect(playedSoundSpecs).toContain('Sorry');
   });
 
   it('suppresses playback for non-applied reducer outcomes while preserving sound transport', () => {
