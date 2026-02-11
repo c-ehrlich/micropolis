@@ -995,6 +995,13 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 4,
       commandId: 'cmd-query-oob',
       reason: 'out-of-bounds',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'UhUh',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
 
     expect(captured.envelopes[5]).toEqual({
@@ -2594,6 +2601,13 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 2,
       commandId: 'cmd-road-no-funds',
       reason: 'no-funds',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'Sorry',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
     expect(authorityState.simState.TotalFunds).toBe(0);
     expect(authorityState.toolContext.funds).toBe(0);
@@ -3232,6 +3246,49 @@ describe('SimCoreEnvelopeHost', () => {
     expect(readSoundDeltasFromEnvelope(ackEnvelope)).toBeNull();
   });
 
+  it('suppresses tool reject error sounds when simState.userSoundOn is false', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          userSoundOn: boolean;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-tool-reject-sound-user-off',
+      clientId: 'client-tool-reject-sound-user-off',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Mirrors `if (!UserSoundOn) return;` in `MakeSoundOn` (`w_sound.c`) for
+    // `DoTool` reject branches (`w_tool.c` result -1/-2 error sounds).
+    hostInternals.authorityState.simState.userSoundOn = false;
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tool-reject-sound-user-off',
+      clientId: 'client-tool-reject-sound-user-off',
+      commandId: 'cmd-tool-reject-sound-user-off',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: -1,
+        y: 8,
+      },
+    });
+
+    const rejectEnvelope = captured.envelopes[2];
+    if (rejectEnvelope === undefined || rejectEnvelope.kind !== 'reject') {
+      throw new Error('expected tool reject envelope');
+    }
+    expect(rejectEnvelope.reason).toBe('out-of-bounds');
+    expect(readSoundDeltasFromEnvelope(rejectEnvelope)).toBeNull();
+  });
+
   it('drops unknown sim-core numeric sound ids from the pending tick queue', () => {
     const host = new SimCoreEnvelopeHost();
     const hostInternals = host as unknown as {
@@ -3648,6 +3705,13 @@ describe('SimCoreEnvelopeHost', () => {
       serverSeq: 6,
       commandId: 'cmd-oob-query',
       reason: 'out-of-bounds',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'UhUh',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
     });
   });
 

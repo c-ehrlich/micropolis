@@ -170,6 +170,16 @@ const SIM_CORE_SOUND_CHANNEL_CITY = 0;
 const SIM_CORE_SOUND_CHANNEL_BY_ID: Readonly<Record<number, string>> = {
   [SIM_CORE_SOUND_CHANNEL_CITY]: 'city',
 };
+const TOOL_ERROR_SOUND_CHANNEL = 'edit';
+const TOOL_ERROR_SOUND_SCOPE_TARGET = '.playMap';
+const TOOL_ERROR_SOUND_SCOPE: HostSoundDeltaPayload['scope'] = {
+  kind: 'view',
+  target: TOOL_ERROR_SOUND_SCOPE_TARGET,
+};
+const TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON = Object.freeze({
+  'out-of-bounds': 'UhUh',
+  'no-funds': 'Sorry',
+} satisfies Record<'out-of-bounds' | 'no-funds', string>);
 const SIM_CORE_SOUND_SPEC_BY_ID: Readonly<Record<number, string>> = {
   // `doMessage` first-display sound specs in `ref/micropolis/src/sim/s_msg.c`.
   1: 'HonkHonk-Med',
@@ -586,11 +596,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (envelope.command.kind === 'tool') {
       const toolOutcome = this.applyToolCommand(envelope.command);
       if (toolOutcome.rejectReason !== undefined) {
+        const soundDeltas = this.buildToolRejectSoundDeltas(toolOutcome.rejectReason);
         this.emitReject(
           envelope.roomId,
           envelope.clientId,
           envelope.commandId,
           toolOutcome.rejectReason,
+          this.tick,
+          soundDeltas.length === 0 ? undefined : soundDeltas,
         );
         return undefined;
       }
@@ -730,6 +743,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     commandId: string,
     reason: string,
     tickOverride = this.tick,
+    soundDeltas?: readonly HostSoundDeltaPayload[],
   ): void {
     this.emitSequencedEnvelope({
       kind: 'reject',
@@ -738,6 +752,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       tick: tickOverride,
       commandId,
       reason,
+      ...(soundDeltas === undefined ? {} : { soundDeltas }),
     });
   }
 
@@ -1996,6 +2011,33 @@ export class SimCoreEnvelopeHost implements CoreHost {
       channel,
       soundSpec,
     });
+  }
+
+  /**
+   * Builds `DoTool`/`ToolDown` reject sound deltas for host-settled tool failures.
+   * Mirrors explicit `MakeSoundOn(view, "edit", "UhUh"/"Sorry")` branches in
+   * `ref/micropolis/src/sim/w_tool.c` (`result == -1` / `result == -2`), with
+   * scope metadata mapped from `MakeSoundOn` view-target semantics in
+   * `ref/micropolis/src/sim/w_sound.c`.
+   */
+  private buildToolRejectSoundDeltas(rejectReason: string): HostSoundDeltaPayload[] {
+    if (!this.isHostSoundEmissionEnabled()) {
+      return [];
+    }
+    const soundSpec =
+      rejectReason === 'out-of-bounds' || rejectReason === 'no-funds'
+        ? TOOL_ERROR_SOUND_SPEC_BY_REJECT_REASON[rejectReason]
+        : undefined;
+    if (soundSpec === undefined) {
+      return [];
+    }
+    return [
+      {
+        channel: TOOL_ERROR_SOUND_CHANNEL,
+        soundSpec,
+        scope: TOOL_ERROR_SOUND_SCOPE,
+      },
+    ];
   }
 
   /**
