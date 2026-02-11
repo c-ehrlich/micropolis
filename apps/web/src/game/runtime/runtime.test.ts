@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createMicropolisGameplaySoundPlaybackPolicy } from '../audio/micropolis-gameplay-sound-playback-policy.ts';
 import {
   type ClientEnvelope,
   type CoreHost,
@@ -11,6 +12,7 @@ import {
   type HostEnvelope,
   type HostPatchPayload,
   type HostSoundDeltaPayload,
+  isSequencedHostEnvelope,
 } from './protocol.ts';
 import { createWebHostRuntime } from './runtime.ts';
 
@@ -342,6 +344,94 @@ describe('createWebHostRuntime', () => {
         soundDeltas: [{ channel: 'warning', soundSpec: 'UhUh' }],
       },
     ]);
+  });
+
+  it('suppresses playback for non-applied reducer outcomes while preserving sound transport', () => {
+    const host = new FakeLocalHost();
+    const runtime = createWebHostRuntime({ host });
+    const playbackPolicy = createMicropolisGameplaySoundPlaybackPolicy({
+      mode: 'applied-only',
+    });
+    const playedSoundSpecs: string[] = [];
+    const suppressedPlaybackOutcomes: string[] = [];
+    const routedOutcomesWithSound: string[] = [];
+
+    runtime.subscribe((event) => {
+      const runtimeEnvelope = event.envelope;
+      if (runtimeEnvelope === undefined || !isSequencedHostEnvelope(runtimeEnvelope)) {
+        return;
+      }
+      const soundDeltas = runtimeEnvelope.soundDeltas ?? [];
+      if (soundDeltas.length === 0) {
+        return;
+      }
+
+      routedOutcomesWithSound.push(event.outcome);
+      const shouldPlaySoundDeltas = playbackPolicy({
+        // Mirrors route playback gating; non-`applied` outcomes are transport-only.
+        defaultShouldAttemptPlayback: event.outcome === 'applied',
+        reducerOutcome: event.outcome,
+        userSoundOn: event.state.hudState.options.userSoundOn,
+        envelopeKind: runtimeEnvelope.kind,
+      });
+      if (!shouldPlaySoundDeltas) {
+        suppressedPlaybackOutcomes.push(event.outcome);
+        return;
+      }
+
+      for (const soundDelta of soundDeltas) {
+        playedSoundSpecs.push(soundDelta.soundSpec);
+      }
+    });
+
+    runtime.connect();
+    host.emit({
+      kind: 'hello',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
+      coreVersion: DEFAULT_CORE_VERSION,
+      accepted: true,
+    });
+
+    host.emit({
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { width: 1, height: 1, tileWords: [5] },
+      },
+      soundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      // Sequence gap mirrors non-applied envelope routing in `w_update.c`-mapped rules.
+      serverSeq: 3,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 6 }] },
+      },
+      soundDeltas: [{ channel: 'warning', soundSpec: 'Explosion High' }],
+    });
+    host.emit({
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 1,
+      payload: {
+        map: { tileWordDeltas: [{ x: 0, y: 0, tileWord: 4 }] },
+      },
+      soundDeltas: [{ channel: 'edit', soundSpec: 'UhUh' }],
+    });
+
+    expect(routedOutcomesWithSound).toEqual(['applied', 'gap-detected', 'dropped-stale']);
+    expect(playedSoundSpecs).toEqual(['Siren']);
+    expect(suppressedPlaybackOutcomes).toEqual(['gap-detected', 'dropped-stale']);
   });
 
   it('creates pending visuals on sendCommand and settles them on ack/reject', () => {
