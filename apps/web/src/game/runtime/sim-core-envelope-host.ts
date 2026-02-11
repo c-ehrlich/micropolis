@@ -260,7 +260,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private lastEmittedServerSeq = 0;
   private tick = 0;
   private lastEmittedTick = 0;
-  private simPaused = false;
+  private simPaused = true;
   private simPausedSpeed = 3;
   private cityFileName = DEFAULT_CITY_FILE_NAME;
   private cityName = DEFAULT_CITY_NAME;

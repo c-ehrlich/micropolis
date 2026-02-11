@@ -1046,11 +1046,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-a',
       tick: 3,
       serverSeq: 6,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
     expect(captured.envelopes[7]).toEqual({
       kind: 'ack',
@@ -2066,11 +2062,12 @@ describe('SimCoreEnvelopeHost', () => {
 
     // Source of magic numbers:
     // - `setSpeed(short)` clamps playable speed into `0..3` in `ref/micropolis/src/sim/w_util.c`.
-    // - this host keeps visible speed at `0` until `new-city` / `load-city` / `load-scenario`
-    //   starts a playable session, while preserving default `SimMetaSpeed` (`3`) as resume speed.
+    // - this host starts paused (`SimSpeed=0`, `simPaused=true`) until `new-city` / `load-city` /
+    //   `load-scenario` starts a playable session, while preserving default `SimMetaSpeed=3`
+    //   as the resume target speed.
     expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
     expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
-    expect(hostInternals.simPaused).toBe(false);
+    expect(hostInternals.simPaused).toBe(true);
 
     captured.send({
       kind: 'command',
@@ -2083,7 +2080,7 @@ describe('SimCoreEnvelopeHost', () => {
       },
     });
     expect(hostInternals.authorityState.simState.SimSpeed).toBe(0);
-    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(0);
+    expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(3);
     expect(hostInternals.simPaused).toBe(true);
     expect(hostInternals.simPausedSpeed).toBe(3);
 
@@ -3130,11 +3127,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 4,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
     expect(secondSessionEnvelopes[4]).toMatchObject({
       kind: 'snapshot',
@@ -3149,11 +3142,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-second',
       tick: 1,
       serverSeq: 6,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
 
     secondSession.disconnect();
@@ -3235,11 +3224,7 @@ describe('SimCoreEnvelopeHost', () => {
       clientId: 'client-snapshot-cursor-clamp',
       tick: 1,
       serverSeq: 7,
-      payload: {
-        hud: {
-          speed: 0,
-        },
-      },
+      payload: {},
     });
   });
 

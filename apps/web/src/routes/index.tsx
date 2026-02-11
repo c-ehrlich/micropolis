@@ -182,6 +182,7 @@ function RuntimePanel() {
   }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
 
   const controlsDisabled = state.phase !== 'ready';
+  const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
   const reconnectDisabled =
     state.phase === 'connecting' || state.phase === 'negotiating' || state.phase === 'reconnecting';
   const resyncDisabled =
@@ -212,7 +213,7 @@ function RuntimePanel() {
         <MapCanvas
           mapState={state.mapState}
           onTileClick={(x, y) => {
-            if (controlsDisabled || !hasStartedPlayableSession) {
+            if (sessionControlsDisabled) {
               return;
             }
 
@@ -267,7 +268,9 @@ function RuntimePanel() {
           style={{
             display: 'grid',
             gap: 6,
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(2, 40px)',
+            justifyContent: 'center',
+            margin: '0 auto',
           }}
         >
           {PLAYABLE_TOOL_SPECS.map((spec) => {
@@ -284,7 +287,7 @@ function RuntimePanel() {
             return (
               <button
                 key={spec.tool}
-                disabled={controlsDisabled}
+                disabled={sessionControlsDisabled}
                 onClick={() => {
                   setActiveTool(spec.tool);
                 }}
@@ -295,11 +298,11 @@ function RuntimePanel() {
                   background: active ? '#fef08a' : '#e2e8f0',
                   border: active ? '2px solid #b45309' : '2px solid #334155',
                   borderRadius: 2,
-                  cursor: controlsDisabled ? 'not-allowed' : 'pointer',
+                  cursor: sessionControlsDisabled ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   height: 40,
                   justifyContent: 'center',
-                  opacity: controlsDisabled ? 0.6 : 1,
+                  opacity: sessionControlsDisabled ? 0.6 : 1,
                   padding: 0,
                   width: 40,
                 }}
@@ -358,7 +361,7 @@ function RuntimePanel() {
           {activeToolSpec.label}: ${activeToolSpec.baseCost}
         </div>
         <div style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>
-          {controlsDisabled
+          {sessionControlsDisabled
             ? 'Connect and start a city to build.'
             : 'Click map tiles to place tool.'}
         </div>
@@ -400,7 +403,7 @@ function RuntimePanel() {
           <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Simulation</strong>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button
-              disabled={controlsDisabled}
+              disabled={sessionControlsDisabled}
               onClick={() => {
                 runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
                   kind: 'sim-control',
@@ -412,7 +415,7 @@ function RuntimePanel() {
               Pause
             </button>
             <button
-              disabled={controlsDisabled}
+              disabled={sessionControlsDisabled}
               onClick={() => {
                 runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
                   kind: 'sim-control',
@@ -426,7 +429,7 @@ function RuntimePanel() {
             {[1, 2, 3].map((speed) => (
               <button
                 key={speed}
-                disabled={controlsDisabled}
+                disabled={sessionControlsDisabled}
                 onClick={() => {
                   runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
                     kind: 'sim-control',
@@ -463,7 +466,7 @@ function RuntimePanel() {
               New City
             </button>
             <button
-              disabled={controlsDisabled}
+              disabled={sessionControlsDisabled}
               onClick={() => {
                 runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
                   kind: 'city-io',
@@ -574,7 +577,7 @@ function RuntimePanel() {
             {PLAYABLE_DISASTER_CHOICES.map((choice) => (
               <button
                 key={choice.id}
-                disabled={controlsDisabled}
+                disabled={sessionControlsDisabled}
                 onClick={() => {
                   setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                 }}
@@ -667,14 +670,9 @@ function DemandHeadsWidget({
   return (
     <div
       style={{
-        alignItems: 'center',
-        background: '#bfbfbf',
-        border: '1px solid rgba(15, 23, 42, 0.72)',
-        borderRadius: 2,
         display: 'flex',
         justifyContent: 'center',
-        minHeight: scaledHeight + 8,
-        padding: 4,
+        width: '100%',
       }}
       title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
     >
@@ -740,14 +738,9 @@ function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
   return (
     <div
       style={{
-        alignItems: 'center',
-        background: '#bfbfbf',
-        border: '1px solid rgba(15, 23, 42, 0.72)',
-        borderRadius: 2,
         display: 'flex',
         justifyContent: 'center',
-        minHeight: 55 * 2 + 8,
-        padding: 4,
+        width: '100%',
       }}
       title={isRunning ? 'Simulation running' : 'Simulation paused'}
     >
