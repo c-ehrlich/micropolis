@@ -146,7 +146,7 @@ Deliverable: single authoritative sound path from host envelopes.
   - Missing in web (42): `a`, `aaah`, `airport`, `beep`, `boing`, `bop`, `build`, `chalk`, `coal`, `com`, `computer`, `cuckoo`, `e`, `eraser`, `explosion-hi`, `explosion-low`, `fire`, `heavytraffic`, `honkhonk-hi`, `honkhonk-high`, `honkhonk-med`, `ignition`, `ind`, `nuclear`, `o`, `oop`, `park`, `police`, `quack`, `quackquack`, `query`, `rail`, `res`, `road`, `rumble`, `seaport`, `skid`, `stadium`, `whip`, `wire`, `woosh`, `zone`.
 - [x] Add missing wav assets for all C-triggered gameplay sounds (tool/message/realtime/disaster pathways).
 - [x] Produce a traceable sound inventory doc/table:
-  - [ ] token/spec
+  - [x] token/spec
   - [ ] wav file name
   - [ ] C/Tcl source location
   - [ ] human-readable gameplay usage note
