@@ -186,7 +186,7 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 ## Asset parity tests
 
 - [x] add coverage that the required gameplay token set has corresponding `/sounds/*.wav` files.
-- [ ] add coverage that the token inventory doc remains in sync with shipped assets.
+- [x] add coverage that the token inventory doc remains in sync with shipped assets.
 
 ## Acceptance Criteria
 
