@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   resolveMicropolisSoundTokenForToolAck,
   resolveMicropolisSoundTokenForToolRejectReason,
-  resolveMicropolisSoundTokensForMessageId,
   SOUND_PREVIEW_SPECS,
   toMicropolisSoundPreviewWavPath,
 } from '../game/audio/micropolis-soundboard.ts';
@@ -168,14 +167,11 @@ function RuntimePanel() {
         return;
       }
 
-      for (const messageId of readMessageIdsFromPatchPayload(runtimeEnvelope.payload)) {
-        const tokens = resolveMicropolisSoundTokensForMessageId(messageId);
-        for (const token of tokens) {
-          void playMicropolisSoundPreview({
-            token,
-            audioByPath: soundPreviewAudioByPath.current,
-          }).catch(() => undefined);
-        }
+      for (const soundDelta of runtimeEnvelope.soundDeltas ?? []) {
+        void playMicropolisSoundPreview({
+          token: soundDelta.soundSpec,
+          audioByPath: soundPreviewAudioByPath.current,
+        }).catch(() => undefined);
       }
 
       const savePayload = readCityExportPayload(runtimeEnvelope.payload);
@@ -691,44 +687,6 @@ async function playMicropolisSoundPreview({
 
   audioElement.currentTime = 0;
   await audioElement.play();
-}
-
-/**
- * Reads canonical HUD message ids from one patch payload for runtime SFX mapping.
- * Mirrors `SendMes` / `SendMesAt` message-id ownership in
- * `ref/micropolis/src/sim/s_msg.c`.
- * Parity note: prefers canonical `messageDeltas` and falls back to legacy
- * `messages` compatibility arrays to avoid duplicate playback.
- */
-function readMessageIdsFromPatchPayload(payload: unknown): readonly number[] {
-  if (payload === null || typeof payload !== 'object') {
-    return [];
-  }
-
-  const candidate = payload as {
-    messageDeltas?: unknown;
-    messages?: unknown;
-  };
-  const entries = Array.isArray(candidate.messageDeltas)
-    ? candidate.messageDeltas
-    : Array.isArray(candidate.messages)
-      ? candidate.messages
-      : null;
-  if (entries === null) {
-    return [];
-  }
-
-  const messageIds: number[] = [];
-  for (const entry of entries) {
-    if (entry === null || typeof entry !== 'object') {
-      continue;
-    }
-    const id = (entry as { id?: unknown }).id;
-    if (typeof id === 'number' && Number.isFinite(id) && Number.isInteger(id)) {
-      messageIds.push(id);
-    }
-  }
-  return messageIds;
 }
 
 /**

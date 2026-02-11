@@ -72,6 +72,17 @@ describe('routes/index default gameplay path', () => {
     expect(playableRuntimeHostSource).not.toMatch(/from ['"]\.\.\/core-host(?:\.ts)?['"]/);
   });
 
+  test('plays gameplay message sounds from host sound deltas instead of route message-id mapping', () => {
+    const routeSource = readFileSync(
+      fileURLToPath(new URL('./index.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(routeSource).toContain('runtimeEnvelope.soundDeltas ?? []');
+    expect(routeSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
+    expect(routeSource).not.toContain('readMessageIdsFromPatchPayload');
+  });
+
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(
       fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),
