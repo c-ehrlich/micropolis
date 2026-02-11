@@ -1,11 +1,11 @@
 import {
   type MouseEvent,
   type PointerEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type WheelEvent,
 } from 'react';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
@@ -306,6 +306,7 @@ export function MapCanvas({
   >(new Map());
   const queuedMapFrameRef = useRef<MapCanvasRenderFrame | null>(null);
   const pendingAnimationFrameRef = useRef<number | null>(null);
+  const mapViewportRef = useRef<HTMLDivElement>(null);
   const panDragStateRef = useRef<MapCanvasPanDragState | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
@@ -437,76 +438,82 @@ export function MapCanvas({
     [mapState.height, mapState.width, realtimeObjects, tileSize],
   );
 
-  const applyCameraPanBy = (deltaX: number, deltaY: number): void => {
-    if (deltaX === 0 && deltaY === 0) {
-      return;
-    }
+  const applyCameraPanBy = useCallback(
+    (deltaX: number, deltaY: number): void => {
+      if (deltaX === 0 && deltaY === 0) {
+        return;
+      }
 
-    setCameraOffsetPx((currentOffset) => {
-      const clampedCurrentOffset = clampMapCanvasCameraOffset(
-        currentOffset,
-        maxCameraOffsetX,
-        maxCameraOffsetY,
-      );
+      setCameraOffsetPx((currentOffset) => {
+        const clampedCurrentOffset = clampMapCanvasCameraOffset(
+          currentOffset,
+          maxCameraOffsetX,
+          maxCameraOffsetY,
+        );
 
-      return clampMapCanvasCameraOffset(
-        {
-          x: clampedCurrentOffset.x + deltaX,
-          y: clampedCurrentOffset.y + deltaY,
-        },
-        maxCameraOffsetX,
-        maxCameraOffsetY,
-      );
-    });
-  };
+        return clampMapCanvasCameraOffset(
+          {
+            x: clampedCurrentOffset.x + deltaX,
+            y: clampedCurrentOffset.y + deltaY,
+          },
+          maxCameraOffsetX,
+          maxCameraOffsetY,
+        );
+      });
+    },
+    [maxCameraOffsetX, maxCameraOffsetY],
+  );
 
   /**
    * Apply one anchored browser zoom update and keep camera offsets bounded.
    * Mirrors C pan-bound ownership in `DoPanTo` from `ref/micropolis/src/sim/w_x.c`.
    * Difference: Authoritative Runtime re-anchors offset at a wheel/pinch point during zoom.
    */
-  const applyCameraZoomAt = (nextZoom: number, anchor: { x: number; y: number }): void => {
-    setCameraZoom((currentZoom) => {
-      const clampedNextZoom = clampMapCanvasZoom(nextZoom);
-      if (clampedNextZoom === currentZoom) {
-        return currentZoom;
-      }
+  const applyCameraZoomAt = useCallback(
+    (nextZoom: number, anchor: { x: number; y: number }): void => {
+      setCameraZoom((currentZoom) => {
+        const clampedNextZoom = clampMapCanvasZoom(nextZoom);
+        if (clampedNextZoom === currentZoom) {
+          return currentZoom;
+        }
 
-      const currentMetrics = getMapCanvasCameraMetrics({
-        mapWidth: mapState.width,
-        mapHeight: mapState.height,
-        tileSize,
-        zoom: currentZoom,
-      });
-      const nextMetrics = getMapCanvasCameraMetrics({
-        mapWidth: mapState.width,
-        mapHeight: mapState.height,
-        tileSize,
-        zoom: clampedNextZoom,
-      });
-
-      setCameraOffsetPx((currentOffset) => {
-        const clampedCurrentOffset = clampMapCanvasCameraOffset(
-          currentOffset,
-          currentMetrics.maxCameraOffsetX,
-          currentMetrics.maxCameraOffsetY,
-        );
-        const zoomedOffset = zoomMapCanvasCameraOffsetAtAnchor({
-          currentOffset: clampedCurrentOffset,
-          anchor,
-          currentZoom,
-          nextZoom: clampedNextZoom,
+        const currentMetrics = getMapCanvasCameraMetrics({
+          mapWidth: mapState.width,
+          mapHeight: mapState.height,
+          tileSize,
+          zoom: currentZoom,
         });
-        return clampMapCanvasCameraOffset(
-          zoomedOffset,
-          nextMetrics.maxCameraOffsetX,
-          nextMetrics.maxCameraOffsetY,
-        );
-      });
+        const nextMetrics = getMapCanvasCameraMetrics({
+          mapWidth: mapState.width,
+          mapHeight: mapState.height,
+          tileSize,
+          zoom: clampedNextZoom,
+        });
 
-      return clampedNextZoom;
-    });
-  };
+        setCameraOffsetPx((currentOffset) => {
+          const clampedCurrentOffset = clampMapCanvasCameraOffset(
+            currentOffset,
+            currentMetrics.maxCameraOffsetX,
+            currentMetrics.maxCameraOffsetY,
+          );
+          const zoomedOffset = zoomMapCanvasCameraOffsetAtAnchor({
+            currentOffset: clampedCurrentOffset,
+            anchor,
+            currentZoom,
+            nextZoom: clampedNextZoom,
+          });
+          return clampMapCanvasCameraOffset(
+            zoomedOffset,
+            nextMetrics.maxCameraOffsetX,
+            nextMetrics.maxCameraOffsetY,
+          );
+        });
+
+        return clampedNextZoom;
+      });
+    },
+    [mapState.height, mapState.width, tileSize],
+  );
 
   /**
    * Apply one button-triggered zoom step around the viewport center.
@@ -518,6 +525,69 @@ export function MapCanvas({
       y: viewportHeightPx / 2,
     });
   };
+
+  useEffect(() => {
+    const mapViewport = mapViewportRef.current;
+    if (mapViewport === null) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent): void => {
+      const delta = normalizeMapCanvasWheelDeltaToPixels({
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+        deltaMode: event.deltaMode,
+        viewportWidthPx,
+        viewportHeightPx,
+      });
+      if (delta.deltaX === 0 && delta.deltaY === 0) {
+        return;
+      }
+
+      const zoomGesture = isMapCanvasZoomWheelGesture({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+      });
+      if (zoomGesture) {
+        event.preventDefault();
+        const anchor = getElementRelativeClientPosition({
+          element: mapViewport,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+        applyCameraZoomAt(
+          computeMapCanvasZoomFromWheel({
+            currentZoom: cameraZoom,
+            wheelDeltaYPx: delta.deltaY,
+          }),
+          anchor,
+        );
+        return;
+      }
+
+      if (maxCameraOffsetX <= 0 && maxCameraOffsetY <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      applyCameraPanBy(delta.deltaX, delta.deltaY);
+    };
+
+    mapViewport.addEventListener('wheel', handleWheel, {
+      passive: false,
+    });
+    return () => {
+      mapViewport.removeEventListener('wheel', handleWheel);
+    };
+  }, [
+    applyCameraPanBy,
+    applyCameraZoomAt,
+    cameraZoom,
+    maxCameraOffsetX,
+    maxCameraOffsetY,
+    viewportHeightPx,
+    viewportWidthPx,
+  ]);
 
   const zoomPercent = truncateTowardZero(cameraZoom * 100);
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
@@ -576,6 +646,7 @@ export function MapCanvas({
         <span>zoom={zoomPercent}%</span>
       </div>
       <div
+        ref={mapViewportRef}
         onPointerCancel={(event) => {
           panDragStateRef.current = null;
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -613,42 +684,6 @@ export function MapCanvas({
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
-        }}
-        onWheel={(event) => {
-          const delta = normalizeMapCanvasWheelDeltaToPixels({
-            deltaX: event.deltaX,
-            deltaY: event.deltaY,
-            deltaMode: event.deltaMode,
-            viewportWidthPx,
-            viewportHeightPx,
-          });
-          if (delta.deltaX === 0 && delta.deltaY === 0) {
-            return;
-          }
-
-          const zoomGesture = isMapCanvasZoomWheelGesture({
-            ctrlKey: event.ctrlKey,
-            metaKey: event.metaKey,
-          });
-          if (zoomGesture) {
-            event.preventDefault();
-            const anchor = getElementRelativeWheelPosition(event);
-            applyCameraZoomAt(
-              computeMapCanvasZoomFromWheel({
-                currentZoom: cameraZoom,
-                wheelDeltaYPx: delta.deltaY,
-              }),
-              anchor,
-            );
-            return;
-          }
-
-          if (!hasPannableBounds) {
-            return;
-          }
-
-          event.preventDefault();
-          applyCameraPanBy(delta.deltaX, delta.deltaY);
         }}
         style={{
           border: '1px solid #333',
@@ -1396,22 +1431,6 @@ function getElementRelativeClientPosition({
  * `ref/micropolis/src/sim/w_map.c`, adapted to browser pointer events.
  */
 function getElementRelativePointerPosition(event: PointerEvent<HTMLDivElement>): {
-  x: number;
-  y: number;
-} {
-  return getElementRelativeClientPosition({
-    element: event.currentTarget,
-    clientX: event.clientX,
-    clientY: event.clientY,
-  });
-}
-
-/**
- * Wheel-event variant of element-relative coordinate conversion.
- * Mirrors map pan pointer-to-local conversion in `MapCmdPanTo` from
- * `ref/micropolis/src/sim/w_map.c`, adapted to browser wheel events.
- */
-function getElementRelativeWheelPosition(event: WheelEvent<HTMLDivElement>): {
   x: number;
   y: number;
 } {
