@@ -3164,6 +3164,274 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
+  it('emits no-funds and out-of-bounds tool reject sounds in their reject settlement envelopes', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+        };
+        toolContext: {
+          funds: number;
+        };
+      };
+    };
+
+    // `CostOf[road_tool]` is 10 in `ref/micropolis/src/sim/w_tool.c`, so zero
+    // authoritative funds must settle as reject `no-funds` with `Sorry`.
+    hostInternals.authorityState.simState.TotalFunds = 0;
+    hostInternals.authorityState.toolContext.funds = 0;
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-tool-reject-sound-parity',
+      clientId: 'client-tool-reject-sound-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tool-reject-sound-parity',
+      clientId: 'client-tool-reject-sound-parity',
+      commandId: 'cmd-road-no-funds-parity',
+      command: {
+        kind: 'tool',
+        tool: 'road',
+        x: 12,
+        y: 12,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-tool-reject-sound-parity',
+      clientId: 'client-tool-reject-sound-parity',
+      commandId: 'cmd-query-out-of-bounds-parity',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: -1,
+        y: 12,
+      },
+    });
+
+    // C parity: `DoTool`/`ToolDown` in `ref/micropolis/src/sim/w_tool.c` emits
+    // `MakeSoundOn(..., "Sorry")` for `-2` and `MakeSoundOn(..., "UhUh")` for
+    // `-1`; host reject settlement keeps those sound deltas on the reject envelope.
+    expect(captured.envelopes[2]).toEqual({
+      kind: 'reject',
+      roomId: 'room-tool-reject-sound-parity',
+      clientId: 'client-tool-reject-sound-parity',
+      tick: 1,
+      serverSeq: 2,
+      commandId: 'cmd-road-no-funds-parity',
+      reason: 'no-funds',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'Sorry',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
+    });
+    expect(captured.envelopes[3]).toEqual({
+      kind: 'reject',
+      roomId: 'room-tool-reject-sound-parity',
+      clientId: 'client-tool-reject-sound-parity',
+      tick: 2,
+      serverSeq: 3,
+      commandId: 'cmd-query-out-of-bounds-parity',
+      reason: 'out-of-bounds',
+      soundDeltas: [
+        {
+          channel: 'edit',
+          soundSpec: 'UhUh',
+          scope: { kind: 'view', target: '.playMap' },
+        },
+      ],
+    });
+  });
+
+  it.each([
+    {
+      messageId: 20,
+      expectedSoundDeltas: [{ channel: 'city', soundSpec: 'Siren' }],
+    },
+    {
+      messageId: 21,
+      expectedSoundDeltas: [{ channel: 'city', soundSpec: 'Monster -speed [MonsterSpeed]' }],
+    },
+    {
+      messageId: 30,
+      expectedSoundDeltas: [
+        { channel: 'city', soundSpec: 'Explosion-Low' },
+        { channel: 'city', soundSpec: 'Siren' },
+      ],
+    },
+  ])(
+    'emits C doMessage first-display sound specs for message id $messageId',
+    ({ messageId, expectedSoundDeltas }) => {
+      const host = new SimCoreEnvelopeHost();
+      const captured = connectAndCapture(host);
+      const hostInternals = host as unknown as {
+        authorityState: {
+          simState: Parameters<typeof sendMes>[0];
+          simContext: Parameters<typeof sendMes>[1];
+        };
+      };
+
+      captured.send({
+        kind: 'hello',
+        roomId: 'room-message-first-display-sounds',
+        clientId: 'client-message-first-display-sounds',
+        protocolVersion: 'core-bridge/v1',
+        coreVersion: 'test-core',
+      });
+
+      // `doMessage` first-display sound switch in `ref/micropolis/src/sim/s_msg.c`:
+      // `case 20` (Siren), `case 21` (Monster), `case 30` (Explosion-Low + Siren).
+      expect(
+        sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, messageId),
+      ).toBe(true);
+      captured.send({
+        kind: 'command',
+        roomId: 'room-message-first-display-sounds',
+        clientId: 'client-message-first-display-sounds',
+        commandId: `cmd-message-first-display-${messageId}`,
+        command: {
+          kind: 'sim-control',
+          control: 'pause',
+        },
+      });
+
+      const messagePatch = captured.envelopes[captured.envelopes.length - 1];
+      if (messagePatch === undefined || messagePatch.kind !== 'patch') {
+        throw new Error('expected message patch envelope');
+      }
+      expect(readSoundDeltasFromEnvelope(messagePatch)).toEqual(expectedSoundDeltas);
+    },
+  );
+
+  it('emits realtime callback sound specs on the next sequenced settlement envelope', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      applyToolCommand(command: { kind: 'tool'; tool: 'query'; x: number; y: number }): {
+        rejectReason: string | undefined;
+        mapPatch: unknown;
+      };
+      realtimeContext: {
+        onSound?: (channel: string, id: string) => void;
+      };
+    };
+    const originalApplyToolCommand = hostInternals.applyToolCommand.bind(hostInternals);
+    hostInternals.applyToolCommand = (command) => {
+      // Mirrors `w_sprite.c` realtime `MakeSound("city", spec)` callbacks firing
+      // while one command settlement cycle is in progress.
+      hostInternals.realtimeContext.onSound?.('city', 'Explosion-High');
+      hostInternals.realtimeContext.onSound?.('city', 'Siren');
+      return originalApplyToolCommand(command);
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-realtime-sound-specs',
+      clientId: 'client-realtime-sound-specs',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-realtime-sound-specs',
+      clientId: 'client-realtime-sound-specs',
+      commandId: 'cmd-realtime-sound-specs',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: 8,
+        y: 8,
+      },
+    });
+
+    const ackEnvelope = captured.envelopes[2];
+    if (ackEnvelope === undefined || ackEnvelope.kind !== 'ack') {
+      throw new Error('expected command ack envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(ackEnvelope)).toEqual([
+      {
+        channel: 'edit',
+        soundSpec: 'E -speed 200',
+        scope: { kind: 'view', target: '.playMap' },
+      },
+      {
+        channel: 'city',
+        soundSpec: 'Explosion-High',
+      },
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+      },
+    ]);
+  });
+
+  it('suppresses doMessage/realtime/tool sound deltas when userSoundOn is false', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0] & {
+          userSoundOn: boolean;
+        };
+        simContext: Parameters<typeof sendMes>[1];
+      };
+      realtimeContext: {
+        onSound?: (channel: string, id: string) => void;
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-user-sound-off-parity',
+      clientId: 'client-user-sound-off-parity',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    // Mirrors `if (!UserSoundOn) return;` in `MakeSound`/`MakeSoundOn`
+    // (`ref/micropolis/src/sim/w_sound.c`) across message/realtime/tool paths.
+    hostInternals.authorityState.simState.userSoundOn = false;
+    expect(
+      sendMes(hostInternals.authorityState.simState, hostInternals.authorityState.simContext, 20),
+    ).toBe(true);
+    hostInternals.realtimeContext.onSound?.('city', 'Explosion-High');
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-user-sound-off-parity',
+      clientId: 'client-user-sound-off-parity',
+      commandId: 'cmd-user-sound-off-tool',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: 8,
+        y: 8,
+      },
+    });
+
+    const ackEnvelope = captured.envelopes[2];
+    if (ackEnvelope === undefined || ackEnvelope.kind !== 'ack') {
+      throw new Error('expected tool ack envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(ackEnvelope)).toBeNull();
+
+    const patchEnvelope = captured.envelopes[3];
+    if (patchEnvelope === undefined || patchEnvelope.kind !== 'patch') {
+      throw new Error('expected tool patch envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(patchEnvelope)).toBeNull();
+  });
+
   it('queues pending sound events by authoritative tick and drains one tick at a time', () => {
     const host = new SimCoreEnvelopeHost();
     const hostInternals = host as unknown as {
