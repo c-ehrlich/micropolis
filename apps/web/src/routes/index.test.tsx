@@ -102,6 +102,26 @@ describe('routes/index default gameplay path', () => {
     expect(soundPreviewPanelSource).toContain('Gameplay audio remains host-envelope driven.');
   });
 
+  test('keeps Sound Test preview module independent from gameplay audio consumer plumbing', () => {
+    const soundPreviewPanelSource = readFileSync(
+      fileURLToPath(new URL('../game/audio/micropolis-sound-preview-panel.tsx', import.meta.url)),
+      'utf8',
+    );
+    const gameplayAudioConsumerSource = readFileSync(
+      fileURLToPath(
+        new URL('../game/audio/micropolis-gameplay-audio-consumer.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(soundPreviewPanelSource).toContain("from './micropolis-soundboard.ts'");
+    expect(soundPreviewPanelSource).not.toContain("from './micropolis-gameplay-audio-consumer.ts'");
+    expect(gameplayAudioConsumerSource).not.toContain(
+      "from './micropolis-sound-preview-panel.tsx'",
+    );
+    expect(gameplayAudioConsumerSource).not.toContain("from './micropolis-soundboard.ts'");
+  });
+
   test('keeps gameplay route free of preview-only sound mapping helper imports', () => {
     const routeSource = readFileSync(
       fileURLToPath(new URL('./index.tsx', import.meta.url)),
