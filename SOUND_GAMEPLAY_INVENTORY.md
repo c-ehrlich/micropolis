@@ -47,3 +47,19 @@ Normalization/parity boundary for all rows:
 | Realtime/sprite | `HonkHonk-Low` | `honkhonk-low.wav` | `ref/micropolis/src/sim/w_sprite.c:854`, `ref/micropolis/res/micropolis.tcl:969` | Ship horn default variant. |
 | Realtime/sprite | `Monster -speed [MonsterSpeed]` | `monster.wav` | `ref/micropolis/src/sim/w_sprite.c:986`, `ref/micropolis/res/micropolis.tcl:969` | Monster movement/turn sound. |
 | Realtime/sprite | `Explosion-High` | `explosion-high.wav` | `ref/micropolis/src/sim/w_sprite.c:1104`, `ref/micropolis/src/sim/w_sprite.c:1391`, `ref/micropolis/res/micropolis.tcl:969` | Explosion sprite and crash/explode pathways. |
+
+## Unreachable Original Gameplay Sound Pathways (2026-02-11)
+
+The rows above list currently emitted gameplay sounds. The following C gameplay sound callsites still do not surface as authoritative sound deltas in the playable web runtime.
+
+| C gameplay callsite | Original sound spec(s) | Why unreachable in current runtime |
+| --- | --- | --- |
+| `ref/micropolis/src/sim/w_tool.c:944`, `ref/micropolis/src/sim/w_tool.c:950`, `ref/micropolis/src/sim/w_tool.c:954`, `ref/micropolis/src/sim/w_tool.c:955`, `ref/micropolis/src/sim/w_tool.c:968`, `ref/micropolis/src/sim/w_tool.c:972`, `ref/micropolis/src/sim/w_tool.c:977`, `ref/micropolis/src/sim/w_tool.c:978` | `Explosion-High`, `Explosion-Low` | `packages/sim-core/src/actions/tool-actions.ts:389` ports bulldozer map/funds behavior but does not emit any sound intent for zone-destruction branches, and `apps/web/src/game/runtime/sim-core-envelope-host.ts:2041` currently emits only `DidTool` callback sounds (for bulldozer, `Rumble`). |
+| `ref/micropolis/src/sim/w_tk.c:694` | `Explosion-Low` | `packages/sim-core/src/systems/disasters.ts:330` invokes `doEarthQuake()`, but `packages/sim-core/src/core/sim-context.ts:78` defaults that hook to noop and `apps/web/src/game/runtime/sim-core-envelope-host.ts:287` does not currently override it, so the earthquake-start boom never enters the host sound queue. |
+| `ref/micropolis/src/sim/w_keys.c:110`, `ref/micropolis/src/sim/w_keys.c:111`, `ref/micropolis/src/sim/w_keys.c:120`, `ref/micropolis/src/sim/w_keys.c:121` | `Explosion-High`, `Explosion-Low` | The playable runtime protocol intentionally limits command ingress to tool/sim-control/city/scenario commands in `apps/web/src/game/runtime/protocol.ts:382`; there is no port of the `LastKeys` cheat-string pathway from `w_keys.c`, so these gameplay-adjacent key-trigger sounds are not triggerable. |
+
+Follow-up tasks:
+
+- [ ] Add an authoritative tool-sound hook for bulldozer zone destruction so `w_tool.c` explosion branches emit `soundDeltas` in the same command tick as the bulldozer acknowledgement.
+- [ ] Wire `doEarthQuake` in the playable host to emit `MakeSound("city", "Explosion-Low")` parity (once per quake start), then add a host-level test proving the sound is present on earthquake-triggered envelopes.
+- [ ] Decide and document policy for `w_keys.c` cheat-sequence sounds: either port the key-chord command path into runtime authority or explicitly classify these as deferred/non-runtime gameplay behaviors.

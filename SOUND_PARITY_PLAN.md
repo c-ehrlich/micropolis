@@ -151,7 +151,9 @@ Deliverable: single authoritative sound path from host envelopes.
   - [x] C/Tcl source location.
     - [x] Inventory rows include line-level C trigger references plus Tcl dispatch entry references.
   - [x] human-readable gameplay usage note
-- [ ] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
+- [x] If any original gameplay sound is unreachable in current runtime, document why and create follow-up tasks.
+  - Unreachable callsites and causes documented in `SOUND_GAMEPLAY_INVENTORY.md` under `Unreachable Original Gameplay Sound Pathways (2026-02-11)`.
+  - Follow-up tasks for bulldozer-zone explosions, earthquake-start boom parity, and `w_keys.c` cheat-sequence sound policy are tracked there.
 - [ ] Menu-only/non-gameplay sounds may be deferred, but must be explicitly marked as such.
 
 Deliverable: gameplay-triggered C sound tokens resolve to available browser assets.
