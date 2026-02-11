@@ -32,6 +32,10 @@ describe('runtime HUD projection', () => {
             c: -3,
             i: 1,
           },
+          // City class index names come from `CityClassStr` in
+          // `ref/micropolis/src/sim/w_eval.c` (`2` => `CITY`).
+          cityPopulation: 50_000,
+          cityClass: 2,
           // `setSpeed` clamps to 0..3 in `ref/micropolis/src/sim/w_util.c`.
           speed: 3,
           options: {
@@ -58,6 +62,9 @@ describe('runtime HUD projection', () => {
     expect(next.demandC).toBe(-3);
     expect(next.demandI).toBe(1);
     expect(next.demandLabel).toBe('Demand R/C/I: 6/-3/1');
+    expect(next.cityPopulation).toBe(50_000);
+    expect(next.cityClassIndex).toBe(2);
+    expect(next.cityClassLabel).toBe('CITY');
     expect(next.speed).toBe(3);
     expect(next.speedLabel).toBe('Speed: x3');
     expect(next.options).toEqual({

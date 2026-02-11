@@ -728,6 +728,8 @@ function RuntimePanel() {
         >
           <div>{state.hudState.fundsLabel}</div>
           <div>{state.hudState.dateDisplayLabel}</div>
+          <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
+          <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
         </div>
         <section style={{ display: 'grid', gap: 4 }}>
           <button

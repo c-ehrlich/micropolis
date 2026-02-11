@@ -852,6 +852,18 @@ export interface HostHudPayload {
   fundsLabel?: string;
   date?: HostHudDatePayload;
   demand?: HostHudDemandPayload;
+  /**
+   * Authoritative city population scalar (`CityPop`) from sim-core evaluation.
+   * Mirrors `CityPop` derivation in `ref/micropolis/src/sim/s_eval.c`.
+   * Parity note: this is emitted as a numeric head value; C displays formatted text.
+   */
+  cityPopulation?: number;
+  /**
+   * Authoritative city class ordinal (`0..5`) from sim-core evaluation.
+   * Mirrors `CityClass` thresholds in `ref/micropolis/src/sim/s_eval.c`
+   * and class labels in `ref/micropolis/src/sim/w_eval.c`.
+   */
+  cityClass?: number;
   speed?: number;
   options?: Partial<HostHudOptionsPayload>;
   /**

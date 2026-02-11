@@ -15,6 +15,14 @@ const HUD_MONTH_LABELS = [
   'Nov',
   'Dec',
 ];
+const CITY_CLASS_LABELS = [
+  'VILLAGE',
+  'TOWN',
+  'CITY',
+  'CAPITAL',
+  'METROPOLIS',
+  'MEGALOPOLIS',
+] as const;
 
 /**
  * Message dispatch channel mirrored from Micropolis message hooks.
@@ -73,6 +81,9 @@ export interface RuntimeHudState {
   demandC: number;
   demandI: number;
   demandLabel: string;
+  cityPopulation: number;
+  cityClassIndex: number;
+  cityClassLabel: string;
   speed: number;
   speedLabel: string;
   options: RuntimeHudOptionsState;
@@ -90,6 +101,7 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
   const demandC = 0;
   const demandI = 0;
   const speed = 0;
+  const cityClassIndex = 0;
   return {
     fundsLabel: 'Funds: $0',
     dateLabel,
@@ -100,6 +112,9 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
     demandC,
     demandI,
     demandLabel: formatDemandLabel(demandR, demandC, demandI),
+    cityPopulation: 0,
+    cityClassIndex,
+    cityClassLabel: formatCityClassLabel(cityClassIndex),
     speed,
     speedLabel: formatSpeedDisplayLabel(speed),
     options: {
@@ -145,6 +160,8 @@ export function projectRuntimeHudState(
   const demandR = parsed.demandR ?? state.demandR;
   const demandC = parsed.demandC ?? state.demandC;
   const demandI = parsed.demandI ?? state.demandI;
+  const cityPopulation = parsed.cityPopulation ?? state.cityPopulation;
+  const cityClassIndex = parsed.cityClassIndex ?? state.cityClassIndex;
   const speed = parsed.speed ?? state.speed;
 
   const nextState: RuntimeHudState = {
@@ -157,6 +174,9 @@ export function projectRuntimeHudState(
     demandC,
     demandI,
     demandLabel: formatDemandLabel(demandR, demandC, demandI),
+    cityPopulation,
+    cityClassIndex,
+    cityClassLabel: formatCityClassLabel(cityClassIndex),
     speed,
     speedLabel: formatSpeedDisplayLabel(speed),
     options:
@@ -182,6 +202,8 @@ interface ParsedHudPayload {
   demandR?: number;
   demandC?: number;
   demandI?: number;
+  cityPopulation?: number;
+  cityClassIndex?: number;
   speed?: number;
   options?: Partial<RuntimeHudOptionsState>;
   messages: RuntimeHudMessageEvent[];
@@ -261,6 +283,16 @@ function parseHudPayload(
       if (i !== null) {
         parsed.demandI = i;
       }
+    }
+
+    const cityPopulation = readRangeInteger(hudRecord.cityPopulation, 0, 2_000_000_000);
+    if (cityPopulation !== null) {
+      parsed.cityPopulation = cityPopulation;
+    }
+
+    const cityClassIndex = readRangeInteger(hudRecord.cityClass, 0, CITY_CLASS_LABELS.length - 1);
+    if (cityClassIndex !== null) {
+      parsed.cityClassIndex = cityClassIndex;
     }
 
     const speed = readRangeInteger(hudRecord.speed, 0, 3);
@@ -517,6 +549,9 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     left.demandC !== right.demandC ||
     left.demandI !== right.demandI ||
     left.demandLabel !== right.demandLabel ||
+    left.cityPopulation !== right.cityPopulation ||
+    left.cityClassIndex !== right.cityClassIndex ||
+    left.cityClassLabel !== right.cityClassLabel ||
     left.speed !== right.speed ||
     left.speedLabel !== right.speedLabel ||
     left.options.autoBudget !== right.options.autoBudget ||
@@ -581,6 +616,14 @@ function formatDateDisplayLabel(dateLabel: string): string {
 
 function formatDemandLabel(demandR: number, demandC: number, demandI: number): string {
   return `Demand R/C/I: ${demandR}/${demandC}/${demandI}`;
+}
+
+/**
+ * Formats city class labels from the Micropolis class-name table.
+ * Mirrors `CityClassStr` entries in `ref/micropolis/src/sim/w_eval.c`.
+ */
+function formatCityClassLabel(cityClassIndex: number): string {
+  return CITY_CLASS_LABELS[cityClassIndex] ?? CITY_CLASS_LABELS[0];
 }
 
 /**

@@ -239,6 +239,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
+  private lastHudCityPopulation = 0;
+  private lastHudCityClass = 0;
   private pendingHookMessages: HostHudMessagePayload[] = [];
   private readonly pendingSoundDeltasByTick = new Map<number, HostSoundDeltaPayload[]>();
   private readonly messageLog: HostHudMessagePayload[] = [];
@@ -287,6 +289,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
       scenarioResourceLoader === undefined
         ? (fileName) => this.loadScenarioResourceBytes(fileName)
         : (fileName) => Promise.resolve(scenarioResourceLoader(fileName));
+    const initialCityStats = readCanonicalCityStatsFromSimState(this.authorityState.simState);
+    this.lastHudCityPopulation = initialCityStats.cityPopulation;
+    this.lastHudCityClass = initialCityStats.cityClass;
     this.refreshHookDrivenHud();
     this.pendingHudUiSetKeys.clear();
     this.snapshotReplayCheckpoints.set(0, {
@@ -2237,8 +2242,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.pendingHudUiSetKeys.has('optionDoAnimation') ||
       this.pendingHudUiSetKeys.has('optionDoMessages') ||
       this.pendingHudUiSetKeys.has('optionDoNotices');
+    const cityStats = readCanonicalCityStatsFromSimState(this.authorityState.simState);
+    const hasCityStats =
+      cityStats.cityPopulation !== this.lastHudCityPopulation ||
+      cityStats.cityClass !== this.lastHudCityClass;
 
-    if (!hasFunds && !hasDate && !hasDemand && !hasSpeed && !hasOptions) {
+    if (!hasFunds && !hasDate && !hasDemand && !hasSpeed && !hasOptions && !hasCityStats) {
       return undefined;
     }
 
@@ -2267,6 +2276,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
     if (hasOptions) {
       hudPayload.options = { ...this.hookHudState.options };
     }
+    if (hasCityStats) {
+      hudPayload.cityPopulation = cityStats.cityPopulation;
+      hudPayload.cityClass = cityStats.cityClass;
+      this.lastHudCityPopulation = cityStats.cityPopulation;
+      this.lastHudCityClass = cityStats.cityClass;
+    }
 
     this.pendingHudUiSetKeys.clear();
     return hudPayload;
@@ -2279,6 +2294,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * `ref/micropolis/src/sim/w_util.c`.
    */
   private buildHudSnapshotPayload(): NonNullable<HostSnapshotPayload['hud']> {
+    const cityStats = readCanonicalCityStatsFromSimState(this.authorityState.simState);
+    this.lastHudCityPopulation = cityStats.cityPopulation;
+    this.lastHudCityClass = cityStats.cityClass;
     return {
       funds: this.authorityState.simState.TotalFunds,
       fundsLabel: this.hookHudState.fundsLabel,
@@ -2292,6 +2310,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
         c: this.hookHudState.demandC,
         i: this.hookHudState.demandI,
       },
+      cityPopulation: cityStats.cityPopulation,
+      cityClass: cityStats.cityClass,
       speed: this.simPaused ? 0 : this.authorityState.simState.SimMetaSpeed,
       options: { ...this.hookHudState.options },
     };
@@ -2800,6 +2820,28 @@ function buildSnapshotTileWordsFromSimCoreMap(
     }
   }
   return tileWords;
+}
+
+interface CanonicalCityStats {
+  cityPopulation: number;
+  cityClass: number;
+}
+
+/**
+ * Reads and clamps authoritative city-population/class HUD heads from sim state.
+ * Mirrors `CityPop`/`CityClass` ownership in `ref/micropolis/src/sim/s_eval.c`
+ * and class label indexing in `ref/micropolis/src/sim/w_eval.c`.
+ * Parity note: bridge payloads clamp to valid numeric transport bounds.
+ */
+function readCanonicalCityStatsFromSimState(
+  simState: SimCoreRuntimeState['simState'],
+): CanonicalCityStats {
+  const rawPopulation = Number.isFinite(simState.CityPop) ? Math.trunc(simState.CityPop) : 0;
+  const rawClass = Number.isFinite(simState.CityClass) ? Math.trunc(simState.CityClass) : 0;
+  return {
+    cityPopulation: Math.max(0, Math.min(rawPopulation, 2_000_000_000)),
+    cityClass: Math.max(0, Math.min(rawClass, 5)),
+  };
 }
 
 /**

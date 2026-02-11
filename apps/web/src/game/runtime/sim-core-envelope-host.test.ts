@@ -400,6 +400,8 @@ describe('SimCoreEnvelopeHost', () => {
         authorityState: {
           simState: {
             TotalFunds: number;
+            CityPop: number;
+            CityClass: number;
           };
           store: {
             snapshot(layer: 'map'): Uint16Array | unknown;
@@ -417,6 +419,8 @@ describe('SimCoreEnvelopeHost', () => {
 
     expect(hud.funds).toBe(authorityState.simState.TotalFunds);
     expect(hud.fundsLabel).toBeTypeOf('string');
+    expect(hud.cityPopulation).toBe(authorityState.simState.CityPop);
+    expect(hud.cityClass).toBe(authorityState.simState.CityClass);
     expect(hud.date).toMatchObject({
       label: expect.any(String),
       month: expect.any(Number),
@@ -4203,6 +4207,8 @@ describe('SimCoreEnvelopeHost', () => {
         fundsLabel: state.hudState.fundsLabel,
         dateLabel: state.hudState.dateLabel,
         demandLabel: state.hudState.demandLabel,
+        cityPopulation: state.hudState.cityPopulation,
+        cityClassLabel: state.hudState.cityClassLabel,
         speedLabel: state.hudState.speedLabel,
         options: state.hudState.options,
         messages: state.hudState.messages,
