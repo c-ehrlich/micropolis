@@ -3126,6 +3126,63 @@ describe('SimCoreEnvelopeHost', () => {
     ]);
   });
 
+  it('emits queued sounds on the same command tick sequenced settlement', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      applyToolCommand(command: { kind: 'tool'; tool: 'query'; x: number; y: number }): {
+        rejectReason: string | undefined;
+        mapPatch: unknown;
+      };
+      captureRealtimeSound(channel: string, soundSpec: string): void;
+    };
+    const originalApplyToolCommand = hostInternals.applyToolCommand.bind(hostInternals);
+    hostInternals.applyToolCommand = (command) => {
+      // `MakeSound("city", "...")` can fire while handling one tool command in C;
+      // this mirrors same-cycle queuing before command settlement envelopes.
+      hostInternals.captureRealtimeSound('city', 'Siren');
+      return originalApplyToolCommand(command);
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-sound-same-cycle',
+      clientId: 'client-sound-same-cycle',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-sound-same-cycle',
+      clientId: 'client-sound-same-cycle',
+      commandId: 'cmd-sound-same-cycle',
+      command: {
+        kind: 'tool',
+        tool: 'query',
+        x: 8,
+        y: 8,
+      },
+    });
+
+    const ackEnvelope = captured.envelopes[2];
+    if (ackEnvelope === undefined || ackEnvelope.kind !== 'ack') {
+      throw new Error('expected command ack envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(ackEnvelope)).toEqual([
+      {
+        channel: 'city',
+        soundSpec: 'Siren',
+      },
+    ]);
+
+    const patchEnvelope = captured.envelopes[3];
+    if (patchEnvelope === undefined || patchEnvelope.kind !== 'patch') {
+      throw new Error('expected command patch envelope');
+    }
+    expect(readSoundDeltasFromEnvelope(patchEnvelope)).toBeNull();
+    expect(ackEnvelope.tick).toBe(patchEnvelope.tick);
+  });
+
   it('drops unknown sim-core numeric sound ids from the pending tick queue', () => {
     const host = new SimCoreEnvelopeHost();
     const hostInternals = host as unknown as {

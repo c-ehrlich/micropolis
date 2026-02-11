@@ -114,6 +114,7 @@ interface ReplayLogEntry {
 interface EmitSequencedEnvelopeOptions {
   replayTailEligible?: boolean;
   recordMessages?: boolean;
+  includeQueuedSoundDeltas?: boolean;
 }
 interface SessionCommandQueueState {
   pending: SessionQueueItem[];
@@ -1338,11 +1339,13 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick, {
       replayTailEligible: false,
       recordMessages: false,
+      includeQueuedSoundDeltas: false,
     });
     for (const envelope of replayTail) {
       this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
         replayTailEligible: false,
         recordMessages: false,
+        includeQueuedSoundDeltas: false,
       });
     }
   }
@@ -1384,16 +1387,43 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    const sequencedEnvelope = this.applyReplayMetadataToEnvelopeMessages(
-      {
-        ...envelope,
-        tick: this.nextEnvelopeTick(envelope.tick),
-        serverSeq: this.nextServerSeq(),
-      },
+    const sequencedEnvelope = this.applyQueuedSoundDeltasToEnvelope(
+      this.applyReplayMetadataToEnvelopeMessages(
+        {
+          ...envelope,
+          tick: this.nextEnvelopeTick(envelope.tick),
+          serverSeq: this.nextServerSeq(),
+        },
+        options,
+      ),
       options,
     );
     this.onEnvelope(sequencedEnvelope);
     this.recordReplayEnvelope(sequencedEnvelope, options);
+  }
+
+  /**
+   * Applies queued host sound deltas to one sequenced envelope when enabled.
+   * Mirrors tick-bounded sound dispatch ownership from `MakeSound`/`MakeSoundOn`
+   * in `ref/micropolis/src/sim/w_sound.c`, adapted to bridge envelope transport.
+   */
+  private applyQueuedSoundDeltasToEnvelope(
+    envelope: SequencedHostEnvelope,
+    options: EmitSequencedEnvelopeOptions,
+  ): SequencedHostEnvelope {
+    const explicitSoundDeltas = envelope.soundDeltas ?? [];
+    const queuedSoundDeltas =
+      options.includeQueuedSoundDeltas === false
+        ? []
+        : this.drainPendingSoundDeltasForTick(envelope.tick);
+    if (explicitSoundDeltas.length === 0 && queuedSoundDeltas.length === 0) {
+      return envelope;
+    }
+
+    return {
+      ...envelope,
+      soundDeltas: cloneHostSoundDeltaPayloadList([...explicitSoundDeltas, ...queuedSoundDeltas]),
+    };
   }
 
   /**
