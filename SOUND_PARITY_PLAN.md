@@ -164,10 +164,10 @@ Deliverable: gameplay-triggered C sound tokens resolve to available browser asse
 ## Host-level parity tests
 
 - [x] `sim-core-envelope-host.test.ts`:
-  - [ ] tool no-funds/out-of-bounds emits expected sound token in same settlement cycle.
-  - [ ] message first-time IDs emit C-matching sound specs.
-  - [ ] realtime events emit expected sound specs.
-  - [ ] `userSoundOn=false` suppresses sound deltas.
+  - [x] tool no-funds/out-of-bounds emits expected sound token in same settlement cycle.
+  - [x] message first-time IDs emit C-matching sound specs.
+  - [x] realtime events emit expected sound specs.
+  - [x] `userSoundOn=false` suppresses sound deltas.
 
 ## Protocol/runtime tests
 
