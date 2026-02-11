@@ -1,4 +1,4 @@
-# Micropolis (TypeScript ported by gpt-5.3-codex)
+# Micropolis (TypeScript port with gpt-5.3-codex)
 
 ![Micropolis Screenshot](_readme/micropolis-screenshot.png)
 
