@@ -37,7 +37,7 @@ const DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX = 480;
 const MICROPOLIS_EDITOR_WORLD_PIXELS_PER_TILE = 16;
 const MICROPOLIS_MAP_PAN_SCALE_NUMERATOR = 16;
 const MICROPOLIS_MAP_PAN_SCALE_DENOMINATOR = 3;
-const MAP_CANVAS_MIN_ZOOM = 0.5;
+const MAP_CANVAS_MIN_ZOOM = 0.2;
 const MAP_CANVAS_MAX_ZOOM = 4;
 const MAP_CANVAS_BUTTON_ZOOM_STEP = 1.25;
 const MAP_CANVAS_WHEEL_ZOOM_SENSITIVITY = 0.0015;
@@ -160,6 +160,17 @@ export interface MapCanvasCameraMetrics {
 }
 
 /**
+ * Runtime viewport bounds applied to map camera clipping.
+ * Mirrors Micropolis `DoAdjustPan` clip-window ownership in `ref/micropolis/src/sim/w_x.c`.
+ * Difference: browser host layout can resize continuously, so Authoritative Runtime
+ * accepts dynamic viewport bounds from a measured DOM container.
+ */
+export interface MapCanvasViewportBounds {
+  viewportMaxWidthPx: number;
+  viewportMaxHeightPx: number;
+}
+
+/**
  * Compute map viewport and pan bounds for one zoom level.
  * Mirrors `DoAdjustPan`-style viewport clipping in `ref/micropolis/src/sim/w_x.c`.
  * Difference: Authoritative Runtime applies browser scale (`zoom`) before viewport clipping.
@@ -169,18 +180,22 @@ export function getMapCanvasCameraMetrics({
   mapHeight,
   tileSize,
   zoom,
+  viewportMaxWidthPx = DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
+  viewportMaxHeightPx = DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
 }: {
   mapWidth: number;
   mapHeight: number;
   tileSize: number;
   zoom: number;
+  viewportMaxWidthPx?: number;
+  viewportMaxHeightPx?: number;
 }): MapCanvasCameraMetrics {
   const mapWidthPx = mapWidth * tileSize;
   const mapHeightPx = mapHeight * tileSize;
   const scaledMapWidthPx = mapWidthPx * zoom;
   const scaledMapHeightPx = mapHeightPx * zoom;
-  const viewportWidthPx = Math.min(scaledMapWidthPx, DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX);
-  const viewportHeightPx = Math.min(scaledMapHeightPx, DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX);
+  const viewportWidthPx = Math.min(scaledMapWidthPx, Math.max(1, viewportMaxWidthPx));
+  const viewportHeightPx = Math.min(scaledMapHeightPx, Math.max(1, viewportMaxHeightPx));
   return {
     mapWidthPx,
     mapHeightPx,
@@ -323,6 +338,7 @@ export function MapCanvas({
   tileSize?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mapCanvasRootRef = useRef<HTMLDivElement>(null);
   const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
     ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
   >(new Map());
@@ -339,6 +355,10 @@ export function MapCanvas({
   }>({
     x: 0,
     y: 0,
+  });
+  const [viewportBounds, setViewportBounds] = useState<MapCanvasViewportBounds>({
+    viewportMaxWidthPx: DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
+    viewportMaxHeightPx: DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
   });
   const baseTileAtlasCanonicalIdentityKey = useMemo(
     () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize),
@@ -438,11 +458,53 @@ export function MapCanvas({
     };
   }, []);
 
+  useEffect(() => {
+    const rootElement = mapCanvasRootRef.current;
+    if (rootElement === null) {
+      return;
+    }
+
+    const updateViewportBounds = (): void => {
+      const rect = rootElement.getBoundingClientRect();
+      const nextBounds: MapCanvasViewportBounds = {
+        viewportMaxWidthPx: Math.max(1, Math.floor(rect.width)),
+        viewportMaxHeightPx: Math.max(1, Math.floor(rect.height)),
+      };
+      setViewportBounds((currentBounds) => {
+        if (
+          currentBounds.viewportMaxWidthPx === nextBounds.viewportMaxWidthPx &&
+          currentBounds.viewportMaxHeightPx === nextBounds.viewportMaxHeightPx
+        ) {
+          return currentBounds;
+        }
+        return nextBounds;
+      });
+    };
+
+    updateViewportBounds();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateViewportBounds);
+      return () => {
+        window.removeEventListener('resize', updateViewportBounds);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateViewportBounds();
+    });
+    observer.observe(rootElement);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   const cameraMetrics = getMapCanvasCameraMetrics({
     mapWidth: mapState.width,
     mapHeight: mapState.height,
     tileSize,
     zoom: cameraZoom,
+    viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+    viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
   });
   const widthPx = cameraMetrics.mapWidthPx;
   const heightPx = cameraMetrics.mapHeightPx;
@@ -510,12 +572,16 @@ export function MapCanvas({
           mapHeight: mapState.height,
           tileSize,
           zoom: currentZoom,
+          viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+          viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
         });
         const nextMetrics = getMapCanvasCameraMetrics({
           mapWidth: mapState.width,
           mapHeight: mapState.height,
           tileSize,
           zoom: clampedNextZoom,
+          viewportMaxWidthPx: viewportBounds.viewportMaxWidthPx,
+          viewportMaxHeightPx: viewportBounds.viewportMaxHeightPx,
         });
 
         setCameraOffsetPx((currentOffset) => {
@@ -540,7 +606,13 @@ export function MapCanvas({
         return clampedNextZoom;
       });
     },
-    [mapState.height, mapState.width, tileSize],
+    [
+      mapState.height,
+      mapState.width,
+      tileSize,
+      viewportBounds.viewportMaxHeightPx,
+      viewportBounds.viewportMaxWidthPx,
+    ],
   );
 
   /**
@@ -621,20 +693,50 @@ export function MapCanvas({
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
 
   if (!mapState.hasSnapshot) {
-    return <div>No map snapshot received yet.</div>;
+    return (
+      <div
+        ref={mapCanvasRootRef}
+        style={{
+          alignItems: 'center',
+          background: '#0b1020',
+          color: '#e2e8f0',
+          display: 'flex',
+          fontFamily: 'monospace',
+          fontSize: 12,
+          height: '100%',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        No map snapshot received yet.
+      </div>
+    );
   }
 
   return (
     <div
+      ref={mapCanvasRootRef}
       style={{
-        display: 'grid',
-        gap: 6,
+        background: '#0b1020',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+        width: '100%',
       }}
     >
       <div
         style={{
+          backdropFilter: 'blur(4px)',
+          background: 'rgba(15, 23, 42, 0.8)',
+          border: '1px solid rgba(148, 163, 184, 0.65)',
+          borderRadius: 6,
+          left: 10,
+          padding: '6px 8px',
+          position: 'absolute',
+          top: 10,
+          zIndex: getMapCanvasLayerZIndex('realtime-overlay') + 1,
           alignItems: 'center',
-          color: '#334155',
+          color: '#e2e8f0',
           display: 'flex',
           flexWrap: 'wrap',
           fontFamily: 'monospace',
@@ -714,10 +816,13 @@ export function MapCanvas({
           }
         }}
         style={{
-          border: '1px solid #333',
+          border: '1px solid rgba(15, 23, 42, 0.9)',
+          left: '50%',
           height: viewportHeightPx,
           overflow: 'hidden',
           position: 'relative',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
           width: viewportWidthPx,
         }}
       >

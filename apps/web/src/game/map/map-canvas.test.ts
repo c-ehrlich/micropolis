@@ -481,6 +481,22 @@ describe('map canvas camera metrics', () => {
     expect(metrics.maxCameraOffsetX).toBe(0);
     expect(metrics.maxCameraOffsetY).toBe(0);
   });
+
+  it('clips viewport using runtime container bounds when provided', () => {
+    const metrics = getMapCanvasCameraMetrics({
+      mapWidth: 120,
+      mapHeight: 100,
+      tileSize: 16,
+      zoom: 1,
+      viewportMaxWidthPx: 1024,
+      viewportMaxHeightPx: 720,
+    });
+
+    expect(metrics.viewportWidthPx).toBe(1024);
+    expect(metrics.viewportHeightPx).toBe(720);
+    expect(metrics.maxCameraOffsetX).toBe(896);
+    expect(metrics.maxCameraOffsetY).toBe(880);
+  });
 });
 
 describe('map canvas wheel and zoom controls', () => {
@@ -564,10 +580,10 @@ describe('map canvas wheel and zoom controls', () => {
     ).toBe(4);
     expect(
       computeMapCanvasZoomFromWheel({
-        currentZoom: 0.6,
+        currentZoom: 0.3,
         wheelDeltaYPx: 1000,
       }),
-    ).toBe(0.5);
+    ).toBe(0.2);
   });
 
   it('keeps the same map point under the zoom anchor during zoom transitions', () => {

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
 import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
-import { MicropolisSoundPreviewPanel } from '../game/audio/micropolis-sound-preview-panel.tsx';
 import { MapCanvas } from '../game/map/map-canvas.tsx';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
@@ -63,12 +62,11 @@ function HomePage() {
   return (
     <main
       style={{
-        display: 'grid',
-        gap: 12,
-        padding: 16,
+        inset: 0,
+        overflow: 'hidden',
+        position: 'fixed',
       }}
     >
-      <h1 style={{ fontSize: 20, margin: 0 }}>Micropolis</h1>
       <RuntimePanel />
     </main>
   );
@@ -205,133 +203,185 @@ function RuntimePanel() {
   return (
     <section
       style={{
-        display: 'grid',
-        gap: 12,
+        background: '#0b1020',
+        color: '#e2e8f0',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+        width: '100%',
       }}
     >
-      <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-        phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
-      </div>
-      <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
-      </div>
-      <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {cityIoError}
-      </div>
-      <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {lastSaveStatus}
-      </div>
-      <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {formatRuntimePhaseStatus(state.phase)}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <button
-          disabled={reconnectDisabled}
-          onClick={() => {
-            runtime.reconnect();
-            setCityIoError('');
-            setLastSaveStatus('');
-          }}
-          type="button"
-        >
-          Reconnect
-        </button>
-        <button
-          disabled={resyncDisabled}
-          onClick={() => {
-            runtime.requestSnapshot('resync');
-          }}
-          type="button"
-        >
-          Resync Snapshot
-        </button>
-      </div>
-
-      <section
+      <div
         style={{
-          display: 'grid',
-          gap: 12,
-          gridTemplateColumns: 'auto minmax(280px, 320px)',
+          inset: 0,
+          position: 'absolute',
         }}
       >
-        <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {PLAYABLE_TOOL_SPECS.map((spec) => {
-              const active = activeTool === spec.tool;
-              return (
-                <button
-                  key={spec.tool}
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    setActiveTool(spec.tool);
-                  }}
-                  type="button"
-                  style={{
-                    background: active ? spec.pendingColor : '#f3f4f6',
-                    border: '1px solid #334155',
-                    borderRadius: 4,
-                    cursor: controlsDisabled ? 'not-allowed' : 'pointer',
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    opacity: controlsDisabled ? 0.6 : 1,
-                    padding: '6px 8px',
-                  }}
-                >
-                  {spec.label}
-                </button>
-              );
-            })}
+        <MapCanvas
+          mapState={state.mapState}
+          onTileClick={(x, y) => {
+            if (controlsDisabled || !hasStartedPlayableSession) {
+              return;
+            }
+
+            const commandId = nextCommandId(commandCounter, 'tool');
+            runtime.sendCommand(commandId, {
+              kind: 'tool',
+              tool: activeTool,
+              x,
+              y,
+            });
+          }}
+          pendingTools={state.pendingTools}
+          realtimeObjects={state.realtimeState.objects}
+          tileSize={MAP_TILE_SIZE}
+        />
+      </div>
+
+      {hasStartedPlayableSession ? null : (
+        <canvas
+          aria-label="Scenario start prompt"
+          height={480}
+          ref={scenarioIntroCanvasRef}
+          role="img"
+          style={{
+            border: '1px solid rgba(148, 163, 184, 0.8)',
+            borderRadius: 8,
+            boxShadow: '0 14px 30px rgba(15, 23, 42, 0.5)',
+            left: '50%',
+            maxWidth: 'calc(100vw - 24px)',
+            pointerEvents: 'none',
+            position: 'absolute',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 3,
+          }}
+          width={640}
+        >
+          Select a scenario to start.
+        </canvas>
+      )}
+
+      <div
+        style={{
+          alignItems: 'flex-start',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          inset: 12,
+          justifyContent: 'space-between',
+          pointerEvents: 'none',
+          position: 'absolute',
+          zIndex: 5,
+        }}
+      >
+        <section
+          style={{
+            backdropFilter: 'blur(6px)',
+            background: 'rgba(15, 23, 42, 0.82)',
+            border: '1px solid rgba(148, 163, 184, 0.65)',
+            borderRadius: 8,
+            display: 'grid',
+            flex: '1 1 280px',
+            gap: 8,
+            maxWidth: '420px',
+            minWidth: 'min(280px, 100%)',
+            padding: 10,
+            pointerEvents: 'auto',
+          }}
+        >
+          <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Micropolis</strong>
+          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+            phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
           </div>
-
-          {hasStartedPlayableSession ? (
-            <MapCanvas
-              mapState={state.mapState}
-              onTileClick={(x, y) => {
-                if (controlsDisabled) {
-                  return;
-                }
-
-                const commandId = nextCommandId(commandCounter, 'tool');
-                runtime.sendCommand(commandId, {
-                  kind: 'tool',
-                  tool: activeTool,
-                  x,
-                  y,
-                });
+          <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+            {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
+          </div>
+          <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+            {cityIoError}
+          </div>
+          <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+            {lastSaveStatus}
+          </div>
+          <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+            {formatRuntimePhaseStatus(state.phase)}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              disabled={reconnectDisabled}
+              onClick={() => {
+                runtime.reconnect();
+                setCityIoError('');
+                setLastSaveStatus('');
               }}
-              pendingTools={state.pendingTools}
-              realtimeObjects={state.realtimeState.objects}
-              tileSize={MAP_TILE_SIZE}
-            />
-          ) : (
-            <canvas
-              aria-label="Scenario start prompt"
-              height={480}
-              ref={scenarioIntroCanvasRef}
-              role="img"
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #334155',
-                borderRadius: 6,
-                display: 'block',
-                maxWidth: '100%',
-              }}
-              width={640}
+              type="button"
             >
-              Select a scenario to start.
-            </canvas>
-          )}
-        </div>
+              Reconnect
+            </button>
+            <button
+              disabled={resyncDisabled}
+              onClick={() => {
+                runtime.requestSnapshot('resync');
+              }}
+              type="button"
+            >
+              Resync Snapshot
+            </button>
+          </div>
+        </section>
 
         <aside
           style={{
-            border: '1px solid #334155',
-            borderRadius: 6,
+            backdropFilter: 'blur(6px)',
+            background: 'rgba(15, 23, 42, 0.82)',
+            border: '1px solid rgba(148, 163, 184, 0.65)',
+            borderRadius: 8,
             display: 'grid',
+            flex: '1 1 320px',
             gap: 12,
+            marginLeft: 'auto',
+            maxHeight: 'calc(100vh - 24px)',
+            maxWidth: '360px',
+            minWidth: 'min(320px, 100%)',
+            overflowY: 'auto',
             padding: 10,
+            pointerEvents: 'auto',
           }}
         >
+          <section style={{ display: 'grid', gap: 6 }}>
+            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Tools</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {PLAYABLE_TOOL_SPECS.map((spec) => {
+                const active = activeTool === spec.tool;
+                return (
+                  <button
+                    key={spec.tool}
+                    disabled={controlsDisabled}
+                    onClick={() => {
+                      setActiveTool(spec.tool);
+                    }}
+                    type="button"
+                    style={{
+                      background: active ? spec.pendingColor : '#f3f4f6',
+                      border: '1px solid #334155',
+                      borderRadius: 4,
+                      cursor: controlsDisabled ? 'not-allowed' : 'pointer',
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      opacity: controlsDisabled ? 0.6 : 1,
+                      padding: '6px 8px',
+                    }}
+                  >
+                    {spec.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 11 }}>
+              Select a tool, then click on the map.
+            </div>
+          </section>
+
           <section style={{ display: 'grid', gap: 6 }}>
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
@@ -388,27 +438,6 @@ function RuntimePanel() {
                   x{speed}
                 </button>
               ))}
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {PLAYABLE_DISASTER_CHOICES.map((choice) => (
-                <button
-                  key={choice.id}
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
-                  }}
-                  type="button"
-                >
-                  {choice.label.replace('Trigger ', '')}
-                </button>
-              ))}
-            </div>
-            <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-              {disasterStatus}
             </div>
           </section>
 
@@ -536,13 +565,32 @@ function RuntimePanel() {
           </section>
 
           <section style={{ display: 'grid', gap: 6 }}>
+            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {PLAYABLE_DISASTER_CHOICES.map((choice) => (
+                <button
+                  key={choice.id}
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
+                  }}
+                  type="button"
+                >
+                  {choice.label.replace('Trigger ', '')}
+                </button>
+              ))}
+            </div>
+            <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+              {disasterStatus}
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gap: 6 }}>
             <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Message Feed</strong>
             <MessageFeed messages={state.hudState.messages} />
           </section>
         </aside>
-      </section>
-
-      <MicropolisSoundPreviewPanel />
+      </div>
     </section>
   );
 }
@@ -618,9 +666,10 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
   return (
     <div
       style={{
-        background: '#f8fafc',
-        border: '1px solid #cbd5e1',
+        background: 'rgba(15, 23, 42, 0.78)',
+        border: '1px solid rgba(148, 163, 184, 0.55)',
         borderRadius: 4,
+        color: '#e2e8f0',
         fontFamily: 'monospace',
         fontSize: 12,
         maxHeight: 180,
@@ -638,7 +687,7 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
             key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
             style={{ marginBottom: 4 }}
           >
-            <span style={{ color: '#334155' }}>[{message.serverSeq}]</span> {message.text}
+            <span style={{ color: '#93c5fd' }}>[{message.serverSeq}]</span> {message.text}
             {coordinateSuffix}
           </div>
         );
