@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
 import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
@@ -9,6 +10,7 @@ import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.
 import {
   coalesceQueuedRuntimeMapState,
   createWebHostRuntime,
+  getPlayableToolSpec,
   PLAYABLE_TOOL_SPECS,
   type PlayableSimSpeed,
   type PlayableToolName,
@@ -30,6 +32,19 @@ export const Route = createFileRoute('/')({
 });
 
 const MAP_TILE_SIZE = 16;
+const PLAYABLE_TOOL_ICON_MODULES = import.meta.glob(
+  '../../../../packages/sim-assets/generated-images/images/ic*.png',
+  {
+    eager: true,
+    import: 'default',
+  },
+) as Record<string, string>;
+const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
+  Object.entries(PLAYABLE_TOOL_ICON_MODULES).map(([modulePath, moduleUrl]) => {
+    const basenameMatch = /\/(ic[^/]+\.png)$/.exec(modulePath);
+    return [basenameMatch?.[1] ?? modulePath, moduleUrl];
+  }),
+);
 
 /**
  * Triggers one playable-route manual disaster control click and returns status text.
@@ -199,6 +214,7 @@ function RuntimePanel() {
     state.phase === 'negotiating' ||
     state.phase === 'reconnecting' ||
     state.phase === 'failed';
+  const activeToolSpec = getPlayableToolSpec(activeTool);
 
   return (
     <section
@@ -262,48 +278,381 @@ function RuntimePanel() {
         </canvas>
       )}
 
-      <div
+      <section
         style={{
-          alignItems: 'flex-start',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          inset: 12,
-          justifyContent: 'space-between',
+          backdropFilter: 'blur(3px)',
+          background: 'rgba(107, 114, 128, 0.9)',
+          border: '2px solid rgba(15, 23, 42, 0.75)',
+          borderRadius: 6,
+          display: 'grid',
+          gap: 6,
+          left: 12,
+          maxHeight: 'calc(100vh - 220px)',
+          overflowY: 'auto',
+          padding: 8,
+          pointerEvents: 'auto',
+          position: 'absolute',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 104,
+          zIndex: 6,
+        }}
+      >
+        <strong
+          style={{
+            color: '#f8fafc',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textAlign: 'center',
+            textTransform: 'uppercase',
+          }}
+        >
+          Build
+        </strong>
+        <div
+          style={{
+            display: 'grid',
+            gap: 6,
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          }}
+        >
+          {PLAYABLE_TOOL_SPECS.map((spec) => {
+            const active = activeTool === spec.tool;
+            const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
+              highlighted: active,
+            });
+            const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
+            const iconUrl =
+              iconBasename === undefined
+                ? undefined
+                : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
+
+            return (
+              <button
+                key={spec.tool}
+                disabled={controlsDisabled}
+                onClick={() => {
+                  setActiveTool(spec.tool);
+                }}
+                title={`${spec.label} ($${spec.baseCost})`}
+                type="button"
+                style={{
+                  alignItems: 'center',
+                  background: active ? '#fef08a' : '#e2e8f0',
+                  border: active ? '2px solid #b45309' : '2px solid #334155',
+                  borderRadius: 2,
+                  cursor: controlsDisabled ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  height: 40,
+                  justifyContent: 'center',
+                  opacity: controlsDisabled ? 0.6 : 1,
+                  padding: 0,
+                  width: 40,
+                }}
+              >
+                {iconUrl === undefined ? (
+                  <span
+                    style={{
+                      color: '#0f172a',
+                      fontFamily: 'monospace',
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {spec.label.slice(0, 2).toUpperCase()}
+                  </span>
+                ) : (
+                  <img
+                    alt={`${spec.label} tool`}
+                    draggable={false}
+                    src={iconUrl}
+                    style={{
+                      display: 'block',
+                      height: 28,
+                      imageRendering: 'pixelated',
+                      width: 28,
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section
+        style={{
+          background: 'rgba(248, 250, 252, 0.94)',
+          border: '2px solid rgba(15, 23, 42, 0.72)',
+          borderRadius: 3,
+          bottom: 12,
+          color: '#0f172a',
+          left: 12,
+          padding: '6px 8px',
           pointerEvents: 'none',
           position: 'absolute',
+          width: 'min(260px, calc(100vw - 24px))',
+          zIndex: 6,
+        }}
+      >
+        <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>
+          {activeToolSpec.label}: ${activeToolSpec.baseCost}
+        </div>
+        <div style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>
+          {controlsDisabled
+            ? 'Connect and start a city to build.'
+            : 'Click map tiles to place tool.'}
+        </div>
+      </section>
+
+      <aside
+        style={{
+          backdropFilter: 'blur(6px)',
+          background: 'rgba(15, 23, 42, 0.82)',
+          border: '1px solid rgba(148, 163, 184, 0.65)',
+          borderRadius: 8,
+          display: 'grid',
+          gap: 12,
+          maxHeight: 'calc(100vh - 24px)',
+          overflowY: 'auto',
+          padding: 10,
+          pointerEvents: 'auto',
+          position: 'absolute',
+          right: 12,
+          top: 12,
+          width: 'min(360px, calc(100vw - 24px))',
           zIndex: 5,
         }}
       >
-        <section
-          style={{
-            backdropFilter: 'blur(6px)',
-            background: 'rgba(15, 23, 42, 0.82)',
-            border: '1px solid rgba(148, 163, 184, 0.65)',
-            borderRadius: 8,
-            display: 'grid',
-            flex: '1 1 280px',
-            gap: 8,
-            maxWidth: '420px',
-            minWidth: 'min(280px, 100%)',
-            padding: 10,
-            pointerEvents: 'auto',
-          }}
-        >
-          <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Micropolis</strong>
+        <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Micropolis</strong>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
+          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+            <div>{state.hudState.fundsLabel}</div>
+            <div>{state.hudState.dateDisplayLabel}</div>
+            <div>{state.hudState.demandLabel}</div>
+            <div>{state.hudState.speedLabel}</div>
+          </div>
+          <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>Message Feed</strong>
+          <MessageFeed messages={state.hudState.messages} />
+        </section>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Simulation</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                  kind: 'sim-control',
+                  control: 'pause',
+                });
+              }}
+              type="button"
+            >
+              Pause
+            </button>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                  kind: 'sim-control',
+                  control: 'play',
+                });
+              }}
+              type="button"
+            >
+              Play
+            </button>
+            {[1, 2, 3].map((speed) => (
+              <button
+                key={speed}
+                disabled={controlsDisabled}
+                onClick={() => {
+                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    kind: 'sim-control',
+                    control: 'set-speed',
+                    speed: speed as PlayableSimSpeed,
+                  });
+                }}
+                style={{
+                  fontWeight: state.hudState.speed === speed ? 700 : 400,
+                }}
+                type="button"
+              >
+                x{speed}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>City</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                setHasStartedPlayableSession(true);
+                setSaveFileName('newcity.cty');
+                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                  kind: 'city-lifecycle',
+                  action: 'new-city',
+                });
+              }}
+              type="button"
+            >
+              New City
+            </button>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                  kind: 'city-io',
+                  action: 'save-city',
+                  fileName: saveFileName,
+                });
+              }}
+              type="button"
+            >
+              Save .cty
+            </button>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                loadInputRef.current?.click();
+              }}
+              type="button"
+            >
+              Load .cty
+            </button>
+          </div>
+          <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+            Save file name
+            <input
+              disabled={controlsDisabled}
+              onChange={(event) => {
+                setSaveFileName(event.target.value);
+              }}
+              type="text"
+              value={saveFileName}
+            />
+          </label>
+          <input
+            accept=".cty,application/octet-stream"
+            onChange={async (event) => {
+              const input = event.currentTarget;
+              const file = input.files?.[0];
+              input.value = '';
+
+              if (file === undefined || controlsDisabled) {
+                return;
+              }
+
+              try {
+                const cityBytes = new Uint8Array(await file.arrayBuffer());
+                setHasStartedPlayableSession(true);
+                setSaveFileName(file.name);
+                runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                  kind: 'city-io',
+                  action: 'load-city',
+                  fileName: file.name,
+                  cityBytes,
+                });
+                setCityIoError('');
+              } catch {
+                setCityIoError('Failed to read selected city file.');
+              }
+            }}
+            ref={loadInputRef}
+            style={{ display: 'none' }}
+            type="file"
+          />
+        </section>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Scenario</strong>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select
+              disabled={controlsDisabled}
+              onChange={(event) => {
+                setSelectedScenarioId(Number.parseInt(event.target.value, 10));
+              }}
+              value={selectedScenarioId}
+            >
+              {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>
+                  {scenario.id}. {scenario.name} ({scenario.startYear})
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={controlsDisabled}
+              onClick={() => {
+                setHasStartedPlayableSession(true);
+                const scenario = PLAYABLE_SCENARIO_CHOICES.find(
+                  (entry) => entry.id === selectedScenarioId,
+                );
+                if (scenario !== undefined) {
+                  setSaveFileName(`${scenario.fileName}.cty`);
+                }
+
+                runtime.sendCommand(nextCommandId(commandCounter, 'scenario'), {
+                  kind: 'scenario',
+                  action: 'load-scenario',
+                  scenarioId: selectedScenarioId,
+                });
+              }}
+              type="button"
+            >
+              Start Scenario
+            </button>
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {PLAYABLE_DISASTER_CHOICES.map((choice) => (
+              <button
+                key={choice.id}
+                disabled={controlsDisabled}
+                onClick={() => {
+                  setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
+                }}
+                type="button"
+              >
+                {choice.label.replace('Trigger ', '')}
+              </button>
+            ))}
+          </div>
+          <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+            {disasterStatus}
+          </div>
+        </section>
+
+        <section style={{ display: 'grid', gap: 6 }}>
+          <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Runtime</strong>
           <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
             phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
           </div>
-          <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-            {state.lastRejectReason === null ? '' : `last reject: ${state.lastRejectReason}`}
-          </div>
-          <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-            {cityIoError}
-          </div>
-          <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-            {lastSaveStatus}
-          </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
+          {state.lastRejectReason === null ? null : (
+            <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12 }}>
+              {`last reject: ${state.lastRejectReason}`}
+            </div>
+          )}
+          {cityIoError === '' ? null : (
+            <div style={{ color: '#fca5a5', fontFamily: 'monospace', fontSize: 12 }}>
+              {cityIoError}
+            </div>
+          )}
+          {lastSaveStatus === '' ? null : (
+            <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12 }}>
+              {lastSaveStatus}
+            </div>
+          )}
+          <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
             {formatRuntimePhaseStatus(state.phase)}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -329,268 +678,7 @@ function RuntimePanel() {
             </button>
           </div>
         </section>
-
-        <aside
-          style={{
-            backdropFilter: 'blur(6px)',
-            background: 'rgba(15, 23, 42, 0.82)',
-            border: '1px solid rgba(148, 163, 184, 0.65)',
-            borderRadius: 8,
-            display: 'grid',
-            flex: '1 1 320px',
-            gap: 12,
-            marginLeft: 'auto',
-            maxHeight: 'calc(100vh - 24px)',
-            maxWidth: '360px',
-            minWidth: 'min(320px, 100%)',
-            overflowY: 'auto',
-            padding: 10,
-            pointerEvents: 'auto',
-          }}
-        >
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Tools</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {PLAYABLE_TOOL_SPECS.map((spec) => {
-                const active = activeTool === spec.tool;
-                return (
-                  <button
-                    key={spec.tool}
-                    disabled={controlsDisabled}
-                    onClick={() => {
-                      setActiveTool(spec.tool);
-                    }}
-                    type="button"
-                    style={{
-                      background: active ? spec.pendingColor : '#f3f4f6',
-                      border: '1px solid #334155',
-                      borderRadius: 4,
-                      cursor: controlsDisabled ? 'not-allowed' : 'pointer',
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      opacity: controlsDisabled ? 0.6 : 1,
-                      padding: '6px 8px',
-                    }}
-                  >
-                    {spec.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 11 }}>
-              Select a tool, then click on the map.
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>HUD</strong>
-            <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
-              <div>{state.hudState.fundsLabel}</div>
-              <div>{state.hudState.dateDisplayLabel}</div>
-              <div>{state.hudState.demandLabel}</div>
-              <div>{state.hudState.speedLabel}</div>
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Simulation</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'pause',
-                  });
-                }}
-                type="button"
-              >
-                Pause
-              </button>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'play',
-                  });
-                }}
-                type="button"
-              >
-                Play
-              </button>
-              {[1, 2, 3].map((speed) => (
-                <button
-                  key={speed}
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                      kind: 'sim-control',
-                      control: 'set-speed',
-                      speed: speed as PlayableSimSpeed,
-                    });
-                  }}
-                  style={{
-                    fontWeight: state.hudState.speed === speed ? 700 : 400,
-                  }}
-                  type="button"
-                >
-                  x{speed}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>City</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  setHasStartedPlayableSession(true);
-                  setSaveFileName('newcity.cty');
-                  runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                    kind: 'city-lifecycle',
-                    action: 'new-city',
-                  });
-                }}
-                type="button"
-              >
-                New City
-              </button>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                    kind: 'city-io',
-                    action: 'save-city',
-                    fileName: saveFileName,
-                  });
-                }}
-                type="button"
-              >
-                Save .cty
-              </button>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  loadInputRef.current?.click();
-                }}
-                type="button"
-              >
-                Load .cty
-              </button>
-            </div>
-            <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
-              Save file name
-              <input
-                disabled={controlsDisabled}
-                onChange={(event) => {
-                  setSaveFileName(event.target.value);
-                }}
-                type="text"
-                value={saveFileName}
-              />
-            </label>
-            <input
-              accept=".cty,application/octet-stream"
-              onChange={async (event) => {
-                const input = event.currentTarget;
-                const file = input.files?.[0];
-                input.value = '';
-
-                if (file === undefined || controlsDisabled) {
-                  return;
-                }
-
-                try {
-                  const cityBytes = new Uint8Array(await file.arrayBuffer());
-                  setHasStartedPlayableSession(true);
-                  setSaveFileName(file.name);
-                  runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
-                    kind: 'city-io',
-                    action: 'load-city',
-                    fileName: file.name,
-                    cityBytes,
-                  });
-                  setCityIoError('');
-                } catch {
-                  setCityIoError('Failed to read selected city file.');
-                }
-              }}
-              ref={loadInputRef}
-              style={{ display: 'none' }}
-              type="file"
-            />
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Scenario</strong>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select
-                disabled={controlsDisabled}
-                onChange={(event) => {
-                  setSelectedScenarioId(Number.parseInt(event.target.value, 10));
-                }}
-                value={selectedScenarioId}
-              >
-                {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
-                  <option key={scenario.id} value={scenario.id}>
-                    {scenario.id}. {scenario.name} ({scenario.startYear})
-                  </option>
-                ))}
-              </select>
-              <button
-                disabled={controlsDisabled}
-                onClick={() => {
-                  setHasStartedPlayableSession(true);
-                  const scenario = PLAYABLE_SCENARIO_CHOICES.find(
-                    (entry) => entry.id === selectedScenarioId,
-                  );
-                  if (scenario !== undefined) {
-                    setSaveFileName(`${scenario.fileName}.cty`);
-                  }
-
-                  runtime.sendCommand(nextCommandId(commandCounter, 'scenario'), {
-                    kind: 'scenario',
-                    action: 'load-scenario',
-                    scenarioId: selectedScenarioId,
-                  });
-                }}
-                type="button"
-              >
-                Start Scenario
-              </button>
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Disasters</strong>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {PLAYABLE_DISASTER_CHOICES.map((choice) => (
-                <button
-                  key={choice.id}
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
-                  }}
-                  type="button"
-                >
-                  {choice.label.replace('Trigger ', '')}
-                </button>
-              ))}
-            </div>
-            <div style={{ color: '#5eead4', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-              {disasterStatus}
-            </div>
-          </section>
-
-          <section style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Message Feed</strong>
-            <MessageFeed messages={state.hudState.messages} />
-          </section>
-        </aside>
-      </div>
+      </aside>
     </section>
   );
 }

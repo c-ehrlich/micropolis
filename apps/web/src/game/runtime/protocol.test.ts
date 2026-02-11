@@ -129,31 +129,50 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
     expect(
       PLAYABLE_TOOL_SPECS.map((spec) => ({
         tool: spec.tool,
+        toolState: spec.toolState,
         size: spec.size,
         offset: spec.offset,
+        baseCost: spec.baseCost,
       })),
     ).toEqual([
-      { tool: 'res', size: 3, offset: 1 },
-      { tool: 'com', size: 3, offset: 1 },
-      { tool: 'ind', size: 3, offset: 1 },
-      { tool: 'fire', size: 3, offset: 1 },
-      { tool: 'query', size: 1, offset: 0 },
-      { tool: 'police', size: 3, offset: 1 },
-      { tool: 'wire', size: 1, offset: 0 },
-      { tool: 'bulldoze', size: 1, offset: 0 },
-      { tool: 'rail', size: 1, offset: 0 },
-      { tool: 'road', size: 1, offset: 0 },
-      { tool: 'stadium', size: 4, offset: 1 },
-      { tool: 'park', size: 1, offset: 0 },
-      { tool: 'seaport', size: 4, offset: 1 },
-      { tool: 'coal', size: 4, offset: 1 },
-      { tool: 'nuclear', size: 4, offset: 1 },
-      { tool: 'airport', size: 6, offset: 1 },
+      // Magic-number source: `tool_state` ids and `CostOf[]` in
+      // `ref/micropolis/src/sim/w_tool.c`.
+      { tool: 'res', toolState: 0, size: 3, offset: 1, baseCost: 100 },
+      { tool: 'com', toolState: 1, size: 3, offset: 1, baseCost: 100 },
+      { tool: 'ind', toolState: 2, size: 3, offset: 1, baseCost: 100 },
+      { tool: 'fire', toolState: 3, size: 3, offset: 1, baseCost: 500 },
+      { tool: 'query', toolState: 4, size: 1, offset: 0, baseCost: 0 },
+      { tool: 'police', toolState: 5, size: 3, offset: 1, baseCost: 500 },
+      { tool: 'wire', toolState: 6, size: 1, offset: 0, baseCost: 5 },
+      { tool: 'bulldoze', toolState: 7, size: 1, offset: 0, baseCost: 1 },
+      { tool: 'rail', toolState: 8, size: 1, offset: 0, baseCost: 20 },
+      { tool: 'road', toolState: 9, size: 1, offset: 0, baseCost: 10 },
+      { tool: 'stadium', toolState: 12, size: 4, offset: 1, baseCost: 5000 },
+      { tool: 'park', toolState: 13, size: 1, offset: 0, baseCost: 10 },
+      { tool: 'seaport', toolState: 14, size: 4, offset: 1, baseCost: 3000 },
+      { tool: 'coal', toolState: 15, size: 4, offset: 1, baseCost: 3000 },
+      { tool: 'nuclear', toolState: 16, size: 4, offset: 1, baseCost: 5000 },
+      { tool: 'airport', toolState: 17, size: 6, offset: 1, baseCost: 10000 },
     ]);
 
-    expect(getPlayableToolSpec('road')).toMatchObject({ size: 1, offset: 0 });
-    expect(getPlayableToolSpec('res')).toMatchObject({ size: 3, offset: 1 });
-    expect(getPlayableToolSpec('airport')).toMatchObject({ size: 6, offset: 1 });
+    expect(getPlayableToolSpec('road')).toMatchObject({
+      toolState: 9,
+      size: 1,
+      offset: 0,
+      baseCost: 10,
+    });
+    expect(getPlayableToolSpec('res')).toMatchObject({
+      toolState: 0,
+      size: 3,
+      offset: 1,
+      baseCost: 100,
+    });
+    expect(getPlayableToolSpec('airport')).toMatchObject({
+      toolState: 17,
+      size: 6,
+      offset: 1,
+      baseCost: 10000,
+    });
   });
 
   it('accepts only frozen Bridge V1 playable command discriminants', () => {
