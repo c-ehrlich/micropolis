@@ -897,7 +897,7 @@ export function MapCanvas({
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
   const cameraControlsContent = (
     <>
-      <div style={{ display: 'flex', width: '100%', justifyContent: 'center' }}>
+      <div className="flex w-full justify-center">
         <button
           onClick={() => {
             applyCameraZoomStep(1 / MAP_CANVAS_BUTTON_ZOOM_STEP);
@@ -933,17 +933,7 @@ export function MapCanvas({
     return (
       <div
         ref={mapCanvasRootRef}
-        style={{
-          alignItems: 'center',
-          background: '#0b1020',
-          color: '#e2e8f0',
-          display: 'flex',
-          fontFamily: 'monospace',
-          fontSize: 12,
-          height: '100%',
-          justifyContent: 'center',
-          width: '100%',
-        }}
+        className="flex h-full w-full items-center justify-center bg-[#0b1020] font-mono text-xs text-slate-200"
       >
         No map snapshot received yet.
       </div>
@@ -951,21 +941,12 @@ export function MapCanvas({
   }
 
   return (
-    <div
-      ref={mapCanvasRootRef}
-      style={{
-        background: '#0b1020',
-        height: '100%',
-        overflow: 'hidden',
-        position: 'relative',
-        width: '100%',
-      }}
-    >
+    <div ref={mapCanvasRootRef} className="relative h-full w-full overflow-hidden bg-[#0b1020]">
       {cameraControlsContainer === undefined ? (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>{cameraControlsContent}</div>
+        <div className="flex flex-col">{cameraControlsContent}</div>
       ) : cameraControlsContainer === null ? null : (
         createPortal(
-          <div style={{ display: 'flex', flexDirection: 'column' }}>{cameraControlsContent}</div>,
+          <div className="flex flex-col">{cameraControlsContent}</div>,
           cameraControlsContainer,
         )
       )}
@@ -1012,25 +993,19 @@ export function MapCanvas({
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
         }}
+        className="relative left-1/2 top-1/2 overflow-hidden border border-slate-950/90 -translate-x-1/2 -translate-y-1/2"
         style={{
-          border: '1px solid rgba(15, 23, 42, 0.9)',
-          left: '50%',
           height: viewportHeightPx,
-          overflow: 'hidden',
-          position: 'relative',
-          top: '50%',
-          transform: 'translate(-50%, -50%)',
           width: viewportWidthPx,
         }}
       >
         <div
+          className="absolute origin-top-left"
           style={{
             height: heightPx,
             left: -clampedCameraOffsetPx.x,
-            position: 'absolute',
             top: -clampedCameraOffsetPx.y,
             transform: `scale(${cameraZoom})`,
-            transformOrigin: 'top left',
             width: widthPx,
           }}
         >
@@ -1143,26 +1118,21 @@ export function MapCanvas({
 
               onTileClick(tile.x, tile.y);
             }}
+            className={`absolute left-0 top-0 block [image-rendering:pixelated] ${
+              onTileClick === undefined ? 'cursor-default' : 'cursor-crosshair'
+            }`}
             style={{
-              cursor: onTileClick === undefined ? 'default' : 'crosshair',
-              display: 'block',
-              imageRendering: 'pixelated',
-              left: 0,
-              position: 'absolute',
-              top: 0,
               zIndex: getMapCanvasLayerZIndex('map'),
             }}
           />
           {hoveredToolFootprint === null || hoverToolSpec === null ? null : (
             <div
+              className="pointer-events-none absolute box-border"
               style={{
                 background: `${hoverToolSpec.pendingColor}26`,
                 border: `2px dashed ${hoverToolSpec.pendingColor}`,
-                boxSizing: 'border-box',
                 height: hoveredToolFootprint.side,
                 left: hoveredToolFootprint.left,
-                pointerEvents: 'none',
-                position: 'absolute',
                 top: hoveredToolFootprint.top,
                 width: hoveredToolFootprint.side,
                 zIndex: getMapCanvasLayerZIndex('tool-cursor'),
@@ -1182,13 +1152,12 @@ export function MapCanvas({
             return (
               <div
                 key={pending.commandId}
+                className="pointer-events-none absolute"
                 style={{
                   background: `${spec.pendingColor}4d`,
                   border: `1px dashed ${spec.pendingColor}`,
                   height: footprint.side,
                   left: footprint.left,
-                  pointerEvents: 'none',
-                  position: 'absolute',
                   top: footprint.top,
                   width: footprint.side,
                   zIndex: getMapCanvasLayerZIndex('pending-tool'),
@@ -1204,12 +1173,10 @@ export function MapCanvas({
                 draggable={false}
                 key={sprite.key}
                 src={sprite.spriteFrameUrl}
+                className="pointer-events-none absolute [image-rendering:pixelated]"
                 style={{
                   height: sprite.height,
-                  imageRendering: 'pixelated',
                   left: sprite.left,
-                  pointerEvents: 'none',
-                  position: 'absolute',
                   top: sprite.top,
                   width: sprite.width,
                   zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
@@ -1219,23 +1186,13 @@ export function MapCanvas({
             ) : (
               <div
                 key={sprite.key}
+                className="pointer-events-none absolute box-border flex items-center justify-center rounded-[3px] font-mono font-bold leading-none text-slate-900"
                 style={{
-                  alignItems: 'center',
                   background: `${sprite.color}59`,
                   border: `1px solid ${sprite.color}`,
-                  borderRadius: 3,
-                  boxSizing: 'border-box',
-                  color: '#0f172a',
-                  display: 'flex',
-                  fontFamily: 'monospace',
                   fontSize: Math.max(7, Math.min(10, sprite.height * 0.45)),
-                  fontWeight: 700,
                   height: sprite.height,
-                  justifyContent: 'center',
                   left: sprite.left,
-                  lineHeight: 1,
-                  pointerEvents: 'none',
-                  position: 'absolute',
                   top: sprite.top,
                   width: sprite.width,
                   zIndex: getMapCanvasLayerZIndex('realtime-overlay'),

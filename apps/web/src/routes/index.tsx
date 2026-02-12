@@ -90,13 +90,7 @@ export function triggerRouteDisasterControl(
  */
 function HomePage() {
   return (
-    <main
-      style={{
-        inset: 0,
-        overflow: 'hidden',
-        position: 'fixed',
-      }}
-    >
+    <main className="fixed inset-0 overflow-hidden">
       <RuntimePanel />
       <div className="pointer-events-none absolute left-3 top-12 z-20">
         <div className="rounded-md border border-emerald-200/70 bg-emerald-500/85 px-2 py-1 font-mono text-xs font-semibold text-emerald-50 shadow-lg">
@@ -268,6 +262,10 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
+  const menubarButtonClass =
+    'rounded-[3px] border border-slate-900/35 px-2 py-1 text-left font-mono text-xs text-slate-900';
+  const menubarPanelClass =
+    'absolute left-0 top-[calc(100%+3px)] z-[12] grid rounded border border-slate-900/55 bg-slate-50 p-1.5 text-slate-900 shadow-[0_8px_20px_rgba(15,23,42,0.25)]';
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -284,22 +282,8 @@ function RuntimePanel() {
   }, [state.hudState.notice]);
 
   return (
-    <section
-      style={{
-        background: '#0b1020',
-        color: '#e2e8f0',
-        height: '100%',
-        overflow: 'hidden',
-        position: 'relative',
-        width: '100%',
-      }}
-    >
-      <div
-        style={{
-          inset: 0,
-          position: 'absolute',
-        }}
-      >
+    <section className="relative h-full w-full overflow-hidden bg-[#0b1020] text-slate-200">
+      <div className="absolute inset-0">
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
           dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
@@ -326,83 +310,31 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        style={{
-          alignItems: 'center',
-          background: 'rgba(226, 232, 240, 0.96)',
-          borderBottom: '1px solid rgba(15, 23, 42, 0.55)',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 8,
-          left: 0,
-          minHeight: 34,
-          padding: '4px 8px',
-          pointerEvents: 'auto',
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          zIndex: 10,
-        }}
+        className="pointer-events-auto absolute left-0 right-0 top-0 z-10 flex min-h-[34px] flex-wrap items-center gap-2 border-b border-slate-900/55 bg-slate-200/96 px-2 py-1"
       >
-        <div
-          style={{
-            alignItems: 'center',
-            color: '#0f172a',
-            display: 'flex',
-            fontFamily: 'monospace',
-            fontSize: 12,
-            fontWeight: 700,
-            gap: 6,
-            minWidth: 86,
-          }}
-        >
+        <div className="flex min-w-[86px] items-center gap-1.5 font-mono text-xs font-bold text-slate-900">
           <span>Micropolis</span>
         </div>
-        <div style={{ alignItems: 'center', display: 'flex', gap: 2 }}>
-          <div style={{ position: 'relative' }}>
+        <div className="flex items-center gap-0.5">
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
               }}
-              style={{
-                background: openMenubarSection === 'game' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 72,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} min-w-[72px] ${openMenubarSection === 'game' ? 'bg-blue-200' : 'bg-transparent'}`}
               type="button"
             >
               Game
             </button>
             {openMenubarSection !== 'game' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 2,
-                  left: 0,
-                  minWidth: 204,
-                  padding: 6,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
+              <section className={`${menubarPanelClass} min-w-[204px] gap-0.5`}>
                 <button
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="text-left"
                   type="button"
                 >
                   New
@@ -414,7 +346,7 @@ function RuntimePanel() {
                     setGameDialog('save');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="text-left"
                   type="button"
                 >
                   Save...
@@ -426,7 +358,7 @@ function RuntimePanel() {
                     setGameDialog('load');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="text-left"
                   type="button"
                 >
                   Load...
@@ -437,7 +369,7 @@ function RuntimePanel() {
                     setGameDialog('scenario');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="text-left"
                   type="button"
                 >
                   Scenario...
@@ -445,44 +377,18 @@ function RuntimePanel() {
               </section>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
               }}
-              style={{
-                background: openMenubarSection === 'disasters' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 84,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} min-w-[84px] ${openMenubarSection === 'disasters' ? 'bg-blue-200' : 'bg-transparent'}`}
               type="button"
             >
               Disasters
             </button>
             {openMenubarSection !== 'disasters' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 4,
-                  left: 0,
-                  minWidth: 204,
-                  padding: 6,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
+              <section className={`${menubarPanelClass} min-w-[204px] gap-1`}>
                 {PLAYABLE_DISASTER_CHOICES.map((choice) => (
                   <button
                     key={choice.id}
@@ -491,7 +397,7 @@ function RuntimePanel() {
                       setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                       setOpenMenubarSection(null);
                     }}
-                    style={{ textAlign: 'left' }}
+                    className="text-left"
                     type="button"
                   >
                     {choice.label.replace('Trigger ', '')}
@@ -500,64 +406,34 @@ function RuntimePanel() {
               </section>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
               }}
-              style={{
-                background: openMenubarSection === 'runtime' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 80,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} min-w-[80px] ${openMenubarSection === 'runtime' ? 'bg-blue-200' : 'bg-transparent'}`}
               type="button"
             >
               Runtime
             </button>
             {openMenubarSection !== 'runtime' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 6,
-                  left: 0,
-                  minWidth: 290,
-                  padding: 8,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
-                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+              <section className={`${menubarPanelClass} min-w-[290px] gap-1.5 p-2`}>
+                <div className="font-mono text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
                 </div>
-                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{runtimePhaseStatus}</div>
+                <div className="font-mono text-xs">{runtimePhaseStatus}</div>
                 {state.lastRejectReason === null ? null : (
-                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
+                  <div className="font-mono text-xs text-red-700">
                     {`last reject: ${state.lastRejectReason}`}
                   </div>
                 )}
                 {cityIoError === '' ? null : (
-                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
-                    {cityIoError}
-                  </div>
+                  <div className="font-mono text-xs text-red-700">{cityIoError}</div>
                 )}
                 {lastSaveStatus === '' ? null : (
-                  <div style={{ color: '#166534', fontFamily: 'monospace', fontSize: 12 }}>
-                    {lastSaveStatus}
-                  </div>
+                  <div className="font-mono text-xs text-green-700">{lastSaveStatus}</div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div className="flex flex-wrap gap-2">
                   <button
                     disabled={reconnectDisabled}
                     onClick={() => {
@@ -594,19 +470,9 @@ function RuntimePanel() {
               return nextMuted;
             });
           }}
-          style={{
-            alignItems: 'center',
-            background: isGameplayMuted ? '#fee2e2' : 'transparent',
-            border: '1px solid rgba(15, 23, 42, 0.35)',
-            borderRadius: 3,
-            color: isGameplayMuted ? '#b91c1c' : '#0f172a',
-            display: 'inline-flex',
-            height: 26,
-            justifyContent: 'center',
-            marginLeft: 'auto',
-            padding: 0,
-            width: 32,
-          }}
+          className={`ml-auto inline-flex h-[26px] w-8 items-center justify-center rounded-[3px] border border-slate-900/35 p-0 ${
+            isGameplayMuted ? 'bg-red-100 text-red-700' : 'bg-transparent text-slate-900'
+          }`}
           title={isGameplayMuted ? 'Unmute' : 'Mute'}
           type="button"
         >
@@ -642,48 +508,12 @@ function RuntimePanel() {
         />
       )}
 
-      <section
-        style={{
-          backdropFilter: 'blur(3px)',
-          background: 'rgba(107, 114, 128, 0.9)',
-          border: '2px solid rgba(15, 23, 42, 0.75)',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 6,
-          left: 12,
-          maxHeight: 'calc(100vh - 240px)',
-          overflowY: 'auto',
-          padding: 8,
-          pointerEvents: 'auto',
-          position: 'absolute',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: 170,
-          zIndex: 6,
-        }}
-      >
-        <strong
-          style={{
-            color: '#f8fafc',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            letterSpacing: 0.4,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-          }}
-        >
+      <section className="pointer-events-auto absolute left-3 top-1/2 z-[6] grid max-h-[calc(100vh-240px)] w-[170px] -translate-y-1/2 gap-1.5 overflow-y-auto rounded-md border-2 border-slate-900/75 bg-gray-500/90 p-2 backdrop-blur-[3px]">
+        <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
           Build
         </strong>
         <MicropolisStatusSprite isRunning={isSimulationRunning} />
-        <div
-          style={{
-            display: 'grid',
-            gap: 6,
-            gridTemplateColumns: 'repeat(2, 40px)',
-            justifyContent: 'center',
-            margin: '0 auto',
-          }}
-        >
+        <div className="mx-auto grid grid-cols-2 justify-center gap-1.5">
           {PLAYABLE_TOOL_SPECS.map((spec) => {
             const active = activeTool === spec.tool;
             const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
@@ -704,52 +534,21 @@ function RuntimePanel() {
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                style={{
-                  alignItems: 'center',
-                  background: active ? '#fef08a' : '#e2e8f0',
-                  border: active ? '2px solid #b45309' : '2px solid #334155',
-                  borderRadius: 2,
-                  cursor: sessionControlsDisabled ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  height: 40,
-                  justifyContent: 'center',
-                  opacity: sessionControlsDisabled ? 0.6 : 1,
-                  padding: 0,
-                  width: 40,
-                }}
+                className={`flex h-10 w-10 items-center justify-center rounded-[2px] border-2 p-0 ${
+                  active ? 'border-amber-700 bg-amber-200' : 'border-slate-700 bg-slate-200'
+                } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 {iconUrl === undefined ? (
-                  <span
-                    style={{
-                      color: '#0f172a',
-                      fontFamily: 'monospace',
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                  >
+                  <span className="font-mono text-[10px] font-bold text-slate-900">
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
-                  <span
-                    style={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      height: 30,
-                      justifyContent: 'center',
-                      width: 30,
-                    }}
-                  >
+                  <span className="flex h-[30px] w-[30px] items-center justify-center">
                     <img
                       alt={`${spec.label} tool`}
                       draggable={false}
                       src={iconUrl}
-                      style={{
-                        display: 'block',
-                        height: '100%',
-                        imageRendering: 'pixelated',
-                        objectFit: 'contain',
-                        width: '100%',
-                      }}
+                      className="block h-full w-full object-contain [image-rendering:pixelated]"
                     />
                   </span>
                 )}
@@ -762,22 +561,13 @@ function RuntimePanel() {
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
         />
-        <div
-          style={{
-            color: '#f8fafc',
-            display: 'grid',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            gap: 2,
-            textAlign: 'center',
-          }}
-        >
+        <div className="grid gap-0.5 text-center font-mono text-[11px] text-slate-50">
           <div>{state.hudState.fundsLabel}</div>
           <div>{state.hudState.dateDisplayLabel}</div>
           <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
           <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
         </div>
-        <section style={{ display: 'grid', gap: 4 }}>
+        <section className="grid gap-1">
           <button
             disabled={sessionControlsDisabled}
             onClick={() => {
@@ -786,12 +576,12 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            style={{ justifySelf: 'center', width: '68%' }}
+            className="w-[68%] justify-self-center"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
           </button>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+          <div className="flex justify-center gap-1">
             {[1, 2, 3].map((speed) => (
               <button
                 key={speed}
@@ -803,11 +593,7 @@ function RuntimePanel() {
                     speed: speed as PlayableSimSpeed,
                   });
                 }}
-                style={{
-                  fontWeight: state.hudState.speed === speed ? 700 : 400,
-                  padding: '2px 0',
-                  width: 26,
-                }}
+                className={`w-[26px] py-[2px] ${state.hudState.speed === speed ? 'font-bold' : 'font-normal'}`}
                 type="button"
               >
                 x{speed}
@@ -815,42 +601,19 @@ function RuntimePanel() {
             ))}
           </div>
         </section>
-        <section style={{ display: 'grid', gap: 4 }}>
-          <strong
-            style={{
-              color: '#f8fafc',
-              fontFamily: 'monospace',
-              fontSize: 11,
-              letterSpacing: 0.4,
-              textAlign: 'center',
-              textTransform: 'uppercase',
-            }}
-          >
+        <section className="grid gap-1">
+          <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
             Zoom
           </strong>
           <div ref={setMapCameraControlsContainer} />
         </section>
       </section>
 
-      <section
-        style={{
-          background: 'rgba(248, 250, 252, 0.94)',
-          border: '2px solid rgba(15, 23, 42, 0.72)',
-          borderRadius: 3,
-          bottom: 12,
-          color: '#0f172a',
-          left: 12,
-          padding: '6px 8px',
-          pointerEvents: 'none',
-          position: 'absolute',
-          width: 'min(260px, calc(100vw - 24px))',
-          zIndex: 6,
-        }}
-      >
-        <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>
+      <section className="pointer-events-none absolute bottom-3 left-3 z-[6] w-[min(260px,calc(100vw-24px))] rounded-[3px] border-2 border-slate-900/72 bg-slate-50/94 px-2 py-1.5 text-slate-900">
+        <div className="font-mono text-xs font-bold">
           {activeToolSpec.label}: ${activeToolSpec.baseCost}
         </div>
-        <div style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>
+        <div className="font-mono text-[11px] text-slate-600">
           {sessionControlsDisabled
             ? 'Connect and start a city to build.'
             : activeToolSpec.size === 1
@@ -859,34 +622,8 @@ function RuntimePanel() {
         </div>
       </section>
 
-      <section
-        style={{
-          backdropFilter: 'blur(3px)',
-          background: 'rgba(107, 114, 128, 0.9)',
-          border: '2px solid rgba(15, 23, 42, 0.75)',
-          borderRadius: 6,
-          bottom: 12,
-          display: 'grid',
-          gap: 4,
-          left: '50%',
-          padding: 8,
-          pointerEvents: 'auto',
-          position: 'absolute',
-          transform: 'translateX(-50%)',
-          width: 'min(420px, calc(100vw - 24px))',
-          zIndex: 6,
-        }}
-      >
-        <strong
-          style={{
-            color: '#f8fafc',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            letterSpacing: 0.4,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-          }}
-        >
+      <section className="pointer-events-auto absolute bottom-3 left-1/2 z-[6] grid w-[min(420px,calc(100vw-24px))] -translate-x-1/2 gap-1 rounded-md border-2 border-slate-900/75 bg-gray-500/90 p-2 backdrop-blur-[3px]">
+        <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
           Message Feed
         </strong>
         <MessageFeed messages={state.hudState.messages} />
@@ -903,7 +640,7 @@ function RuntimePanel() {
           }
         }}
         ref={loadInputRef}
-        style={{ display: 'none' }}
+        className="hidden"
         type="file"
       />
 
@@ -914,32 +651,13 @@ function RuntimePanel() {
               setGameDialog(null);
             }
           }}
-          style={{
-            alignItems: 'center',
-            background: 'rgba(15, 23, 42, 0.62)',
-            display: 'flex',
-            inset: 0,
-            justifyContent: 'center',
-            pointerEvents: 'auto',
-            position: 'absolute',
-            zIndex: 15,
-          }}
+          className="pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center bg-slate-900/62"
         >
           <section
             onClick={(event) => {
               event.stopPropagation();
             }}
-            style={{
-              background: '#f8fafc',
-              border: '1px solid rgba(15, 23, 42, 0.45)',
-              borderRadius: 6,
-              color: '#0f172a',
-              display: 'grid',
-              gap: 10,
-              minWidth: 320,
-              padding: 12,
-              width: 'min(420px, calc(100vw - 24px))',
-            }}
+            className="grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 rounded-md border border-slate-900/45 bg-slate-50 p-3 text-slate-900"
           >
             {gameDialog !== 'save' ? null : (
               <form
@@ -957,10 +675,10 @@ function RuntimePanel() {
                   });
                   setGameDialog(null);
                 }}
-                style={{ display: 'grid', gap: 10 }}
+                className="grid gap-2.5"
               >
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Save City</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                <strong className="font-mono text-sm">Save City</strong>
+                <label className="grid gap-1 font-mono text-xs">
                   File name
                   <input
                     autoFocus
@@ -972,7 +690,7 @@ function RuntimePanel() {
                     value={saveFileNameDraft}
                   />
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
                     onClick={() => {
                       setGameDialog(null);
@@ -989,9 +707,9 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'new' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>New Game</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="font-mono text-sm">New Game</strong>
+                <label className="grid gap-1 font-mono text-xs">
                   Difficulty
                   <select
                     autoFocus
@@ -1011,7 +729,7 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
                     onClick={() => {
                       setGameDialog(null);
@@ -1041,14 +759,14 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'load' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Load City</strong>
-                <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="font-mono text-sm">Load City</strong>
+                <div className="font-mono text-xs text-slate-700">
                   {pendingLoadFile === null
                     ? 'No file selected.'
                     : `Selected: ${pendingLoadFile.name}`}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div className="flex flex-wrap gap-2">
                   <button
                     disabled={controlsDisabled || isLoadingCityFile}
                     onClick={() => {
@@ -1090,7 +808,7 @@ function RuntimePanel() {
                     {isLoadingCityFile ? 'Loading...' : 'Load'}
                   </button>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div className="flex justify-end">
                   <button
                     disabled={isLoadingCityFile}
                     onClick={() => {
@@ -1105,9 +823,9 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'scenario' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Scenario</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="font-mono text-sm">Scenario</strong>
+                <label className="grid gap-1 font-mono text-xs">
                   Scenario
                   <select
                     autoFocus
@@ -1124,7 +842,7 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                <label className="grid gap-1 font-mono text-xs">
                   Difficulty
                   <select
                     disabled={controlsDisabled}
@@ -1143,7 +861,7 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
                     onClick={() => {
                       setGameDialog(null);
@@ -1198,57 +916,18 @@ function NoticePanel({
   onDismiss: () => void;
 }) {
   return (
-    <section
-      style={{
-        background: 'rgba(248, 250, 252, 0.96)',
-        border: '1px solid rgba(15, 23, 42, 0.75)',
-        borderRadius: 6,
-        color: '#0f172a',
-        display: 'grid',
-        gap: 10,
-        maxHeight: 'min(45vh, 320px)',
-        maxWidth: 'min(520px, calc(100vw - 24px))',
-        overflow: 'hidden',
-        padding: 10,
-        pointerEvents: 'auto',
-        position: 'absolute',
-        right: 12,
-        top: 46,
-        width: 'min(520px, calc(100vw - 24px))',
-        zIndex: 13,
-      }}
-    >
+    <section className="pointer-events-auto absolute right-3 top-[46px] z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden rounded-md border border-slate-900/75 bg-slate-50/96 p-2.5 text-slate-900">
       <header
-        style={{
-          alignItems: 'center',
-          background: notice.color,
-          border: '1px solid rgba(15, 23, 42, 0.35)',
-          borderRadius: 4,
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: '6px 8px',
-        }}
+        className="flex items-center justify-between rounded border border-slate-900/35 px-2 py-1.5"
+        style={{ background: notice.color }}
       >
-        <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>{notice.title}</strong>
-        <span style={{ fontFamily: 'monospace', fontSize: 11 }}>#{notice.id}</span>
+        <strong className="font-mono text-xs">{notice.title}</strong>
+        <span className="font-mono text-[11px]">#{notice.id}</span>
       </header>
-      <pre
-        style={{
-          background: 'rgba(241, 245, 249, 0.9)',
-          border: '1px solid rgba(148, 163, 184, 0.45)',
-          borderRadius: 4,
-          fontFamily: 'monospace',
-          fontSize: 12,
-          lineHeight: '18px',
-          margin: 0,
-          overflow: 'auto',
-          padding: 8,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
+      <pre className="m-0 overflow-auto whitespace-pre-wrap rounded border border-slate-400/45 bg-slate-100/90 p-2 font-mono text-xs leading-[18px]">
         {notice.body}
       </pre>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div className="flex justify-end">
         <button onClick={onDismiss} type="button">
           Dismiss
         </button>
@@ -1273,8 +952,6 @@ function DemandHeadsWidget({
   demandC: number;
   demandI: number;
 }) {
-  const scaledWidth = 39 * 2;
-  const scaledHeight = 55 * 2;
   const demandBars = [
     { channel: 'r', demand: demandR, left: 8, fillColor: '#1b8f3a' },
     { channel: 'c', demand: demandC, left: 17, fillColor: '#1b2fe0' },
@@ -1283,52 +960,26 @@ function DemandHeadsWidget({
 
   return (
     <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        width: '100%',
-      }}
+      className="flex w-full justify-center"
       title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
     >
       <div
         aria-label={`Demand heads R ${demandR}, C ${demandC}, I ${demandI}`}
         role="img"
-        style={{
-          height: scaledHeight,
-          position: 'relative',
-          width: scaledWidth,
-        }}
+        className="relative h-[110px] w-[78px]"
       >
-        <div
-          style={{
-            height: 55,
-            left: 0,
-            position: 'absolute',
-            top: 0,
-            transform: 'scale(2)',
-            transformOrigin: 'top left',
-            width: 39,
-          }}
-        >
+        <div className="absolute left-0 top-0 h-[55px] w-[39px] origin-top-left [transform:scale(2)]">
           <img
             alt=""
             aria-hidden
             draggable={false}
             src={demandGaugeBackgroundUrl}
-            style={{
-              display: 'block',
-              height: 47,
-              imageRendering: 'pixelated',
-              left: 0,
-              pointerEvents: 'none',
-              position: 'absolute',
-              top: 4,
-              width: 39,
-            }}
+            className="pointer-events-none absolute left-0 top-1 block h-[47px] w-[39px] [image-rendering:pixelated]"
           />
           {demandBars.map((bar) => (
             <div
               key={bar.channel}
+              className="pointer-events-none absolute w-[7px]"
               style={resolveDemandBarStyle({
                 demand: bar.demand,
                 fillColor: bar.fillColor,
@@ -1351,11 +1002,7 @@ function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
   const spriteUrl = isRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl;
   return (
     <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        width: '100%',
-      }}
+      className="flex w-full justify-center"
       title={isRunning ? 'Simulation running' : 'Simulation paused'}
     >
       <img
@@ -1363,12 +1010,7 @@ function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
         aria-hidden
         draggable={false}
         src={spriteUrl}
-        style={{
-          display: 'block',
-          height: 47 * 2,
-          imageRendering: 'pixelated',
-          width: 37 * 2,
-        }}
+        className="block h-[94px] w-[74px] [image-rendering:pixelated]"
       />
     </div>
   );
@@ -1397,10 +1039,7 @@ function resolveDemandBarStyle({
     background: fillColor,
     height: Math.max(1, bottom - top),
     left,
-    pointerEvents: 'none',
-    position: 'absolute',
     top,
-    width: 7,
   };
 }
 
@@ -1486,21 +1125,9 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
  */
 function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
   return (
-    <div
-      style={{
-        background: 'rgba(15, 23, 42, 0.32)',
-        border: '1px solid rgba(15, 23, 42, 0.58)',
-        borderRadius: 4,
-        color: '#e2e8f0',
-        fontFamily: 'monospace',
-        fontSize: 12,
-        height: 58,
-        overflowY: 'auto',
-        padding: '4px 6px',
-      }}
-    >
+    <div className="h-[58px] overflow-y-auto rounded border border-slate-900/58 bg-slate-900/32 px-1.5 py-1 font-mono text-xs text-slate-200">
       {messages.length === 0 ? (
-        <div style={{ color: '#cbd5e1', lineHeight: '16px' }}>No messages yet.</div>
+        <div className="leading-4 text-slate-300">No messages yet.</div>
       ) : (
         [...messages].reverse().map((message) => {
           const coordinateSuffix =
@@ -1510,14 +1137,9 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
           return (
             <div
               key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
-              style={{
-                lineHeight: '16px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
+              className="overflow-hidden text-ellipsis whitespace-nowrap leading-4"
             >
-              <span style={{ color: '#bfdbfe' }}>[{message.serverSeq}]</span> {message.text}
+              <span className="text-blue-200">[{message.serverSeq}]</span> {message.text}
               {coordinateSuffix}
             </div>
           );
