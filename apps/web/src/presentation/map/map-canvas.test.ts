@@ -3,25 +3,27 @@ import { describe, expect, it } from 'vitest';
 import { Tile, TileFlag } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
   computeMapCanvasZoomFromWheel,
-  consumeQueuedMapCanvasFrame,
   continueMapCanvasPanDrag,
-  forEachMapCanvasPatchTileIndex,
   getMapCanvasCameraMetrics,
-  getMapCanvasLayerZIndex,
   isMapCanvasUnpoweredZoneBlinkPhase,
   isMapCanvasZoomWheelGesture,
   normalizeMapCanvasWheelDeltaToPixels,
   projectMapCanvasToolFootprintRect,
-  projectRealtimeOverlaySprites,
   scaleMapPanDeltaToWorldPixels,
   scaleWorldPanDeltaToCanvasPixels,
   selectMapCanvasBaseTileAtlasCanonicalIdentityKey,
-  selectMapCanvasDrawMode,
-  selectMapCanvasTileRenderMode,
   startMapCanvasPanDrag,
   traceMapCanvasSingleTileToolDragPath,
   zoomMapCanvasCameraOffsetAtAnchor,
-} from './map-canvas.tsx';
+} from './map-canvas.camera.ts';
+import {
+  consumeQueuedMapCanvasFrame,
+  forEachMapCanvasPatchTileIndex,
+  getMapCanvasLayerZIndex,
+  selectMapCanvasDrawMode,
+  selectMapCanvasTileRenderMode,
+} from './map-canvas.draw.ts';
+import { projectRealtimeOverlaySprites } from './map-canvas.overlay.ts';
 import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   lookupTileSprite,

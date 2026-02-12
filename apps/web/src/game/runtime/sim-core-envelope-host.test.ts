@@ -17,7 +17,7 @@ import {
   sendMesAt,
 } from '../../../../../packages/sim-core/src/systems/messages.ts';
 import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
-import { projectRealtimeOverlaySprites } from '../map/map-canvas.tsx';
+import { projectRealtimeOverlaySprites } from '../../presentation/map/map-canvas.overlay.ts';
 import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {
   type HostEnvelope,

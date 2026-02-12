@@ -4,14 +4,24 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getAllThemes, getThemeVars } from 'classicy';
 import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import demandGaugeBackgroundUrl from '../../../../packages/sim-assets/generated-images/images/demandg.png';
 import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
 import micropolisPausedIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropoliss.png';
 import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
+import {
+  downloadCityBytes,
+  formatRuntimePhaseStatus,
+  nextCommandId,
+  normalizeCitySaveFileName,
+  triggerRouteDisasterControl,
+} from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
+import {
+  DemandHeadsWidget,
+  MessageFeed,
+  NoticePanel,
+} from '../features/playable-runtime/presentation/runtime-panel-components.tsx';
 import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
 import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
 import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
-import { MapCanvas } from '../game/map/map-canvas.tsx';
 import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
   coalesceQueuedRuntimeMapState,
@@ -20,19 +30,16 @@ import {
   PLAYABLE_TOOL_SPECS,
   type PlayableSimSpeed,
   type PlayableToolName,
-  type RuntimeHudMessageEvent,
-  type RuntimeHudNoticeEvent,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
   PLAYABLE_SCENARIO_CHOICES,
-  type PlayableDisasterChoiceId,
   readCityExportPayload,
-  triggerPlayableRuntimeDisaster,
 } from '../game/runtime/playable-runtime-host.ts';
-import { type CoreHost, type PlayableGameLevel } from '../game/runtime/protocol.ts';
+import { type PlayableGameLevel } from '../game/runtime/protocol.ts';
+import { MapCanvas } from '../presentation/map/map-canvas.tsx';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -63,26 +70,6 @@ const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   { id: 1, label: 'Medium', startingFundsLabel: '$10,000' },
   { id: 2, label: 'Hard', startingFundsLabel: '$5,000' },
 ];
-
-/**
- * Triggers one playable-route manual disaster control click and returns status text.
- * Mirrors Disasters menu entrypoint ownership in `ref/micropolis/res/whead.tcl`,
- * with runtime disaster handling in `ref/micropolis/src/sim/s_disast.c` and
- * `ref/micropolis/src/sim/w_sprite.c`.
- * Parity note: this keeps route `/` disaster controls host-agnostic by delegating
- * to the structural host capability adapter instead of concrete host classes.
- */
-export function triggerRouteDisasterControl(
-  host: CoreHost,
-  disasterId: PlayableDisasterChoiceId,
-  disasterLabel: string,
-): string {
-  if (triggerPlayableRuntimeDisaster(host, disasterId)) {
-    return `${disasterLabel}.`;
-  }
-
-  return 'Disaster trigger is unavailable on this host.';
-}
 
 /**
  * Primary Authoritative Runtime gameplay route rendered at `/`.
@@ -1095,234 +1082,5 @@ function RuntimePanel() {
         </div>
       )}
     </section>
-  );
-}
-
-/**
- * Authoritative Runtime notice panel.
- * Mirrors `UIShowPictureOn` + `NoticeMessageOn` rendering and local dismiss behavior
- * in `ref/micropolis/res/micropolis.tcl` and `ref/micropolis/res/wnotice.tcl`.
- * Parity note: dismiss is UI-only and does not send a simulation command.
- */
-function NoticePanel({
-  notice,
-  onDismiss,
-  topInsetPx,
-}: {
-  notice: RuntimeHudNoticeEvent;
-  onDismiss: () => void;
-  topInsetPx: number;
-}) {
-  return (
-    <section
-      className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
-      style={{ top: `calc(${topInsetPx}px + var(--window-padding-size))` }}
-    >
-      <header
-        className="flex items-center justify-between border px-2 py-1.5"
-        style={{ background: notice.color }}
-      >
-        <strong className="text-xs">{notice.title}</strong>
-        <span className="text-[11px]">#{notice.id}</span>
-      </header>
-      <pre className="classicyRuntimeMessageFeed m-0 overflow-auto whitespace-pre-wrap p-2 text-xs leading-[18px]">
-        {notice.body}
-      </pre>
-      <div className="flex justify-end">
-        <button className="classicyButton" onClick={onDismiss} type="button">
-          Dismiss
-        </button>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Demand heads widget shown in the Build tool rail.
- * Mirrors demand canvas composition in `ref/micropolis/res/whead.tcl` and
- * bar updates from `UISetDemand` in `ref/micropolis/res/micropolis.tcl`.
- * Parity note: this uses PNG conversions of the original XPM art and CSS
- * absolutely positioned bars instead of Tk canvas primitives.
- */
-function DemandHeadsWidget({
-  demandR,
-  demandC,
-  demandI,
-}: {
-  demandR: number;
-  demandC: number;
-  demandI: number;
-}) {
-  const demandBars = [
-    { channel: 'r', demand: demandR, left: 8, fillColor: '#1b8f3a' },
-    { channel: 'c', demand: demandC, left: 17, fillColor: '#1b2fe0' },
-    { channel: 'i', demand: demandI, left: 26, fillColor: '#ff7a1a' },
-  ] as const;
-
-  return (
-    <div
-      className="flex w-full justify-center"
-      title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
-    >
-      <div
-        aria-label={`Demand heads R ${demandR}, C ${demandC}, I ${demandI}`}
-        role="img"
-        className="relative h-[110px] w-[78px]"
-      >
-        <div className="absolute left-0 top-0 h-[55px] w-[39px] origin-top-left [transform:scale(2)]">
-          <img
-            alt=""
-            aria-hidden
-            draggable={false}
-            src={demandGaugeBackgroundUrl}
-            className="pointer-events-none absolute left-0 top-1 block h-[47px] w-[39px] [image-rendering:pixelated]"
-          />
-          {demandBars.map((bar) => (
-            <div
-              key={bar.channel}
-              className="pointer-events-none absolute w-[7px]"
-              style={resolveDemandBarStyle({
-                demand: bar.demand,
-                fillColor: bar.fillColor,
-                left: bar.left,
-              })}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Computes one vertical demand-bar segment style.
- * Mirrors the Tcl `UISetDemand` branch and coordinate math in
- * `ref/micropolis/res/micropolis.tcl` (1:1 baseline and endpoint behavior).
- */
-function resolveDemandBarStyle({
-  demand,
-  left,
-  fillColor,
-}: {
-  demand: number;
-  left: number;
-  fillColor: string;
-}): CSSProperties {
-  const clampedDemand = Math.max(-15, Math.min(15, Math.trunc(demand)));
-  const baseline = clampedDemand <= 0 ? 32 : 24;
-  const endpoint = baseline - clampedDemand;
-  const top = Math.min(baseline, endpoint);
-  const bottom = Math.max(baseline, endpoint);
-  return {
-    background: fillColor,
-    height: Math.max(1, bottom - top),
-    left,
-    top,
-  };
-}
-
-/**
- * Normalizes Save dialog file-name input to one classic `.cty` target.
- * Mirrors `SaveCityAs` naming flow in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: browser UI keeps user-entered names but appends `.cty`
- * when no extension is provided.
- */
-function normalizeCitySaveFileName(fileNameInput: string): string {
-  const trimmedName = fileNameInput.trim();
-  if (trimmedName === '') {
-    return 'newcity.cty';
-  }
-  if (trimmedName.toLowerCase().endsWith('.cty')) {
-    return trimmedName;
-  }
-  return `${trimmedName}.cty`;
-}
-
-/**
- * Triggers a browser download for exported `.cty` payload bytes.
- * Mirrors `SaveCityAs` user-selected output intent in `ref/micropolis/src/sim/s_fileio.c`.
- */
-function downloadCityBytes(fileName: string, cityBytes: Uint8Array): void {
-  const blobBytes = new Uint8Array(cityBytes.byteLength);
-  blobBytes.set(cityBytes);
-  const blob = new Blob([blobBytes.buffer], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.style.display = 'none';
-
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Deterministically builds command ids for runtime command sends.
- * Mirrors `commandId`-based host correlation requirements from Stage plans.
- */
-function nextCommandId(counter: { current: number }, prefix: string): string {
-  const nextValue = counter.current;
-  counter.current = nextValue + 1;
-  return `${prefix}-${nextValue}`;
-}
-
-/**
- * Runtime phase status text shown above Authoritative Runtime reconnect/resync controls.
- * Mirrors reconnect/resync lifecycle intent from
- * `ref/micropolis/spec/integration/SPEC.md`.
- */
-function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
-  if (phase === 'reconnecting') {
-    return 'Reconnecting to host...';
-  }
-  if (phase === 'resyncing') {
-    return 'Resyncing authoritative snapshot...';
-  }
-  if (phase === 'negotiating') {
-    return 'Negotiating hello handshake...';
-  }
-  if (phase === 'connecting') {
-    return 'Connecting to host...';
-  }
-  if (phase === 'failed') {
-    return 'Connection failed. Reconnect to retry.';
-  }
-  if (phase === 'disconnected') {
-    return 'Disconnected.';
-  }
-  return 'Connected.';
-}
-
-/**
- * Authoritative Runtime message feed view.
- * Mirrors user-visible message surface from `UISetMessage` in
- * `ref/micropolis/src/sim/s_msg.c`, with a bounded reverse-chronological list.
- */
-function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
-  return (
-    <div className="classicyRuntimeMessageFeed h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
-      {messages.length === 0 ? (
-        <div className="leading-4">No messages yet.</div>
-      ) : (
-        [...messages].reverse().map((message) => {
-          const coordinateSuffix =
-            message.dispatch === 'sendMesAt' && message.x !== null && message.y !== null
-              ? ` @ (${message.x}, ${message.y})`
-              : '';
-          return (
-            <div
-              key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
-              className="overflow-hidden text-ellipsis whitespace-nowrap leading-4"
-            >
-              <span className="text-blue-700">[{message.serverSeq}]</span> {message.text}
-              {coordinateSuffix}
-            </div>
-          );
-        })
-      )}
-    </div>
   );
 }

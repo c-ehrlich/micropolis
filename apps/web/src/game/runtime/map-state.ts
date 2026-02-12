@@ -466,7 +466,7 @@ function convertSnapshotTileWordsToRuntimeTiles(
 
 /**
  * Computes the runtime row-major tile index used by the canvas projection buffer.
- * Mirrors Playable Runtime renderer indexing in `apps/web/src/game/map/map-canvas.tsx`.
+ * Mirrors Playable Runtime renderer indexing in `apps/web/src/presentation/map/map-canvas.tsx`.
  */
 function toRuntimeTileIndex(x: number, y: number, width: number): number {
   return y * width + x;

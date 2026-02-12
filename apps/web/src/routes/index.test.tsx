@@ -8,13 +8,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../packages/core-bridge/src/types.ts';
+import { triggerRouteDisasterControl } from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
 } from '../game/runtime/playable-runtime-host.ts';
 import type { HostEnvelope } from '../game/runtime/protocol.ts';
 import { SimCoreEnvelopeHost } from '../game/runtime/sim-core-envelope-host.ts';
-import { Route, triggerRouteDisasterControl } from './index.tsx';
+import { Route } from './index.tsx';
 
 const WEB_WORKSPACE_ROOT = process.cwd().endsWith('/apps/web')
   ? process.cwd()
