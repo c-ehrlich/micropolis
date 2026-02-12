@@ -256,7 +256,7 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
-  const menubarButtonClass = 'classicyButton classicyRuntimeMenuButton px-2 py-1 text-left';
+  const menubarButtonClass = 'classicyButton classicyRuntimeMenuButton px-2 py-1 text-center';
   const menubarPanelClass =
     'classicyRuntimeMenuPanel absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
   const runtimeTheme = useMemo(() => {
