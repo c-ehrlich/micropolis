@@ -152,6 +152,7 @@ function RuntimePanel() {
   const [cityIoError, setCityIoError] = useState<string>('');
   const [_disasterStatus, setDisasterStatus] = useState<string>('');
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
+  const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
   const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
@@ -160,6 +161,7 @@ function RuntimePanel() {
   const [mapCameraControlsContainer, setMapCameraControlsContainer] =
     useState<HTMLDivElement | null>(null);
   const menubarRef = useRef<HTMLElement | null>(null);
+  const speedControlRef = useRef<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
   const commandCounter = useRef(1);
@@ -209,17 +211,21 @@ function RuntimePanel() {
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (openMenubarSection === null) {
+      if (!(event.target instanceof Node)) {
         return;
       }
-      const menuRoot = menubarRef.current;
-      if (menuRoot === null) {
-        return;
+      if (openMenubarSection !== null) {
+        const menuRoot = menubarRef.current;
+        if (menuRoot === null || !menuRoot.contains(event.target)) {
+          setOpenMenubarSection(null);
+        }
       }
-      if (event.target instanceof Node && menuRoot.contains(event.target)) {
-        return;
+      if (isSpeedMenuOpen) {
+        const speedRoot = speedControlRef.current;
+        if (speedRoot === null || !speedRoot.contains(event.target)) {
+          setIsSpeedMenuOpen(false);
+        }
       }
-      setOpenMenubarSection(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -228,6 +234,7 @@ function RuntimePanel() {
       }
       setOpenMenubarSection(null);
       setGameDialog(null);
+      setIsSpeedMenuOpen(false);
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
@@ -236,7 +243,7 @@ function RuntimePanel() {
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [openMenubarSection]);
+  }, [openMenubarSection, isSpeedMenuOpen]);
 
   const controlsDisabled = state.phase !== 'ready';
   const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
@@ -290,7 +297,7 @@ function RuntimePanel() {
       className="classicyRuntimePanel relative h-full w-full overflow-hidden"
       style={runtimeTheme as CSSProperties}
     >
-      <div className="absolute inset-0">
+      <div className="classicyRuntimeMapArea absolute">
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
           dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
@@ -317,16 +324,14 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        className="classicyRuntimeMenuBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex min-h-[34px] flex-wrap items-center gap-2 px-2 py-1"
+        className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 px-2"
       >
-        <div className="classicyRuntimePanelTitle flex min-w-[86px] items-center gap-1.5 font-bold">
-          <span>Micropolis</span>
-        </div>
-        <div className="flex items-center gap-0.5">
+        <div className="classicyRuntimeTopLeft flex items-center gap-0.5">
           <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
+                setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'game' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
@@ -388,6 +393,7 @@ function RuntimePanel() {
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
+                setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
@@ -417,6 +423,7 @@ function RuntimePanel() {
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
+                setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'runtime' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
@@ -430,9 +437,7 @@ function RuntimePanel() {
                 </div>
                 <div className="text-xs">{runtimePhaseStatus}</div>
                 {state.lastRejectReason === null ? null : (
-                  <div className="text-xs text-red-700">
-                    {`last reject: ${state.lastRejectReason}`}
-                  </div>
+                  <div className="text-xs text-red-700">{`last reject: ${state.lastRejectReason}`}</div>
                 )}
                 {cityIoError === '' ? null : (
                   <div className="text-xs text-red-700">{cityIoError}</div>
@@ -468,45 +473,113 @@ function RuntimePanel() {
             )}
           </div>
         </div>
-        <button
-          aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
-          onClick={() => {
-            setIsGameplayMuted((current) => {
-              const nextMuted = !current;
-              if (nextMuted) {
-                gameplayAudioConsumer.dispose();
-              }
-              return nextMuted;
-            });
-          }}
-          className={`classicyButton classicyButtonShapeSquare classicyButtonSmall ml-auto inline-flex h-[26px] w-8 items-center justify-center p-0 ${
-            isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
-          }`}
-          title={isGameplayMuted ? 'Unmute' : 'Mute'}
-          type="button"
-        >
-          <svg
-            aria-hidden="true"
-            fill="none"
-            height="16"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="1.7"
-            viewBox="0 0 24 24"
-            width="16"
+        <div className="classicyRuntimeTopStatus pointer-events-none absolute left-1/2 top-1/2 z-[11] flex -translate-x-1/2 -translate-y-1/2 flex-col px-2 py-0.5">
+          <div className="text-[12px] font-bold leading-4">
+            {activeToolSpec.label}: ${activeToolSpec.baseCost}
+          </div>
+          <div className="text-[10px] leading-3 text-slate-700">
+            {sessionControlsDisabled
+              ? 'Connect and start a city to build.'
+              : activeToolSpec.size === 1
+                ? 'Click or drag to place tool.'
+                : 'Click map tiles to place tool.'}
+          </div>
+        </div>
+        <div className="classicyRuntimeTopControls ml-auto flex items-center gap-0.5">
+          <button
+            disabled={sessionControlsDisabled}
+            onClick={() => {
+              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                kind: 'sim-control',
+                control: isSimulationRunning ? 'pause' : 'play',
+              });
+            }}
+            className="classicyButton min-w-[84px] font-bold"
+            type="button"
           >
-            <path d="M3 9h4l5-4v14l-5-4H3z" />
-            {isGameplayMuted ? (
-              <path d="M15 9l6 6M21 9l-6 6" />
-            ) : (
-              <>
-                <path d="M15 9.5a4 4 0 0 1 0 5" />
-                <path d="M17.5 7a7.5 7.5 0 0 1 0 10" />
-              </>
-            )}
-          </svg>
-        </button>
+            {isSimulationRunning ? 'Pause' : 'Play'}
+          </button>
+          <div ref={speedControlRef} className="relative">
+            <button
+              disabled={sessionControlsDisabled}
+              onClick={() => {
+                setOpenMenubarSection(null);
+                setIsSpeedMenuOpen((current) => !current);
+              }}
+              className={`classicyButton min-w-[54px] px-1.5 font-bold ${
+                isSpeedMenuOpen ? 'classicyRuntimeMenuButtonActive' : ''
+              }`}
+              type="button"
+            >
+              {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
+            </button>
+            {isSpeedMenuOpen ? (
+              <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-[12] grid min-w-[58px] gap-0.5 p-1">
+                {([1, 2, 3] as const).map((speed) => (
+                  <button
+                    key={speed}
+                    className={`classicyButton px-2 py-1 text-left ${
+                      state.hudState.speed === speed
+                        ? 'classicyRuntimeMenuButtonActive font-bold'
+                        : ''
+                    }`}
+                    disabled={sessionControlsDisabled}
+                    onClick={() => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-speed',
+                        speed: speed as PlayableSimSpeed,
+                      });
+                      setIsSpeedMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </section>
+            ) : null}
+          </div>
+          <button
+            aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
+            onClick={() => {
+              setIsGameplayMuted((current) => {
+                const nextMuted = !current;
+                if (nextMuted) {
+                  gameplayAudioConsumer.dispose();
+                }
+                return nextMuted;
+              });
+            }}
+            className={`classicyButton classicyButtonShapeSquare inline-flex h-[var(--window-control-size)] w-[var(--window-control-size)] items-center justify-center p-0 ${
+              isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
+            }`}
+            title={isGameplayMuted ? 'Unmute' : 'Mute'}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.7"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path d="M3 9h4l5-4v14l-5-4H3z" />
+              {isGameplayMuted ? (
+                <path d="M15 9l6 6M21 9l-6 6" />
+              ) : (
+                <>
+                  <path d="M15 9.5a4 4 0 0 1 0 5" />
+                  <path d="M17.5 7a7.5 7.5 0 0 1 0 10" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
       </header>
       {visibleNotice === null ? null : (
         <NoticePanel
@@ -517,12 +590,20 @@ function RuntimePanel() {
         />
       )}
 
-      <section className="classicyRuntimePanelChrome pointer-events-auto absolute left-3 top-1/2 z-[6] grid max-h-[calc(100vh-240px)] w-[170px] -translate-y-1/2 gap-1.5 overflow-y-auto p-2">
-        <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
-          Build
-        </strong>
-        <MicropolisStatusSprite isRunning={isSimulationRunning} />
+      <section className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute left-0 bottom-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3">
         <div className="mx-auto grid grid-cols-2 justify-center gap-1.5">
+          <div className="col-span-2 flex justify-center pb-0.5">
+            <img
+              alt={
+                isSimulationRunning ? 'Simulation running indicator' : 'Simulation paused indicator'
+              }
+              draggable={false}
+              src={
+                isSimulationRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl
+              }
+              className="block h-[47px] w-[37px] [image-rendering:pixelated]"
+            />
+          </div>
           {PLAYABLE_TOOL_SPECS.map((spec) => {
             const active = activeTool === spec.tool;
             const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
@@ -543,7 +624,7 @@ function RuntimePanel() {
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                className={`classicyButton classicyButtonShapeSquare classicyButtonSmall classicyRuntimeToolButton flex h-10 w-10 items-center justify-center border-2 p-0 ${
+                className={`classicyButton classicyButtonShapeSquare classicyButtonSmall classicyRuntimeToolButton flex items-center justify-center border-2 p-0 ${
                   active ? 'classicyRuntimeToolButtonActive' : 'classicyRuntimeToolButtonInactive'
                 } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
@@ -552,7 +633,7 @@ function RuntimePanel() {
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
-                  <span className="flex h-[30px] w-[30px] items-center justify-center">
+                  <span className="flex h-8 w-8 items-center justify-center">
                     <img
                       alt={`${spec.label} tool`}
                       draggable={false}
@@ -576,62 +657,10 @@ function RuntimePanel() {
           <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
           <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
         </div>
-        <section className="grid gap-1">
-          <button
-            disabled={sessionControlsDisabled}
-            onClick={() => {
-              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                kind: 'sim-control',
-                control: isSimulationRunning ? 'pause' : 'play',
-              });
-            }}
-            className="classicyButton w-[68%] justify-self-center"
-            type="button"
-          >
-            {isSimulationRunning ? 'Pause' : 'Play'}
-          </button>
-          <div className="flex justify-center gap-1">
-            {[1, 2, 3].map((speed) => (
-              <button
-                key={speed}
-                disabled={sessionControlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'set-speed',
-                    speed: speed as PlayableSimSpeed,
-                  });
-                }}
-                className={`classicyButton classicyButtonSmall w-[26px] py-[2px] ${state.hudState.speed === speed ? 'classicyRuntimeMenuButtonActive font-bold' : 'font-normal'}`}
-                type="button"
-              >
-                x{speed}
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="grid gap-1">
-          <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
-            Zoom
-          </strong>
-          <div ref={setMapCameraControlsContainer} />
-        </section>
+        <div ref={setMapCameraControlsContainer} />
       </section>
 
-      <section className="classicyRuntimePanelChrome pointer-events-none absolute bottom-3 left-3 z-[6] w-[min(260px,calc(100vw-24px))] px-2 py-1.5">
-        <div className="text-xs font-bold">
-          {activeToolSpec.label}: ${activeToolSpec.baseCost}
-        </div>
-        <div className="text-[11px] text-slate-700">
-          {sessionControlsDisabled
-            ? 'Connect and start a city to build.'
-            : activeToolSpec.size === 1
-              ? 'Click or drag to place tool.'
-              : 'Click map tiles to place tool.'}
-        </div>
-      </section>
-
-      <section className="classicyRuntimePanelChrome pointer-events-auto absolute bottom-3 left-1/2 z-[6] grid w-[min(420px,calc(100vw-24px))] -translate-x-1/2 gap-1 p-2">
+      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-1 p-2">
         <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
           Message Feed
         </strong>
@@ -941,7 +970,7 @@ function NoticePanel({
   onDismiss: () => void;
 }) {
   return (
-    <section className="classicyRuntimePanelChrome pointer-events-auto absolute right-3 top-[46px] z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5">
+    <section className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5">
       <header
         className="flex items-center justify-between border px-2 py-1.5"
         style={{ background: notice.color }}
@@ -1014,29 +1043,6 @@ function DemandHeadsWidget({
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * Micropolis paused/running indicator shown above the Build tool palette.
- * Mirrors `UIUpdateRunning` bitmap switching in `ref/micropolis/res/micropolis.tcl`.
- * Parity note: this uses exported PNG assets instead of Tk bitmap paths.
- */
-function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
-  const spriteUrl = isRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl;
-  return (
-    <div
-      className="flex w-full justify-center"
-      title={isRunning ? 'Simulation running' : 'Simulation paused'}
-    >
-      <img
-        alt=""
-        aria-hidden
-        draggable={false}
-        src={spriteUrl}
-        className="block h-[94px] w-[74px] [image-rendering:pixelated]"
-      />
     </div>
   );
 }
