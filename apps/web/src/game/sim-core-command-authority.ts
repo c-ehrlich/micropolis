@@ -64,8 +64,16 @@ type RejectedOutcome = HostToolRejectOutcome;
 
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
+interface SnapshotReplayBaseline {
+  baseServerSeq: number;
+  tick: number;
+  placements: CoreHostSnapshotPlacement[];
+}
 
 const DEFAULT_TICK_INTERVAL_MS = 100;
+const COMMAND_OUTCOME_HISTORY_LIMIT = 512;
+const SEQUENCED_TAIL_HISTORY_LIMIT = 256;
+const SNAPSHOT_BASELINE_CADENCE_SERVER_SEQS = 64;
 
 /**
  * Authority engine selection for Authoritative Runtime host wiring.
@@ -152,8 +160,14 @@ export interface CreateCommandAuthorityOptions extends SimCoreCommandAuthorityOp
 export class SimCoreCommandAuthority implements CommandAuthority {
   private serverSeq = 0;
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
+  private readonly commandOutcomeOrder: string[] = [];
   private readonly sequencedEvents: SequencedEvent[] = [];
   private readonly patchEvents: CoreHostPatchEvent[] = [];
+  private snapshotReplayBaseline: SnapshotReplayBaseline = {
+    baseServerSeq: 0,
+    tick: 0,
+    placements: [],
+  };
   private readonly simState: SimState;
   private readonly simContext: SimContext;
   private readonly toolContext: ToolContext;
@@ -299,7 +313,7 @@ export class SimCoreCommandAuthority implements CommandAuthority {
       x: command.x,
       y: command.y,
     };
-    this.commandOutcomes.set(command.commandId, {
+    this.recordCommandOutcome(command.commandId, {
       kind: 'ack',
       placement,
     });
@@ -318,8 +332,9 @@ export class SimCoreCommandAuthority implements CommandAuthority {
    */
   public createSnapshotReplay(lastAppliedServerSeq = 0): CoreHostEvent[] {
     const baseServerSeq = normalizeServerSeq(lastAppliedServerSeq, this.serverSeq);
-    const snapshot = this.createSnapshot(baseServerSeq);
-    const tail = this.sequencedEvents.filter((event) => event.serverSeq > baseServerSeq);
+    const replayBaseServerSeq = Math.max(baseServerSeq, this.snapshotReplayBaseline.baseServerSeq);
+    const snapshot = this.createSnapshot(replayBaseServerSeq);
+    const tail = this.sequencedEvents.filter((event) => event.serverSeq > replayBaseServerSeq);
     return [snapshot, ...tail];
   }
 
@@ -356,7 +371,7 @@ export class SimCoreCommandAuthority implements CommandAuthority {
       this.setSimulationSpeed(command.speed);
     }
 
-    this.commandOutcomes.set(command.commandId, { kind: 'ack' });
+    this.recordCommandOutcome(command.commandId, { kind: 'ack' });
     return [this.recordSequenced(this.createAck(command.commandId, currentTick))];
   }
 
@@ -456,7 +471,7 @@ export class SimCoreCommandAuthority implements CommandAuthority {
     message: string,
     tick: number,
   ): CoreHostEvent[] {
-    this.commandOutcomes.set(commandId, {
+    this.recordCommandOutcome(commandId, {
       kind: 'reject',
       code,
       message,
@@ -469,7 +484,116 @@ export class SimCoreCommandAuthority implements CommandAuthority {
     if (event.type === 'patch') {
       this.patchEvents.push(event);
     }
+    this.compactSnapshotReplayBaselineOnCadence(event.serverSeq);
+    this.pruneSequencedHistoryAtOrBeforeReplayBaseline();
+    this.enforceSequencedTailHistoryLimit();
     return event;
+  }
+
+  /**
+   * Records one command outcome in a bounded idempotency cache.
+   * Mirrors the finite historical-buffer policy from Micropolis C graph/census
+   * buffers (`HISTLEN`/`MISCHISTLEN`) in `ref/micropolis/src/sim/headers/sim.h`,
+   * adapted to command outcome dedupe retention in TypeScript.
+   */
+  private recordCommandOutcome(commandId: string, outcome: CommandOutcome): void {
+    const hasExisting = this.commandOutcomes.has(commandId);
+    this.commandOutcomes.set(commandId, outcome);
+    if (!hasExisting) {
+      this.commandOutcomeOrder.push(commandId);
+    }
+    this.pruneCommandOutcomes();
+  }
+
+  /**
+   * Prunes command outcome cache to one bounded replay/idempotency window.
+   * Mirrors bounded-history intent from Micropolis C fixed-size history arrays in
+   * `ref/micropolis/src/sim/s_alloc.c`, applied to bridge command outcome records.
+   */
+  private pruneCommandOutcomes(): void {
+    if (this.commandOutcomeOrder.length <= COMMAND_OUTCOME_HISTORY_LIMIT) {
+      return;
+    }
+    const overflowCount = this.commandOutcomeOrder.length - COMMAND_OUTCOME_HISTORY_LIMIT;
+    const prunedCommandIds = this.commandOutcomeOrder.splice(0, overflowCount);
+    for (const commandId of prunedCommandIds) {
+      this.commandOutcomes.delete(commandId);
+    }
+  }
+
+  /**
+   * Advances replay snapshot baseline at cadence boundaries.
+   * Mirrors bridge snapshot-cadence intent from
+   * `packages/core-bridge/src/types.ts` (`CORE_BRIDGE_V1_DEFAULT_SNAPSHOT_CADENCE_TICKS`)
+   * while preserving bounded replay-tail recovery from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private compactSnapshotReplayBaselineOnCadence(serverSeq: number): void {
+    if (
+      serverSeq <= 0 ||
+      serverSeq % SNAPSHOT_BASELINE_CADENCE_SERVER_SEQS !== 0 ||
+      serverSeq <= SEQUENCED_TAIL_HISTORY_LIMIT
+    ) {
+      return;
+    }
+    this.advanceSnapshotReplayBaselineTo(serverSeq - SEQUENCED_TAIL_HISTORY_LIMIT);
+  }
+
+  /**
+   * Enforces one strict sequenced-tail event retention cap.
+   * Mirrors bounded replay-tail retention policy for browser memory safety, with
+   * baseline rollover preserving deterministic recovery semantics from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   */
+  private enforceSequencedTailHistoryLimit(): void {
+    if (this.sequencedEvents.length <= SEQUENCED_TAIL_HISTORY_LIMIT) {
+      return;
+    }
+    const overflowCount = this.sequencedEvents.length - SEQUENCED_TAIL_HISTORY_LIMIT;
+    const cutoffEvent = this.sequencedEvents[overflowCount - 1];
+    if (cutoffEvent !== undefined) {
+      this.advanceSnapshotReplayBaselineTo(cutoffEvent.serverSeq);
+    }
+    this.pruneSequencedHistoryAtOrBeforeReplayBaseline();
+  }
+
+  /**
+   * Advances replay baseline snapshot to one target server sequence.
+   * Mirrors checkpoint-baseline replay intent from
+   * `ref/micropolis/spec/integration/SPEC.md`, with TypeScript-only bounded
+   * retention not needed in C's single-process state model.
+   */
+  private advanceSnapshotReplayBaselineTo(targetServerSeq: number): void {
+    const normalizedTarget = normalizeServerSeq(targetServerSeq, this.serverSeq);
+    if (normalizedTarget <= this.snapshotReplayBaseline.baseServerSeq) {
+      return;
+    }
+    this.snapshotReplayBaseline = {
+      baseServerSeq: normalizedTarget,
+      tick: this.tickAtOrBefore(normalizedTarget),
+      placements: this.placementsAtOrBefore(normalizedTarget),
+    };
+  }
+
+  /**
+   * Drops retained sequenced and patch events at or before the replay baseline.
+   * Mirrors old-cycle history rollover intent from Micropolis C history shifting
+   * in `ref/micropolis/src/sim/s_sim.c`, adapted to bridge replay retention.
+   */
+  private pruneSequencedHistoryAtOrBeforeReplayBaseline(): void {
+    const baselineServerSeq = this.snapshotReplayBaseline.baseServerSeq;
+    while (
+      this.sequencedEvents[0] !== undefined &&
+      this.sequencedEvents[0].serverSeq <= baselineServerSeq
+    ) {
+      this.sequencedEvents.shift();
+    }
+    while (
+      this.patchEvents[0] !== undefined &&
+      this.patchEvents[0].serverSeq <= baselineServerSeq
+    ) {
+      this.patchEvents.shift();
+    }
   }
 
   private createAck(commandId: string, tick: number): CoreHostAckEvent {
@@ -526,10 +650,15 @@ export class SimCoreCommandAuthority implements CommandAuthority {
   }
 
   private placementsAtOrBefore(baseServerSeq: number): CoreHostSnapshotPlacement[] {
-    const placements: CoreHostSnapshotPlacement[] = [];
+    const placements = this.snapshotReplayBaseline.placements.map((placement) => ({
+      ...placement,
+    }));
     for (const patchEvent of this.patchEvents) {
       if (patchEvent.serverSeq > baseServerSeq) {
         break;
+      }
+      if (patchEvent.serverSeq <= this.snapshotReplayBaseline.baseServerSeq) {
+        continue;
       }
 
       for (const placement of patchEvent.placements) {
@@ -546,8 +675,8 @@ export class SimCoreCommandAuthority implements CommandAuthority {
   }
 
   private tickAtOrBefore(baseServerSeq: number): number {
-    if (baseServerSeq <= 0) {
-      return 0;
+    if (baseServerSeq <= this.snapshotReplayBaseline.baseServerSeq) {
+      return this.snapshotReplayBaseline.tick;
     }
 
     for (let index = this.sequencedEvents.length - 1; index >= 0; index -= 1) {
@@ -557,7 +686,7 @@ export class SimCoreCommandAuthority implements CommandAuthority {
       }
     }
 
-    return 0;
+    return this.snapshotReplayBaseline.tick;
   }
 
   private nextServerSeq(): number {

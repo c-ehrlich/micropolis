@@ -32,6 +32,14 @@ type RejectedOutcome = HostToolRejectOutcome;
 
 type CommandOutcome = AcceptedOutcome | RejectedOutcome;
 type SequencedEvent = CoreHostAckEvent | CoreHostRejectEvent | CoreHostPatchEvent;
+interface SnapshotReplayBaseline {
+  baseServerSeq: number;
+  tick: number;
+  placements: CoreHostSnapshotPlacement[];
+}
+const COMMAND_OUTCOME_HISTORY_LIMIT = 512;
+const SEQUENCED_TAIL_HISTORY_LIMIT = 256;
+const SNAPSHOT_BASELINE_CADENCE_SERVER_SEQS = 64;
 
 /**
  * Construction options for the deterministic Authoritative Runtime command authority shim.
@@ -58,8 +66,14 @@ export class DeterministicCommandAuthority {
   private serverSeq = 0;
   private tick = 0;
   private readonly commandOutcomes = new Map<string, CommandOutcome>();
+  private readonly commandOutcomeOrder: string[] = [];
   private readonly sequencedEvents: SequencedEvent[] = [];
   private readonly patchEvents: CoreHostPatchEvent[] = [];
+  private snapshotReplayBaseline: SnapshotReplayBaseline = {
+    baseServerSeq: 0,
+    tick: 0,
+    placements: [],
+  };
   private readonly simState: SimState;
   private readonly toolContext: ToolContext;
 
@@ -111,7 +125,7 @@ export class DeterministicCommandAuthority {
       x: command.x,
       y: command.y,
     };
-    this.commandOutcomes.set(command.commandId, {
+    this.recordCommandOutcome(command.commandId, {
       kind: 'ack',
       placement,
     });
@@ -142,7 +156,7 @@ export class DeterministicCommandAuthority {
       ];
     }
 
-    this.commandOutcomes.set(commandId, { kind: 'ack' });
+    this.recordCommandOutcome(commandId, { kind: 'ack' });
     return [this.recordSequenced(this.createAck(commandId, tick))];
   }
 
@@ -191,8 +205,9 @@ export class DeterministicCommandAuthority {
    */
   public createSnapshotReplay(lastAppliedServerSeq = 0): CoreHostEvent[] {
     const baseServerSeq = normalizeServerSeq(lastAppliedServerSeq, this.serverSeq);
-    const snapshot = this.createSnapshot(baseServerSeq);
-    const tail = this.sequencedEvents.filter((event) => event.serverSeq > baseServerSeq);
+    const replayBaseServerSeq = Math.max(baseServerSeq, this.snapshotReplayBaseline.baseServerSeq);
+    const snapshot = this.createSnapshot(replayBaseServerSeq);
+    const tail = this.sequencedEvents.filter((event) => event.serverSeq > replayBaseServerSeq);
     return [snapshot, ...tail];
   }
 
@@ -202,7 +217,7 @@ export class DeterministicCommandAuthority {
     message: string,
     tick: number,
   ): CoreHostEvent[] {
-    this.commandOutcomes.set(commandId, {
+    this.recordCommandOutcome(commandId, {
       kind: 'reject',
       code,
       message,
@@ -215,7 +230,115 @@ export class DeterministicCommandAuthority {
     if (event.type === 'patch') {
       this.patchEvents.push(event);
     }
+    this.compactSnapshotReplayBaselineOnCadence(event.serverSeq);
+    this.pruneSequencedHistoryAtOrBeforeReplayBaseline();
+    this.enforceSequencedTailHistoryLimit();
     return event;
+  }
+
+  /**
+   * Records one command outcome in a bounded idempotency cache.
+   * Mirrors bounded historical-buffer intent in Micropolis C (`HISTLEN` /
+   * `MISCHISTLEN` in `ref/micropolis/src/sim/headers/sim.h`) while adapting
+   * to bridge command outcome dedupe retention.
+   */
+  private recordCommandOutcome(commandId: string, outcome: CommandOutcome): void {
+    const hasExisting = this.commandOutcomes.has(commandId);
+    this.commandOutcomes.set(commandId, outcome);
+    if (!hasExisting) {
+      this.commandOutcomeOrder.push(commandId);
+    }
+    this.pruneCommandOutcomes();
+  }
+
+  /**
+   * Prunes command outcome cache to one bounded replay/idempotency window.
+   * Mirrors Micropolis C fixed-size history retention in
+   * `ref/micropolis/src/sim/s_alloc.c`, applied to deterministic fallback
+   * command outcomes.
+   */
+  private pruneCommandOutcomes(): void {
+    if (this.commandOutcomeOrder.length <= COMMAND_OUTCOME_HISTORY_LIMIT) {
+      return;
+    }
+    const overflowCount = this.commandOutcomeOrder.length - COMMAND_OUTCOME_HISTORY_LIMIT;
+    const prunedCommandIds = this.commandOutcomeOrder.splice(0, overflowCount);
+    for (const commandId of prunedCommandIds) {
+      this.commandOutcomes.delete(commandId);
+    }
+  }
+
+  /**
+   * Advances replay snapshot baseline on cadence boundaries.
+   * Mirrors bridge snapshot-cadence ownership from
+   * `packages/core-bridge/src/types.ts` (`CORE_BRIDGE_V1_DEFAULT_SNAPSHOT_CADENCE_TICKS`)
+   * for deterministic fallback replay retention.
+   */
+  private compactSnapshotReplayBaselineOnCadence(serverSeq: number): void {
+    if (
+      serverSeq <= 0 ||
+      serverSeq % SNAPSHOT_BASELINE_CADENCE_SERVER_SEQS !== 0 ||
+      serverSeq <= SEQUENCED_TAIL_HISTORY_LIMIT
+    ) {
+      return;
+    }
+    this.advanceSnapshotReplayBaselineTo(serverSeq - SEQUENCED_TAIL_HISTORY_LIMIT);
+  }
+
+  /**
+   * Enforces one strict sequenced-tail retention cap with baseline rollover.
+   * Mirrors bounded replay retention policy needed in browser memory-constrained
+   * environments while preserving deterministic replay construction.
+   */
+  private enforceSequencedTailHistoryLimit(): void {
+    if (this.sequencedEvents.length <= SEQUENCED_TAIL_HISTORY_LIMIT) {
+      return;
+    }
+    const overflowCount = this.sequencedEvents.length - SEQUENCED_TAIL_HISTORY_LIMIT;
+    const cutoffEvent = this.sequencedEvents[overflowCount - 1];
+    if (cutoffEvent !== undefined) {
+      this.advanceSnapshotReplayBaselineTo(cutoffEvent.serverSeq);
+    }
+    this.pruneSequencedHistoryAtOrBeforeReplayBaseline();
+  }
+
+  /**
+   * Advances replay baseline snapshot to one target server sequence.
+   * Mirrors snapshot baseline + tail recovery from
+   * `ref/micropolis/spec/integration/SPEC.md`, with bounded retention behavior
+   * added for TypeScript fallback runtime safety.
+   */
+  private advanceSnapshotReplayBaselineTo(targetServerSeq: number): void {
+    const normalizedTarget = normalizeServerSeq(targetServerSeq, this.serverSeq);
+    if (normalizedTarget <= this.snapshotReplayBaseline.baseServerSeq) {
+      return;
+    }
+    this.snapshotReplayBaseline = {
+      baseServerSeq: normalizedTarget,
+      tick: this.tickAtOrBefore(normalizedTarget),
+      placements: this.placementsAtOrBefore(normalizedTarget),
+    };
+  }
+
+  /**
+   * Drops retained sequenced and patch events at or before replay baseline.
+   * Mirrors rolling history-window behavior from Micropolis C census/history
+   * maintenance in `ref/micropolis/src/sim/s_sim.c`, adapted to replay queues.
+   */
+  private pruneSequencedHistoryAtOrBeforeReplayBaseline(): void {
+    const baselineServerSeq = this.snapshotReplayBaseline.baseServerSeq;
+    while (
+      this.sequencedEvents[0] !== undefined &&
+      this.sequencedEvents[0].serverSeq <= baselineServerSeq
+    ) {
+      this.sequencedEvents.shift();
+    }
+    while (
+      this.patchEvents[0] !== undefined &&
+      this.patchEvents[0].serverSeq <= baselineServerSeq
+    ) {
+      this.patchEvents.shift();
+    }
   }
 
   private createAck(commandId: string, tick: number): CoreHostAckEvent {
@@ -272,10 +395,15 @@ export class DeterministicCommandAuthority {
   }
 
   private placementsAtOrBefore(baseServerSeq: number): CoreHostSnapshotPlacement[] {
-    const placements: CoreHostSnapshotPlacement[] = [];
+    const placements = this.snapshotReplayBaseline.placements.map((placement) => ({
+      ...placement,
+    }));
     for (const patchEvent of this.patchEvents) {
       if (patchEvent.serverSeq > baseServerSeq) {
         break;
+      }
+      if (patchEvent.serverSeq <= this.snapshotReplayBaseline.baseServerSeq) {
+        continue;
       }
 
       for (const placement of patchEvent.placements) {
@@ -292,8 +420,8 @@ export class DeterministicCommandAuthority {
   }
 
   private tickAtOrBefore(baseServerSeq: number): number {
-    if (baseServerSeq <= 0) {
-      return 0;
+    if (baseServerSeq <= this.snapshotReplayBaseline.baseServerSeq) {
+      return this.snapshotReplayBaseline.tick;
     }
 
     for (let index = this.sequencedEvents.length - 1; index >= 0; index -= 1) {
@@ -303,7 +431,7 @@ export class DeterministicCommandAuthority {
       }
     }
 
-    return 0;
+    return this.snapshotReplayBaseline.tick;
   }
 
   private nextServerSeq(): number {
