@@ -26,21 +26,13 @@ export function MicropolisSoundPreviewPanel() {
   }, []);
 
   return (
-    <section
-      style={{
-        border: '1px solid #334155',
-        borderRadius: 6,
-        display: 'grid',
-        gap: 8,
-        padding: 10,
-      }}
-    >
-      <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>Sound Test</strong>
-      <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+    <section className="grid gap-2 rounded-md border border-slate-700 p-2.5">
+      <strong className="font-mono text-[13px]">Sound Test</strong>
+      <div className="font-mono text-xs text-slate-700">
         Manual verification only: preview Micropolis wav assets (`/sounds/*.wav`) from the
         Sugar-style token route. Gameplay audio remains host-envelope driven.
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div className="flex flex-wrap gap-2">
         {SOUND_PREVIEW_SPECS.map((soundSpec) => (
           <button
             key={soundSpec.token}
@@ -63,9 +55,7 @@ export function MicropolisSoundPreviewPanel() {
           </button>
         ))}
       </div>
-      <div style={{ color: '#0f766e', fontFamily: 'monospace', fontSize: 12, minHeight: 16 }}>
-        {soundStatus}
-      </div>
+      <div className="min-h-4 font-mono text-xs text-teal-700">{soundStatus}</div>
     </section>
   );
 }

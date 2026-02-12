@@ -1,5 +1,8 @@
+import './index.classicy.css';
+
 import { createFileRoute } from '@tanstack/react-router';
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { getAllThemes, getThemeVars } from 'classicy';
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import demandGaugeBackgroundUrl from '../../../../packages/sim-assets/generated-images/images/demandg.png';
 import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
@@ -90,13 +93,7 @@ export function triggerRouteDisasterControl(
  */
 function HomePage() {
   return (
-    <main
-      style={{
-        inset: 0,
-        overflow: 'hidden',
-        position: 'fixed',
-      }}
-    >
+    <main className="fixed inset-0 overflow-hidden">
       <RuntimePanel />
     </main>
   );
@@ -155,14 +152,17 @@ function RuntimePanel() {
   const [cityIoError, setCityIoError] = useState<string>('');
   const [_disasterStatus, setDisasterStatus] = useState<string>('');
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
+  const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
+  const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false);
   const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
-  const [mapCameraControlsContainer, setMapCameraControlsContainer] =
-    useState<HTMLDivElement | null>(null);
+  const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
   const menubarRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const speedControlRef = useRef<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
   const commandCounter = useRef(1);
@@ -212,17 +212,21 @@ function RuntimePanel() {
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (openMenubarSection === null) {
+      if (!(event.target instanceof Node)) {
         return;
       }
-      const menuRoot = menubarRef.current;
-      if (menuRoot === null) {
-        return;
+      if (openMenubarSection !== null) {
+        const menuRoot = menubarRef.current;
+        if (menuRoot === null || !menuRoot.contains(event.target)) {
+          setOpenMenubarSection(null);
+        }
       }
-      if (event.target instanceof Node && menuRoot.contains(event.target)) {
-        return;
+      if (isSpeedMenuOpen) {
+        const speedRoot = speedControlRef.current;
+        if (speedRoot === null || !speedRoot.contains(event.target)) {
+          setIsSpeedMenuOpen(false);
+        }
       }
-      setOpenMenubarSection(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -231,6 +235,8 @@ function RuntimePanel() {
       }
       setOpenMenubarSection(null);
       setGameDialog(null);
+      setIsSpeedMenuOpen(false);
+      setIsBrandDialogOpen(false);
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
@@ -239,7 +245,7 @@ function RuntimePanel() {
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [openMenubarSection]);
+  }, [openMenubarSection, isSpeedMenuOpen]);
 
   const controlsDisabled = state.phase !== 'ready';
   const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
@@ -263,6 +269,16 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
+  const menubarButtonClass = 'classicyButton classicyRuntimeMenuButton px-2 py-1 text-left';
+  const menubarPanelClass =
+    'classicyRuntimeMenuPanel absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
+  const runtimeTheme = useMemo(() => {
+    const theme = getAllThemes()[0];
+    if (theme === undefined) {
+      return {};
+    }
+    return getThemeVars(theme);
+  }, []);
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -278,25 +294,53 @@ function RuntimePanel() {
     setGameDialog('scenario');
   }, [state.hudState.notice]);
 
+  useLayoutEffect(() => {
+    const menubarElement = menubarRef.current;
+    const sidebarElement = sidebarRef.current;
+    if (
+      menubarElement === null ||
+      sidebarElement === null ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const updateInsets = () => {
+      const nextTopInset = Math.ceil(menubarElement.getBoundingClientRect().height);
+      const nextLeftInset = Math.ceil(sidebarElement.getBoundingClientRect().width);
+      setLayoutInsets((currentInsets) => {
+        if (currentInsets.top === nextTopInset && currentInsets.left === nextLeftInset) {
+          return currentInsets;
+        }
+        return { top: nextTopInset, left: nextLeftInset };
+      });
+    };
+
+    updateInsets();
+
+    const observer = new ResizeObserver(() => {
+      updateInsets();
+    });
+    observer.observe(menubarElement);
+    observer.observe(sidebarElement);
+    window.addEventListener('resize', updateInsets);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateInsets);
+    };
+  }, []);
+
   return (
     <section
-      style={{
-        background: '#0b1020',
-        color: '#e2e8f0',
-        height: '100%',
-        overflow: 'hidden',
-        position: 'relative',
-        width: '100%',
-      }}
+      className="classicyRuntimePanel relative h-full w-full overflow-hidden"
+      style={runtimeTheme as CSSProperties}
     >
       <div
-        style={{
-          inset: 0,
-          position: 'absolute',
-        }}
+        className="classicyRuntimeMapArea absolute"
+        style={{ left: layoutInsets.left, top: layoutInsets.top }}
       >
         <MapCanvas
-          cameraControlsContainer={mapCameraControlsContainer}
           dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
           hoverTool={sessionControlsDisabled ? undefined : activeTool}
           mapState={state.mapState}
@@ -321,83 +365,29 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        style={{
-          alignItems: 'center',
-          background: 'rgba(226, 232, 240, 0.96)',
-          borderBottom: '1px solid rgba(15, 23, 42, 0.55)',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 8,
-          left: 0,
-          minHeight: 34,
-          padding: '4px 8px',
-          pointerEvents: 'auto',
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          zIndex: 10,
-        }}
+        className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 pl-2 pr-0"
       >
-        <div
-          style={{
-            alignItems: 'center',
-            color: '#0f172a',
-            display: 'flex',
-            fontFamily: 'monospace',
-            fontSize: 12,
-            fontWeight: 700,
-            gap: 6,
-            minWidth: 86,
-          }}
-        >
-          <span>Micropolis</span>
-        </div>
-        <div style={{ alignItems: 'center', display: 'flex', gap: 2 }}>
-          <div style={{ position: 'relative' }}>
+        <div className="classicyRuntimeTopLeft flex items-center gap-2">
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
+                setIsSpeedMenuOpen(false);
               }}
-              style={{
-                background: openMenubarSection === 'game' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 72,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} ${openMenubarSection === 'game' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Game
             </button>
             {openMenubarSection !== 'game' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 2,
-                  left: 0,
-                  minWidth: 204,
-                  padding: 6,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
+              <section className={`${menubarPanelClass} min-w-[204px] gap-0.5`}>
                 <button
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   New
@@ -409,7 +399,7 @@ function RuntimePanel() {
                     setGameDialog('save');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Save...
@@ -421,7 +411,7 @@ function RuntimePanel() {
                     setGameDialog('load');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Load...
@@ -432,7 +422,7 @@ function RuntimePanel() {
                     setGameDialog('scenario');
                     setOpenMenubarSection(null);
                   }}
-                  style={{ textAlign: 'left' }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Scenario...
@@ -440,44 +430,19 @@ function RuntimePanel() {
               </section>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
+                setIsSpeedMenuOpen(false);
               }}
-              style={{
-                background: openMenubarSection === 'disasters' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 84,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Disasters
             </button>
             {openMenubarSection !== 'disasters' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 4,
-                  left: 0,
-                  minWidth: 204,
-                  padding: 6,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
+              <section className={`${menubarPanelClass} min-w-[204px] gap-1`}>
                 {PLAYABLE_DISASTER_CHOICES.map((choice) => (
                   <button
                     key={choice.id}
@@ -486,7 +451,7 @@ function RuntimePanel() {
                       setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                       setOpenMenubarSection(null);
                     }}
-                    style={{ textAlign: 'left' }}
+                    className="classicyButton classicyRuntimeMenuItem text-left"
                     type="button"
                   >
                     {choice.label.replace('Trigger ', '')}
@@ -495,64 +460,33 @@ function RuntimePanel() {
               </section>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
+          <div className="relative">
             <button
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
+                setIsSpeedMenuOpen(false);
               }}
-              style={{
-                background: openMenubarSection === 'runtime' ? '#bfdbfe' : 'transparent',
-                border: '1px solid rgba(15, 23, 42, 0.35)',
-                borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                minWidth: 80,
-                padding: '4px 8px',
-                textAlign: 'left',
-              }}
+              className={`${menubarButtonClass} ${openMenubarSection === 'runtime' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Runtime
             </button>
             {openMenubarSection !== 'runtime' ? null : (
-              <section
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid rgba(15, 23, 42, 0.55)',
-                  borderRadius: 4,
-                  boxShadow: '0 8px 20px rgba(15, 23, 42, 0.25)',
-                  color: '#0f172a',
-                  display: 'grid',
-                  gap: 6,
-                  left: 0,
-                  minWidth: 290,
-                  padding: 8,
-                  position: 'absolute',
-                  top: 'calc(100% + 3px)',
-                  zIndex: 12,
-                }}
-              >
-                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+              <section className={`${menubarPanelClass} min-w-[290px] gap-1.5 p-2`}>
+                <div className="text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
                 </div>
-                <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{runtimePhaseStatus}</div>
+                <div className="text-xs">{runtimePhaseStatus}</div>
                 {state.lastRejectReason === null ? null : (
-                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
-                    {`last reject: ${state.lastRejectReason}`}
-                  </div>
+                  <div className="text-xs text-red-700">{`last reject: ${state.lastRejectReason}`}</div>
                 )}
                 {cityIoError === '' ? null : (
-                  <div style={{ color: '#b91c1c', fontFamily: 'monospace', fontSize: 12 }}>
-                    {cityIoError}
-                  </div>
+                  <div className="text-xs text-red-700">{cityIoError}</div>
                 )}
                 {lastSaveStatus === '' ? null : (
-                  <div style={{ color: '#166534', fontFamily: 'monospace', fontSize: 12 }}>
-                    {lastSaveStatus}
-                  </div>
+                  <div className="text-xs text-green-700">{lastSaveStatus}</div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div className="flex flex-wrap gap-2">
                   <button
                     disabled={reconnectDisabled}
                     onClick={() => {
@@ -560,6 +494,7 @@ function RuntimePanel() {
                       setCityIoError('');
                       setLastSaveStatus('');
                     }}
+                    className="classicyButton classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Reconnect
@@ -569,6 +504,7 @@ function RuntimePanel() {
                     onClick={() => {
                       runtime.requestSnapshot('resync');
                     }}
+                    className="classicyButton classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Resync Snapshot
@@ -578,55 +514,136 @@ function RuntimePanel() {
             )}
           </div>
         </div>
-        <button
-          aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
-          onClick={() => {
-            setIsGameplayMuted((current) => {
-              const nextMuted = !current;
-              if (nextMuted) {
-                gameplayAudioConsumer.dispose();
-              }
-              return nextMuted;
-            });
-          }}
-          style={{
-            alignItems: 'center',
-            background: isGameplayMuted ? '#fee2e2' : 'transparent',
-            border: '1px solid rgba(15, 23, 42, 0.35)',
-            borderRadius: 3,
-            color: isGameplayMuted ? '#b91c1c' : '#0f172a',
-            display: 'inline-flex',
-            height: 26,
-            justifyContent: 'center',
-            marginLeft: 'auto',
-            padding: 0,
-            width: 32,
-          }}
-          title={isGameplayMuted ? 'Unmute' : 'Mute'}
-          type="button"
-        >
-          <svg
-            aria-hidden="true"
-            fill="none"
-            height="16"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="1.7"
-            viewBox="0 0 24 24"
-            width="16"
+        <div className="classicyRuntimeTopStatus pointer-events-none absolute left-1/2 top-1/2 z-[11] flex -translate-x-1/2 -translate-y-1/2 flex-col px-2 py-0.5">
+          <div className="text-[12px] font-bold leading-4">
+            {activeToolSpec.label}: ${activeToolSpec.baseCost}
+          </div>
+          <div className="text-[10px] leading-3 text-slate-700">
+            {sessionControlsDisabled
+              ? 'Connect and start a city to build.'
+              : activeToolSpec.size === 1
+                ? 'Click or drag to place tool.'
+                : 'Click map tiles to place tool.'}
+          </div>
+        </div>
+        <div className="classicyRuntimeTopControls ml-auto flex items-center gap-2">
+          <button
+            disabled={sessionControlsDisabled}
+            onClick={() => {
+              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                kind: 'sim-control',
+                control: isSimulationRunning ? 'pause' : 'play',
+              });
+            }}
+            className="classicyButton classicyRuntimeTopControlButton min-w-[84px] font-bold"
+            type="button"
           >
-            <path d="M3 9h4l5-4v14l-5-4H3z" />
-            {isGameplayMuted ? (
-              <path d="M15 9l6 6M21 9l-6 6" />
-            ) : (
-              <>
-                <path d="M15 9.5a4 4 0 0 1 0 5" />
-                <path d="M17.5 7a7.5 7.5 0 0 1 0 10" />
-              </>
-            )}
-          </svg>
-        </button>
+            {isSimulationRunning ? 'Pause' : 'Play'}
+          </button>
+          <div ref={speedControlRef} className="relative">
+            <button
+              disabled={sessionControlsDisabled}
+              onClick={() => {
+                setOpenMenubarSection(null);
+                setIsSpeedMenuOpen((current) => !current);
+              }}
+              className={`classicyButton classicyRuntimeTopControlButton min-w-[54px] px-1.5 font-bold ${
+                isSpeedMenuOpen ? 'classicyRuntimeMenuButtonActive' : ''
+              }`}
+              type="button"
+            >
+              {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
+            </button>
+            {isSpeedMenuOpen ? (
+              <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-[12] grid min-w-[58px] gap-0.5 p-1">
+                {([1, 2, 3] as const).map((speed) => (
+                  <button
+                    key={speed}
+                    className={`classicyButton px-2 py-1 text-left ${
+                      state.hudState.speed === speed
+                        ? 'classicyRuntimeMenuButtonActive font-bold'
+                        : ''
+                    }`}
+                    disabled={sessionControlsDisabled}
+                    onClick={() => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-speed',
+                        speed: speed as PlayableSimSpeed,
+                      });
+                      setIsSpeedMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </section>
+            ) : null}
+          </div>
+          <button
+            aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
+            onClick={() => {
+              setIsGameplayMuted((current) => {
+                const nextMuted = !current;
+                if (nextMuted) {
+                  gameplayAudioConsumer.dispose();
+                }
+                return nextMuted;
+              });
+            }}
+            className={`classicyButton classicyRuntimeTopControlButton classicyButtonShapeSquare inline-flex h-[var(--window-control-size)] w-[var(--window-control-size)] items-center justify-center p-0 ${
+              isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
+            }`}
+            title={isGameplayMuted ? 'Unmute' : 'Mute'}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.7"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path d="M3 9h4l5-4v14l-5-4H3z" />
+              {isGameplayMuted ? (
+                <path d="M15 9l6 6M21 9l-6 6" />
+              ) : (
+                <>
+                  <path d="M15 9.5a4 4 0 0 1 0 5" />
+                  <path d="M17.5 7a7.5 7.5 0 0 1 0 10" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
+        <img
+          alt={isSimulationRunning ? 'Simulation running indicator' : 'Simulation paused indicator'}
+          aria-label="Open Micropolis popup"
+          draggable={false}
+          onClick={() => {
+            setOpenMenubarSection(null);
+            setIsSpeedMenuOpen(false);
+            setIsBrandDialogOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setOpenMenubarSection(null);
+              setIsSpeedMenuOpen(false);
+              setIsBrandDialogOpen(true);
+            }
+          }}
+          role="button"
+          src={isSimulationRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl}
+          tabIndex={0}
+          title="Micropolis"
+          className="classicyRuntimeBrandIcon [image-rendering:pixelated]"
+        />
       </header>
       {visibleNotice === null ? null : (
         <NoticePanel
@@ -634,51 +651,16 @@ function RuntimePanel() {
           onDismiss={() => {
             setDismissedNoticeSignature(activeNoticeSignature);
           }}
+          topInsetPx={layoutInsets.top}
         />
       )}
 
       <section
-        style={{
-          backdropFilter: 'blur(3px)',
-          background: 'rgba(107, 114, 128, 0.9)',
-          border: '2px solid rgba(15, 23, 42, 0.75)',
-          borderRadius: 6,
-          display: 'grid',
-          gap: 6,
-          left: 12,
-          maxHeight: 'calc(100vh - 240px)',
-          overflowY: 'auto',
-          padding: 8,
-          pointerEvents: 'auto',
-          position: 'absolute',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: 170,
-          zIndex: 6,
-        }}
+        ref={sidebarRef}
+        className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3"
+        style={{ top: layoutInsets.top }}
       >
-        <strong
-          style={{
-            color: '#f8fafc',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            letterSpacing: 0.4,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-          }}
-        >
-          Build
-        </strong>
-        <MicropolisStatusSprite isRunning={isSimulationRunning} />
-        <div
-          style={{
-            display: 'grid',
-            gap: 6,
-            gridTemplateColumns: 'repeat(2, 40px)',
-            justifyContent: 'center',
-            margin: '0 auto',
-          }}
-        >
+        <div className="mx-auto grid grid-cols-2 justify-center gap-x-1.5 gap-y-1">
           {PLAYABLE_TOOL_SPECS.map((spec) => {
             const active = activeTool === spec.tool;
             const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
@@ -699,52 +681,21 @@ function RuntimePanel() {
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                style={{
-                  alignItems: 'center',
-                  background: active ? '#fef08a' : '#e2e8f0',
-                  border: active ? '2px solid #b45309' : '2px solid #334155',
-                  borderRadius: 2,
-                  cursor: sessionControlsDisabled ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  height: 40,
-                  justifyContent: 'center',
-                  opacity: sessionControlsDisabled ? 0.6 : 1,
-                  padding: 0,
-                  width: 40,
-                }}
+                className={`classicyButton classicyButtonShapeSquare classicyButtonSmall classicyRuntimeToolButton flex items-center justify-center border-2 p-0 ${
+                  active ? 'classicyRuntimeToolButtonActive' : 'classicyRuntimeToolButtonInactive'
+                } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 {iconUrl === undefined ? (
-                  <span
-                    style={{
-                      color: '#0f172a',
-                      fontFamily: 'monospace',
-                      fontSize: 10,
-                      fontWeight: 700,
-                    }}
-                  >
+                  <span className="classicyRuntimeToolButtonLabel font-bold">
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
-                  <span
-                    style={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      height: 30,
-                      justifyContent: 'center',
-                      width: 30,
-                    }}
-                  >
+                  <span className="flex h-8 w-8 items-center justify-center">
                     <img
                       alt={`${spec.label} tool`}
                       draggable={false}
                       src={iconUrl}
-                      style={{
-                        display: 'block',
-                        height: '100%',
-                        imageRendering: 'pixelated',
-                        objectFit: 'contain',
-                        width: '100%',
-                      }}
+                      className="block h-full w-full object-contain [image-rendering:pixelated]"
                     />
                   </span>
                 )}
@@ -757,131 +708,37 @@ function RuntimePanel() {
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
         />
-        <div
-          style={{
-            color: '#f8fafc',
-            display: 'grid',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            gap: 2,
-            textAlign: 'center',
-          }}
-        >
-          <div>{state.hudState.fundsLabel}</div>
-          <div>{state.hudState.dateDisplayLabel}</div>
-          <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
-          <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
-        </div>
-        <section style={{ display: 'grid', gap: 4 }}>
-          <button
-            disabled={sessionControlsDisabled}
-            onClick={() => {
-              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                kind: 'sim-control',
-                control: isSimulationRunning ? 'pause' : 'play',
-              });
-            }}
-            style={{ justifySelf: 'center', width: '68%' }}
-            type="button"
-          >
-            {isSimulationRunning ? 'Pause' : 'Play'}
-          </button>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-            {[1, 2, 3].map((speed) => (
-              <button
-                key={speed}
-                disabled={sessionControlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'set-speed',
-                    speed: speed as PlayableSimSpeed,
-                  });
-                }}
-                style={{
-                  fontWeight: state.hudState.speed === speed ? 700 : 400,
-                  padding: '2px 0',
-                  width: 26,
-                }}
-                type="button"
-              >
-                x{speed}
-              </button>
-            ))}
+        <div className="classicyRuntimeSidebarStats grid text-[11px]">
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Funds</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
+            </div>
           </div>
-        </section>
-        <section style={{ display: 'grid', gap: 4 }}>
-          <strong
-            style={{
-              color: '#f8fafc',
-              fontFamily: 'monospace',
-              fontSize: 11,
-              letterSpacing: 0.4,
-              textAlign: 'center',
-              textTransform: 'uppercase',
-            }}
-          >
-            Zoom
-          </strong>
-          <div ref={setMapCameraControlsContainer} />
-        </section>
-      </section>
-
-      <section
-        style={{
-          background: 'rgba(248, 250, 252, 0.94)',
-          border: '2px solid rgba(15, 23, 42, 0.72)',
-          borderRadius: 3,
-          bottom: 12,
-          color: '#0f172a',
-          left: 12,
-          padding: '6px 8px',
-          pointerEvents: 'none',
-          position: 'absolute',
-          width: 'min(260px, calc(100vw - 24px))',
-          zIndex: 6,
-        }}
-      >
-        <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>
-          {activeToolSpec.label}: ${activeToolSpec.baseCost}
-        </div>
-        <div style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>
-          {sessionControlsDisabled
-            ? 'Connect and start a city to build.'
-            : activeToolSpec.size === 1
-              ? 'Click or drag to place tool.'
-              : 'Click map tiles to place tool.'}
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Date</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')}
+            </div>
+          </div>
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Population</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.cityPopulation.toLocaleString('en-US')}
+            </div>
+          </div>
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Class</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.cityClassLabel.slice(0, 1).toUpperCase() +
+                state.hudState.cityClassLabel.slice(1).toLowerCase()}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          backdropFilter: 'blur(3px)',
-          background: 'rgba(107, 114, 128, 0.9)',
-          border: '2px solid rgba(15, 23, 42, 0.75)',
-          borderRadius: 6,
-          bottom: 12,
-          display: 'grid',
-          gap: 4,
-          left: '50%',
-          padding: 8,
-          pointerEvents: 'auto',
-          position: 'absolute',
-          transform: 'translateX(-50%)',
-          width: 'min(420px, calc(100vw - 24px))',
-          zIndex: 6,
-        }}
-      >
-        <strong
-          style={{
-            color: '#f8fafc',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            letterSpacing: 0.4,
-            textAlign: 'center',
-            textTransform: 'uppercase',
-          }}
-        >
+      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
+        <strong className="classicyRuntimePanelTitle text-center text-xs leading-none normal-case">
           Message Feed
         </strong>
         <MessageFeed messages={state.hudState.messages} />
@@ -898,9 +755,74 @@ function RuntimePanel() {
           }
         }}
         ref={loadInputRef}
-        style={{ display: 'none' }}
+        className="hidden"
         type="file"
       />
+
+      {isBrandDialogOpen ? (
+        <div
+          onClick={() => {
+            setIsBrandDialogOpen(false);
+          }}
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
+        >
+          <section
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+            className="classicyWindow classicyWindowActive classicyWindowModal classicyRuntimeDialog classicyRuntimeBrandDialog grid min-w-[280px] w-[min(420px,calc(100vw-24px))] gap-2.5"
+            style={{ position: 'relative' }}
+          >
+            <strong className="classicyRuntimePanelTitle text-sm">Micropolis</strong>
+            <div className="grid gap-1 text-sm">
+              <p>
+                Developed by Christopher Ehrlich using gpt 5.3-codex:{' '}
+                <a
+                  className="underline"
+                  href="https://github.com/c-ehrlich/micropolis"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  github.com/c-ehrlich/micropolis
+                </a>
+              </p>
+              <p>
+                Based on the TCL/X11 version of Micropolis (open-source SimCity):{' '}
+                <a
+                  className="underline"
+                  href="https://github.com/SimHacker/micropolis"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  github.com/SimHacker/micropolis
+                </a>
+              </p>
+              <p>
+                Twitter:{' '}
+                <a
+                  className="underline"
+                  href="https://x.com/ccccjjjjeeee"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  x.com/ccccjjjjeeee
+                </a>
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                className="classicyButton"
+                onClick={() => {
+                  setIsBrandDialogOpen(false);
+                }}
+                type="button"
+              >
+                Dismiss
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {gameDialog === null ? null : (
         <div
@@ -909,32 +831,13 @@ function RuntimePanel() {
               setGameDialog(null);
             }
           }}
-          style={{
-            alignItems: 'center',
-            background: 'rgba(15, 23, 42, 0.62)',
-            display: 'flex',
-            inset: 0,
-            justifyContent: 'center',
-            pointerEvents: 'auto',
-            position: 'absolute',
-            zIndex: 15,
-          }}
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
         >
           <section
             onClick={(event) => {
               event.stopPropagation();
             }}
-            style={{
-              background: '#f8fafc',
-              border: '1px solid rgba(15, 23, 42, 0.45)',
-              borderRadius: 6,
-              color: '#0f172a',
-              display: 'grid',
-              gap: 10,
-              minWidth: 320,
-              padding: 12,
-              width: 'min(420px, calc(100vw - 24px))',
-            }}
+            className="classicyRuntimeDialog grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 p-3"
           >
             {gameDialog !== 'save' ? null : (
               <form
@@ -952,13 +855,14 @@ function RuntimePanel() {
                   });
                   setGameDialog(null);
                 }}
-                style={{ display: 'grid', gap: 10 }}
+                className="grid gap-2.5"
               >
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Save City</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                <strong className="classicyRuntimePanelTitle text-sm">Save City</strong>
+                <label className="grid gap-1 text-xs">
                   File name
                   <input
                     autoFocus
+                    className="classicyRuntimeInput px-2 py-1"
                     disabled={sessionControlsDisabled}
                     onChange={(event) => {
                       setSaveFileNameDraft(event.target.value);
@@ -967,8 +871,9 @@ function RuntimePanel() {
                     value={saveFileNameDraft}
                   />
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -976,7 +881,11 @@ function RuntimePanel() {
                   >
                     Cancel
                   </button>
-                  <button disabled={sessionControlsDisabled} type="submit">
+                  <button
+                    className="classicyButton"
+                    disabled={sessionControlsDisabled}
+                    type="submit"
+                  >
                     Save
                   </button>
                 </div>
@@ -984,12 +893,13 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'new' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>New Game</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="classicyRuntimePanelTitle text-sm">New Game</strong>
+                <label className="grid gap-1 text-xs">
                   Difficulty
                   <select
                     autoFocus
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -1006,8 +916,9 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -1016,6 +927,7 @@ function RuntimePanel() {
                     Cancel
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -1036,15 +948,16 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'load' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Load City</strong>
-                <div style={{ color: '#334155', fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="classicyRuntimePanelTitle text-sm">Load City</strong>
+                <div className="text-xs text-slate-700">
                   {pendingLoadFile === null
                     ? 'No file selected.'
                     : `Selected: ${pendingLoadFile.name}`}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div className="flex flex-wrap gap-2">
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled || isLoadingCityFile}
                     onClick={() => {
                       loadInputRef.current?.click();
@@ -1054,6 +967,7 @@ function RuntimePanel() {
                     Choose .cty File...
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled || pendingLoadFile === null || isLoadingCityFile}
                     onClick={async () => {
                       if (pendingLoadFile === null || controlsDisabled) {
@@ -1085,8 +999,9 @@ function RuntimePanel() {
                     {isLoadingCityFile ? 'Loading...' : 'Load'}
                   </button>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div className="flex justify-end">
                   <button
+                    className="classicyButton"
                     disabled={isLoadingCityFile}
                     onClick={() => {
                       setGameDialog(null);
@@ -1100,12 +1015,13 @@ function RuntimePanel() {
             )}
 
             {gameDialog !== 'scenario' ? null : (
-              <section style={{ display: 'grid', gap: 10 }}>
-                <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>Scenario</strong>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+              <section className="grid gap-2.5">
+                <strong className="classicyRuntimePanelTitle text-sm">Scenario</strong>
+                <label className="grid gap-1 text-xs">
                   Scenario
                   <select
                     autoFocus
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       setSelectedScenarioId(Number.parseInt(event.target.value, 10));
@@ -1119,9 +1035,10 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <label style={{ display: 'grid', gap: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                <label className="grid gap-1 text-xs">
                   Difficulty
                   <select
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -1138,8 +1055,9 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -1148,6 +1066,7 @@ function RuntimePanel() {
                     Cancel
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -1188,63 +1107,29 @@ function RuntimePanel() {
 function NoticePanel({
   notice,
   onDismiss,
+  topInsetPx,
 }: {
   notice: RuntimeHudNoticeEvent;
   onDismiss: () => void;
+  topInsetPx: number;
 }) {
   return (
     <section
-      style={{
-        background: 'rgba(248, 250, 252, 0.96)',
-        border: '1px solid rgba(15, 23, 42, 0.75)',
-        borderRadius: 6,
-        color: '#0f172a',
-        display: 'grid',
-        gap: 10,
-        maxHeight: 'min(45vh, 320px)',
-        maxWidth: 'min(520px, calc(100vw - 24px))',
-        overflow: 'hidden',
-        padding: 10,
-        pointerEvents: 'auto',
-        position: 'absolute',
-        right: 12,
-        top: 46,
-        width: 'min(520px, calc(100vw - 24px))',
-        zIndex: 13,
-      }}
+      className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
+      style={{ top: `calc(${topInsetPx}px + var(--window-padding-size))` }}
     >
       <header
-        style={{
-          alignItems: 'center',
-          background: notice.color,
-          border: '1px solid rgba(15, 23, 42, 0.35)',
-          borderRadius: 4,
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: '6px 8px',
-        }}
+        className="flex items-center justify-between border px-2 py-1.5"
+        style={{ background: notice.color }}
       >
-        <strong style={{ fontFamily: 'monospace', fontSize: 12 }}>{notice.title}</strong>
-        <span style={{ fontFamily: 'monospace', fontSize: 11 }}>#{notice.id}</span>
+        <strong className="text-xs">{notice.title}</strong>
+        <span className="text-[11px]">#{notice.id}</span>
       </header>
-      <pre
-        style={{
-          background: 'rgba(241, 245, 249, 0.9)',
-          border: '1px solid rgba(148, 163, 184, 0.45)',
-          borderRadius: 4,
-          fontFamily: 'monospace',
-          fontSize: 12,
-          lineHeight: '18px',
-          margin: 0,
-          overflow: 'auto',
-          padding: 8,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
+      <pre className="classicyRuntimeMessageFeed m-0 overflow-auto whitespace-pre-wrap p-2 text-xs leading-[18px]">
         {notice.body}
       </pre>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={onDismiss} type="button">
+      <div className="flex justify-end">
+        <button className="classicyButton" onClick={onDismiss} type="button">
           Dismiss
         </button>
       </div>
@@ -1268,8 +1153,6 @@ function DemandHeadsWidget({
   demandC: number;
   demandI: number;
 }) {
-  const scaledWidth = 39 * 2;
-  const scaledHeight = 55 * 2;
   const demandBars = [
     { channel: 'r', demand: demandR, left: 8, fillColor: '#1b8f3a' },
     { channel: 'c', demand: demandC, left: 17, fillColor: '#1b2fe0' },
@@ -1278,52 +1161,26 @@ function DemandHeadsWidget({
 
   return (
     <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        width: '100%',
-      }}
+      className="flex w-full justify-center"
       title={`Demand R/C/I: ${demandR}/${demandC}/${demandI}`}
     >
       <div
         aria-label={`Demand heads R ${demandR}, C ${demandC}, I ${demandI}`}
         role="img"
-        style={{
-          height: scaledHeight,
-          position: 'relative',
-          width: scaledWidth,
-        }}
+        className="relative h-[110px] w-[78px]"
       >
-        <div
-          style={{
-            height: 55,
-            left: 0,
-            position: 'absolute',
-            top: 0,
-            transform: 'scale(2)',
-            transformOrigin: 'top left',
-            width: 39,
-          }}
-        >
+        <div className="absolute left-0 top-0 h-[55px] w-[39px] origin-top-left [transform:scale(2)]">
           <img
             alt=""
             aria-hidden
             draggable={false}
             src={demandGaugeBackgroundUrl}
-            style={{
-              display: 'block',
-              height: 47,
-              imageRendering: 'pixelated',
-              left: 0,
-              pointerEvents: 'none',
-              position: 'absolute',
-              top: 4,
-              width: 39,
-            }}
+            className="pointer-events-none absolute left-0 top-1 block h-[47px] w-[39px] [image-rendering:pixelated]"
           />
           {demandBars.map((bar) => (
             <div
               key={bar.channel}
+              className="pointer-events-none absolute w-[7px]"
               style={resolveDemandBarStyle({
                 demand: bar.demand,
                 fillColor: bar.fillColor,
@@ -1333,38 +1190,6 @@ function DemandHeadsWidget({
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * Micropolis paused/running indicator shown above the Build tool palette.
- * Mirrors `UIUpdateRunning` bitmap switching in `ref/micropolis/res/micropolis.tcl`.
- * Parity note: this uses exported PNG assets instead of Tk bitmap paths.
- */
-function MicropolisStatusSprite({ isRunning }: { isRunning: boolean }) {
-  const spriteUrl = isRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl;
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        width: '100%',
-      }}
-      title={isRunning ? 'Simulation running' : 'Simulation paused'}
-    >
-      <img
-        alt=""
-        aria-hidden
-        draggable={false}
-        src={spriteUrl}
-        style={{
-          display: 'block',
-          height: 47 * 2,
-          imageRendering: 'pixelated',
-          width: 37 * 2,
-        }}
-      />
     </div>
   );
 }
@@ -1392,10 +1217,7 @@ function resolveDemandBarStyle({
     background: fillColor,
     height: Math.max(1, bottom - top),
     left,
-    pointerEvents: 'none',
-    position: 'absolute',
     top,
-    width: 7,
   };
 }
 
@@ -1481,21 +1303,9 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
  */
 function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
   return (
-    <div
-      style={{
-        background: 'rgba(15, 23, 42, 0.32)',
-        border: '1px solid rgba(15, 23, 42, 0.58)',
-        borderRadius: 4,
-        color: '#e2e8f0',
-        fontFamily: 'monospace',
-        fontSize: 12,
-        height: 58,
-        overflowY: 'auto',
-        padding: '4px 6px',
-      }}
-    >
+    <div className="classicyRuntimeMessageFeed h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
       {messages.length === 0 ? (
-        <div style={{ color: '#cbd5e1', lineHeight: '16px' }}>No messages yet.</div>
+        <div className="leading-4">No messages yet.</div>
       ) : (
         [...messages].reverse().map((message) => {
           const coordinateSuffix =
@@ -1505,14 +1315,9 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
           return (
             <div
               key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
-              style={{
-                lineHeight: '16px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
+              className="overflow-hidden text-ellipsis whitespace-nowrap leading-4"
             >
-              <span style={{ color: '#bfdbfe' }}>[{message.serverSeq}]</span> {message.text}
+              <span className="text-blue-700">[{message.serverSeq}]</span> {message.text}
               {coordinateSuffix}
             </div>
           );
