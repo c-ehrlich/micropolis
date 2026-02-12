@@ -725,9 +725,9 @@ function RuntimePanel() {
       </section>
 
       <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
-        <strong className="classicyRuntimePanelTitle text-center text-xs leading-none normal-case">
+        <div className="classicyRuntimeSidebarStatLabel classicyRuntimeMessageFeedLabel">
           Message Feed
-        </strong>
+        </div>
         <MessageFeed messages={state.hudState.messages} />
       </section>
       <input

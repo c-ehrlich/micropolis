@@ -126,7 +126,15 @@
 }
 
 .classicyRuntimeSidebarStatLabel {
+  font-family: var(--ui-font), sans-serif;
+  font-size: var(--ui-font-size);
+  line-height: 1;
+  padding: 0;
   text-align: left;
+}
+
+.classicyRuntimeMessageFeedLabel {
+  text-align: center;
 }
 
 .classicyRuntimeSidebarStatValue {
