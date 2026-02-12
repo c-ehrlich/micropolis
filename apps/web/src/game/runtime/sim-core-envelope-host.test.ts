@@ -42,6 +42,7 @@ const LOAD_SCENARIO_CITY_TAX = 7;
 const LOAD_SCENARIO_SIM_SPEED = 3;
 // Replay retention bound from `apps/web/src/game/runtime/sim-core-envelope-host.ts`.
 const REPLAY_HISTORY_LIMIT = 512;
+const REPLAY_CHECKPOINT_LIMIT = 8;
 // `DidTool(..., name, ...)` in `ref/micropolis/src/sim/w_tool.c` dispatches
 // `UIDidTool*` callbacks in `ref/micropolis/res/micropolis.tcl`; each callback's
 // `UIMakeSoundOn ... edit ...` argument is the expected tool-success soundSpec.
@@ -5132,9 +5133,13 @@ describe('SimCoreEnvelopeHost', () => {
     }
 
     expect(hostInternals.sequencedReplayLog.length).toBe(REPLAY_HISTORY_LIMIT);
-    expect(hostInternals.snapshotReplayCheckpoints.size).toBeLessThanOrEqual(
-      REPLAY_HISTORY_LIMIT + 1,
+    const checkpointServerSeqs = [...hostInternals.snapshotReplayCheckpoints.keys()].sort(
+      (left, right) => left - right,
     );
+    const nonBootstrapCheckpointServerSeqs = checkpointServerSeqs.filter(
+      (checkpointServerSeq) => checkpointServerSeq !== 0,
+    );
+    expect(nonBootstrapCheckpointServerSeqs.length).toBeLessThanOrEqual(REPLAY_CHECKPOINT_LIMIT);
 
     const oldestRetainedServerSeq = hostInternals.sequencedReplayLog[0]?.envelope.serverSeq;
     expect(oldestRetainedServerSeq).toBeDefined();
@@ -5145,8 +5150,17 @@ describe('SimCoreEnvelopeHost', () => {
     const eligibleReplayEntries = hostInternals.sequencedReplayLog.filter(
       (entry) => entry.replayTailEligible,
     );
+    const expectedReplayBaselineServerSeq =
+      checkpointServerSeqs.find(
+        (checkpointServerSeq) => checkpointServerSeq >= oldestRetainedServerSeq,
+      ) ??
+      checkpointServerSeqs
+        .slice()
+        .reverse()
+        .find((checkpointServerSeq) => checkpointServerSeq <= oldestRetainedServerSeq) ??
+      0;
     const expectedTailCount = eligibleReplayEntries.filter(
-      (entry) => entry.envelope.serverSeq > oldestRetainedServerSeq,
+      (entry) => entry.envelope.serverSeq > expectedReplayBaselineServerSeq,
     ).length;
 
     const replayStart = captured.envelopes.length;

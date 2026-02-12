@@ -114,6 +114,10 @@ interface SnapshotReplayCheckpoint {
   tick: number;
   payload: HostSnapshotPayload;
 }
+interface SnapshotReplayBaselineSelection {
+  checkpointServerSeq: number;
+  checkpoint: SnapshotReplayCheckpoint;
+}
 interface ReplayLogEntry {
   envelope: SequencedHostEnvelope;
   replayTailEligible: boolean;
@@ -168,6 +172,8 @@ const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
 const MESSAGE_LOG_LIMIT = 24;
 const REPLAY_HISTORY_LIMIT = 512;
+const REPLAY_CHECKPOINT_CADENCE_SERVER_SEQS = 64;
+const REPLAY_CHECKPOINT_LIMIT = 8;
 const EASY_GAME_LEVEL = 0;
 const MEDIUM_GAME_LEVEL = 1;
 const HARD_GAME_LEVEL = 2;
@@ -1408,14 +1414,20 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * building baseline + tail for reducer-compatible recovery ordering.
    */
   private emitSnapshotReplay(roomId: string, clientId: string, replayCursor: number): void {
-    const baseline = this.readSnapshotReplayBaseline(replayCursor);
-    const replayTail = this.readSnapshotReplayTail(replayCursor);
-    this.emitSnapshotFromPayload(roomId, clientId, baseline.payload, baseline.tick, {
-      replayTailEligible: false,
-      recordMessages: false,
-      includeQueuedSoundDeltas: false,
-      recordReplay: false,
-    });
+    const baseline = this.readSnapshotReplayBaselineSelection(replayCursor);
+    const replayTail = this.readSnapshotReplayTail(baseline.checkpointServerSeq);
+    this.emitSnapshotFromPayload(
+      roomId,
+      clientId,
+      baseline.checkpoint.payload,
+      baseline.checkpoint.tick,
+      {
+        replayTailEligible: false,
+        recordMessages: false,
+        includeQueuedSoundDeltas: false,
+        recordReplay: false,
+      },
+    );
     for (const envelope of replayTail) {
       this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
         replayTailEligible: false,
@@ -1600,57 +1612,107 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Reads one replay-baseline snapshot checkpoint for a clamped cursor.
+   * Reads one replay-baseline snapshot checkpoint selection for a clamped cursor.
    * Mirrors checkpoint-based recovery baseline intent from
    * `ref/micropolis/spec/integration/SPEC.md`.
    */
-  private readSnapshotReplayBaseline(replayCursor: number): SnapshotReplayCheckpoint {
-    const checkpointServerSeq = this.readNearestRetainedReplayCheckpointServerSeq(replayCursor);
+  private readSnapshotReplayBaselineSelection(
+    replayCursor: number,
+  ): SnapshotReplayBaselineSelection {
+    const oldestRetainedCursor = this.readOldestRetainedReplayCursor();
+    const checkpointServerSeq = this.selectSnapshotReplayBaselineServerSeq(
+      replayCursor,
+      oldestRetainedCursor,
+    );
     const checkpoint =
       checkpointServerSeq === undefined
         ? undefined
         : this.snapshotReplayCheckpoints.get(checkpointServerSeq);
-    if (checkpoint !== undefined) {
+    if (checkpointServerSeq !== undefined && checkpoint !== undefined) {
       return {
-        tick: checkpoint.tick,
-        payload: cloneHostSnapshotPayload(checkpoint.payload),
+        checkpointServerSeq,
+        checkpoint: {
+          tick: checkpoint.tick,
+          payload: cloneHostSnapshotPayload(checkpoint.payload),
+        },
       };
     }
 
     return {
-      tick: this.tick,
-      payload: this.buildSnapshotPayload(),
+      checkpointServerSeq: this.lastEmittedServerSeq,
+      checkpoint: {
+        tick: this.tick,
+        payload: this.buildSnapshotPayload(),
+      },
     };
   }
 
   /**
-   * Finds the nearest retained replay checkpoint at or before one replay cursor.
+   * Selects one retained replay checkpoint server sequence for baseline replay.
    * Mirrors deterministic replay-baseline selection from
    * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: sparse checkpoint retention may not include a checkpoint at the
+   * replay cursor, so this host prefers checkpoints that can still be replayed
+   * from retained tail history (`>= oldestRetained - 1`) and otherwise falls
+   * forward to the next retained checkpoint.
    */
-  private readNearestRetainedReplayCheckpointServerSeq(replayCursor: number): number | undefined {
-    let bestServerSeq = Number.NEGATIVE_INFINITY;
-    for (const checkpointServerSeq of this.snapshotReplayCheckpoints.keys()) {
-      if (checkpointServerSeq <= replayCursor && checkpointServerSeq > bestServerSeq) {
-        bestServerSeq = checkpointServerSeq;
-      }
-    }
-    if (!Number.isFinite(bestServerSeq)) {
+  private selectSnapshotReplayBaselineServerSeq(
+    replayCursor: number,
+    oldestRetainedCursor: number,
+  ): number | undefined {
+    const checkpointServerSeqs = [...this.snapshotReplayCheckpoints.keys()].sort(
+      (left, right) => left - right,
+    );
+    if (checkpointServerSeqs.length === 0) {
       return undefined;
     }
-    return Math.trunc(bestServerSeq);
+
+    const minimumReplayableServerSeq = oldestRetainedCursor - 1;
+    let bestAtOrBeforeCursor = Number.NEGATIVE_INFINITY;
+    for (const checkpointServerSeq of checkpointServerSeqs) {
+      if (checkpointServerSeq > replayCursor) {
+        continue;
+      }
+      if (checkpointServerSeq < minimumReplayableServerSeq) {
+        continue;
+      }
+      bestAtOrBeforeCursor = checkpointServerSeq;
+    }
+    if (Number.isFinite(bestAtOrBeforeCursor)) {
+      return Math.trunc(bestAtOrBeforeCursor);
+    }
+
+    for (const checkpointServerSeq of checkpointServerSeqs) {
+      if (checkpointServerSeq >= replayCursor) {
+        return checkpointServerSeq;
+      }
+    }
+
+    let fallbackAtOrBeforeCursor = Number.NEGATIVE_INFINITY;
+    for (const checkpointServerSeq of checkpointServerSeqs) {
+      if (checkpointServerSeq <= replayCursor) {
+        fallbackAtOrBeforeCursor = checkpointServerSeq;
+      }
+    }
+    if (!Number.isFinite(fallbackAtOrBeforeCursor)) {
+      return undefined;
+    }
+    return Math.trunc(fallbackAtOrBeforeCursor);
   }
 
   /**
-   * Reads one ordered sequenced tail replay after a clamped replay cursor.
+   * Reads one ordered sequenced replay tail after one selected baseline checkpoint.
    * Mirrors bridge replay-tail ordering intent from
    * `ref/micropolis/spec/integration/SPEC.md`.
    * Parity note: snapshot envelopes are excluded from tail replay because this
    * host emits exactly one deterministic replay baseline snapshot first.
    */
-  private readSnapshotReplayTail(replayCursor: number): SequencedHostEnvelope[] {
+  private readSnapshotReplayTail(baselineCheckpointServerSeq: number): SequencedHostEnvelope[] {
     return this.sequencedReplayLog
-      .filter((entry) => entry.replayTailEligible && entry.envelope.serverSeq > replayCursor)
+      .filter(
+        (entry) =>
+          entry.replayTailEligible && entry.envelope.serverSeq > baselineCheckpointServerSeq,
+      )
       .sort((left, right) => left.envelope.serverSeq - right.envelope.serverSeq)
       .map((entry) => cloneReplaySequencedEnvelope(entry.envelope));
   }
@@ -1685,10 +1747,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
       envelope: cloneReplaySequencedEnvelope(envelope),
       replayTailEligible: options.replayTailEligible ?? true,
     });
-    this.snapshotReplayCheckpoints.set(envelope.serverSeq, {
-      tick: envelope.tick,
-      payload: cloneHostSnapshotPayload(this.buildSnapshotPayload()),
-    });
+    if (this.shouldCaptureReplayCheckpoint(envelope)) {
+      this.snapshotReplayCheckpoints.set(envelope.serverSeq, {
+        tick: envelope.tick,
+        payload: cloneHostSnapshotPayload(this.buildSnapshotPayload()),
+      });
+    }
     this.pruneReplayHistory();
   }
 
@@ -1699,6 +1763,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
    */
   private pruneReplayHistory(): void {
     if (this.sequencedReplayLog.length <= REPLAY_HISTORY_LIMIT) {
+      this.pruneReplayCheckpointsToLimit();
       return;
     }
 
@@ -1707,9 +1772,61 @@ export class SimCoreEnvelopeHost implements CoreHost {
     for (const entry of prunedEntries) {
       this.snapshotReplayCheckpoints.delete(entry.envelope.serverSeq);
     }
+    this.pruneReplayCheckpointsToLimit();
+  }
+
+  /**
+   * Returns whether one sequenced envelope should capture a full replay checkpoint.
+   * Mirrors snapshot-baseline cadence intent in
+   * `packages/core-bridge/src/types.ts` (`CORE_BRIDGE_V1_DEFAULT_SNAPSHOT_CADENCE_TICKS`)
+   * and deterministic replay recovery ownership in
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: unlike Micropolis C in-process state (no retained replay
+   * snapshots), browser recovery keeps dense checkpoints within the bounded
+   * replay-history window, then falls back to sparse cadence to bound memory.
+   */
+  private shouldCaptureReplayCheckpoint(envelope: SequencedHostEnvelope): boolean {
+    if (this.sequencedReplayLog.length <= REPLAY_HISTORY_LIMIT) {
+      return true;
+    }
+    if (envelope.kind === 'snapshot') {
+      return true;
+    }
+    return envelope.serverSeq % REPLAY_CHECKPOINT_CADENCE_SERVER_SEQS === 0;
+  }
+
+  /**
+   * Prunes retained replay checkpoints to a bounded sparse window.
+   * Mirrors bounded-history policy intent from Micropolis C historical buffers
+   * (`HISTLEN`/`MISCHISTLEN`) while preserving bridge replay checkpoints from
+   * `ref/micropolis/spec/integration/SPEC.md`.
+   * Parity note: checkpoint server sequence `0` is always preserved as the
+   * bootstrap baseline for empty-history recovery.
+   */
+  private pruneReplayCheckpointsToLimit(): void {
+    const nonBootstrapCheckpointServerSeqs = [...this.snapshotReplayCheckpoints.keys()]
+      .filter((checkpointServerSeq) => checkpointServerSeq !== 0)
+      .sort((left, right) => left - right);
+    if (nonBootstrapCheckpointServerSeqs.length <= REPLAY_CHECKPOINT_LIMIT) {
+      return;
+    }
+
     const oldestRetainedCursor = this.readOldestRetainedReplayCursor();
-    for (const checkpointServerSeq of [...this.snapshotReplayCheckpoints.keys()]) {
-      if (checkpointServerSeq >= oldestRetainedCursor || checkpointServerSeq === 0) {
+    const retainedCheckpointServerSeqs =
+      nonBootstrapCheckpointServerSeqs.slice(-REPLAY_CHECKPOINT_LIMIT);
+    const anchorAtOrBeforeOldest = [...nonBootstrapCheckpointServerSeqs]
+      .reverse()
+      .find((checkpointServerSeq) => checkpointServerSeq <= oldestRetainedCursor);
+    if (
+      anchorAtOrBeforeOldest !== undefined &&
+      !retainedCheckpointServerSeqs.includes(anchorAtOrBeforeOldest)
+    ) {
+      retainedCheckpointServerSeqs[0] = anchorAtOrBeforeOldest;
+    }
+
+    const retainedCheckpointSet = new Set(retainedCheckpointServerSeqs);
+    for (const checkpointServerSeq of nonBootstrapCheckpointServerSeqs) {
+      if (retainedCheckpointSet.has(checkpointServerSeq)) {
         continue;
       }
       this.snapshotReplayCheckpoints.delete(checkpointServerSeq);
