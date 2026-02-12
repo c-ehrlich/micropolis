@@ -98,6 +98,11 @@ function HomePage() {
       }}
     >
       <RuntimePanel />
+      <div className="pointer-events-none absolute left-3 top-12 z-20">
+        <div className="rounded-md border border-emerald-200/70 bg-emerald-500/85 px-2 py-1 font-mono text-xs font-semibold text-emerald-50 shadow-lg">
+          Tailwind demo active
+        </div>
+      </div>
     </main>
   );
 }
