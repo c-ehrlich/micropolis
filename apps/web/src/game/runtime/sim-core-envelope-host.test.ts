@@ -41,7 +41,7 @@ const CLASSIC_CITY_FILE_BYTE_LENGTH = cityDimensionsForMap(World.WORLD_X, World.
 const LOAD_SCENARIO_CITY_TAX = 7;
 const LOAD_SCENARIO_SIM_SPEED = 3;
 // Replay retention bound from `apps/web/src/game/runtime/sim-core-envelope-host.ts`.
-const REPLAY_HISTORY_LIMIT = 1024;
+const REPLAY_HISTORY_LIMIT = 512;
 // `DidTool(..., name, ...)` in `ref/micropolis/src/sim/w_tool.c` dispatches
 // `UIDidTool*` callbacks in `ref/micropolis/res/micropolis.tcl`; each callback's
 // `UIMakeSoundOn ... edit ...` argument is the expected tool-success soundSpec.
@@ -5150,6 +5150,8 @@ describe('SimCoreEnvelopeHost', () => {
     ).length;
 
     const replayStart = captured.envelopes.length;
+    const replayHistoryLengthBeforeRequest = hostInternals.sequencedReplayLog.length;
+    const replayCheckpointCountBeforeRequest = hostInternals.snapshotReplayCheckpoints.size;
     captured.send({
       kind: 'request_snapshot',
       roomId: 'room-replay-retention-bound',
@@ -5160,5 +5162,7 @@ describe('SimCoreEnvelopeHost', () => {
     const replayResponse = captured.envelopes.slice(replayStart);
     expect(replayResponse[0]?.kind).toBe('snapshot');
     expect(replayResponse.slice(1)).toHaveLength(expectedTailCount);
+    expect(hostInternals.sequencedReplayLog.length).toBe(replayHistoryLengthBeforeRequest);
+    expect(hostInternals.snapshotReplayCheckpoints.size).toBe(replayCheckpointCountBeforeRequest);
   });
 });

@@ -122,6 +122,7 @@ interface EmitSequencedEnvelopeOptions {
   replayTailEligible?: boolean;
   recordMessages?: boolean;
   includeQueuedSoundDeltas?: boolean;
+  recordReplay?: boolean;
 }
 interface SessionCommandQueueState {
   pending: SessionQueueItem[];
@@ -166,7 +167,7 @@ type PendingNoticeUpdate = HostHudNoticePayload | null | undefined;
 const DEFAULT_CITY_FILE_NAME = 'newcity.cty';
 const DEFAULT_CITY_NAME = 'New City';
 const MESSAGE_LOG_LIMIT = 24;
-const REPLAY_HISTORY_LIMIT = 1024;
+const REPLAY_HISTORY_LIMIT = 512;
 const EASY_GAME_LEVEL = 0;
 const MEDIUM_GAME_LEVEL = 1;
 const HARD_GAME_LEVEL = 2;
@@ -1413,12 +1414,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
       replayTailEligible: false,
       recordMessages: false,
       includeQueuedSoundDeltas: false,
+      recordReplay: false,
     });
     for (const envelope of replayTail) {
       this.emitSequencedEnvelope(this.retargetSequencedEnvelope(envelope, roomId, clientId), {
         replayTailEligible: false,
         recordMessages: false,
         includeQueuedSoundDeltas: false,
+        recordReplay: false,
       });
     }
   }
@@ -1472,7 +1475,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
       options,
     );
     this.onEnvelope(sequencedEnvelope);
-    this.recordReplayEnvelope(sequencedEnvelope, options);
+    if (options.recordReplay !== false) {
+      this.recordReplayEnvelope(sequencedEnvelope, options);
+    }
   }
 
   /**
