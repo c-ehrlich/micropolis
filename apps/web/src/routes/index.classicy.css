@@ -1,0 +1,116 @@
+.classicyRuntimePanel {
+  color: var(--color-black);
+  font-family: var(--ui-font), sans-serif;
+  font-size: var(--ui-font-size);
+}
+
+.classicyRuntimeMenuBar {
+  background: var(--color-system-02);
+  border-bottom: var(--window-border-size) solid var(--color-black);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07);
+}
+
+.classicyRuntimeMenuButton {
+  margin: 0 !important;
+  min-width: calc(var(--window-control-size) * 7);
+}
+
+.classicyRuntimeMenuButtonActive {
+  color: var(--color-white) !important;
+  background: var(--color-theme-04) !important;
+}
+
+.classicyRuntimeMenuPanel {
+  border: var(--window-border-size) solid var(--color-black);
+  background: var(--color-system-02);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07),
+    calc(var(--window-border-size) * 2) calc(var(--window-border-size) * 2) 0 0 var(--color-black);
+}
+
+.classicyRuntimeMenuItem,
+.classicyRuntimeRuntimeAction {
+  margin: calc(var(--window-padding-size) / 2) !important;
+}
+
+.classicyRuntimePanelChrome {
+  border: var(--window-border-size) solid var(--color-black);
+  background: color-mix(in srgb, var(--color-system-02) 92%, transparent);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07),
+    calc(var(--window-border-size) * 2) calc(var(--window-border-size) * 2) 0 0 rgba(0, 0, 0, 0.45);
+}
+
+.classicyRuntimePanelTitle {
+  font-family: var(--header-font), serif;
+  font-size: var(--header-font-size);
+}
+
+.classicyRuntimeDialogBackdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.classicyRuntimeDialog {
+  border: var(--window-border-size) solid var(--color-black);
+  background: var(--color-system-02);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07),
+    calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4) 0 0 rgba(0, 0, 0, 0.35);
+}
+
+.classicyRuntimeInput,
+.classicyRuntimeSelect {
+  font-family: var(--ui-font), sans-serif;
+  font-size: var(--ui-font-size);
+  border: var(--window-border-size) solid var(--color-window-border);
+  background: var(--color-white);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-03);
+}
+
+.classicyRuntimeToolButton {
+  margin: 0 !important;
+}
+
+.classicyRuntimeToolButtonActive {
+  border-color: var(--color-theme-07) !important;
+  background: var(--color-theme-03) !important;
+}
+
+.classicyRuntimeToolButtonInactive {
+  border-color: var(--color-black) !important;
+  background: var(--color-system-02) !important;
+}
+
+.classicyRuntimeToolButtonLabel {
+  font-family: var(--ui-font), sans-serif;
+  font-size: calc(var(--ui-font-size) * 0.75);
+  color: var(--color-black);
+}
+
+.classicyRuntimeMessageFeed {
+  color: var(--color-black);
+  border: var(--window-border-size) solid var(--color-window-border);
+  background: color-mix(in srgb, var(--color-system-03) 90%, transparent);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07);
+}

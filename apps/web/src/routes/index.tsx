@@ -1,4 +1,7 @@
+import './index.classicy.css';
+
 import { createFileRoute } from '@tanstack/react-router';
+import { getAllThemes, getThemeVars } from 'classicy';
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 
 import demandGaugeBackgroundUrl from '../../../../packages/sim-assets/generated-images/images/demandg.png';
@@ -257,10 +260,16 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
-  const menubarButtonClass =
-    'rounded-[3px] border border-slate-900/35 px-2 py-1 text-left font-mono text-xs text-slate-900';
+  const menubarButtonClass = 'classicyButton classicyRuntimeMenuButton px-2 py-1 text-left';
   const menubarPanelClass =
-    'absolute left-0 top-[calc(100%+3px)] z-[12] grid rounded border border-slate-900/55 bg-slate-50 p-1.5 text-slate-900 shadow-[0_8px_20px_rgba(15,23,42,0.25)]';
+    'classicyRuntimeMenuPanel absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
+  const runtimeTheme = useMemo(() => {
+    const theme = getAllThemes()[0];
+    if (theme === undefined) {
+      return {};
+    }
+    return getThemeVars(theme);
+  }, []);
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -277,7 +286,10 @@ function RuntimePanel() {
   }, [state.hudState.notice]);
 
   return (
-    <section className="relative h-full w-full overflow-hidden bg-[#0b1020] text-slate-200">
+    <section
+      className="classicyRuntimePanel relative h-full w-full overflow-hidden"
+      style={runtimeTheme as CSSProperties}
+    >
       <div className="absolute inset-0">
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
@@ -305,9 +317,9 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        className="pointer-events-auto absolute left-0 right-0 top-0 z-10 flex min-h-[34px] flex-wrap items-center gap-2 border-b border-slate-900/55 bg-slate-200/96 px-2 py-1"
+        className="classicyRuntimeMenuBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex min-h-[34px] flex-wrap items-center gap-2 px-2 py-1"
       >
-        <div className="flex min-w-[86px] items-center gap-1.5 font-mono text-xs font-bold text-slate-900">
+        <div className="classicyRuntimePanelTitle flex min-w-[86px] items-center gap-1.5 font-bold">
           <span>Micropolis</span>
         </div>
         <div className="flex items-center gap-0.5">
@@ -316,7 +328,7 @@ function RuntimePanel() {
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
               }}
-              className={`${menubarButtonClass} min-w-[72px] ${openMenubarSection === 'game' ? 'bg-blue-200' : 'bg-transparent'}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'game' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Game
@@ -329,7 +341,7 @@ function RuntimePanel() {
                     setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
-                  className="text-left"
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   New
@@ -341,7 +353,7 @@ function RuntimePanel() {
                     setGameDialog('save');
                     setOpenMenubarSection(null);
                   }}
-                  className="text-left"
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Save...
@@ -353,7 +365,7 @@ function RuntimePanel() {
                     setGameDialog('load');
                     setOpenMenubarSection(null);
                   }}
-                  className="text-left"
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Load...
@@ -364,7 +376,7 @@ function RuntimePanel() {
                     setGameDialog('scenario');
                     setOpenMenubarSection(null);
                   }}
-                  className="text-left"
+                  className="classicyButton classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Scenario...
@@ -377,7 +389,7 @@ function RuntimePanel() {
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
               }}
-              className={`${menubarButtonClass} min-w-[84px] ${openMenubarSection === 'disasters' ? 'bg-blue-200' : 'bg-transparent'}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Disasters
@@ -392,7 +404,7 @@ function RuntimePanel() {
                       setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                       setOpenMenubarSection(null);
                     }}
-                    className="text-left"
+                    className="classicyButton classicyRuntimeMenuItem text-left"
                     type="button"
                   >
                     {choice.label.replace('Trigger ', '')}
@@ -406,27 +418,27 @@ function RuntimePanel() {
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
               }}
-              className={`${menubarButtonClass} min-w-[80px] ${openMenubarSection === 'runtime' ? 'bg-blue-200' : 'bg-transparent'}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'runtime' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
               Runtime
             </button>
             {openMenubarSection !== 'runtime' ? null : (
               <section className={`${menubarPanelClass} min-w-[290px] gap-1.5 p-2`}>
-                <div className="font-mono text-xs">
+                <div className="text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
                 </div>
-                <div className="font-mono text-xs">{runtimePhaseStatus}</div>
+                <div className="text-xs">{runtimePhaseStatus}</div>
                 {state.lastRejectReason === null ? null : (
-                  <div className="font-mono text-xs text-red-700">
+                  <div className="text-xs text-red-700">
                     {`last reject: ${state.lastRejectReason}`}
                   </div>
                 )}
                 {cityIoError === '' ? null : (
-                  <div className="font-mono text-xs text-red-700">{cityIoError}</div>
+                  <div className="text-xs text-red-700">{cityIoError}</div>
                 )}
                 {lastSaveStatus === '' ? null : (
-                  <div className="font-mono text-xs text-green-700">{lastSaveStatus}</div>
+                  <div className="text-xs text-green-700">{lastSaveStatus}</div>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -436,6 +448,7 @@ function RuntimePanel() {
                       setCityIoError('');
                       setLastSaveStatus('');
                     }}
+                    className="classicyButton classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Reconnect
@@ -445,6 +458,7 @@ function RuntimePanel() {
                     onClick={() => {
                       runtime.requestSnapshot('resync');
                     }}
+                    className="classicyButton classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Resync Snapshot
@@ -465,8 +479,8 @@ function RuntimePanel() {
               return nextMuted;
             });
           }}
-          className={`ml-auto inline-flex h-[26px] w-8 items-center justify-center rounded-[3px] border border-slate-900/35 p-0 ${
-            isGameplayMuted ? 'bg-red-100 text-red-700' : 'bg-transparent text-slate-900'
+          className={`classicyButton classicyButtonShapeSquare classicyButtonSmall ml-auto inline-flex h-[26px] w-8 items-center justify-center p-0 ${
+            isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
           }`}
           title={isGameplayMuted ? 'Unmute' : 'Mute'}
           type="button"
@@ -503,8 +517,8 @@ function RuntimePanel() {
         />
       )}
 
-      <section className="pointer-events-auto absolute left-3 top-1/2 z-[6] grid max-h-[calc(100vh-240px)] w-[170px] -translate-y-1/2 gap-1.5 overflow-y-auto rounded-md border-2 border-slate-900/75 bg-gray-500/90 p-2 backdrop-blur-[3px]">
-        <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
+      <section className="classicyRuntimePanelChrome pointer-events-auto absolute left-3 top-1/2 z-[6] grid max-h-[calc(100vh-240px)] w-[170px] -translate-y-1/2 gap-1.5 overflow-y-auto p-2">
+        <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
           Build
         </strong>
         <MicropolisStatusSprite isRunning={isSimulationRunning} />
@@ -529,12 +543,12 @@ function RuntimePanel() {
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                className={`flex h-10 w-10 items-center justify-center rounded-[2px] border-2 p-0 ${
-                  active ? 'border-amber-700 bg-amber-200' : 'border-slate-700 bg-slate-200'
+                className={`classicyButton classicyButtonShapeSquare classicyButtonSmall classicyRuntimeToolButton flex h-10 w-10 items-center justify-center border-2 p-0 ${
+                  active ? 'classicyRuntimeToolButtonActive' : 'classicyRuntimeToolButtonInactive'
                 } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 {iconUrl === undefined ? (
-                  <span className="font-mono text-[10px] font-bold text-slate-900">
+                  <span className="classicyRuntimeToolButtonLabel font-bold">
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
@@ -556,7 +570,7 @@ function RuntimePanel() {
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
         />
-        <div className="grid gap-0.5 text-center font-mono text-[11px] text-slate-50">
+        <div className="grid gap-0.5 text-center text-[11px]">
           <div>{state.hudState.fundsLabel}</div>
           <div>{state.hudState.dateDisplayLabel}</div>
           <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
@@ -571,7 +585,7 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            className="w-[68%] justify-self-center"
+            className="classicyButton w-[68%] justify-self-center"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
@@ -588,7 +602,7 @@ function RuntimePanel() {
                     speed: speed as PlayableSimSpeed,
                   });
                 }}
-                className={`w-[26px] py-[2px] ${state.hudState.speed === speed ? 'font-bold' : 'font-normal'}`}
+                className={`classicyButton classicyButtonSmall w-[26px] py-[2px] ${state.hudState.speed === speed ? 'classicyRuntimeMenuButtonActive font-bold' : 'font-normal'}`}
                 type="button"
               >
                 x{speed}
@@ -597,18 +611,18 @@ function RuntimePanel() {
           </div>
         </section>
         <section className="grid gap-1">
-          <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
+          <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
             Zoom
           </strong>
           <div ref={setMapCameraControlsContainer} />
         </section>
       </section>
 
-      <section className="pointer-events-none absolute bottom-3 left-3 z-[6] w-[min(260px,calc(100vw-24px))] rounded-[3px] border-2 border-slate-900/72 bg-slate-50/94 px-2 py-1.5 text-slate-900">
-        <div className="font-mono text-xs font-bold">
+      <section className="classicyRuntimePanelChrome pointer-events-none absolute bottom-3 left-3 z-[6] w-[min(260px,calc(100vw-24px))] px-2 py-1.5">
+        <div className="text-xs font-bold">
           {activeToolSpec.label}: ${activeToolSpec.baseCost}
         </div>
-        <div className="font-mono text-[11px] text-slate-600">
+        <div className="text-[11px] text-slate-700">
           {sessionControlsDisabled
             ? 'Connect and start a city to build.'
             : activeToolSpec.size === 1
@@ -617,8 +631,8 @@ function RuntimePanel() {
         </div>
       </section>
 
-      <section className="pointer-events-auto absolute bottom-3 left-1/2 z-[6] grid w-[min(420px,calc(100vw-24px))] -translate-x-1/2 gap-1 rounded-md border-2 border-slate-900/75 bg-gray-500/90 p-2 backdrop-blur-[3px]">
-        <strong className="text-center font-mono text-[11px] uppercase tracking-[0.4px] text-slate-50">
+      <section className="classicyRuntimePanelChrome pointer-events-auto absolute bottom-3 left-1/2 z-[6] grid w-[min(420px,calc(100vw-24px))] -translate-x-1/2 gap-1 p-2">
+        <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
           Message Feed
         </strong>
         <MessageFeed messages={state.hudState.messages} />
@@ -646,13 +660,13 @@ function RuntimePanel() {
               setGameDialog(null);
             }
           }}
-          className="pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center bg-slate-900/62"
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
         >
           <section
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 rounded-md border border-slate-900/45 bg-slate-50 p-3 text-slate-900"
+            className="classicyRuntimeDialog grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 p-3"
           >
             {gameDialog !== 'save' ? null : (
               <form
@@ -672,11 +686,12 @@ function RuntimePanel() {
                 }}
                 className="grid gap-2.5"
               >
-                <strong className="font-mono text-sm">Save City</strong>
-                <label className="grid gap-1 font-mono text-xs">
+                <strong className="classicyRuntimePanelTitle text-sm">Save City</strong>
+                <label className="grid gap-1 text-xs">
                   File name
                   <input
                     autoFocus
+                    className="classicyRuntimeInput px-2 py-1"
                     disabled={sessionControlsDisabled}
                     onChange={(event) => {
                       setSaveFileNameDraft(event.target.value);
@@ -687,6 +702,7 @@ function RuntimePanel() {
                 </label>
                 <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -694,7 +710,11 @@ function RuntimePanel() {
                   >
                     Cancel
                   </button>
-                  <button disabled={sessionControlsDisabled} type="submit">
+                  <button
+                    className="classicyButton"
+                    disabled={sessionControlsDisabled}
+                    type="submit"
+                  >
                     Save
                   </button>
                 </div>
@@ -703,11 +723,12 @@ function RuntimePanel() {
 
             {gameDialog !== 'new' ? null : (
               <section className="grid gap-2.5">
-                <strong className="font-mono text-sm">New Game</strong>
-                <label className="grid gap-1 font-mono text-xs">
+                <strong className="classicyRuntimePanelTitle text-sm">New Game</strong>
+                <label className="grid gap-1 text-xs">
                   Difficulty
                   <select
                     autoFocus
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -726,6 +747,7 @@ function RuntimePanel() {
                 </label>
                 <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -734,6 +756,7 @@ function RuntimePanel() {
                     Cancel
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -755,14 +778,15 @@ function RuntimePanel() {
 
             {gameDialog !== 'load' ? null : (
               <section className="grid gap-2.5">
-                <strong className="font-mono text-sm">Load City</strong>
-                <div className="font-mono text-xs text-slate-700">
+                <strong className="classicyRuntimePanelTitle text-sm">Load City</strong>
+                <div className="text-xs text-slate-700">
                   {pendingLoadFile === null
                     ? 'No file selected.'
                     : `Selected: ${pendingLoadFile.name}`}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled || isLoadingCityFile}
                     onClick={() => {
                       loadInputRef.current?.click();
@@ -772,6 +796,7 @@ function RuntimePanel() {
                     Choose .cty File...
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled || pendingLoadFile === null || isLoadingCityFile}
                     onClick={async () => {
                       if (pendingLoadFile === null || controlsDisabled) {
@@ -805,6 +830,7 @@ function RuntimePanel() {
                 </div>
                 <div className="flex justify-end">
                   <button
+                    className="classicyButton"
                     disabled={isLoadingCityFile}
                     onClick={() => {
                       setGameDialog(null);
@@ -819,11 +845,12 @@ function RuntimePanel() {
 
             {gameDialog !== 'scenario' ? null : (
               <section className="grid gap-2.5">
-                <strong className="font-mono text-sm">Scenario</strong>
-                <label className="grid gap-1 font-mono text-xs">
+                <strong className="classicyRuntimePanelTitle text-sm">Scenario</strong>
+                <label className="grid gap-1 text-xs">
                   Scenario
                   <select
                     autoFocus
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       setSelectedScenarioId(Number.parseInt(event.target.value, 10));
@@ -837,9 +864,10 @@ function RuntimePanel() {
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1 font-mono text-xs">
+                <label className="grid gap-1 text-xs">
                   Difficulty
                   <select
+                    className="classicyRuntimeSelect px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -858,6 +886,7 @@ function RuntimePanel() {
                 </label>
                 <div className="flex justify-end gap-2">
                   <button
+                    className="classicyButton"
                     onClick={() => {
                       setGameDialog(null);
                     }}
@@ -866,6 +895,7 @@ function RuntimePanel() {
                     Cancel
                   </button>
                   <button
+                    className="classicyButton"
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -911,19 +941,19 @@ function NoticePanel({
   onDismiss: () => void;
 }) {
   return (
-    <section className="pointer-events-auto absolute right-3 top-[46px] z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden rounded-md border border-slate-900/75 bg-slate-50/96 p-2.5 text-slate-900">
+    <section className="classicyRuntimePanelChrome pointer-events-auto absolute right-3 top-[46px] z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5">
       <header
-        className="flex items-center justify-between rounded border border-slate-900/35 px-2 py-1.5"
+        className="flex items-center justify-between border px-2 py-1.5"
         style={{ background: notice.color }}
       >
-        <strong className="font-mono text-xs">{notice.title}</strong>
-        <span className="font-mono text-[11px]">#{notice.id}</span>
+        <strong className="text-xs">{notice.title}</strong>
+        <span className="text-[11px]">#{notice.id}</span>
       </header>
-      <pre className="m-0 overflow-auto whitespace-pre-wrap rounded border border-slate-400/45 bg-slate-100/90 p-2 font-mono text-xs leading-[18px]">
+      <pre className="classicyRuntimeMessageFeed m-0 overflow-auto whitespace-pre-wrap p-2 text-xs leading-[18px]">
         {notice.body}
       </pre>
       <div className="flex justify-end">
-        <button onClick={onDismiss} type="button">
+        <button className="classicyButton" onClick={onDismiss} type="button">
           Dismiss
         </button>
       </div>
@@ -1120,9 +1150,9 @@ function formatRuntimePhaseStatus(phase: WebRuntimeState['phase']): string {
  */
 function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
   return (
-    <div className="h-[58px] overflow-y-auto rounded border border-slate-900/58 bg-slate-900/32 px-1.5 py-1 font-mono text-xs text-slate-200">
+    <div className="classicyRuntimeMessageFeed h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
       {messages.length === 0 ? (
-        <div className="leading-4 text-slate-300">No messages yet.</div>
+        <div className="leading-4">No messages yet.</div>
       ) : (
         [...messages].reverse().map((message) => {
           const coordinateSuffix =
@@ -1134,7 +1164,7 @@ function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[]
               key={`${message.serverSeq}:${message.id}:${message.tick}:${message.x ?? 'na'}:${message.y ?? 'na'}`}
               className="overflow-hidden text-ellipsis whitespace-nowrap leading-4"
             >
-              <span className="text-blue-200">[{message.serverSeq}]</span> {message.text}
+              <span className="text-blue-700">[{message.serverSeq}]</span> {message.text}
               {coordinateSuffix}
             </div>
           );
