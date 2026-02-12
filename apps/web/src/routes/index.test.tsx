@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -13,6 +15,20 @@ import {
 import type { HostEnvelope } from '../game/runtime/protocol.ts';
 import { SimCoreEnvelopeHost } from '../game/runtime/sim-core-envelope-host.ts';
 import { Route, triggerRouteDisasterControl } from './index.tsx';
+
+const WEB_WORKSPACE_ROOT = process.cwd().endsWith('/apps/web')
+  ? process.cwd()
+  : resolve(process.cwd(), 'apps/web');
+const INDEX_ROUTE_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routes/index.tsx');
+const PLAYABLE_RUNTIME_HOST_SOURCE_PATH = resolve(
+  WEB_WORKSPACE_ROOT,
+  'src/game/runtime/playable-runtime-host.ts',
+);
+const SOUND_ROUTING_SOURCE_PATH = resolve(
+  WEB_WORKSPACE_ROOT,
+  'src/game/audio/micropolis-runtime-envelope-sound-routing.ts',
+);
+const ROUTE_TREE_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routeTree.gen.ts');
 
 /**
  * Builds the legacy synthetic snapshot baseline in bridge x-major order.
@@ -42,10 +58,7 @@ function buildLegacySyntheticSnapshotTileWords(width: number, height: number): U
  */
 describe('routes/index default gameplay path', () => {
   test('routes "/" host creation through sim-core authoritative envelope host factory only', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toMatch(
       /createPlayableRuntimeHost[\s\S]*from ['"]\.\.\/game\/runtime\/playable-runtime-host(?:\.ts)?['"]/,
@@ -57,14 +70,8 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('keeps "/" gameplay host contract isolated to runtime envelope protocol modules', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
-    const playableRuntimeHostSource = readFileSync(
-      fileURLToPath(new URL('../game/runtime/playable-runtime-host.ts', import.meta.url)),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
+    const playableRuntimeHostSource = readFileSync(PLAYABLE_RUNTIME_HOST_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toContain("from '../game/runtime/protocol.ts'");
     expect(routeSource).not.toMatch(/from ['"]\.\.\/game\/core-host(?:\.ts)?['"]/);
@@ -73,10 +80,7 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('routes gameplay audio through dedicated consumer module with envelope-delta routing', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toContain("from '../game/audio/micropolis-gameplay-audio-consumer.ts'");
     expect(routeSource).toContain(
@@ -87,10 +91,7 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('keeps gameplay route free of preview-only sound mapping helper imports', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
 
     expect(routeSource).not.toContain("from '../game/audio/micropolis-soundboard.ts'");
     expect(routeSource).not.toContain('toMicropolisSoundPreviewWavPath');
@@ -98,16 +99,8 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
-    const soundRoutingSource = readFileSync(
-      fileURLToPath(
-        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
-      ),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
+    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toContain(
       "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
@@ -123,12 +116,7 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
-    const soundRoutingSource = readFileSync(
-      fileURLToPath(
-        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
-      ),
-      'utf8',
-    );
+    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
 
     expect(soundRoutingSource).toContain(
       "const shouldAttemptEnvelopePlayback = context.reducerOutcome === 'applied';",
@@ -138,16 +126,8 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('keeps sequenced sound transport separate from configurable playback policy', () => {
-    const routeSource = readFileSync(
-      fileURLToPath(new URL('./index.tsx', import.meta.url)),
-      'utf8',
-    );
-    const soundRoutingSource = readFileSync(
-      fileURLToPath(
-        new URL('../game/audio/micropolis-runtime-envelope-sound-routing.ts', import.meta.url),
-      ),
-      'utf8',
-    );
+    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
+    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toContain('createMicropolisGameplaySoundPlaybackPolicy');
     expect(routeSource).toContain("mode: 'applied-only'");
@@ -160,10 +140,7 @@ describe('routes/index default gameplay path', () => {
   });
 
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
-    const routeTreeSource = readFileSync(
-      fileURLToPath(new URL('../routeTree.gen.ts', import.meta.url)),
-      'utf8',
-    );
+    const routeTreeSource = readFileSync(ROUTE_TREE_SOURCE_PATH, 'utf8');
     expect(routeTreeSource).toContain("path: '/'");
     expect(routeTreeSource).toContain("fullPath: '/'");
 
@@ -176,7 +153,7 @@ describe('routes/index default gameplay path', () => {
     const markup = renderToStaticMarkup(React.createElement(component));
     expect(markup).not.toContain('Sound Test');
     expect(markup).toContain('Runtime');
-    expect(markup).toContain('Build');
+    expect(markup).toContain('Play');
     expect(markup).toContain('Road: $10');
     expect(markup).toContain('Demand heads R 0, C 0, I 0');
     expect(markup).toContain('Message Feed');
