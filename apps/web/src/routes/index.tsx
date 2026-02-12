@@ -2,7 +2,7 @@ import './index.classicy.css';
 
 import { createFileRoute } from '@tanstack/react-router';
 import { getAllThemes, getThemeVars } from 'classicy';
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import demandGaugeBackgroundUrl from '../../../../packages/sim-assets/generated-images/images/demandg.png';
 import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
@@ -160,7 +160,9 @@ function RuntimePanel() {
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
   const [mapCameraControlsContainer, setMapCameraControlsContainer] =
     useState<HTMLDivElement | null>(null);
+  const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
   const menubarRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const speedControlRef = useRef<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
@@ -292,12 +294,52 @@ function RuntimePanel() {
     setGameDialog('scenario');
   }, [state.hudState.notice]);
 
+  useLayoutEffect(() => {
+    const menubarElement = menubarRef.current;
+    const sidebarElement = sidebarRef.current;
+    if (
+      menubarElement === null ||
+      sidebarElement === null ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const updateInsets = () => {
+      const nextTopInset = Math.ceil(menubarElement.getBoundingClientRect().height);
+      const nextLeftInset = Math.ceil(sidebarElement.getBoundingClientRect().width);
+      setLayoutInsets((currentInsets) => {
+        if (currentInsets.top === nextTopInset && currentInsets.left === nextLeftInset) {
+          return currentInsets;
+        }
+        return { top: nextTopInset, left: nextLeftInset };
+      });
+    };
+
+    updateInsets();
+
+    const observer = new ResizeObserver(() => {
+      updateInsets();
+    });
+    observer.observe(menubarElement);
+    observer.observe(sidebarElement);
+    window.addEventListener('resize', updateInsets);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateInsets);
+    };
+  }, []);
+
   return (
     <section
       className="classicyRuntimePanel relative h-full w-full overflow-hidden"
       style={runtimeTheme as CSSProperties}
     >
-      <div className="classicyRuntimeMapArea absolute">
+      <div
+        className="classicyRuntimeMapArea absolute"
+        style={{ left: layoutInsets.left, top: layoutInsets.top }}
+      >
         <MapCanvas
           cameraControlsContainer={mapCameraControlsContainer}
           dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
@@ -326,7 +368,7 @@ function RuntimePanel() {
         ref={menubarRef}
         className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 px-2"
       >
-        <div className="classicyRuntimeTopLeft flex items-center gap-0.5">
+        <div className="classicyRuntimeTopLeft flex items-center gap-2">
           <div className="relative">
             <button
               onClick={() => {
@@ -485,7 +527,7 @@ function RuntimePanel() {
                 : 'Click map tiles to place tool.'}
           </div>
         </div>
-        <div className="classicyRuntimeTopControls ml-auto flex items-center gap-0.5">
+        <div className="classicyRuntimeTopControls ml-auto flex items-center gap-2">
           <button
             disabled={sessionControlsDisabled}
             onClick={() => {
@@ -494,7 +536,7 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            className="classicyButton min-w-[84px] font-bold"
+            className="classicyButton classicyRuntimeTopControlButton min-w-[84px] font-bold"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
@@ -506,7 +548,7 @@ function RuntimePanel() {
                 setOpenMenubarSection(null);
                 setIsSpeedMenuOpen((current) => !current);
               }}
-              className={`classicyButton min-w-[54px] px-1.5 font-bold ${
+              className={`classicyButton classicyRuntimeTopControlButton min-w-[54px] px-1.5 font-bold ${
                 isSpeedMenuOpen ? 'classicyRuntimeMenuButtonActive' : ''
               }`}
               type="button"
@@ -551,7 +593,7 @@ function RuntimePanel() {
                 return nextMuted;
               });
             }}
-            className={`classicyButton classicyButtonShapeSquare inline-flex h-[var(--window-control-size)] w-[var(--window-control-size)] items-center justify-center p-0 ${
+            className={`classicyButton classicyRuntimeTopControlButton classicyButtonShapeSquare inline-flex h-[var(--window-control-size)] w-[var(--window-control-size)] items-center justify-center p-0 ${
               isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
             }`}
             title={isGameplayMuted ? 'Unmute' : 'Mute'}
@@ -587,10 +629,15 @@ function RuntimePanel() {
           onDismiss={() => {
             setDismissedNoticeSignature(activeNoticeSignature);
           }}
+          topInsetPx={layoutInsets.top}
         />
       )}
 
-      <section className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute left-0 bottom-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3">
+      <section
+        ref={sidebarRef}
+        className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3"
+        style={{ top: layoutInsets.top }}
+      >
         <div className="mx-auto grid grid-cols-2 justify-center gap-1.5">
           <div className="col-span-2 flex justify-center pb-0.5">
             <img
@@ -965,12 +1012,17 @@ function RuntimePanel() {
 function NoticePanel({
   notice,
   onDismiss,
+  topInsetPx,
 }: {
   notice: RuntimeHudNoticeEvent;
   onDismiss: () => void;
+  topInsetPx: number;
 }) {
   return (
-    <section className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5">
+    <section
+      className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
+      style={{ top: `calc(${topInsetPx}px + var(--window-padding-size))` }}
+    >
       <header
         className="flex items-center justify-between border px-2 py-1.5"
         style={{ background: notice.color }}
