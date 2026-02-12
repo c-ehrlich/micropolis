@@ -367,7 +367,7 @@ function RuntimePanel() {
               Game
             </button>
             {openMenubarSection !== 'game' ? null : (
-              <section className={`${menubarPanelClass} min-w-[204px] gap-0.5`}>
+              <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
                 <button
                   disabled={controlsDisabled}
                   onClick={() => {
@@ -429,7 +429,7 @@ function RuntimePanel() {
               Disasters
             </button>
             {openMenubarSection !== 'disasters' ? null : (
-              <section className={`${menubarPanelClass} min-w-[204px] gap-1`}>
+              <section className={`${menubarPanelClass} min-w-51 gap-1`}>
                 {PLAYABLE_DISASTER_CHOICES.map((choice) => (
                   <button
                     key={choice.id}
@@ -459,7 +459,7 @@ function RuntimePanel() {
               Runtime
             </button>
             {openMenubarSection !== 'runtime' ? null : (
-              <section className={`${menubarPanelClass} min-w-[290px] gap-1.5 p-2`}>
+              <section className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
                 <div className="text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
                 </div>
@@ -501,7 +501,7 @@ function RuntimePanel() {
             )}
           </div>
         </div>
-        <div className="classicyRuntimeTopStatus pointer-events-none absolute left-1/2 top-1/2 z-[11] flex -translate-x-1/2 -translate-y-1/2 flex-col px-2 py-0.5">
+        <div className="classicyRuntimeTopStatus pointer-events-none absolute left-1/2 top-1/2 z- 11 flex -translate-x-1/2 -translate-y-1/2 flex-col px-2 py-0.5">
           <div className="text-[12px] font-bold leading-4">
             {activeToolSpec.label}: ${activeToolSpec.baseCost}
           </div>
@@ -522,7 +522,7 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            className="classicyButton classicyRuntimeTopControlButton min-w-[84px] font-bold"
+            className="classicyButton classicyRuntimeTopControlButton min-w-21 font-bold"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
@@ -534,7 +534,7 @@ function RuntimePanel() {
                 setOpenMenubarSection(null);
                 setIsSpeedMenuOpen((current) => !current);
               }}
-              className={`classicyButton classicyRuntimeTopControlButton min-w-[54px] px-1.5 font-bold ${
+              className={`classicyButton classicyRuntimeTopControlButton min-w-13.5 px-1.5 font-bold ${
                 isSpeedMenuOpen ? 'classicyRuntimeMenuButtonActive' : ''
               }`}
               type="button"
@@ -542,7 +542,7 @@ function RuntimePanel() {
               {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
             </button>
             {isSpeedMenuOpen ? (
-              <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-[12] grid min-w-[58px] gap-0.5 p-1">
+              <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-12 grid min-w-14.5 gap-0.5 p-1">
                 {([1, 2, 3] as const).map((speed) => (
                   <button
                     key={speed}
@@ -579,7 +579,7 @@ function RuntimePanel() {
                 return nextMuted;
               });
             }}
-            className={`classicyButton classicyRuntimeTopControlButton classicyButtonShapeSquare inline-flex h-[var(--window-control-size)] w-[var(--window-control-size)] items-center justify-center p-0 ${
+            className={`classicyButton classicyRuntimeTopControlButton classicyButtonShapeSquare inline-flex h-(--window-control-size) w-(--window-control-size) items-center justify-center p-0 ${
               isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
             }`}
             title={isGameplayMuted ? 'Unmute' : 'Mute'}
@@ -644,7 +644,7 @@ function RuntimePanel() {
 
       <section
         ref={sidebarRef}
-        className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3"
+        className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-6 grid gap-1.5 overflow-y-auto px-2 py-3"
         style={{ top: layoutInsets.top }}
       >
         <div className="mx-auto grid grid-cols-2 justify-center gap-x-1.5 gap-y-1">
@@ -724,7 +724,7 @@ function RuntimePanel() {
         </div>
       </section>
 
-      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
+      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-6 grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
         <div className="classicyRuntimeSidebarStatLabel classicyRuntimeMessageFeedLabel">
           Message Feed
         </div>
@@ -751,13 +751,13 @@ function RuntimePanel() {
           onClick={() => {
             setIsBrandDialogOpen(false);
           }}
-          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-15 flex items-center justify-center"
         >
           <section
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="classicyWindow classicyWindowActive classicyWindowModal classicyRuntimeDialog classicyRuntimeBrandDialog grid min-w-[280px] w-[min(420px,calc(100vw-24px))] gap-2.5"
+            className="classicyWindow classicyWindowActive classicyWindowModal classicyRuntimeDialog classicyRuntimeBrandDialog grid min-w-70 w-[min(420px,calc(100vw-24px))] gap-2.5"
             style={{ position: 'relative' }}
           >
             <strong className="classicyRuntimePanelTitle text-sm">Micropolis</strong>
@@ -818,7 +818,7 @@ function RuntimePanel() {
               setGameDialog(null);
             }
           }}
-          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-15 flex items-center justify-center"
         >
           <section
             onClick={(event) => {
