@@ -158,8 +158,6 @@ function RuntimePanel() {
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
-  const [mapCameraControlsContainer, setMapCameraControlsContainer] =
-    useState<HTMLDivElement | null>(null);
   const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
   const menubarRef = useRef<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
@@ -341,7 +339,6 @@ function RuntimePanel() {
         style={{ left: layoutInsets.left, top: layoutInsets.top }}
       >
         <MapCanvas
-          cameraControlsContainer={mapCameraControlsContainer}
           dragPlacementEnabled={!sessionControlsDisabled && activeToolSpec.size === 1}
           hoverTool={sessionControlsDisabled ? undefined : activeTool}
           mapState={state.mapState}
@@ -704,7 +701,6 @@ function RuntimePanel() {
           <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
           <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
         </div>
-        <div ref={setMapCameraControlsContainer} />
       </section>
 
       <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-1 p-2">
