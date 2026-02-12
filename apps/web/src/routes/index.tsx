@@ -154,6 +154,7 @@ function RuntimePanel() {
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
+  const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false);
   const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
@@ -235,6 +236,7 @@ function RuntimePanel() {
       setOpenMenubarSection(null);
       setGameDialog(null);
       setIsSpeedMenuOpen(false);
+      setIsBrandDialogOpen(false);
     };
 
     window.addEventListener('pointerdown', handlePointerDown);
@@ -363,7 +365,7 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 px-2"
+        className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 pl-2 pr-0"
       >
         <div className="classicyRuntimeTopLeft flex items-center gap-2">
           <div className="relative">
@@ -619,6 +621,29 @@ function RuntimePanel() {
             </svg>
           </button>
         </div>
+        <img
+          alt={isSimulationRunning ? 'Simulation running indicator' : 'Simulation paused indicator'}
+          aria-label="Open Micropolis popup"
+          draggable={false}
+          onClick={() => {
+            setOpenMenubarSection(null);
+            setIsSpeedMenuOpen(false);
+            setIsBrandDialogOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setOpenMenubarSection(null);
+              setIsSpeedMenuOpen(false);
+              setIsBrandDialogOpen(true);
+            }
+          }}
+          role="button"
+          src={isSimulationRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl}
+          tabIndex={0}
+          title="Micropolis"
+          className="classicyRuntimeBrandIcon [image-rendering:pixelated]"
+        />
       </header>
       {visibleNotice === null ? null : (
         <NoticePanel
@@ -635,19 +660,7 @@ function RuntimePanel() {
         className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-[6] grid gap-1.5 overflow-y-auto px-2 py-3"
         style={{ top: layoutInsets.top }}
       >
-        <div className="mx-auto grid grid-cols-2 justify-center gap-1.5">
-          <div className="col-span-2 flex justify-center pb-0.5">
-            <img
-              alt={
-                isSimulationRunning ? 'Simulation running indicator' : 'Simulation paused indicator'
-              }
-              draggable={false}
-              src={
-                isSimulationRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl
-              }
-              className="block h-[47px] w-[37px] [image-rendering:pixelated]"
-            />
-          </div>
+        <div className="mx-auto grid grid-cols-2 justify-center gap-x-1.5 gap-y-1">
           {PLAYABLE_TOOL_SPECS.map((spec) => {
             const active = activeTool === spec.tool;
             const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
@@ -695,16 +708,37 @@ function RuntimePanel() {
           demandI={state.hudState.demandI}
           demandR={state.hudState.demandR}
         />
-        <div className="grid gap-0.5 text-center text-[11px]">
-          <div>{state.hudState.fundsLabel}</div>
-          <div>{state.hudState.dateDisplayLabel}</div>
-          <div>{`Population: ${state.hudState.cityPopulation.toLocaleString('en-US')}`}</div>
-          <div>{`Class: ${state.hudState.cityClassLabel}`}</div>
+        <div className="classicyRuntimeSidebarStats grid text-[11px]">
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Funds</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
+            </div>
+          </div>
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Date</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')}
+            </div>
+          </div>
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Population</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.cityPopulation.toLocaleString('en-US')}
+            </div>
+          </div>
+          <div className="classicyRuntimeSidebarStat">
+            <div className="classicyRuntimeSidebarStatLabel">Class</div>
+            <div className="classicyRuntimeSidebarStatValue">
+              {state.hudState.cityClassLabel.slice(0, 1).toUpperCase() +
+                state.hudState.cityClassLabel.slice(1).toLowerCase()}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-1 p-2">
-        <strong className="classicyRuntimePanelTitle text-center text-[11px] uppercase tracking-[0.4px]">
+      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-[6] grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
+        <strong className="classicyRuntimePanelTitle text-center text-xs leading-none normal-case">
           Message Feed
         </strong>
         <MessageFeed messages={state.hudState.messages} />
@@ -724,6 +758,71 @@ function RuntimePanel() {
         className="hidden"
         type="file"
       />
+
+      {isBrandDialogOpen ? (
+        <div
+          onClick={() => {
+            setIsBrandDialogOpen(false);
+          }}
+          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-[15] flex items-center justify-center"
+        >
+          <section
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+            className="classicyWindow classicyWindowActive classicyWindowModal classicyRuntimeDialog classicyRuntimeBrandDialog grid min-w-[280px] w-[min(420px,calc(100vw-24px))] gap-2.5"
+            style={{ position: 'relative' }}
+          >
+            <strong className="classicyRuntimePanelTitle text-sm">Micropolis</strong>
+            <div className="grid gap-1 text-sm">
+              <p>
+                Developed by Christopher Ehrlich using gpt 5.3-codex:{' '}
+                <a
+                  className="underline"
+                  href="https://github.com/c-ehrlich/micropolis"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  github.com/c-ehrlich/micropolis
+                </a>
+              </p>
+              <p>
+                Based on the TCL/X11 version of Micropolis (open-source SimCity):{' '}
+                <a
+                  className="underline"
+                  href="https://github.com/SimHacker/micropolis"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  github.com/SimHacker/micropolis
+                </a>
+              </p>
+              <p>
+                Twitter:{' '}
+                <a
+                  className="underline"
+                  href="https://x.com/ccccjjjjeeee"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  x.com/ccccjjjjeeee
+                </a>
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                className="classicyButton"
+                onClick={() => {
+                  setIsBrandDialogOpen(false);
+                }}
+                type="button"
+              >
+                Dismiss
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {gameDialog === null ? null : (
         <div

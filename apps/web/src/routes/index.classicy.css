@@ -51,6 +51,19 @@
   margin: 0 !important;
 }
 
+.classicyRuntimeBrandIcon {
+  display: block;
+  align-self: stretch;
+  margin-top: calc((var(--runtime-top-bar-padding-y) * -1) + var(--window-border-size)) !important;
+  margin-bottom: calc(var(--runtime-top-bar-padding-y) * -1) !important;
+  height: auto;
+  width: auto;
+  flex-shrink: 0;
+  max-height: none;
+  cursor: pointer;
+  user-select: none;
+}
+
 .classicyRuntimeMenuButtonActive {
   color: var(--color-white) !important;
   background: var(--color-theme-04) !important;
@@ -93,6 +106,47 @@
 .classicyRuntimeSidebar {
   top: var(--runtime-top-bar-height);
   width: var(--runtime-sidebar-width);
+  align-content: start;
+}
+
+.classicyRuntimeSidebarStats {
+  --runtime-sidebar-stat-value-height: 22px;
+  min-width: 0;
+  row-gap: 4px;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.classicyRuntimeSidebarStat {
+  display: grid;
+  grid-template-rows: auto var(--runtime-sidebar-stat-value-height);
+  row-gap: 1px;
+  min-width: 0;
+  align-content: start;
+}
+
+.classicyRuntimeSidebarStatLabel {
+  text-align: left;
+}
+
+.classicyRuntimeSidebarStatValue {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  height: var(--runtime-sidebar-stat-value-height);
+  padding: 0 4px;
+  line-height: 1;
+  border: var(--window-border-size) solid var(--color-window-border);
+  background: color-mix(in srgb, var(--color-system-03) 90%, transparent);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .classicyRuntimeBottomFeed {
@@ -121,6 +175,10 @@
     inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
       var(--color-system-07),
     calc(var(--window-border-size) * 4) calc(var(--window-border-size) * 4) 0 0 rgba(0, 0, 0, 0.35);
+}
+
+.classicyRuntimeBrandDialog {
+  padding: 8px !important;
 }
 
 .classicyRuntimeInput,
