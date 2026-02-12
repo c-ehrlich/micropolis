@@ -895,39 +895,6 @@ export function MapCanvas({
   ]);
 
   const hasPannableBounds = maxCameraOffsetX > 0 || maxCameraOffsetY > 0;
-  const cameraControlsContent = (
-    <>
-      <div className="flex w-full justify-center">
-        <button
-          onClick={() => {
-            applyCameraZoomStep(1 / MAP_CANVAS_BUTTON_ZOOM_STEP);
-          }}
-          type="button"
-        >
-          -
-        </button>
-        <button
-          onClick={() => {
-            applyCameraZoomAt(1, {
-              x: viewportWidthPx / 2,
-              y: viewportHeightPx / 2,
-            });
-          }}
-          type="button"
-        >
-          100%
-        </button>
-        <button
-          onClick={() => {
-            applyCameraZoomStep(MAP_CANVAS_BUTTON_ZOOM_STEP);
-          }}
-          type="button"
-        >
-          +
-        </button>
-      </div>
-    </>
-  );
 
   if (!mapState.hasSnapshot) {
     return (
@@ -942,14 +909,6 @@ export function MapCanvas({
 
   return (
     <div ref={mapCanvasRootRef} className="relative h-full w-full overflow-hidden bg-[#0b1020]">
-      {cameraControlsContainer === undefined ? (
-        <div className="flex flex-col">{cameraControlsContent}</div>
-      ) : cameraControlsContainer === null ? null : (
-        createPortal(
-          <div className="flex flex-col">{cameraControlsContent}</div>,
-          cameraControlsContainer,
-        )
-      )}
       <div
         ref={mapViewportRef}
         onPointerCancel={(event) => {
