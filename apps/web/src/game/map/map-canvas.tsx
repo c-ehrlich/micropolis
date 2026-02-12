@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { createPortal } from 'react-dom';
 
 import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-assets/src/derived-images.ts';
 import {
@@ -44,7 +43,6 @@ const MICROPOLIS_MAP_PAN_SCALE_NUMERATOR = 16;
 const MICROPOLIS_MAP_PAN_SCALE_DENOMINATOR = 3;
 const MAP_CANVAS_MIN_ZOOM = 0.2;
 const MAP_CANVAS_MAX_ZOOM = 4;
-const MAP_CANVAS_BUTTON_ZOOM_STEP = 1.25;
 const MAP_CANVAS_WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const MAP_CANVAS_WHEEL_LINE_DELTA_PX = 16;
 const MICROPOLIS_FLAG_BLINK_PERIOD_MS = 1000;
@@ -410,7 +408,6 @@ export function MapCanvas({
   onTileClick,
   dragPlacementEnabled = false,
   tileSize = 4,
-  cameraControlsContainer,
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
@@ -819,17 +816,6 @@ export function MapCanvas({
       viewportBounds.viewportMaxWidthPx,
     ],
   );
-
-  /**
-   * Apply one button-triggered zoom step around the viewport center.
-   * Difference from C: Micropolis has no map zoom controls in `w_map.c`.
-   */
-  const applyCameraZoomStep = (zoomFactor: number): void => {
-    applyCameraZoomAt(clampMapCanvasZoom(cameraZoom * zoomFactor), {
-      x: viewportWidthPx / 2,
-      y: viewportHeightPx / 2,
-    });
-  };
 
   useEffect(() => {
     const mapViewport = mapViewportRef.current;
