@@ -1,6 +1,21 @@
 import './index.classicy.css';
 
-import { ClassicyButton } from '@city/classicyui';
+import {
+  ClassicyButton,
+  ClassicyDialogBackdrop,
+  ClassicyDialogPanel,
+  ClassicyInput,
+  ClassicyMenuActionButton,
+  ClassicyMenuItemButton,
+  ClassicyMenuPanel,
+  ClassicyMenuSeparator,
+  ClassicyPanelChrome,
+  ClassicyPanelTitle,
+  ClassicyRange,
+  ClassicySelect,
+  ClassicyStatRow,
+  ClassicyWindowFrame,
+} from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
 import { getAllThemes, getThemeVars } from 'classicy';
 import {
@@ -496,8 +511,7 @@ function RuntimePanel() {
       ? null
       : activeNotice;
   const menubarButtonClass = 'classicyRuntimeMenuButton px-2 py-1 text-center';
-  const menubarPanelClass =
-    'classicyRuntimeMenuPanel absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
+  const menubarPanelClass = 'absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
   const runtimeTheme = useMemo(() => {
     const theme = getAllThemes()[0];
     if (theme === undefined) {
@@ -627,65 +641,60 @@ function RuntimePanel() {
               Micropolis
             </ClassicyButton>
             {openMenubarSection !== 'micropolis' ? null : (
-              <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
-                <ClassicyButton
+              <ClassicyMenuPanel className={`${menubarPanelClass} min-w-51 gap-0.5`}>
+                <ClassicyMenuItemButton
                   onClick={() => {
                     setIsBrandDialogOpen(true);
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   About...
-                </ClassicyButton>
-                <div className="mx-1 h-px bg-black/35" />
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuSeparator />
+                <ClassicyMenuItemButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   New
-                </ClassicyButton>
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuItemButton
                   disabled={sessionControlsDisabled}
                   onClick={() => {
                     setSaveFileNameDraft(saveFileName);
                     setGameDialog('save');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Save...
-                </ClassicyButton>
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuItemButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setPendingLoadFile(null);
                     setGameDialog('load');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Load...
-                </ClassicyButton>
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuItemButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('scenario');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Scenario...
-                </ClassicyButton>
-              </section>
+                </ClassicyMenuItemButton>
+              </ClassicyMenuPanel>
             )}
           </div>
           <div className="relative">
@@ -702,38 +711,35 @@ function RuntimePanel() {
               Windows
             </ClassicyButton>
             {openMenubarSection !== 'windows' ? null : (
-              <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
-                <ClassicyButton
+              <ClassicyMenuPanel className={`${menubarPanelClass} min-w-51 gap-0.5`}>
+                <ClassicyMenuItemButton
                   onClick={() => {
                     openFloatingWindow('budget');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Budget
-                </ClassicyButton>
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuItemButton
                   onClick={() => {
                     openFloatingWindow('evaluation');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Evaluation
-                </ClassicyButton>
-                <ClassicyButton
+                </ClassicyMenuItemButton>
+                <ClassicyMenuItemButton
                   onClick={() => {
                     openFloatingWindow('graph');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Graph
-                </ClassicyButton>
-              </section>
+                </ClassicyMenuItemButton>
+              </ClassicyMenuPanel>
             )}
           </div>
           <div className="relative">
@@ -750,22 +756,21 @@ function RuntimePanel() {
               Disasters
             </ClassicyButton>
             {openMenubarSection !== 'disasters' ? null : (
-              <section className={`${menubarPanelClass} min-w-51 gap-1`}>
+              <ClassicyMenuPanel className={`${menubarPanelClass} min-w-51 gap-1`}>
                 {PLAYABLE_DISASTER_CHOICES.map((choice) => (
-                  <ClassicyButton
+                  <ClassicyMenuItemButton
                     key={choice.id}
                     disabled={sessionControlsDisabled}
                     onClick={() => {
                       setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                       setOpenMenubarSection(null);
                     }}
-                    className="classicyRuntimeMenuItem text-left"
                     type="button"
                   >
                     {choice.label.replace('Trigger ', '')}
-                  </ClassicyButton>
+                  </ClassicyMenuItemButton>
                 ))}
-              </section>
+              </ClassicyMenuPanel>
             )}
           </div>
           <div className="relative">
@@ -782,12 +787,12 @@ function RuntimePanel() {
               Settings
             </ClassicyButton>
             {openMenubarSection !== 'settings' ? null : (
-              <section className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
+              <ClassicyMenuPanel className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
                 <label className="grid gap-0.5 text-xs" htmlFor="settings-tileset-select">
                   Tileset
-                  <select
+                  <ClassicySelect
                     id="settings-tileset-select"
-                    className="classicyRuntimeSelect px-1.5 py-1"
+                    className="px-1.5 py-1"
                     onChange={(event) => {
                       const nextTileset = event.currentTarget.value as RuntimeTilesetName;
                       setSelectedRuntimeTileset(nextTileset);
@@ -799,7 +804,7 @@ function RuntimePanel() {
                         {choice.label}
                       </option>
                     ))}
-                  </select>
+                  </ClassicySelect>
                 </label>
                 <div className="text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
@@ -816,30 +821,28 @@ function RuntimePanel() {
                   <div className="text-xs text-green-700">{lastSaveStatus}</div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <ClassicyButton
+                  <ClassicyMenuActionButton
                     disabled={reconnectDisabled}
                     onClick={() => {
                       runtime.reconnect();
                       setCityIoError('');
                       setLastSaveStatus('');
                     }}
-                    className="classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Reconnect
-                  </ClassicyButton>
-                  <ClassicyButton
+                  </ClassicyMenuActionButton>
+                  <ClassicyMenuActionButton
                     disabled={resyncDisabled}
                     onClick={() => {
                       runtime.requestSnapshot('resync');
                     }}
-                    className="classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Resync Snapshot
-                  </ClassicyButton>
+                  </ClassicyMenuActionButton>
                 </div>
-              </section>
+              </ClassicyMenuPanel>
             )}
           </div>
         </div>
@@ -884,7 +887,7 @@ function RuntimePanel() {
               {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
             </ClassicyButton>
             {isSpeedMenuOpen ? (
-              <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-12 grid min-w-14.5 gap-0.5 p-1">
+              <ClassicyMenuPanel className="absolute right-0 top-[calc(100%+3px)] z-12 grid min-w-14.5 gap-0.5 p-1">
                 {([1, 2, 3] as const).map((speed) => (
                   <ClassicyButton
                     key={speed}
@@ -905,7 +908,7 @@ function RuntimePanel() {
                     {speed}x
                   </ClassicyButton>
                 ))}
-              </section>
+              </ClassicyMenuPanel>
             ) : null}
           </div>
           <ClassicyButton
@@ -983,9 +986,9 @@ function RuntimePanel() {
         />
       )}
 
-      <section
+      <ClassicyPanelChrome
         ref={sidebarRef}
-        className="classicyRuntimeSidebar classicyRuntimePanelChrome pointer-events-auto absolute bottom-0 left-0 z-6 grid gap-1.5 overflow-y-auto px-2 py-3"
+        className="classicyRuntimeSidebar pointer-events-auto absolute bottom-0 left-0 z-6 grid gap-1.5 overflow-y-auto px-2 py-3"
         style={{ top: layoutInsets.top }}
       >
         <div className="mx-auto grid grid-cols-2 justify-center gap-x-1.5 gap-y-1">
@@ -1070,47 +1073,33 @@ function RuntimePanel() {
             title="Open Budget Window"
             type="button"
           >
-            <div className="classicyRuntimeSidebarStat">
-              <div className="classicyRuntimeSidebarStatLabel">Funds</div>
-              <div className="classicyRuntimeSidebarStatValue">
-                {state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
-              </div>
-            </div>
-            <div className="classicyRuntimeSidebarStat">
-              <div className="classicyRuntimeSidebarStatLabel">Tax</div>
-              <div className="classicyRuntimeSidebarStatValue">
-                {state.hudState.budget.taxRate}%
-              </div>
-            </div>
+            <ClassicyStatRow
+              label="Funds"
+              value={state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
+            />
+            <ClassicyStatRow label="Tax" value={`${state.hudState.budget.taxRate}%`} />
           </button>
-          <div className="classicyRuntimeSidebarStat">
-            <div className="classicyRuntimeSidebarStatLabel">Date</div>
-            <div className="classicyRuntimeSidebarStatValue">
-              {state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')}
-            </div>
-          </div>
-          <div className="classicyRuntimeSidebarStat">
-            <div className="classicyRuntimeSidebarStatLabel">Population</div>
-            <div className="classicyRuntimeSidebarStatValue">
-              {state.hudState.cityPopulation.toLocaleString('en-US')}
-            </div>
-          </div>
-          <div className="classicyRuntimeSidebarStat">
-            <div className="classicyRuntimeSidebarStatLabel">Class</div>
-            <div className="classicyRuntimeSidebarStatValue">
-              {state.hudState.cityClassLabel.slice(0, 1).toUpperCase() +
-                state.hudState.cityClassLabel.slice(1).toLowerCase()}
-            </div>
-          </div>
+          <ClassicyStatRow label="Date" value={state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')} />
+          <ClassicyStatRow
+            label="Population"
+            value={state.hudState.cityPopulation.toLocaleString('en-US')}
+          />
+          <ClassicyStatRow
+            label="Class"
+            value={
+              state.hudState.cityClassLabel.slice(0, 1).toUpperCase() +
+              state.hudState.cityClassLabel.slice(1).toLowerCase()
+            }
+          />
         </div>
-      </section>
+      </ClassicyPanelChrome>
 
-      <section className="classicyRuntimeBottomFeed classicyRuntimePanelChrome pointer-events-auto absolute left-1/2 z-6 grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
+      <ClassicyPanelChrome className="classicyRuntimeBottomFeed pointer-events-auto absolute left-1/2 z-6 grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
         <div className="classicyRuntimeSidebarStatLabel classicyRuntimeMessageFeedLabel">
           Message Feed
         </div>
         <MessageFeed messages={state.hudState.messages} />
-      </section>
+      </ClassicyPanelChrome>
       <input
         accept=".cty,application/octet-stream"
         onChange={(event) => {
@@ -1128,323 +1117,282 @@ function RuntimePanel() {
       />
 
       {floatingWindows.budget.open ? (
-        <section
+        <ClassicyWindowFrame
+          bodyClassName="grid gap-2 p-2 text-xs"
           data-floating-window="budget"
+          onClose={() => {
+            closeFloatingWindow('budget');
+          }}
+          onHeaderPointerDown={(event) => {
+            startFloatingWindowDrag('budget', event);
+          }}
           onPointerDown={() => {
             focusFloatingWindow('budget');
           }}
-          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-88 max-w-[min(520px,calc(100vw-12px))]"
+          className="min-w-88 max-w-[min(520px,calc(100vw-12px))]"
           style={{
             left: floatingWindows.budget.x,
             top: floatingWindows.budget.y,
             zIndex: floatingWindows.budget.zIndex,
           }}
+          title="Budget"
         >
-          <header
-            onPointerDown={(event) => {
-              startFloatingWindowDrag('budget', event);
-            }}
-            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
-          >
-            <strong className="classicyRuntimeFloatingWindowMenuTitle">Budget</strong>
-            <button
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-              onClick={() => {
-                closeFloatingWindow('budget');
-              }}
-              className="classicyButton classicyRuntimeFloatingWindowClose"
-              type="button"
-            >
-              x
-            </button>
-          </header>
-          <div className="classicyRuntimeFloatingWindowBody grid gap-2 p-2 text-xs">
-            <div className="grid gap-1.5 md:grid-cols-2">
-              <div className="grid gap-1">
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>Taxes Collected</span>
-                  <strong>{formatBudgetAmount(state.hudState.budget.taxFund)}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>Cash Flow</span>
-                  <strong>{formatSignedBudgetAmount(state.hudState.budget.cashFlow)}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>Previous Funds</span>
-                  <strong>{formatBudgetAmount(state.hudState.budget.totalFunds)}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>Current Funds</span>
-                  <strong>
-                    {formatBudgetAmount(
-                      state.hudState.budget.totalFunds + state.hudState.budget.cashFlow,
-                    )}
-                  </strong>
-                </div>
+          <div className="grid gap-1.5 md:grid-cols-2">
+            <div className="grid gap-1">
+              <div className="classicyRuntimeFloatingBudgetRow">
+                <span>Taxes Collected</span>
+                <strong>{formatBudgetAmount(state.hudState.budget.taxFund)}</strong>
               </div>
-              <div className="grid gap-1.5">
-                <label className="grid gap-0.5">
-                  <span>Road Fund ({state.hudState.budget.roadPercent}%)</span>
-                  <span className="text-[11px] text-slate-700">
-                    {formatBudgetAmount(state.hudState.budget.roadGot)} /{' '}
-                    {formatBudgetAmount(state.hudState.budget.roadWant)}
-                  </span>
-                  <input
-                    className="classicyRuntimeRange"
-                    disabled={sessionControlsDisabled}
-                    max={100}
-                    min={0}
-                    onChange={(event) => {
-                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                        kind: 'sim-control',
-                        control: 'set-road-percent',
-                        percent: Math.trunc(Number(event.currentTarget.value)),
-                      });
-                    }}
-                    type="range"
-                    value={state.hudState.budget.roadPercent}
-                  />
-                </label>
-                <label className="grid gap-0.5">
-                  <span>Fire Fund ({state.hudState.budget.firePercent}%)</span>
-                  <span className="text-[11px] text-slate-700">
-                    {formatBudgetAmount(state.hudState.budget.fireGot)} /{' '}
-                    {formatBudgetAmount(state.hudState.budget.fireWant)}
-                  </span>
-                  <input
-                    className="classicyRuntimeRange"
-                    disabled={sessionControlsDisabled}
-                    max={100}
-                    min={0}
-                    onChange={(event) => {
-                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                        kind: 'sim-control',
-                        control: 'set-fire-percent',
-                        percent: Math.trunc(Number(event.currentTarget.value)),
-                      });
-                    }}
-                    type="range"
-                    value={state.hudState.budget.firePercent}
-                  />
-                </label>
-                <label className="grid gap-0.5">
-                  <span>Police Fund ({state.hudState.budget.policePercent}%)</span>
-                  <span className="text-[11px] text-slate-700">
-                    {formatBudgetAmount(state.hudState.budget.policeGot)} /{' '}
-                    {formatBudgetAmount(state.hudState.budget.policeWant)}
-                  </span>
-                  <input
-                    className="classicyRuntimeRange"
-                    disabled={sessionControlsDisabled}
-                    max={100}
-                    min={0}
-                    onChange={(event) => {
-                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                        kind: 'sim-control',
-                        control: 'set-police-percent',
-                        percent: Math.trunc(Number(event.currentTarget.value)),
-                      });
-                    }}
-                    type="range"
-                    value={state.hudState.budget.policePercent}
-                  />
-                </label>
-                <label className="grid gap-0.5">
-                  <span>Tax Rate ({state.hudState.budget.taxRate}%)</span>
-                  <input
-                    className="classicyRuntimeRange"
-                    disabled={sessionControlsDisabled}
-                    max={20}
-                    min={0}
-                    onChange={(event) => {
-                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                        kind: 'sim-control',
-                        control: 'set-tax-rate',
-                        taxRate: Math.trunc(Number(event.currentTarget.value)),
-                      });
-                    }}
-                    type="range"
-                    value={state.hudState.budget.taxRate}
-                  />
-                </label>
+              <div className="classicyRuntimeFloatingBudgetRow">
+                <span>Cash Flow</span>
+                <strong>{formatSignedBudgetAmount(state.hudState.budget.cashFlow)}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow">
+                <span>Previous Funds</span>
+                <strong>{formatBudgetAmount(state.hudState.budget.totalFunds)}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow">
+                <span>Current Funds</span>
+                <strong>
+                  {formatBudgetAmount(
+                    state.hudState.budget.totalFunds + state.hudState.budget.cashFlow,
+                  )}
+                </strong>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button
-                disabled={sessionControlsDisabled}
-                onClick={() => {
-                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-                    kind: 'sim-control',
-                    control: 'set-auto-budget',
-                    enabled: !state.hudState.budget.autoBudget,
-                  });
-                }}
-                className="classicyButton"
-                type="button"
-              >
-                {state.hudState.budget.autoBudget ? 'Disable Auto Budget' : 'Enable Auto Budget'}
-              </button>
-              <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  className="classicyButton"
-                  onClick={() => {
-                    closeFloatingWindow('budget');
-                  }}
-                  type="button"
-                >
-                  Continue
-                </button>
-                <button
+            <div className="grid gap-1.5">
+              <label className="grid gap-0.5">
+                <span>Road Fund ({state.hudState.budget.roadPercent}%)</span>
+                <span className="text-[11px] text-slate-700">
+                  {formatBudgetAmount(state.hudState.budget.roadGot)} /{' '}
+                  {formatBudgetAmount(state.hudState.budget.roadWant)}
+                </span>
+                <ClassicyRange
                   disabled={sessionControlsDisabled}
-                  className="classicyButton"
-                  onClick={() => {
-                    applyBudgetControlState(budgetWindowOriginalStateRef.current);
+                  max={100}
+                  min={0}
+                  onChange={(event) => {
+                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                      kind: 'sim-control',
+                      control: 'set-road-percent',
+                      percent: Math.trunc(Number(event.currentTarget.value)),
+                    });
                   }}
-                  type="button"
-                >
-                  Reset
-                </button>
-                <button
+                  value={state.hudState.budget.roadPercent}
+                />
+              </label>
+              <label className="grid gap-0.5">
+                <span>Fire Fund ({state.hudState.budget.firePercent}%)</span>
+                <span className="text-[11px] text-slate-700">
+                  {formatBudgetAmount(state.hudState.budget.fireGot)} /{' '}
+                  {formatBudgetAmount(state.hudState.budget.fireWant)}
+                </span>
+                <ClassicyRange
                   disabled={sessionControlsDisabled}
-                  className="classicyButton"
-                  onClick={() => {
-                    applyBudgetControlState(budgetWindowOriginalStateRef.current);
-                    closeFloatingWindow('budget');
+                  max={100}
+                  min={0}
+                  onChange={(event) => {
+                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                      kind: 'sim-control',
+                      control: 'set-fire-percent',
+                      percent: Math.trunc(Number(event.currentTarget.value)),
+                    });
                   }}
-                  type="button"
-                >
-                  Cancel
-                </button>
-              </div>
+                  value={state.hudState.budget.firePercent}
+                />
+              </label>
+              <label className="grid gap-0.5">
+                <span>Police Fund ({state.hudState.budget.policePercent}%)</span>
+                <span className="text-[11px] text-slate-700">
+                  {formatBudgetAmount(state.hudState.budget.policeGot)} /{' '}
+                  {formatBudgetAmount(state.hudState.budget.policeWant)}
+                </span>
+                <ClassicyRange
+                  disabled={sessionControlsDisabled}
+                  max={100}
+                  min={0}
+                  onChange={(event) => {
+                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                      kind: 'sim-control',
+                      control: 'set-police-percent',
+                      percent: Math.trunc(Number(event.currentTarget.value)),
+                    });
+                  }}
+                  value={state.hudState.budget.policePercent}
+                />
+              </label>
+              <label className="grid gap-0.5">
+                <span>Tax Rate ({state.hudState.budget.taxRate}%)</span>
+                <ClassicyRange
+                  disabled={sessionControlsDisabled}
+                  max={20}
+                  min={0}
+                  onChange={(event) => {
+                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                      kind: 'sim-control',
+                      control: 'set-tax-rate',
+                      taxRate: Math.trunc(Number(event.currentTarget.value)),
+                    });
+                  }}
+                  value={state.hudState.budget.taxRate}
+                />
+              </label>
             </div>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <ClassicyButton
+              disabled={sessionControlsDisabled}
+              onClick={() => {
+                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                  kind: 'sim-control',
+                  control: 'set-auto-budget',
+                  enabled: !state.hudState.budget.autoBudget,
+                });
+              }}
+              type="button"
+            >
+              {state.hudState.budget.autoBudget ? 'Disable Auto Budget' : 'Enable Auto Budget'}
+            </ClassicyButton>
+            <div className="flex flex-wrap justify-end gap-2">
+              <ClassicyButton
+                onClick={() => {
+                  closeFloatingWindow('budget');
+                }}
+                type="button"
+              >
+                Continue
+              </ClassicyButton>
+              <ClassicyButton
+                disabled={sessionControlsDisabled}
+                onClick={() => {
+                  applyBudgetControlState(budgetWindowOriginalStateRef.current);
+                }}
+                type="button"
+              >
+                Reset
+              </ClassicyButton>
+              <ClassicyButton
+                disabled={sessionControlsDisabled}
+                onClick={() => {
+                  applyBudgetControlState(budgetWindowOriginalStateRef.current);
+                  closeFloatingWindow('budget');
+                }}
+                type="button"
+              >
+                Cancel
+              </ClassicyButton>
+            </div>
+          </div>
+        </ClassicyWindowFrame>
       ) : null}
 
       {floatingWindows.evaluation.open ? (
-        <section
+        <ClassicyWindowFrame
+          bodyClassName="grid gap-1.5 p-2 text-xs"
           data-floating-window="evaluation"
+          onClose={() => {
+            closeFloatingWindow('evaluation');
+          }}
+          onHeaderPointerDown={(event) => {
+            startFloatingWindowDrag('evaluation', event);
+          }}
           onPointerDown={() => {
             focusFloatingWindow('evaluation');
           }}
-          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-70 max-w-[min(460px,calc(100vw-12px))]"
+          className="min-w-70 max-w-[min(460px,calc(100vw-12px))]"
           style={{
             left: floatingWindows.evaluation.x,
             top: floatingWindows.evaluation.y,
             zIndex: floatingWindows.evaluation.zIndex,
           }}
+          title="Evaluation"
         >
-          <header
-            onPointerDown={(event) => {
-              startFloatingWindowDrag('evaluation', event);
-            }}
-            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
-          >
-            <strong className="classicyRuntimeFloatingWindowMenuTitle">Evaluation</strong>
-            <button
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
+          <ClassicyPanelTitle className="text-center text-xs">
+            {state.hudState.evaluation.title}
+          </ClassicyPanelTitle>
+          <div className="grid gap-2 md:grid-cols-2">
+            <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+              <strong className="text-[11px]">Public Opinion</strong>
+              <div className="text-[11px]">Is the mayor doing a good job?</div>
+              <div
+                className="classicyRuntimeEvaluationOpinionChart"
+                role="img"
+                aria-label={`Public opinion: yes ${state.hudState.evaluation.yesPercent}, no ${state.hudState.evaluation.noPercent}`}
+              >
+                <div className="classicyRuntimeEvaluationOpinionTrack">
+                  <div
+                    className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentYes"
+                    style={{ width: `${opinionYesChartWidthPercent}%` }}
+                  />
+                  <div
+                    className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentNo"
+                    style={{ width: `${opinionNoChartWidthPercent}%` }}
+                  />
+                </div>
+                <div className="classicyRuntimeEvaluationOpinionLabels">
+                  <strong className="classicyRuntimeEvaluationOpinionLabel">
+                    Yes {state.hudState.evaluation.yesPercent}
+                  </strong>
+                  <strong className="classicyRuntimeEvaluationOpinionLabel">
+                    No {state.hudState.evaluation.noPercent}
+                  </strong>
+                </div>
+              </div>
+              <strong className="mt-1 text-[11px]">Worst Problems</strong>
+              {state.hudState.evaluation.problems.map((problem, index) => (
+                <div
+                  key={`evaluation-problem-${index}`}
+                  className="classicyRuntimeFloatingBudgetRow text-[11px]"
+                >
+                  <span>{problem.name}</span>
+                  <strong>{problem.percent}</strong>
+                </div>
+              ))}
+            </section>
+            <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+              <strong className="text-[11px]">Statistics</strong>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Population</span>
+                <strong>{state.hudState.evaluation.population}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Net Migration (last year)</span>
+                <strong>{state.hudState.evaluation.populationDelta}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Assessed Value</span>
+                <strong>{state.hudState.evaluation.assessedValue}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Category</span>
+                <strong>{state.hudState.evaluation.cityClass}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Game Level</span>
+                <strong>{state.hudState.evaluation.cityLevel}</strong>
+              </div>
+              <strong className="mt-1 text-[11px]">Overall City Score (0 - 1000)</strong>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Current Score</span>
+                <strong>{state.hudState.evaluation.score}</strong>
+              </div>
+              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                <span>Annual Change</span>
+                <strong>{state.hudState.evaluation.scoreDelta}</strong>
+              </div>
+            </section>
+          </div>
+          <div className="flex justify-center">
+            <ClassicyButton
               onClick={() => {
                 closeFloatingWindow('evaluation');
               }}
-              className="classicyButton classicyRuntimeFloatingWindowClose"
               type="button"
             >
-              x
-            </button>
-          </header>
-          <div className="classicyRuntimeFloatingWindowBody grid gap-1.5 p-2 text-xs">
-            <div className="classicyRuntimePanelTitle text-center text-xs">
-              {state.hudState.evaluation.title}
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
-                <strong className="text-[11px]">Public Opinion</strong>
-                <div className="text-[11px]">Is the mayor doing a good job?</div>
-                <div
-                  className="classicyRuntimeEvaluationOpinionChart"
-                  role="img"
-                  aria-label={`Public opinion: yes ${state.hudState.evaluation.yesPercent}, no ${state.hudState.evaluation.noPercent}`}
-                >
-                  <div className="classicyRuntimeEvaluationOpinionTrack">
-                    <div
-                      className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentYes"
-                      style={{ width: `${opinionYesChartWidthPercent}%` }}
-                    />
-                    <div
-                      className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentNo"
-                      style={{ width: `${opinionNoChartWidthPercent}%` }}
-                    />
-                  </div>
-                  <div className="classicyRuntimeEvaluationOpinionLabels">
-                    <strong className="classicyRuntimeEvaluationOpinionLabel">
-                      Yes {state.hudState.evaluation.yesPercent}
-                    </strong>
-                    <strong className="classicyRuntimeEvaluationOpinionLabel">
-                      No {state.hudState.evaluation.noPercent}
-                    </strong>
-                  </div>
-                </div>
-                <strong className="mt-1 text-[11px]">Worst Problems</strong>
-                {state.hudState.evaluation.problems.map((problem, index) => (
-                  <div
-                    key={`evaluation-problem-${index}`}
-                    className="classicyRuntimeFloatingBudgetRow text-[11px]"
-                  >
-                    <span>{problem.name}</span>
-                    <strong>{problem.percent}</strong>
-                  </div>
-                ))}
-              </section>
-              <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
-                <strong className="text-[11px]">Statistics</strong>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Population</span>
-                  <strong>{state.hudState.evaluation.population}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Net Migration (last year)</span>
-                  <strong>{state.hudState.evaluation.populationDelta}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Assessed Value</span>
-                  <strong>{state.hudState.evaluation.assessedValue}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Category</span>
-                  <strong>{state.hudState.evaluation.cityClass}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Game Level</span>
-                  <strong>{state.hudState.evaluation.cityLevel}</strong>
-                </div>
-                <strong className="mt-1 text-[11px]">Overall City Score (0 - 1000)</strong>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Current Score</span>
-                  <strong>{state.hudState.evaluation.score}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-                  <span>Annual Change</span>
-                  <strong>{state.hudState.evaluation.scoreDelta}</strong>
-                </div>
-              </section>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onClick={() => {
-                  closeFloatingWindow('evaluation');
-                }}
-                className="classicyButton"
-                type="button"
-              >
-                Dismiss Evaluation
-              </button>
-            </div>
+              Dismiss Evaluation
+            </ClassicyButton>
           </div>
-        </section>
+        </ClassicyWindowFrame>
       ) : null}
 
       {floatingWindows.graph.open ? (

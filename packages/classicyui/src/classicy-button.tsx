@@ -1,5 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+import { joinClassTokens } from './class-token-join.ts';
+
 type ClassicyButtonShape = 'rectangle' | 'square';
 type ClassicyButtonSize = 'medium' | 'small';
 
@@ -49,15 +51,4 @@ export function ClassicyButton({
       {children}
     </button>
   );
-}
-
-/**
- * Concatenates optional CSS class tokens into one className string.
- * Mirrors no single Micropolis C/Tcl function; this is React-only glue to keep
- * runtime UI class composition deterministic.
- */
-function joinClassTokens(...tokens: ReadonlyArray<string | null | undefined>): string {
-  return tokens
-    .filter((token): token is string => typeof token === 'string' && token.length > 0)
-    .join(' ');
 }
