@@ -96,8 +96,13 @@ const MICROPOLISCORE_OBJECT_SHEET_FRAME_COUNT_OVERRIDES = Object.freeze({
   'futureusa:train': 8,
 } as const);
 
-const MICROPOLISCORE_OBJECT_SPRITE_SHEET_URL_BY_KEY =
+const MICROPOLISCORE_OBJECT_SPRITE_SHEET_ASSET_BY_KEY =
   createMicropolisCoreObjectSpriteSheetUrlByKey();
+
+interface MicropolisCoreObjectSpriteSheetAsset {
+  readonly spriteSheetUrl: string;
+  readonly assetFileBasename: string;
+}
 
 /**
  * Browser sprite-frame metadata for one active Micropolis realtime object.
@@ -112,6 +117,7 @@ export interface ObjectSpriteFrameLookup {
   readonly sourceFrame: number;
   readonly canonicalIdentityKey: CanonicalImageIdentityKey;
   readonly derivedPngPath: string;
+  readonly renderFilterCss?: string;
   readonly spriteFrameUrl?: string;
   readonly spriteSheetUrl?: string;
   readonly sourceX?: number;
@@ -150,11 +156,12 @@ export function lookupObjectSpriteFrame({
 
   const sourceFrame = normalizedRuntimeFrame - 1;
   if (tilesetName === 'classic' || tilesetName === 'classicbw') {
-    return lookupClassicObjectSpriteFrame(
+    return lookupClassicObjectSpriteFrame({
       normalizedSpriteType,
       normalizedRuntimeFrame,
       sourceFrame,
-    );
+      tilesetName,
+    });
   }
 
   const micropolisCoreLookup = lookupMicropolisCoreObjectSpriteFrame({
@@ -167,7 +174,12 @@ export function lookupObjectSpriteFrame({
     return micropolisCoreLookup;
   }
 
-  return lookupClassicObjectSpriteFrame(normalizedSpriteType, normalizedRuntimeFrame, sourceFrame);
+  return lookupClassicObjectSpriteFrame({
+    normalizedSpriteType,
+    normalizedRuntimeFrame,
+    sourceFrame,
+    tilesetName,
+  });
 }
 
 /**
@@ -208,11 +220,17 @@ function parseObjectSpriteFrameModulePath(
  * Resolve one frame from classic split `obj*-*.png` outputs.
  * Mirrors `GetObjectXpms` object-frame loading in `ref/micropolis/src/sim/g_setup.c`.
  */
-function lookupClassicObjectSpriteFrame(
-  spriteType: number,
-  runtimeFrame: number,
-  sourceFrame: number,
-): ObjectSpriteFrameLookup | undefined {
+function lookupClassicObjectSpriteFrame({
+  normalizedSpriteType: spriteType,
+  normalizedRuntimeFrame: runtimeFrame,
+  sourceFrame,
+  tilesetName,
+}: Readonly<{
+  normalizedSpriteType: number;
+  normalizedRuntimeFrame: number;
+  sourceFrame: number;
+  tilesetName: RuntimeTilesetName;
+}>): ObjectSpriteFrameLookup | undefined {
   const spriteFrameUrl = OBJECT_SPRITE_FRAME_URL_BY_KEY.get(
     toObjectSpriteFrameKey(spriteType, sourceFrame),
   );
@@ -229,6 +247,7 @@ function lookupClassicObjectSpriteFrame(
     sourceFrame,
     canonicalIdentityKey,
     derivedPngPath: canonicalSourcePathToDerivedPngPath(canonicalIdentityKey),
+    renderFilterCss: resolveObjectRenderFilterCss(tilesetName),
     spriteFrameUrl,
   };
 }
@@ -268,10 +287,10 @@ function lookupMicropolisCoreObjectSpriteFrame({
     return undefined;
   }
 
-  const spriteSheetUrl = MICROPOLISCORE_OBJECT_SPRITE_SHEET_URL_BY_KEY.get(
+  const spriteSheetAsset = MICROPOLISCORE_OBJECT_SPRITE_SHEET_ASSET_BY_KEY.get(
     toMicropolisCoreObjectSpriteSheetKey(directoryName, spriteSheetSpec.assetBasename),
   );
-  if (spriteSheetUrl === undefined) {
+  if (spriteSheetAsset === undefined) {
     return undefined;
   }
 
@@ -285,8 +304,8 @@ function lookupMicropolisCoreObjectSpriteFrame({
     runtimeFrame,
     sourceFrame,
     canonicalIdentityKey,
-    derivedPngPath: `packages/sim-assets/micropoliscore-tilesets/${directoryName}/${spriteSheetSpec.assetBasename}.png`,
-    spriteSheetUrl,
+    derivedPngPath: `packages/sim-assets/micropoliscore-tilesets/${directoryName}/${spriteSheetAsset.assetFileBasename}.png`,
+    spriteSheetUrl: spriteSheetAsset.spriteSheetUrl,
     sourceX: sourceFrame * spriteSheetSpec.frameWidth,
     sourceY: 0,
     sourceWidth: spriteSheetSpec.frameWidth,
@@ -328,6 +347,20 @@ function resolveMicropolisCoreObjectFrameCount({
 }
 
 /**
+ * Resolve object sprite render filter policy for one runtime tileset.
+ * Mirrors classic object-art loading in `GetObjectXpms` from
+ * `ref/micropolis/src/sim/g_setup.c`.
+ * Difference: Micropolis has no separate `obj*bw` sprites; TypeScript applies
+ * a monochrome post-filter for the `classicbw` runtime theme.
+ */
+function resolveObjectRenderFilterCss(tilesetName: RuntimeTilesetName): string | undefined {
+  if (tilesetName === 'classicbw') {
+    return 'grayscale(1) saturate(0) contrast(1.12)';
+  }
+  return undefined;
+}
+
+/**
  * Runtime guard for supported MicropolisCore object sheet basenames.
  * Mirrors object-art enum intent from classic `GetObjectXpms` in `g_setup.c`,
  * adapted to MicropolisCore sprite sheet filenames.
@@ -338,6 +371,38 @@ function isMicropolisCoreObjectSpriteAssetBasename(
   return MICROPOLISCORE_OBJECT_SPRITE_ASSET_BASENAMES.includes(
     basename as MicropolisCoreObjectSpriteAssetBasename,
   );
+}
+
+/**
+ * Parse one MicropolisCore object-sheet module path.
+ * Mirrors object-sheet filename ownership from MicropolisCore
+ * `resources/tilesets/<name>/<object>.bmp`, adapted to browser-side PNG variants.
+ */
+function parseMicropolisCoreObjectSheetModulePath(modulePath: string):
+  | Readonly<{
+      directoryName: string;
+      assetBasename: MicropolisCoreObjectSpriteAssetBasename;
+      isAlphaVariant: boolean;
+    }>
+  | undefined {
+  const match = /\/micropoliscore-tilesets\/([^/]+)\/([^/]+)\.png$/.exec(modulePath);
+  const directoryName = match?.[1];
+  const fullBasename = match?.[2];
+  if (directoryName === undefined || fullBasename === undefined) {
+    return undefined;
+  }
+
+  const isAlphaVariant = fullBasename.endsWith('-alpha');
+  const assetBasename = isAlphaVariant ? fullBasename.slice(0, -'-alpha'.length) : fullBasename;
+  if (!isMicropolisCoreObjectSpriteAssetBasename(assetBasename)) {
+    return undefined;
+  }
+
+  return {
+    directoryName,
+    assetBasename,
+    isAlphaVariant,
+  };
 }
 
 /**
@@ -361,24 +426,71 @@ function createObjectSpriteFrameUrlByKey(): ReadonlyMap<string, string> {
  * Create deterministic URL lookup for MicropolisCore object sprite sheets.
  * Mirrors object art bundle selection by tileset directory in MicropolisCore
  * `resources/tilesets/<name>/*.bmp`, adapted to Vite static asset URLs.
+ * Difference: TypeScript prefers baked `*-alpha.png` variants to preserve
+ * classic picture/mask semantics from `DrawSprite` in `w_sprite.c`.
  */
-function createMicropolisCoreObjectSpriteSheetUrlByKey(): ReadonlyMap<string, string> {
-  const urlsByKey = new Map<string, string>();
+function createMicropolisCoreObjectSpriteSheetUrlByKey(): ReadonlyMap<
+  string,
+  MicropolisCoreObjectSpriteSheetAsset
+> {
+  const rawVariantsByKey = new Map<
+    string,
+    Readonly<{
+      alphaVariantUrl?: string;
+      baseVariantUrl?: string;
+      assetBasename: MicropolisCoreObjectSpriteAssetBasename;
+    }>
+  >();
   for (const [modulePath, spriteSheetUrl] of Object.entries(
     MICROPOLISCORE_OBJECT_SPRITE_SHEET_MODULES,
   )) {
-    const match = /\/micropoliscore-tilesets\/([^/]+)\/([^/]+)\.png$/.exec(modulePath);
-    const directoryName = match?.[1];
-    const basename = match?.[2];
-    if (directoryName === undefined || basename === undefined) {
+    const parsedModulePath = parseMicropolisCoreObjectSheetModulePath(modulePath);
+    if (parsedModulePath === undefined) {
       continue;
     }
-    if (!isMicropolisCoreObjectSpriteAssetBasename(basename)) {
-      continue;
-    }
-    urlsByKey.set(toMicropolisCoreObjectSpriteSheetKey(directoryName, basename), spriteSheetUrl);
+
+    const key = toMicropolisCoreObjectSpriteSheetKey(
+      parsedModulePath.directoryName,
+      parsedModulePath.assetBasename,
+    );
+    const current = rawVariantsByKey.get(key) ?? { assetBasename: parsedModulePath.assetBasename };
+    rawVariantsByKey.set(
+      key,
+      parsedModulePath.isAlphaVariant
+        ? Object.freeze({
+            ...current,
+            alphaVariantUrl: spriteSheetUrl,
+          })
+        : Object.freeze({
+            ...current,
+            baseVariantUrl: spriteSheetUrl,
+          }),
+    );
   }
-  return urlsByKey;
+
+  const assetsByKey = new Map<string, MicropolisCoreObjectSpriteSheetAsset>();
+  for (const [key, variants] of rawVariantsByKey.entries()) {
+    if (variants.alphaVariantUrl !== undefined) {
+      assetsByKey.set(
+        key,
+        Object.freeze({
+          spriteSheetUrl: variants.alphaVariantUrl,
+          assetFileBasename: `${variants.assetBasename}-alpha`,
+        }),
+      );
+      continue;
+    }
+    if (variants.baseVariantUrl !== undefined) {
+      assetsByKey.set(
+        key,
+        Object.freeze({
+          spriteSheetUrl: variants.baseVariantUrl,
+          assetFileBasename: variants.assetBasename,
+        }),
+      );
+    }
+  }
+  return assetsByKey;
 }
 
 const OBJECT_SPRITE_FRAME_URL_BY_KEY = createObjectSpriteFrameUrlByKey();

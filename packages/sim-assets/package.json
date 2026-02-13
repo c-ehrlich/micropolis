@@ -9,6 +9,7 @@
     "build": "pnpm -w tsc -p packages/sim-assets/tsconfig.json --noEmit",
     "check-derived-image-drift": "node scripts/check-derived-image-drift.mjs",
     "export-derived-images": "node scripts/export-derived-images.mjs",
+    "export-micropoliscore-object-alpha-images": "node scripts/export-micropoliscore-object-alpha-images.mjs",
     "lint": "pnpm -w eslint packages/sim-assets/src",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",

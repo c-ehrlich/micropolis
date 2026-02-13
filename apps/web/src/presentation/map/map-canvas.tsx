@@ -799,6 +799,7 @@ export function MapCanvas({
                 src={sprite.spriteFrameUrl}
                 className="pointer-events-none absolute [image-rendering:pixelated]"
                 style={{
+                  filter: sprite.renderFilterCss,
                   height: sprite.height,
                   left: sprite.left,
                   top: sprite.top,
@@ -823,6 +824,7 @@ export function MapCanvas({
                   backgroundPosition: `${-(sprite.sourceX * (sprite.width / sprite.sourceWidth))}px ${-(sprite.sourceY * (sprite.height / sprite.sourceHeight))}px`,
                   backgroundRepeat: 'no-repeat',
                   backgroundSize: `${sprite.spriteSheetPixelWidth * (sprite.width / sprite.sourceWidth)}px ${sprite.spriteSheetPixelHeight * (sprite.height / sprite.sourceHeight)}px`,
+                  filter: sprite.renderFilterCss,
                   height: sprite.height,
                   left: sprite.left,
                   top: sprite.top,

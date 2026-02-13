@@ -30,7 +30,12 @@ describe('object sprite atlas', () => {
     });
 
     expect(spriteFrame?.spriteFrameUrl).toBeUndefined();
-    expect(spriteFrame?.spriteSheetUrl).toContain('micropoliscore-tilesets/futureusa/chopper');
+    expect(spriteFrame?.spriteSheetUrl).toContain(
+      'micropoliscore-tilesets/futureusa/chopper-alpha',
+    );
+    expect(spriteFrame?.derivedPngPath).toBe(
+      'packages/sim-assets/micropoliscore-tilesets/futureusa/chopper-alpha.png',
+    );
     expect(spriteFrame?.sourceX).toBe(0);
     expect(spriteFrame?.sourceY).toBe(0);
     expect(spriteFrame?.sourceWidth).toBe(32);
@@ -47,6 +52,18 @@ describe('object sprite atlas', () => {
 
     expect(spriteFrame?.spriteFrameUrl).toContain('obj8-0');
     expect(spriteFrame?.spriteSheetUrl).toBeUndefined();
+  });
+
+  it('applies monochrome object filter for classic bw runtime tileset', () => {
+    const spriteFrame = lookupObjectSpriteFrame({
+      // Type `4` is SHI in `sim.h`; no dedicated `obj*bw` assets exist in Micropolis.
+      spriteType: 4,
+      runtimeFrame: 1,
+      tilesetName: 'classicbw',
+    });
+
+    expect(spriteFrame?.spriteFrameUrl).toContain('obj4-0');
+    expect(spriteFrame?.renderFilterCss).toContain('grayscale');
   });
 
   it('returns undefined for inactive frame 0, matching DrawObjects skip behavior', () => {

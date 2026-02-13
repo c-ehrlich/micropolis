@@ -249,6 +249,24 @@ describe('map canvas draw-mode selection', () => {
     expect(projected.sourceHeight).toBe(32);
   });
 
+  it('projects classic bw object overlays with monochrome filter metadata', () => {
+    const overlays = projectRealtimeOverlaySprites({
+      // `SHI` type is 4 in `sim.h`; classic bw reuses `obj*-*.xpm` with runtime monochrome filter.
+      objects: [{ name: 'SHI', type: 4, x: 64, y: 80, frame: 1 }],
+      tileSize: 4,
+      mapWidth: 120,
+      mapHeight: 100,
+      tilesetName: 'classicbw',
+    });
+
+    const projected = overlays[0];
+    if (projected === undefined) {
+      throw new Error('Expected one classic bw realtime overlay sprite projection');
+    }
+    expect(projected.spriteFrameUrl).toContain('obj4-0');
+    expect(projected.renderFilterCss).toContain('grayscale');
+  });
+
   it('skips inactive and out-of-bounds realtime overlay objects', () => {
     const overlays = projectRealtimeOverlaySprites({
       objects: [

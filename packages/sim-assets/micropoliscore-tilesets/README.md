@@ -17,3 +17,17 @@ loading:
 
 The PNG files are direct BMP -> PNG conversions used by the web runtime atlas
 adapters.
+
+Object sheets also include generated alpha-baked variants:
+
+- `train-alpha.png`
+- `chopper-alpha.png`
+- `plane-alpha.png`
+- `ship-alpha.png`
+- `monster-alpha.png`
+- `tornado-alpha.png`
+- `explode-alpha.png`
+
+These are emitted by
+`packages/sim-assets/scripts/export-micropoliscore-object-alpha-images.mjs`
+to reconstruct sprite transparency for browser rendering.

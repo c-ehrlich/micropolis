@@ -26,6 +26,7 @@ export interface MapCanvasRealtimeOverlaySprite {
   frame: number;
   label: string;
   color: string;
+  renderFilterCss?: string;
   spriteFrameUrl?: string;
   spriteSheetUrl?: string;
   spriteSheetPixelWidth?: number;
@@ -183,6 +184,7 @@ export function projectRealtimeOverlaySprites({
       frame: object.frame,
       label: spec.label,
       color: spec.color,
+      renderFilterCss: spriteFrame?.renderFilterCss,
       spriteFrameUrl: spriteFrame?.spriteFrameUrl,
       spriteSheetUrl: spriteFrame?.spriteSheetUrl,
       spriteSheetPixelWidth: spriteFrame?.spriteSheetPixelWidth,
