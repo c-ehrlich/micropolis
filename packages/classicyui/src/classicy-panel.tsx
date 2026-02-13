@@ -1,6 +1,5 @@
+import { clsx } from 'clsx';
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
-
-import { joinClassTokens } from './class-token-join.ts';
 
 export interface ClassicyPanelChromeProps extends HTMLAttributes<HTMLElement> {
   readonly children?: ReactNode;
@@ -19,11 +18,7 @@ export const ClassicyPanelChrome = forwardRef<HTMLElement, ClassicyPanelChromePr
    */
   function ClassicyPanelChromeWithRef({ children, className, ...panelProps }, ref) {
     return (
-      <section
-        {...panelProps}
-        ref={ref}
-        className={joinClassTokens('classicyRuntimePanelChrome', className)}
-      >
+      <section {...panelProps} ref={ref} className={clsx('classicyRuntimePanelChrome', className)}>
         {children}
       </section>
     );
@@ -45,7 +40,7 @@ export function ClassicyPanelTitle({
   ...titleProps
 }: ClassicyPanelTitleProps) {
   return (
-    <strong {...titleProps} className={joinClassTokens('classicyRuntimePanelTitle', className)}>
+    <strong {...titleProps} className={clsx('classicyRuntimePanelTitle', className)}>
       {children}
     </strong>
   );
@@ -66,7 +61,7 @@ export function ClassicyMessageSurface({
   ...surfaceProps
 }: ClassicyMessageSurfaceProps) {
   return (
-    <div {...surfaceProps} className={joinClassTokens('classicyRuntimeMessageFeed', className)}>
+    <div {...surfaceProps} className={clsx('classicyRuntimeMessageFeed', className)}>
       {children}
     </div>
   );

@@ -4,9 +4,9 @@ import type {
   PointerEventHandler,
   ReactNode,
 } from 'react';
+import { clsx } from 'clsx';
 
 import { ClassicyButton } from './classicy-button.tsx';
-import { joinClassTokens } from './class-token-join.ts';
 
 export interface ClassicyWindowFrameProps extends HTMLAttributes<HTMLElement> {
   readonly bodyClassName?: string;
@@ -43,21 +43,19 @@ export function ClassicyWindowFrame({
   return (
     <section
       {...windowProps}
-      className={joinClassTokens(
+      className={clsx(
         'classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid',
         className,
       )}
     >
       <header
         onPointerDown={onHeaderPointerDown}
-        className={joinClassTokens(
+        className={clsx(
           'classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2',
           headerClassName,
         )}
       >
-        <strong
-          className={joinClassTokens('classicyRuntimeFloatingWindowMenuTitle', titleClassName)}
-        >
+        <strong className={clsx('classicyRuntimeFloatingWindowMenuTitle', titleClassName)}>
           {windowTitle}
         </strong>
         <div className="flex items-center gap-1">
@@ -73,9 +71,7 @@ export function ClassicyWindowFrame({
           </ClassicyButton>
         </div>
       </header>
-      <div className={joinClassTokens('classicyRuntimeFloatingWindowBody', bodyClassName)}>
-        {children}
-      </div>
+      <div className={clsx('classicyRuntimeFloatingWindowBody', bodyClassName)}>{children}</div>
     </section>
   );
 }

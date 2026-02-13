@@ -114,6 +114,10 @@ importers:
         version: 7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
 
   packages/classicyui:
+    dependencies:
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
     devDependencies:
       '@types/react':
         specifier: 19.2.10

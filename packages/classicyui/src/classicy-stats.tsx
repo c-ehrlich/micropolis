@@ -1,6 +1,5 @@
+import { clsx } from 'clsx';
 import type { HTMLAttributes, ReactNode } from 'react';
-
-import { joinClassTokens } from './class-token-join.ts';
 
 export interface ClassicyStatRowProps extends HTMLAttributes<HTMLDivElement> {
   readonly label: ReactNode;
@@ -23,13 +22,9 @@ export function ClassicyStatRow({
   ...rowProps
 }: ClassicyStatRowProps) {
   return (
-    <div {...rowProps} className={joinClassTokens('classicyRuntimeSidebarStat', className)}>
-      <div className={joinClassTokens('classicyRuntimeSidebarStatLabel', labelClassName)}>
-        {label}
-      </div>
-      <div className={joinClassTokens('classicyRuntimeSidebarStatValue', valueClassName)}>
-        {value}
-      </div>
+    <div {...rowProps} className={clsx('classicyRuntimeSidebarStat', className)}>
+      <div className={clsx('classicyRuntimeSidebarStatLabel', labelClassName)}>{label}</div>
+      <div className={clsx('classicyRuntimeSidebarStatValue', valueClassName)}>{value}</div>
     </div>
   );
 }

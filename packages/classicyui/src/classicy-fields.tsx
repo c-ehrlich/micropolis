@@ -1,5 +1,5 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { clsx } from 'clsx';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 export interface ClassicyInputProps extends InputHTMLAttributes<HTMLInputElement> {}
 
@@ -22,7 +22,11 @@ export interface ClassicySelectProps extends SelectHTMLAttributes<HTMLSelectElem
  * Parity note: this does not emulate Tcl menu internals; it uses native HTML select semantics.
  */
 export function ClassicySelect({ children, className, ...selectProps }: ClassicySelectProps) {
-  return <select {...selectProps} className={clsx('classicyRuntimeSelect', className)}>{children}</select>;
+  return (
+    <select {...selectProps} className={clsx('classicyRuntimeSelect', className)}>
+      {children}
+    </select>
+  );
 }
 
 export interface ClassicyRangeProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {}
@@ -33,11 +37,5 @@ export interface ClassicyRangeProps extends Omit<InputHTMLAttributes<HTMLInputEl
  * Parity note: value-to-command mapping is managed by callers; this component only styles the slider.
  */
 export function ClassicyRange({ className, ...rangeProps }: ClassicyRangeProps) {
-  return (
-    <input
-      {...rangeProps}
-      className={clsx('classicyRuntimeRange', className)}
-      type="range"
-    />
-  );
+  return <input {...rangeProps} className={clsx('classicyRuntimeRange', className)} type="range" />;
 }

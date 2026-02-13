@@ -11,7 +11,11 @@ export interface ClassicyMenuPanelProps extends HTMLAttributes<HTMLElement> {}
  * Parity note: this is a React wrapper over CSS classes, not a Tcl widget port.
  */
 export function ClassicyMenuPanel({ children, className, ...panelProps }: ClassicyMenuPanelProps) {
-  return <section {...panelProps} className={clsx('classicyRuntimeMenuPanel', className)}>{children}</section>;
+  return (
+    <section {...panelProps} className={clsx('classicyRuntimeMenuPanel', className)}>
+      {children}
+    </section>
+  );
 }
 
 export interface ClassicyMenuItemButtonProps extends ClassicyButtonProps {}
@@ -49,10 +53,7 @@ export function ClassicyMenuActionButton({
   ...buttonProps
 }: ClassicyMenuActionButtonProps) {
   return (
-    <ClassicyButton
-      {...buttonProps}
-      className={clsx('classicyRuntimeRuntimeAction', className)}
-    >
+    <ClassicyButton {...buttonProps} className={clsx('classicyRuntimeRuntimeAction', className)}>
       {children}
     </ClassicyButton>
   );
