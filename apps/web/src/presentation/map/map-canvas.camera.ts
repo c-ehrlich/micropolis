@@ -2,6 +2,8 @@ import type { CanonicalImageIdentityKey } from '../../../../../packages/sim-asse
 import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
   resolveMicropolisTileSheetCanonicalIdentityKey,
+  resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey,
+  type RuntimeTilesetName,
 } from './tile-sprite-atlas.ts';
 
 const EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY =
@@ -60,11 +62,17 @@ export interface MapCanvasPanDragState {
  * `Editor_Class` (`tiles.xpm`) and `Map_Class` color (`tilessm.xpm`).
  * Parity note: C selects view class per widget; TypeScript selects map-class
  * art for compact square tiles to avoid severe downscale aliasing artifacts
- * from 16x16 editor rails rendered at small runtime tile sizes.
+ * from 16x16 editor rails rendered at small runtime tile sizes. Runtime tileset
+ * selection is TypeScript-only and keeps canonical Micropolis tile ids unchanged.
  */
 export function selectMapCanvasBaseTileAtlasCanonicalIdentityKey(
   tileSize: number,
+  tilesetName: RuntimeTilesetName = 'classic',
 ): CanonicalImageIdentityKey {
+  if (tilesetName !== 'classic') {
+    return resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey(tilesetName);
+  }
+
   return tileSize >= MAP_CANVAS_EDITOR_ART_MIN_TILE_SIZE
     ? EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY
     : MAP_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY;

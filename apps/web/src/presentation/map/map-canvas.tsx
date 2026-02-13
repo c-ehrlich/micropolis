@@ -46,7 +46,10 @@ import {
   type MapCanvasRenderFrame,
 } from './map-canvas.draw.ts';
 import { projectRealtimeOverlaySprites } from './map-canvas.overlay.ts';
-import { getTileAtlasSourceByCanonicalIdentityKey } from './tile-sprite-atlas.ts';
+import {
+  getTileAtlasSourceByCanonicalIdentityKey,
+  type RuntimeTilesetName,
+} from './tile-sprite-atlas.ts';
 
 /**
  * Active left-button drag state for repeated single-tile tool placement.
@@ -69,7 +72,8 @@ interface MapCanvasToolPlacementDragState {
  * Parity note: Sprite Atlas uses Micropolis-derived tile sprites from canonical
  * `tiles.xpm` identity and treats missing atlas images as explicit fallback.
  * Difference: browser-only pan/zoom controls can render either in-map (default)
- * or in an external UI container supplied by the route.
+ * or in an external UI container supplied by the route. Runtime tileset
+ * selection is TypeScript-only and leaves authoritative tile ids unchanged.
  */
 export function MapCanvas({
   mapState,
@@ -80,6 +84,7 @@ export function MapCanvas({
   onTileClick,
   dragPlacementEnabled = false,
   tileSize = 4,
+  tilesetName = 'classic',
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
@@ -89,6 +94,7 @@ export function MapCanvas({
   onTileClick?: (x: number, y: number) => void;
   dragPlacementEnabled?: boolean;
   tileSize?: number;
+  tilesetName?: RuntimeTilesetName;
   cameraControlsContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -124,8 +130,8 @@ export function MapCanvas({
     y: number;
   } | null>(null);
   const baseTileAtlasCanonicalIdentityKey = useMemo(
-    () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize),
-    [tileSize],
+    () => selectMapCanvasBaseTileAtlasCanonicalIdentityKey(tileSize, tilesetName),
+    [tileSize, tilesetName],
   );
 
   useEffect(() => {

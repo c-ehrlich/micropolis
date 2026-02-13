@@ -40,6 +40,10 @@ import {
 } from '../game/runtime/playable-runtime-host.ts';
 import { type PlayableGameLevel } from '../game/runtime/protocol.ts';
 import { MapCanvas } from '../presentation/map/map-canvas.tsx';
+import {
+  RUNTIME_TILESET_CHOICES,
+  type RuntimeTilesetName,
+} from '../presentation/map/tile-sprite-atlas.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -147,6 +151,8 @@ function RuntimePanel() {
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
   const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
+  const [selectedRuntimeTileset, setSelectedRuntimeTileset] =
+    useState<RuntimeTilesetName>('classic');
   const menubarRef = useRef<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const speedControlRef = useRef<HTMLDivElement | null>(null);
@@ -347,6 +353,7 @@ function RuntimePanel() {
           pendingTools={state.pendingTools}
           realtimeObjects={state.realtimeState.objects}
           tileSize={MAP_TILE_SIZE}
+          tilesetName={selectedRuntimeTileset}
         />
       </div>
 
@@ -460,10 +467,29 @@ function RuntimePanel() {
             </button>
             {openMenubarSection !== 'runtime' ? null : (
               <section className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
+                <label className="grid gap-0.5 text-xs" htmlFor="runtime-tileset-select">
+                  Tileset
+                  <select
+                    id="runtime-tileset-select"
+                    className="classicyRuntimeSelect px-1.5 py-1"
+                    onChange={(event) => {
+                      const nextTileset = event.currentTarget.value as RuntimeTilesetName;
+                      setSelectedRuntimeTileset(nextTileset);
+                    }}
+                    value={selectedRuntimeTileset}
+                  >
+                    {RUNTIME_TILESET_CHOICES.map((choice) => (
+                      <option key={choice.name} value={choice.name}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="text-xs">
                   phase={state.phase} seq={state.lastAppliedServerSeq} tick={state.lastAppliedTick}
                 </div>
                 <div className="text-xs">{runtimePhaseStatus}</div>
+
                 {state.lastRejectReason === null ? null : (
                   <div className="text-xs text-red-700">{`last reject: ${state.lastRejectReason}`}</div>
                 )}

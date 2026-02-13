@@ -26,6 +26,7 @@ import {
 import { projectRealtimeOverlaySprites } from './map-canvas.overlay.ts';
 import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
   lookupTileSprite,
 } from './tile-sprite-atlas.ts';
 
@@ -92,6 +93,15 @@ describe('map canvas draw-mode selection', () => {
     );
     expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16)).toBe(
       DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
+  it('uses selected runtime tileset atlas identity when not using classic art', () => {
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(6, 'futureusa')).toBe(
+      FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
+    );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16, 'futureusa')).toBe(
+      FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
     );
   });
 

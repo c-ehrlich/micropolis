@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { Tile, TileFlag, TileMask } from '../../../../../packages/sim-core/src/core/constants.ts';
 import {
   DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
   getTileAtlasSourceByCanonicalIdentityKey,
   isDebugTileRendererEnabled,
   lookupTileSprite,
   lookupTileSpriteRectByTileId,
+  lookupTileSpriteRectByTileName,
   resolveMicropolisTileSheetCanonicalIdentityKey,
+  resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey,
+  resolveTileIdByName,
+  resolveTileNameById,
   TILE_ATLAS_CANONICAL_IDENTITY_KEYS,
 } from './tile-sprite-atlas.ts';
 
@@ -35,6 +40,7 @@ describe('tile sprite atlas', () => {
       'ref/micropolis/images/tiles.xpm',
       'ref/micropolis/images/tilesbw.xpm',
       'ref/micropolis/images/tilessm.xpm',
+      'ref/micropolis/images/tiles-futureusa.xpm',
     ]);
     expect(atlas).toBeDefined();
     expect(atlas?.canonicalIdentityKey).toBe(DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY);
@@ -59,6 +65,22 @@ describe('tile sprite atlas', () => {
     expect(atlas?.tileCount).toBe(Tile.TILE_COUNT);
     expect(editorMonochromeAtlas?.tileCount).toBe(Tile.TILE_COUNT);
     expect(mapColorAtlas?.tileCount).toBe(Tile.TILE_COUNT);
+  });
+
+  it('resolves MicropolisCore Future USA atlas metadata through static adapter path', () => {
+    const atlas = getTileAtlasSourceByCanonicalIdentityKey(
+      FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
+    );
+
+    expect(atlas?.canonicalIdentityKey).toBe('ref/micropolis/images/tiles-futureusa.xpm');
+    expect(atlas?.derivedPngPath).toBe(
+      'packages/sim-assets/micropoliscore-tilesets/futureusa/tiles.png',
+    );
+    // `resources/tilesets/futureusa/tiles.bmp` in MicropolisCore is 512x480.
+    expect(atlas?.tileWidth).toBe(16);
+    expect(atlas?.tileHeight).toBe(16);
+    // Source: `#define TILE_COUNT 960` in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(atlas?.tileCount).toBe(Tile.TILE_COUNT);
   });
 
   it('maps authoritative tile words to deterministic atlas rects with LOMASK parity', () => {
@@ -86,6 +108,19 @@ describe('tile sprite atlas', () => {
     expect(flagged.sourceY).toBe(base.sourceY);
     expect(wrapped.tileId).toBe(13);
     expect(wrapped.sourceY).toBe(13 * 16);
+  });
+
+  it('maps tile ids with MicropolisCore grid atlas adapter coordinates', () => {
+    const sprite = lookupTileSpriteRectByTileId(33, {
+      atlasCanonicalIdentityKey: FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
+    });
+
+    expect(sprite.tileId).toBe(33);
+    // MicropolisCore `tiles.bmp` is 512px wide with 16px tiles -> 32 columns.
+    expect(sprite.sourceX).toBe(16);
+    expect(sprite.sourceY).toBe(16);
+    expect(sprite.sourceWidth).toBe(16);
+    expect(sprite.sourceHeight).toBe(16);
   });
 
   it('wraps masked top-of-page ids exactly like g_bigmap lookup normalization', () => {
@@ -181,5 +216,27 @@ describe('tile sprite atlas', () => {
     expect(
       resolveMicropolisTileSheetCanonicalIdentityKey({ viewClass: 'map', color: false }),
     ).toBeUndefined();
+  });
+
+  it('resolves runtime tileset names to adapter-backed base atlas identities', () => {
+    expect(resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic')).toBe(
+      DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+    );
+    expect(resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('futureusa')).toBe(
+      FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
+    );
+  });
+
+  it('supports adapter tile-name lookup and tile-name sprite queries', () => {
+    // Sources:
+    // - `#define ROADBASE 64` in `ref/micropolis/src/sim/headers/sim.h`
+    // - draw path in `g_bigmap.c` resolves source row from normalized tile id.
+    expect(resolveTileIdByName('roadbase')).toBe(Tile.ROADBASE);
+    expect(resolveTileNameById(Tile.ROADBASE)).toBe('ROADBASE');
+
+    const byName = lookupTileSpriteRectByTileName('ROADBASE');
+    expect(byName?.tileId).toBe(Tile.ROADBASE);
+    expect(byName?.sourceY).toBe(Tile.ROADBASE * 16);
+    expect(lookupTileSpriteRectByTileName('missing-tile-name')).toBeUndefined();
   });
 });
