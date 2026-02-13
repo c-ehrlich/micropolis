@@ -153,6 +153,12 @@ function RuntimePanel() {
   const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
   const [selectedRuntimeTileset, setSelectedRuntimeTileset] =
     useState<RuntimeTilesetName>('classic');
+  // Temporarily hide `ancientasia` because upstream tileset files are incorrect.
+  // Tracking: https://github.com/SimHacker/MicropolisCore/issues/9
+  const runtimeTilesetMenuChoices = useMemo(
+    () => RUNTIME_TILESET_CHOICES.filter((choice) => choice.name !== 'ancientasia'),
+    [],
+  );
   const menubarRef = useRef<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const speedControlRef = useRef<HTMLDivElement | null>(null);
@@ -272,6 +278,7 @@ function RuntimePanel() {
     }
     return getThemeVars(theme);
   }, []);
+  const isClassicBwTheme = selectedRuntimeTileset === 'classicbw';
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -326,7 +333,9 @@ function RuntimePanel() {
 
   return (
     <section
-      className="classicyRuntimePanel relative h-full w-full overflow-hidden"
+      className={`classicyRuntimePanel relative h-full w-full overflow-hidden ${
+        isClassicBwTheme ? 'classicyRuntimePanelClassicBw' : ''
+      }`}
       style={runtimeTheme as CSSProperties}
     >
       <div
@@ -478,7 +487,7 @@ function RuntimePanel() {
                     }}
                     value={selectedRuntimeTileset}
                   >
-                    {RUNTIME_TILESET_CHOICES.map((choice) => (
+                    {runtimeTilesetMenuChoices.map((choice) => (
                       <option key={choice.name} value={choice.name}>
                         {choice.label}
                       </option>

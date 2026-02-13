@@ -10,6 +10,10 @@
   font-size: var(--ui-font-size);
 }
 
+.classicyRuntimePanelClassicBw {
+  filter: grayscale(1);
+}
+
 .classicyRuntimeTopBar {
   min-height: var(--runtime-top-bar-height);
   padding-top: var(--runtime-top-bar-padding-y);
