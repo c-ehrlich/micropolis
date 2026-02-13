@@ -77,6 +77,61 @@ export interface RuntimeHudOptionsState {
 }
 
 /**
+ * Runtime HUD budget projection consumed by the Budget floating window.
+ * Mirrors budget-window scalar sources from `ReallyDrawBudgetWindow` and
+ * `ReallyDrawCurrPercents` in `ref/micropolis/src/sim/w_budget.c`.
+ */
+export interface RuntimeHudBudgetState {
+  taxRate: number;
+  autoBudget: boolean;
+  taxFund: number;
+  totalFunds: number;
+  cashFlow: number;
+  roadPercent: number;
+  firePercent: number;
+  policePercent: number;
+  roadWant: number;
+  fireWant: number;
+  policeWant: number;
+  roadGot: number;
+  fireGot: number;
+  policeGot: number;
+}
+
+/**
+ * One ranked evaluation problem row shown in the Evaluation window.
+ * Mirrors one `ps*` / `pv*` row pair from `UISetEvaluation` in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+export interface RuntimeHudEvaluationProblemSlot {
+  name: string;
+  percent: string;
+}
+
+/**
+ * Runtime HUD evaluation scorecard projection consumed by the Evaluation floating window.
+ * Mirrors `SetEvaluation` arguments in `ref/micropolis/src/sim/w_eval.c`.
+ */
+export interface RuntimeHudEvaluationState {
+  title: string;
+  score: string;
+  scoreDelta: string;
+  population: string;
+  populationDelta: string;
+  assessedValue: string;
+  cityClass: string;
+  cityLevel: string;
+  yesPercent: string;
+  noPercent: string;
+  problems: readonly [
+    RuntimeHudEvaluationProblemSlot,
+    RuntimeHudEvaluationProblemSlot,
+    RuntimeHudEvaluationProblemSlot,
+    RuntimeHudEvaluationProblemSlot,
+  ];
+}
+
+/**
  * Runtime HUD projection consumed by Playable Runtime UI components.
  * Mirrors scalar head updates from `DoUpdateHeads`/`updateDate`/`SetDemand`
  * in `ref/micropolis/src/sim/w_update.c`, speed updates from
@@ -101,6 +156,8 @@ export interface RuntimeHudState {
   speed: number;
   speedLabel: string;
   options: RuntimeHudOptionsState;
+  evaluation: RuntimeHudEvaluationState;
+  budget: RuntimeHudBudgetState;
   messages: readonly RuntimeHudMessageEvent[];
   notice: RuntimeHudNoticeEvent | null;
 }
@@ -141,6 +198,40 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
       doAnimation: true,
       doMessages: true,
       doNotices: true,
+    },
+    evaluation: {
+      title: 'City Evaluation  1900',
+      score: '500',
+      scoreDelta: '0',
+      population: '0',
+      populationDelta: '0',
+      assessedValue: '$0',
+      cityClass: 'VILLAGE',
+      cityLevel: 'Easy',
+      yesPercent: '0%',
+      noPercent: '0%',
+      problems: [
+        { name: ' ', percent: ' ' },
+        { name: ' ', percent: ' ' },
+        { name: ' ', percent: ' ' },
+        { name: ' ', percent: ' ' },
+      ],
+    },
+    budget: {
+      taxRate: 7,
+      autoBudget: true,
+      taxFund: 0,
+      totalFunds: 0,
+      cashFlow: 0,
+      roadPercent: 100,
+      firePercent: 100,
+      policePercent: 100,
+      roadWant: 0,
+      fireWant: 0,
+      policeWant: 0,
+      roadGot: 0,
+      fireGot: 0,
+      policeGot: 0,
     },
     messages: [],
     notice: null,
@@ -197,6 +288,8 @@ export function projectRuntimeHudState(
     speedLabel: formatSpeedDisplayLabel(speed),
     options:
       parsed.options === undefined ? state.options : mergeOptions(state.options, parsed.options),
+    evaluation: parsed.evaluation ?? state.evaluation,
+    budget: parsed.budget ?? state.budget,
     messages:
       envelope.kind === 'snapshot'
         ? parsed.messages
@@ -223,6 +316,8 @@ interface ParsedHudPayload {
   cityClassIndex?: number;
   speed?: number;
   options?: Partial<RuntimeHudOptionsState>;
+  evaluation?: RuntimeHudEvaluationState;
+  budget?: RuntimeHudBudgetState;
   messages: RuntimeHudMessageEvent[];
   notice?: RuntimeHudNoticeEvent | null;
 }
@@ -334,6 +429,21 @@ function parseHudPayload(
           ...parsed.options,
           ...parsedNestedOptions,
         };
+      }
+    }
+
+    const budgetRecord = readRecord(hudRecord.budget);
+    if (budgetRecord !== null) {
+      const parsedBudget = parseHudBudgetFromRecord(budgetRecord);
+      if (parsedBudget !== null) {
+        parsed.budget = parsedBudget;
+      }
+    }
+    const evaluationRecord = readRecord(hudRecord.evaluation);
+    if (evaluationRecord !== null) {
+      const parsedEvaluation = parseHudEvaluationFromRecord(evaluationRecord);
+      if (parsedEvaluation !== null) {
+        parsed.evaluation = parsedEvaluation;
       }
     }
 
@@ -545,6 +655,146 @@ function parseHudOptionsFromRecord(
   return options;
 }
 
+/**
+ * Parses one budget payload record from host HUD transport.
+ * Mirrors the budget scalar domains emitted from `w_budget.c` callback payloads.
+ */
+function parseHudBudgetFromRecord(record: Record<string, unknown>): RuntimeHudBudgetState | null {
+  const taxRate = readRangeInteger(record.taxRate, 0, 20);
+  const autoBudget = readBoolean(record.autoBudget);
+  const taxFund = readRangeInteger(record.taxFund, 0, 2_000_000_000);
+  const totalFunds = readRangeInteger(record.totalFunds, 0, 2_000_000_000);
+  const cashFlow = readRangeInteger(record.cashFlow, -2_000_000_000, 2_000_000_000);
+  const roadPercent = readRangeInteger(record.roadPercent, 0, 100);
+  const firePercent = readRangeInteger(record.firePercent, 0, 100);
+  const policePercent = readRangeInteger(record.policePercent, 0, 100);
+  const roadWant = readRangeInteger(record.roadWant, 0, 2_000_000_000);
+  const fireWant = readRangeInteger(record.fireWant, 0, 2_000_000_000);
+  const policeWant = readRangeInteger(record.policeWant, 0, 2_000_000_000);
+  const roadGot = readRangeInteger(record.roadGot, 0, 2_000_000_000);
+  const fireGot = readRangeInteger(record.fireGot, 0, 2_000_000_000);
+  const policeGot = readRangeInteger(record.policeGot, 0, 2_000_000_000);
+  if (
+    taxRate === null ||
+    autoBudget === null ||
+    taxFund === null ||
+    totalFunds === null ||
+    cashFlow === null ||
+    roadPercent === null ||
+    firePercent === null ||
+    policePercent === null ||
+    roadWant === null ||
+    fireWant === null ||
+    policeWant === null ||
+    roadGot === null ||
+    fireGot === null ||
+    policeGot === null
+  ) {
+    return null;
+  }
+
+  return {
+    taxRate,
+    autoBudget,
+    taxFund,
+    totalFunds,
+    cashFlow,
+    roadPercent,
+    firePercent,
+    policePercent,
+    roadWant,
+    fireWant,
+    policeWant,
+    roadGot,
+    fireGot,
+    policeGot,
+  };
+}
+
+/**
+ * Parses one evaluation payload record from host HUD transport.
+ * Mirrors `UISetEvaluation` string payload semantics in
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+function parseHudEvaluationFromRecord(
+  record: Record<string, unknown>,
+): RuntimeHudEvaluationState | null {
+  const title = readString(record.title);
+  const score = readString(record.score);
+  const scoreDelta = readString(record.scoreDelta);
+  const population = readString(record.population);
+  const populationDelta = readString(record.populationDelta);
+  const assessedValue = readString(record.assessedValue);
+  const cityClass = readString(record.cityClass);
+  const cityLevel = readString(record.cityLevel);
+  const yesPercent = readString(record.yesPercent);
+  const noPercent = readString(record.noPercent);
+  const problems = parseHudEvaluationProblemSlots(record.problems);
+  if (
+    title === null ||
+    score === null ||
+    scoreDelta === null ||
+    population === null ||
+    populationDelta === null ||
+    assessedValue === null ||
+    cityClass === null ||
+    cityLevel === null ||
+    yesPercent === null ||
+    noPercent === null ||
+    problems === null
+  ) {
+    return null;
+  }
+
+  return {
+    title,
+    score,
+    scoreDelta,
+    population,
+    populationDelta,
+    assessedValue,
+    cityClass,
+    cityLevel,
+    yesPercent,
+    noPercent,
+    problems,
+  };
+}
+
+/**
+ * Parses the four ranked problem slots in one evaluation payload.
+ * Mirrors `ps0..ps3`/`pv0..pv3` slot count in `SetEvaluation` from
+ * `ref/micropolis/src/sim/w_eval.c`.
+ */
+function parseHudEvaluationProblemSlots(
+  value: unknown,
+): RuntimeHudEvaluationState['problems'] | null {
+  if (!Array.isArray(value) || value.length !== 4) {
+    return null;
+  }
+  const first = parseHudEvaluationProblemSlot(value[0]);
+  const second = parseHudEvaluationProblemSlot(value[1]);
+  const third = parseHudEvaluationProblemSlot(value[2]);
+  const fourth = parseHudEvaluationProblemSlot(value[3]);
+  if (first === null || second === null || third === null || fourth === null) {
+    return null;
+  }
+  return [first, second, third, fourth];
+}
+
+function parseHudEvaluationProblemSlot(value: unknown): RuntimeHudEvaluationProblemSlot | null {
+  const record = readRecord(value);
+  if (record === null) {
+    return null;
+  }
+  const name = readString(record.name);
+  const percent = readString(record.percent);
+  if (name === null || percent === null) {
+    return null;
+  }
+  return { name, percent };
+}
+
 function addOptionBoolean(
   options: Partial<RuntimeHudOptionsState>,
   key: keyof RuntimeHudOptionsState,
@@ -616,6 +866,13 @@ function readBoolean(value: unknown): boolean | null {
   return value;
 }
 
+function readString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  return value;
+}
+
 function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean {
   if (
     left.fundsLabel !== right.fundsLabel ||
@@ -640,6 +897,38 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     left.options.doAnimation !== right.options.doAnimation ||
     left.options.doMessages !== right.options.doMessages ||
     left.options.doNotices !== right.options.doNotices ||
+    left.evaluation.title !== right.evaluation.title ||
+    left.evaluation.score !== right.evaluation.score ||
+    left.evaluation.scoreDelta !== right.evaluation.scoreDelta ||
+    left.evaluation.population !== right.evaluation.population ||
+    left.evaluation.populationDelta !== right.evaluation.populationDelta ||
+    left.evaluation.assessedValue !== right.evaluation.assessedValue ||
+    left.evaluation.cityClass !== right.evaluation.cityClass ||
+    left.evaluation.cityLevel !== right.evaluation.cityLevel ||
+    left.evaluation.yesPercent !== right.evaluation.yesPercent ||
+    left.evaluation.noPercent !== right.evaluation.noPercent ||
+    left.evaluation.problems[0].name !== right.evaluation.problems[0].name ||
+    left.evaluation.problems[0].percent !== right.evaluation.problems[0].percent ||
+    left.evaluation.problems[1].name !== right.evaluation.problems[1].name ||
+    left.evaluation.problems[1].percent !== right.evaluation.problems[1].percent ||
+    left.evaluation.problems[2].name !== right.evaluation.problems[2].name ||
+    left.evaluation.problems[2].percent !== right.evaluation.problems[2].percent ||
+    left.evaluation.problems[3].name !== right.evaluation.problems[3].name ||
+    left.evaluation.problems[3].percent !== right.evaluation.problems[3].percent ||
+    left.budget.taxRate !== right.budget.taxRate ||
+    left.budget.autoBudget !== right.budget.autoBudget ||
+    left.budget.taxFund !== right.budget.taxFund ||
+    left.budget.totalFunds !== right.budget.totalFunds ||
+    left.budget.cashFlow !== right.budget.cashFlow ||
+    left.budget.roadPercent !== right.budget.roadPercent ||
+    left.budget.firePercent !== right.budget.firePercent ||
+    left.budget.policePercent !== right.budget.policePercent ||
+    left.budget.roadWant !== right.budget.roadWant ||
+    left.budget.fireWant !== right.budget.fireWant ||
+    left.budget.policeWant !== right.budget.policeWant ||
+    left.budget.roadGot !== right.budget.roadGot ||
+    left.budget.fireGot !== right.budget.fireGot ||
+    left.budget.policeGot !== right.budget.policeGot ||
     left.messages.length !== right.messages.length
   ) {
     return false;

@@ -16,6 +16,7 @@ import {
   isPlayableBridgeCommandType,
   isPlayableCityLifecycleCommand,
   isPlayableScenarioCommand,
+  isPlayableSimControlCommand,
   PLAYABLE_BRIDGE_COMMAND_TYPES,
   PLAYABLE_TOOL_SPECS,
   type PlayableToolName,
@@ -62,6 +63,13 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         kind: 'sim-control',
         control: 'set-speed',
         speed: 2,
+      }),
+    ).toBe('sim_set_speed');
+    expect(
+      getPlayableBridgeCommandType({
+        kind: 'sim-control',
+        control: 'set-tax-rate',
+        taxRate: 7,
       }),
     ).toBe('sim_set_speed');
     expect(
@@ -201,6 +209,50 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         scenarioId: 1.5,
       }),
     ).toBe(false);
+  });
+
+  it('accepts only C-range budget-oriented sim-control commands', () => {
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-tax-rate',
+        taxRate: 20,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-road-percent',
+        percent: 100,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-fire-percent',
+        percent: -1,
+      }),
+    ).toBe(false);
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-police-percent',
+        percent: 101,
+      }),
+    ).toBe(false);
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-auto-budget',
+        enabled: true,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableSimControlCommand({
+        kind: 'sim-control',
+        control: 'open-budget-from-menu',
+      }),
+    ).toBe(true);
   });
 
   it('accepts only 0..2 game level ids on new-city/scenario command gates', () => {

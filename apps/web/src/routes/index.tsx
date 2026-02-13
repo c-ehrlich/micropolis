@@ -2,7 +2,15 @@ import './index.classicy.css';
 
 import { createFileRoute } from '@tanstack/react-router';
 import { getAllThemes, getThemeVars } from 'classicy';
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
 import micropolisPausedIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropoliss.png';
@@ -16,6 +24,7 @@ import {
 } from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
 import {
   DemandHeadsWidget,
+  GraphPreviewWidget,
   MessageFeed,
   NoticePanel,
 } from '../features/playable-runtime/presentation/runtime-panel-components.tsx';
@@ -63,8 +72,28 @@ const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
     return [basenameMatch?.[1] ?? modulePath, moduleUrl];
   }),
 );
-type TopMenubarSection = 'game' | 'disasters' | 'settings';
+type TopMenubarSection = 'micropolis' | 'windows' | 'disasters' | 'settings';
 type GameDialogKind = 'new' | 'save' | 'load' | 'scenario';
+type RuntimeFloatingWindowId = 'budget' | 'evaluation' | 'graph';
+
+interface RuntimeFloatingWindowState {
+  open: boolean;
+  x: number;
+  y: number;
+  zIndex: number;
+}
+
+interface RuntimeFloatingWindowsState {
+  budget: RuntimeFloatingWindowState;
+  evaluation: RuntimeFloatingWindowState;
+  graph: RuntimeFloatingWindowState;
+}
+
+interface FloatingWindowDragState {
+  windowId: RuntimeFloatingWindowId;
+  offsetX: number;
+  offsetY: number;
+}
 const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   id: PlayableGameLevel;
   label: 'Easy' | 'Medium' | 'Hard';
@@ -74,6 +103,36 @@ const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   { id: 1, label: 'Medium', startingFundsLabel: '$10,000' },
   { id: 2, label: 'Hard', startingFundsLabel: '$5,000' },
 ];
+
+/**
+ * Creates initial floating-window positions for budget/evaluation/graph windows.
+ * Mirrors independent top-level window placement in `ref/micropolis/res/whead.tcl`.
+ */
+function createInitialRuntimeFloatingWindows(): RuntimeFloatingWindowsState {
+  return {
+    budget: { open: false, x: 140, y: 76, zIndex: 20 },
+    evaluation: { open: false, x: 190, y: 116, zIndex: 21 },
+    graph: { open: false, x: 240, y: 156, zIndex: 22 },
+  };
+}
+
+/**
+ * Formats HUD budget amounts with a C-style signed currency prefix.
+ * Mirrors the sign behavior in `ReallyDrawBudgetWindow` from `w_budget.c`.
+ */
+function formatSignedBudgetAmount(value: number): string {
+  const absValue = Math.abs(Math.trunc(value));
+  const signedPrefix = value < 0 ? '-' : '+';
+  return `${signedPrefix}$${absValue.toLocaleString('en-US')}`;
+}
+
+/**
+ * Formats HUD budget amounts using grouped dollars.
+ * Mirrors `makeDollarDecimalStr` display intent in `ref/micropolis/src/sim/w_budget.c`.
+ */
+function formatBudgetAmount(value: number): string {
+  return `$${Math.max(0, Math.trunc(value)).toLocaleString('en-US')}`;
+}
 
 /**
  * Primary Authoritative Runtime gameplay route rendered at `/`.
@@ -144,6 +203,12 @@ function RuntimePanel() {
   const [_disasterStatus, setDisasterStatus] = useState<string>('');
   const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
+  const [floatingWindows, setFloatingWindows] = useState<RuntimeFloatingWindowsState>(() =>
+    createInitialRuntimeFloatingWindows(),
+  );
+  const [floatingWindowZCounter, setFloatingWindowZCounter] = useState(30);
+  const floatingWindowDragRef = useRef<FloatingWindowDragState | null>(null);
+  const budgetWindowOriginalStateRef = useRef({ ...state.hudState.budget });
   const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
   const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false);
   const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
@@ -165,6 +230,117 @@ function RuntimePanel() {
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
   const commandCounter = useRef(1);
+
+  /**
+   * Raises one floating window to the top of the local z-order stack.
+   * Mirrors front-window focus behavior for `budget/evaluation/graph` windows in
+   * `ref/micropolis/res/whead.tcl`.
+   */
+  const focusFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
+    const nextZIndex = floatingWindowZCounter + 1;
+    setFloatingWindowZCounter(nextZIndex);
+    setFloatingWindows((current) => ({
+      ...current,
+      [windowId]: {
+        ...current[windowId],
+        zIndex: nextZIndex,
+      },
+    }));
+  };
+
+  /**
+   * Opens one floating runtime window and optionally runs menu-open side effects.
+   * Mirrors menu-triggered window creation in `ref/micropolis/res/whead.tcl`.
+   */
+  const openFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
+    focusFloatingWindow(windowId);
+    setFloatingWindows((current) => ({
+      ...current,
+      [windowId]: {
+        ...current[windowId],
+        open: true,
+      },
+    }));
+    if (windowId === 'budget') {
+      budgetWindowOriginalStateRef.current = { ...state.hudState.budget };
+      if (!sessionControlsDisabled) {
+        runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+          kind: 'sim-control',
+          control: 'open-budget-from-menu',
+        });
+      }
+    }
+  };
+
+  /**
+   * Closes one floating runtime window.
+   * Mirrors user-dismissed auxiliary windows in `ref/micropolis/res/whead.tcl`.
+   */
+  const closeFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
+    setFloatingWindows((current) => ({
+      ...current,
+      [windowId]: {
+        ...current[windowId],
+        open: false,
+      },
+    }));
+  };
+
+  /**
+   * Starts drag movement for one floating runtime window.
+   * Mirrors window title-bar drag behavior in classic Micropolis Tk windows.
+   */
+  const startFloatingWindowDrag = (
+    windowId: RuntimeFloatingWindowId,
+    event: ReactPointerEvent<HTMLElement>,
+  ): void => {
+    const windowElement = event.currentTarget.closest<HTMLElement>('[data-floating-window]');
+    if (windowElement === null) {
+      return;
+    }
+    const bounds = windowElement.getBoundingClientRect();
+    floatingWindowDragRef.current = {
+      windowId,
+      offsetX: event.clientX - bounds.left,
+      offsetY: event.clientY - bounds.top,
+    };
+    focusFloatingWindow(windowId);
+  };
+
+  /**
+   * Applies one full budget control state to authoritative sim runtime.
+   * Mirrors `BudgetReset` restore semantics in `ref/micropolis/res/micropolis.tcl`.
+   */
+  const applyBudgetControlState = (nextBudgetState: typeof state.hudState.budget): void => {
+    if (sessionControlsDisabled) {
+      return;
+    }
+    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+      kind: 'sim-control',
+      control: 'set-tax-rate',
+      taxRate: nextBudgetState.taxRate,
+    });
+    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+      kind: 'sim-control',
+      control: 'set-road-percent',
+      percent: nextBudgetState.roadPercent,
+    });
+    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+      kind: 'sim-control',
+      control: 'set-fire-percent',
+      percent: nextBudgetState.firePercent,
+    });
+    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+      kind: 'sim-control',
+      control: 'set-police-percent',
+      percent: nextBudgetState.policePercent,
+    });
+    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+      kind: 'sim-control',
+      control: 'set-auto-budget',
+      enabled: nextBudgetState.autoBudget,
+    });
+  };
 
   useEffect(() => {
     isGameplayMutedRef.current = isGameplayMuted;
@@ -245,6 +421,43 @@ function RuntimePanel() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [openMenubarSection, isSpeedMenuOpen]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = floatingWindowDragRef.current;
+      if (dragState === null) {
+        return;
+      }
+
+      const unclampedX = Math.trunc(event.clientX - dragState.offsetX);
+      const unclampedY = Math.trunc(event.clientY - dragState.offsetY);
+      const maxX = Math.max(0, window.innerWidth - 220);
+      const maxY = Math.max(0, window.innerHeight - 120);
+      const clampedX = Math.max(0, Math.min(unclampedX, maxX));
+      const clampedY = Math.max(0, Math.min(unclampedY, maxY));
+      setFloatingWindows((current) => ({
+        ...current,
+        [dragState.windowId]: {
+          ...current[dragState.windowId],
+          x: clampedX,
+          y: clampedY,
+        },
+      }));
+    };
+
+    const stopDrag = () => {
+      floatingWindowDragRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+    };
+  }, []);
 
   const controlsDisabled = state.phase !== 'ready';
   const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
@@ -374,16 +587,29 @@ function RuntimePanel() {
           <div className="relative">
             <button
               onClick={() => {
-                setOpenMenubarSection((current) => (current === 'game' ? null : 'game'));
+                setOpenMenubarSection((current) =>
+                  current === 'micropolis' ? null : 'micropolis',
+                );
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'game' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'micropolis' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
-              Game
+              Micropolis
             </button>
-            {openMenubarSection !== 'game' ? null : (
+            {openMenubarSection !== 'micropolis' ? null : (
               <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
+                <button
+                  onClick={() => {
+                    setIsBrandDialogOpen(true);
+                    setOpenMenubarSection(null);
+                  }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  type="button"
+                >
+                  About...
+                </button>
+                <div className="mx-1 h-px bg-black/35" />
                 <button
                   disabled={controlsDisabled}
                   onClick={() => {
@@ -429,6 +655,52 @@ function RuntimePanel() {
                   type="button"
                 >
                   Scenario...
+                </button>
+              </section>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => {
+                setOpenMenubarSection((current) => (current === 'windows' ? null : 'windows'));
+                setIsSpeedMenuOpen(false);
+              }}
+              className={`${menubarButtonClass} ${openMenubarSection === 'windows' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              type="button"
+            >
+              Windows
+            </button>
+            {openMenubarSection !== 'windows' ? null : (
+              <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
+                <button
+                  onClick={() => {
+                    openFloatingWindow('budget');
+                    setOpenMenubarSection(null);
+                  }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  type="button"
+                >
+                  Budget
+                </button>
+                <button
+                  onClick={() => {
+                    openFloatingWindow('evaluation');
+                    setOpenMenubarSection(null);
+                  }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  type="button"
+                >
+                  Evaluation
+                </button>
+                <button
+                  onClick={() => {
+                    openFloatingWindow('graph');
+                    setOpenMenubarSection(null);
+                  }}
+                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  type="button"
+                >
+                  Graph
                 </button>
               </section>
             )}
@@ -725,18 +997,42 @@ function RuntimePanel() {
             );
           })}
         </div>
-        <DemandHeadsWidget
-          demandC={state.hudState.demandC}
-          demandI={state.hudState.demandI}
-          demandR={state.hudState.demandR}
-        />
+        <button
+          onClick={() => {
+            openFloatingWindow('evaluation');
+          }}
+          className="classicyButton classicyRuntimeWindowLauncher p-0"
+          title="Open Evaluation Window"
+          type="button"
+        >
+          <DemandHeadsWidget
+            demandC={state.hudState.demandC}
+            demandI={state.hudState.demandI}
+            demandR={state.hudState.demandR}
+          />
+        </button>
         <div className="classicyRuntimeSidebarStats grid text-[11px]">
-          <div className="classicyRuntimeSidebarStat">
-            <div className="classicyRuntimeSidebarStatLabel">Funds</div>
-            <div className="classicyRuntimeSidebarStatValue">
-              {state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
+          <button
+            onClick={() => {
+              openFloatingWindow('budget');
+            }}
+            className="classicyRuntimeSidebarBudgetGroup"
+            title="Open Budget Window"
+            type="button"
+          >
+            <div className="classicyRuntimeSidebarStat">
+              <div className="classicyRuntimeSidebarStatLabel">Funds</div>
+              <div className="classicyRuntimeSidebarStatValue">
+                {state.hudState.fundsLabel.replace(/^Funds:\s*/u, '')}
+              </div>
             </div>
-          </div>
+            <div className="classicyRuntimeSidebarStat">
+              <div className="classicyRuntimeSidebarStatLabel">Tax</div>
+              <div className="classicyRuntimeSidebarStatValue">
+                {state.hudState.budget.taxRate}%
+              </div>
+            </div>
+          </button>
           <div className="classicyRuntimeSidebarStat">
             <div className="classicyRuntimeSidebarStatLabel">Date</div>
             <div className="classicyRuntimeSidebarStatValue">
@@ -780,6 +1076,363 @@ function RuntimePanel() {
         className="hidden"
         type="file"
       />
+
+      {floatingWindows.budget.open ? (
+        <section
+          data-floating-window="budget"
+          onPointerDown={() => {
+            focusFloatingWindow('budget');
+          }}
+          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-88 max-w-[min(520px,calc(100vw-12px))]"
+          style={{
+            left: floatingWindows.budget.x,
+            top: floatingWindows.budget.y,
+            zIndex: floatingWindows.budget.zIndex,
+          }}
+        >
+          <header
+            onPointerDown={(event) => {
+              startFloatingWindowDrag('budget', event);
+            }}
+            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
+          >
+            <strong className="classicyRuntimeFloatingWindowMenuTitle">Budget</strong>
+            <button
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                closeFloatingWindow('budget');
+              }}
+              className="classicyButton classicyRuntimeFloatingWindowClose"
+              type="button"
+            >
+              x
+            </button>
+          </header>
+          <div className="classicyRuntimeFloatingWindowBody grid gap-2 p-2 text-xs">
+            <div className="grid gap-1.5 md:grid-cols-2">
+              <div className="grid gap-1">
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>Taxes Collected</span>
+                  <strong>{formatBudgetAmount(state.hudState.budget.taxFund)}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>Cash Flow</span>
+                  <strong>{formatSignedBudgetAmount(state.hudState.budget.cashFlow)}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>Previous Funds</span>
+                  <strong>{formatBudgetAmount(state.hudState.budget.totalFunds)}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>Current Funds</span>
+                  <strong>
+                    {formatBudgetAmount(
+                      state.hudState.budget.totalFunds + state.hudState.budget.cashFlow,
+                    )}
+                  </strong>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <label className="grid gap-0.5">
+                  <span>Road Fund ({state.hudState.budget.roadPercent}%)</span>
+                  <span className="text-[11px] text-slate-700">
+                    {formatBudgetAmount(state.hudState.budget.roadGot)} /{' '}
+                    {formatBudgetAmount(state.hudState.budget.roadWant)}
+                  </span>
+                  <input
+                    className="classicyRuntimeRange"
+                    disabled={sessionControlsDisabled}
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-road-percent',
+                        percent: Math.trunc(Number(event.currentTarget.value)),
+                      });
+                    }}
+                    type="range"
+                    value={state.hudState.budget.roadPercent}
+                  />
+                </label>
+                <label className="grid gap-0.5">
+                  <span>Fire Fund ({state.hudState.budget.firePercent}%)</span>
+                  <span className="text-[11px] text-slate-700">
+                    {formatBudgetAmount(state.hudState.budget.fireGot)} /{' '}
+                    {formatBudgetAmount(state.hudState.budget.fireWant)}
+                  </span>
+                  <input
+                    className="classicyRuntimeRange"
+                    disabled={sessionControlsDisabled}
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-fire-percent',
+                        percent: Math.trunc(Number(event.currentTarget.value)),
+                      });
+                    }}
+                    type="range"
+                    value={state.hudState.budget.firePercent}
+                  />
+                </label>
+                <label className="grid gap-0.5">
+                  <span>Police Fund ({state.hudState.budget.policePercent}%)</span>
+                  <span className="text-[11px] text-slate-700">
+                    {formatBudgetAmount(state.hudState.budget.policeGot)} /{' '}
+                    {formatBudgetAmount(state.hudState.budget.policeWant)}
+                  </span>
+                  <input
+                    className="classicyRuntimeRange"
+                    disabled={sessionControlsDisabled}
+                    max={100}
+                    min={0}
+                    onChange={(event) => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-police-percent',
+                        percent: Math.trunc(Number(event.currentTarget.value)),
+                      });
+                    }}
+                    type="range"
+                    value={state.hudState.budget.policePercent}
+                  />
+                </label>
+                <label className="grid gap-0.5">
+                  <span>Tax Rate ({state.hudState.budget.taxRate}%)</span>
+                  <input
+                    className="classicyRuntimeRange"
+                    disabled={sessionControlsDisabled}
+                    max={20}
+                    min={0}
+                    onChange={(event) => {
+                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                        kind: 'sim-control',
+                        control: 'set-tax-rate',
+                        taxRate: Math.trunc(Number(event.currentTarget.value)),
+                      });
+                    }}
+                    type="range"
+                    value={state.hudState.budget.taxRate}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                disabled={sessionControlsDisabled}
+                onClick={() => {
+                  runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    kind: 'sim-control',
+                    control: 'set-auto-budget',
+                    enabled: !state.hudState.budget.autoBudget,
+                  });
+                }}
+                className="classicyButton"
+                type="button"
+              >
+                {state.hudState.budget.autoBudget ? 'Disable Auto Budget' : 'Enable Auto Budget'}
+              </button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  className="classicyButton"
+                  onClick={() => {
+                    closeFloatingWindow('budget');
+                  }}
+                  type="button"
+                >
+                  Continue
+                </button>
+                <button
+                  disabled={sessionControlsDisabled}
+                  className="classicyButton"
+                  onClick={() => {
+                    applyBudgetControlState(budgetWindowOriginalStateRef.current);
+                  }}
+                  type="button"
+                >
+                  Reset
+                </button>
+                <button
+                  disabled={sessionControlsDisabled}
+                  className="classicyButton"
+                  onClick={() => {
+                    applyBudgetControlState(budgetWindowOriginalStateRef.current);
+                    closeFloatingWindow('budget');
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {floatingWindows.evaluation.open ? (
+        <section
+          data-floating-window="evaluation"
+          onPointerDown={() => {
+            focusFloatingWindow('evaluation');
+          }}
+          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-70 max-w-[min(460px,calc(100vw-12px))]"
+          style={{
+            left: floatingWindows.evaluation.x,
+            top: floatingWindows.evaluation.y,
+            zIndex: floatingWindows.evaluation.zIndex,
+          }}
+        >
+          <header
+            onPointerDown={(event) => {
+              startFloatingWindowDrag('evaluation', event);
+            }}
+            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
+          >
+            <strong className="classicyRuntimeFloatingWindowMenuTitle">Evaluation</strong>
+            <button
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                closeFloatingWindow('evaluation');
+              }}
+              className="classicyButton classicyRuntimeFloatingWindowClose"
+              type="button"
+            >
+              x
+            </button>
+          </header>
+          <div className="classicyRuntimeFloatingWindowBody grid gap-1.5 p-2 text-xs">
+            <div className="classicyRuntimePanelTitle text-center text-xs">
+              {state.hudState.evaluation.title}
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+                <strong className="text-[11px]">Public Opinion</strong>
+                <div className="text-[11px]">Is the mayor doing a good job?</div>
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>YES</span>
+                  <strong>{state.hudState.evaluation.yesPercent}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow">
+                  <span>NO</span>
+                  <strong>{state.hudState.evaluation.noPercent}</strong>
+                </div>
+                <strong className="mt-1 text-[11px]">Worst Problems</strong>
+                {state.hudState.evaluation.problems.map((problem, index) => (
+                  <div
+                    key={`evaluation-problem-${index}`}
+                    className="classicyRuntimeFloatingBudgetRow text-[11px]"
+                  >
+                    <span>{problem.name}</span>
+                    <strong>{problem.percent}</strong>
+                  </div>
+                ))}
+              </section>
+              <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+                <strong className="text-[11px]">Statistics</strong>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Population</span>
+                  <strong>{state.hudState.evaluation.population}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Net Migration (last year)</span>
+                  <strong>{state.hudState.evaluation.populationDelta}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Assessed Value</span>
+                  <strong>{state.hudState.evaluation.assessedValue}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Category</span>
+                  <strong>{state.hudState.evaluation.cityClass}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Game Level</span>
+                  <strong>{state.hudState.evaluation.cityLevel}</strong>
+                </div>
+                <strong className="mt-1 text-[11px]">Overall City Score (0 - 1000)</strong>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Current Score</span>
+                  <strong>{state.hudState.evaluation.score}</strong>
+                </div>
+                <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+                  <span>Annual Change</span>
+                  <strong>{state.hudState.evaluation.scoreDelta}</strong>
+                </div>
+              </section>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => {
+                  closeFloatingWindow('evaluation');
+                }}
+                className="classicyButton"
+                type="button"
+              >
+                Dismiss Evaluation
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {floatingWindows.graph.open ? (
+        <section
+          data-floating-window="graph"
+          onPointerDown={() => {
+            focusFloatingWindow('graph');
+          }}
+          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-70 max-w-[min(460px,calc(100vw-12px))]"
+          style={{
+            left: floatingWindows.graph.x,
+            top: floatingWindows.graph.y,
+            zIndex: floatingWindows.graph.zIndex,
+          }}
+        >
+          <header
+            onPointerDown={(event) => {
+              startFloatingWindowDrag('graph', event);
+            }}
+            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
+          >
+            <strong className="classicyRuntimeFloatingWindowMenuTitle">Graph</strong>
+            <button
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                closeFloatingWindow('graph');
+              }}
+              className="classicyButton classicyRuntimeFloatingWindowClose"
+              type="button"
+            >
+              x
+            </button>
+          </header>
+          <div className="classicyRuntimeFloatingWindowBody grid gap-1.5 p-2 text-xs">
+            <GraphPreviewWidget
+              demandC={state.hudState.demandC}
+              demandI={state.hudState.demandI}
+              demandR={state.hudState.demandR}
+            />
+            <div className="classicyRuntimeFloatingBudgetRow">
+              <span>Demand R/C/I</span>
+              <strong>
+                {state.hudState.demandR} / {state.hudState.demandC} / {state.hudState.demandI}
+              </strong>
+            </div>
+            <div className="text-[11px] text-slate-700">
+              Graph window is wired to the same launcher paths as classic Micropolis (Windows/Graph
+              menu and graph-area click in the head panel).
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {isBrandDialogOpen ? (
         <div

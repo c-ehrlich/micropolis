@@ -206,12 +206,27 @@ export interface CoreOracleState {
   ComZPop: number;
   IndZPop: number;
   TotalZPop: number;
+  HospPop: number;
+  ChurchPop: number;
+  NeedHosp: number;
+  NeedChurch: number;
   StadiumPop: number;
   PortPop: number;
   APortPop: number;
   ResCap: number;
   ComCap: number;
   IndCap: number;
+  CrimeRamp: number;
+  PolluteRamp: number;
+  ResHisMax: number;
+  ComHisMax: number;
+  IndHisMax: number;
+  Res2HisMax: number;
+  Com2HisMax: number;
+  Ind2HisMax: number;
+  Graph10Max: number;
+  Graph120Max: number;
+  CensusChanged: number;
   NoDisasters: number;
   DisasterEvent: number;
   DisasterWait: number;
@@ -444,12 +459,27 @@ interface CoreOracleSnapshotJson {
   ComZPop: number;
   IndZPop: number;
   TotalZPop: number;
+  HospPop: number;
+  ChurchPop: number;
+  NeedHosp: number;
+  NeedChurch: number;
   StadiumPop: number;
   PortPop: number;
   APortPop: number;
   ResCap: number;
   ComCap: number;
   IndCap: number;
+  CrimeRamp: number;
+  PolluteRamp: number;
+  ResHisMax: number;
+  ComHisMax: number;
+  IndHisMax: number;
+  Res2HisMax: number;
+  Com2HisMax: number;
+  Ind2HisMax: number;
+  Graph10Max: number;
+  Graph120Max: number;
+  CensusChanged: number;
   NoDisasters: number;
   DisasterEvent: number;
   DisasterWait: number;
@@ -726,12 +756,27 @@ function writeCoreOracleState(dir: string, state: CoreOracleState): void {
     ComZPop: Math.trunc(state.ComZPop),
     IndZPop: Math.trunc(state.IndZPop),
     TotalZPop: Math.trunc(state.TotalZPop),
+    HospPop: Math.trunc(state.HospPop),
+    ChurchPop: Math.trunc(state.ChurchPop),
+    NeedHosp: Math.trunc(state.NeedHosp),
+    NeedChurch: Math.trunc(state.NeedChurch),
     StadiumPop: Math.trunc(state.StadiumPop),
     PortPop: Math.trunc(state.PortPop),
     APortPop: Math.trunc(state.APortPop),
     ResCap: Math.trunc(state.ResCap),
     ComCap: Math.trunc(state.ComCap),
     IndCap: Math.trunc(state.IndCap),
+    CrimeRamp: Math.trunc(state.CrimeRamp),
+    PolluteRamp: Math.trunc(state.PolluteRamp),
+    ResHisMax: Math.trunc(state.ResHisMax),
+    ComHisMax: Math.trunc(state.ComHisMax),
+    IndHisMax: Math.trunc(state.IndHisMax),
+    Res2HisMax: Math.trunc(state.Res2HisMax),
+    Com2HisMax: Math.trunc(state.Com2HisMax),
+    Ind2HisMax: Math.trunc(state.Ind2HisMax),
+    Graph10Max: Math.trunc(state.Graph10Max),
+    Graph120Max: Math.trunc(state.Graph120Max),
+    CensusChanged: Math.trunc(state.CensusChanged),
     NoDisasters: Math.trunc(state.NoDisasters),
     DisasterEvent: Math.trunc(state.DisasterEvent),
     DisasterWait: Math.trunc(state.DisasterWait),
@@ -1140,12 +1185,27 @@ function readCoreOracleState(dir: string): CoreOracleState {
     ComZPop: snapshot.ComZPop,
     IndZPop: snapshot.IndZPop,
     TotalZPop: snapshot.TotalZPop,
+    HospPop: snapshot.HospPop,
+    ChurchPop: snapshot.ChurchPop,
+    NeedHosp: snapshot.NeedHosp,
+    NeedChurch: snapshot.NeedChurch,
     StadiumPop: snapshot.StadiumPop,
     PortPop: snapshot.PortPop,
     APortPop: snapshot.APortPop,
     ResCap: snapshot.ResCap,
     ComCap: snapshot.ComCap,
     IndCap: snapshot.IndCap,
+    CrimeRamp: snapshot.CrimeRamp,
+    PolluteRamp: snapshot.PolluteRamp,
+    ResHisMax: snapshot.ResHisMax,
+    ComHisMax: snapshot.ComHisMax,
+    IndHisMax: snapshot.IndHisMax,
+    Res2HisMax: snapshot.Res2HisMax,
+    Com2HisMax: snapshot.Com2HisMax,
+    Ind2HisMax: snapshot.Ind2HisMax,
+    Graph10Max: snapshot.Graph10Max,
+    Graph120Max: snapshot.Graph120Max,
+    CensusChanged: snapshot.CensusChanged,
     NoDisasters: snapshot.NoDisasters,
     DisasterEvent: snapshot.DisasterEvent,
     DisasterWait: snapshot.DisasterWait,
@@ -1441,6 +1501,32 @@ export function runCoreOracleCollectTax(state: CoreOracleState): CoreOracleState
   return withTempStateDir((stateDir) => {
     writeCoreOracleState(stateDir, state);
     runCoreOracle(['collect-tax', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `TakeCensus` and returns the updated snapshot state.
+ *
+ * Mirrors `TakeCensus` in `ref/micropolis/src/sim/s_sim.c`.
+ */
+export function runCoreOracleTakeCensus(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['take-census', '--state-dir', stateDir]);
+    return readCoreOracleState(stateDir);
+  });
+}
+
+/**
+ * Runs C `Take2Census` and returns the updated snapshot state.
+ *
+ * Mirrors `Take2Census` in `ref/micropolis/src/sim/s_sim.c`.
+ */
+export function runCoreOracleTake2Census(state: CoreOracleState): CoreOracleState {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    runCoreOracle(['take-2-census', '--state-dir', stateDir]);
     return readCoreOracleState(stateDir);
   });
 }

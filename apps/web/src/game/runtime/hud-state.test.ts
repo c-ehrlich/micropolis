@@ -177,6 +177,59 @@ describe('runtime HUD projection', () => {
     ]);
   });
 
+  it('hydrates Micropolis evaluation scorecard fields from HUD payload', () => {
+    const initial = createInitialRuntimeHudState();
+    const next = projectRuntimeHudState(initial, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 9,
+      serverSeq: 2,
+      payload: {
+        hud: {
+          evaluation: {
+            // `w_eval.c` emits title `"City Evaluation  %d"` from `CurrentYear()`.
+            title: 'City Evaluation  1900',
+            score: '746',
+            scoreDelta: '246',
+            population: '5000',
+            populationDelta: '300',
+            assessedValue: '$1,234,000',
+            cityClass: 'TOWN',
+            cityLevel: 'Medium',
+            yesPercent: '67%',
+            noPercent: '33%',
+            problems: [
+              { name: 'CRIME', percent: '25%' },
+              { name: 'POLLUTION', percent: '19%' },
+              { name: 'TAXES', percent: '12%' },
+              { name: ' ', percent: ' ' },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(next.evaluation).toEqual({
+      title: 'City Evaluation  1900',
+      score: '746',
+      scoreDelta: '246',
+      population: '5000',
+      populationDelta: '300',
+      assessedValue: '$1,234,000',
+      cityClass: 'TOWN',
+      cityLevel: 'Medium',
+      yesPercent: '67%',
+      noPercent: '33%',
+      problems: [
+        { name: 'CRIME', percent: '25%' },
+        { name: 'POLLUTION', percent: '19%' },
+        { name: 'TAXES', percent: '12%' },
+        { name: ' ', percent: ' ' },
+      ],
+    });
+  });
+
   it('maps MesX/MesY dispatch to SendMesAt only when MesX || MesY', () => {
     const initial = createInitialRuntimeHudState();
     const snapshot = projectRuntimeHudState(initial, {

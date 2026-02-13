@@ -1,3 +1,8 @@
+import {
+  runCoreOracleInitNewCity,
+  runCoreOracleTake2Census,
+  runCoreOracleTakeCensus,
+} from '@city/micropolis-c-harness/core-parity';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createClassicMapStore } from '../core/map-store.ts';
@@ -211,6 +216,218 @@ describe('Census system', () => {
     expect(state.MoneyHis[0]).toBe(0);
     expect(state.NeedHosp).toBe(0);
     expect(state.NeedChurch).toBe(0);
+    expect(changeCensus).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Find the first mismatch in two signed history arrays.
+ *
+ * C references:
+ * - `ResHis` / `ComHis` / `IndHis` / `CrimeHis` / `PollutionHis` / `MoneyHis`
+ *   are `short[240]` in `ref/micropolis/src/sim/s_sim.c`.
+ */
+function findHistoryMismatch(
+  actual: Int16Array,
+  expected: Int16Array,
+): {
+  actual: number;
+  expected: number;
+  index: number;
+} | null {
+  if (actual.length !== expected.length) {
+    throw new Error(`history length mismatch: actual=${actual.length} expected=${expected.length}`);
+  }
+
+  for (let i = 0; i < expected.length; i += 1) {
+    const actualValue = actual[i];
+    const expectedValue = expected[i];
+    if (actualValue === undefined || expectedValue === undefined) {
+      throw new Error(`expected history value at index ${i}`);
+    }
+    if (actualValue !== expectedValue) {
+      return { index: i, expected: expectedValue, actual: actualValue };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Asserts a TS history buffer matches C-oracle output exactly.
+ *
+ * C references:
+ * - `TakeCensus` / `Take2Census` shifts in `ref/micropolis/src/sim/s_sim.c`.
+ */
+function expectHistoryEqual(label: string, actual: Int16Array, expected: Int16Array): void {
+  const mismatch = findHistoryMismatch(actual, expected);
+  if (mismatch !== null) {
+    throw new Error(
+      `${label} mismatch at index=${mismatch.index}: expected=${mismatch.expected} actual=${mismatch.actual}`,
+    );
+  }
+}
+
+/**
+ * Deterministic unsigned LCG used to generate parity cases.
+ *
+ * Constants mirror ANSI-C LCG style and keep cases reproducible in CI.
+ */
+function nextSeed(seed: number): number {
+  return (Math.imul(seed >>> 0, 1664525) + 1013904223) >>> 0;
+}
+
+/**
+ * Deterministically maps an unsigned seed to a signed 16-bit integer.
+ *
+ * Mirrors C `short` storage behavior for history buffers.
+ */
+function toSigned16(word: number): number {
+  const wrapped = word & 0xffff;
+  return wrapped >= 0x8000 ? wrapped - 0x10000 : wrapped;
+}
+
+describe('Census parity against C oracle (env-gated)', () => {
+  if (process.env.CITY_TEST_PARITY !== '1') {
+    it.skip('run `pnpm test-parity` to enable C parity tests', () => {});
+    return;
+  }
+
+  it('matches C TakeCensus for history shifts, ramps, and graph maxima', () => {
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00a11ce5 });
+    let seed = 0x1357_9bdf;
+
+    for (let i = 0; i < 240; i += 1) {
+      seed = nextSeed(seed);
+      oracleBefore.resHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.comHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.indHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.crimeHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.pollutionHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.moneyHis[i] = toSigned16(seed);
+    }
+
+    // Magic numbers source:
+    // - `ResHis[0] = ResPop / 8`
+    // - `CrimeRamp += (CrimeAverage - CrimeRamp) / 4`
+    // - `PolluteRamp += (PolluteAverage - PolluteRamp) / 4`
+    // - `x = (CashFlow / 20) + 128` then clamp 0..255
+    // in `TakeCensus` (`ref/micropolis/src/sim/s_sim.c`).
+    oracleBefore.ResPop = 8192;
+    oracleBefore.ComPop = 432;
+    oracleBefore.IndPop = 321;
+    oracleBefore.CrimeAverage = 220;
+    oracleBefore.PolluteAverage = 140;
+    oracleBefore.CrimeRamp = 60;
+    oracleBefore.PolluteRamp = 20;
+    oracleBefore.CashFlow = -3000;
+    oracleBefore.HospPop = 20;
+    oracleBefore.ChurchPop = 40;
+
+    const oracleAfter = runCoreOracleTakeCensus(oracleBefore);
+
+    const store = createClassicMapStore();
+    const changeCensus = vi.fn();
+    const context = createSimContext({ store, hooks: { changeCensus } });
+    const state = createSimState();
+    state.ResHis.set(oracleBefore.resHis);
+    state.ComHis.set(oracleBefore.comHis);
+    state.IndHis.set(oracleBefore.indHis);
+    state.CrimeHis.set(oracleBefore.crimeHis);
+    state.PollutionHis.set(oracleBefore.pollutionHis);
+    state.MoneyHis.set(oracleBefore.moneyHis);
+    state.ResPop = oracleBefore.ResPop;
+    state.ComPop = oracleBefore.ComPop;
+    state.IndPop = oracleBefore.IndPop;
+    state.CrimeAverage = oracleBefore.CrimeAverage;
+    state.PolluteAverage = oracleBefore.PolluteAverage;
+    state.CrimeRamp = oracleBefore.CrimeRamp;
+    state.PolluteRamp = oracleBefore.PolluteRamp;
+    state.CashFlow = oracleBefore.CashFlow;
+    state.HospPop = oracleBefore.HospPop;
+    state.ChurchPop = oracleBefore.ChurchPop;
+
+    takeCensus(state, context);
+
+    expectHistoryEqual('ResHis', state.ResHis, oracleAfter.resHis);
+    expectHistoryEqual('ComHis', state.ComHis, oracleAfter.comHis);
+    expectHistoryEqual('IndHis', state.IndHis, oracleAfter.indHis);
+    expectHistoryEqual('CrimeHis', state.CrimeHis, oracleAfter.crimeHis);
+    expectHistoryEqual('PollutionHis', state.PollutionHis, oracleAfter.pollutionHis);
+    expectHistoryEqual('MoneyHis', state.MoneyHis, oracleAfter.moneyHis);
+
+    expect(state.ResHisMax).toBe(oracleAfter.ResHisMax);
+    expect(state.ComHisMax).toBe(oracleAfter.ComHisMax);
+    expect(state.IndHisMax).toBe(oracleAfter.IndHisMax);
+    expect(state.Graph10Max).toBe(oracleAfter.Graph10Max);
+    expect(state.CrimeRamp).toBe(oracleAfter.CrimeRamp);
+    expect(state.PolluteRamp).toBe(oracleAfter.PolluteRamp);
+    expect(state.NeedHosp).toBe(oracleAfter.NeedHosp);
+    expect(state.NeedChurch).toBe(oracleAfter.NeedChurch);
+    expect(changeCensus).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches C Take2Census for long-term history shifts and graph maxima', () => {
+    const oracleBefore = runCoreOracleInitNewCity({ seed: 0x00b16b00 });
+    let seed = 0x2468_ace0;
+
+    for (let i = 0; i < 240; i += 1) {
+      seed = nextSeed(seed);
+      oracleBefore.resHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.comHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.indHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.crimeHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.pollutionHis[i] = toSigned16(seed);
+      seed = nextSeed(seed);
+      oracleBefore.moneyHis[i] = toSigned16(seed);
+    }
+
+    // Magic numbers source:
+    // - loop bounds `for (x = 238; x >= 120; x--)`
+    // - writes at index 120 from current pop/history
+    // in `Take2Census` (`ref/micropolis/src/sim/s_sim.c`).
+    oracleBefore.ResPop = 4096;
+    oracleBefore.ComPop = 246;
+    oracleBefore.IndPop = 135;
+
+    const oracleAfter = runCoreOracleTake2Census(oracleBefore);
+
+    const store = createClassicMapStore();
+    const changeCensus = vi.fn();
+    const context = createSimContext({ store, hooks: { changeCensus } });
+    const state = createSimState();
+    state.ResHis.set(oracleBefore.resHis);
+    state.ComHis.set(oracleBefore.comHis);
+    state.IndHis.set(oracleBefore.indHis);
+    state.CrimeHis.set(oracleBefore.crimeHis);
+    state.PollutionHis.set(oracleBefore.pollutionHis);
+    state.MoneyHis.set(oracleBefore.moneyHis);
+    state.ResPop = oracleBefore.ResPop;
+    state.ComPop = oracleBefore.ComPop;
+    state.IndPop = oracleBefore.IndPop;
+
+    take2Census(state, context);
+
+    expectHistoryEqual('ResHis', state.ResHis, oracleAfter.resHis);
+    expectHistoryEqual('ComHis', state.ComHis, oracleAfter.comHis);
+    expectHistoryEqual('IndHis', state.IndHis, oracleAfter.indHis);
+    expectHistoryEqual('CrimeHis', state.CrimeHis, oracleAfter.crimeHis);
+    expectHistoryEqual('PollutionHis', state.PollutionHis, oracleAfter.pollutionHis);
+    expectHistoryEqual('MoneyHis', state.MoneyHis, oracleAfter.moneyHis);
+
+    expect(state.Res2HisMax).toBe(oracleAfter.Res2HisMax);
+    expect(state.Com2HisMax).toBe(oracleAfter.Com2HisMax);
+    expect(state.Ind2HisMax).toBe(oracleAfter.Ind2HisMax);
+    expect(state.Graph120Max).toBe(oracleAfter.Graph120Max);
     expect(changeCensus).toHaveBeenCalledTimes(1);
   });
 });

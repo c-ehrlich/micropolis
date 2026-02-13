@@ -24,6 +24,7 @@ import {
   decROGMem,
   decTrafficMem,
   destroyAllSprites as destroyRealtimeSprites,
+  doBudgetFromMenu,
   doDisasters,
   fireAnalysis,
   generateCopter as generateRealtimeCopter,
@@ -61,6 +62,7 @@ import {
   take2Census,
   takeCensus,
   type ToolResult,
+  updateFundEffects,
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { doPowerScan, pushPowerStack } from '../../../../../packages/sim-core/src/systems/power.ts';
@@ -78,6 +80,8 @@ import type {
   CoreHost,
   CoreHostConnection,
   HostEnvelope,
+  HostHudBudgetPayload,
+  HostHudEvaluationPayload,
   HostHudMessagePayload,
   HostHudNoticePayload,
   HostHudOptionsPayload,
@@ -260,6 +264,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
   private lastHudCityPopulation = 0;
   private lastHudCityClass = 0;
+  private lastHudBudgetPayload: HostHudBudgetPayload | null = null;
+  private lastHudEvaluationPayload: HostHudEvaluationPayload | null = null;
   private pendingHookMessages: HostHudMessagePayload[] = [];
   private activeNotice: HostHudNoticePayload | null = null;
   private pendingNoticeUpdate: PendingNoticeUpdate = undefined;
@@ -318,6 +324,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const initialCityStats = readCanonicalCityStatsFromSimState(this.authorityState.simState);
     this.lastHudCityPopulation = initialCityStats.cityPopulation;
     this.lastHudCityClass = initialCityStats.cityClass;
+    this.lastHudEvaluationPayload = buildHostHudEvaluationPayload(this.authorityState.simState);
     this.refreshHookDrivenHud();
     this.pendingHudUiSetKeys.clear();
     this.snapshotReplayCheckpoints.set(0, {
@@ -962,12 +969,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Applies pause/play/set-speed commands through authoritative sim-core state.
-   * Mirrors `Pause`, `Resume`, and `setSpeed(short)` in
-   * `ref/micropolis/src/sim/w_util.c` and command ingress in
-   * `ref/micropolis/src/sim/w_sim.c` (`SimCmdPause`, `SimCmdResume`, `SimCmdSpeed`).
-   * Parity note: this stage ports state transitions only; HUD speed payload
-   * projection is added in later payload-port tasks.
+   * Applies playable sim-control commands through authoritative sim-core state.
+   * Mirrors `SimCmd*` command ingress in `ref/micropolis/src/sim/w_sim.c`, including
+   * pause/resume/speed plus budget/tax commands used by `whead.tcl`/`wbudget.tcl`.
    */
   private applySimControlCommand(command: PlayableSimControlCommand): void {
     if (command.control === 'pause') {
@@ -980,7 +984,101 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    this.setSimulationSpeed(command.speed);
+    if (command.control === 'set-speed') {
+      this.setSimulationSpeed(command.speed);
+      return;
+    }
+
+    if (command.control === 'set-tax-rate') {
+      this.setTaxRate(command.taxRate);
+      return;
+    }
+
+    if (command.control === 'set-road-percent') {
+      this.setRoadPercent(command.percent);
+      return;
+    }
+
+    if (command.control === 'set-fire-percent') {
+      this.setFirePercent(command.percent);
+      return;
+    }
+
+    if (command.control === 'set-police-percent') {
+      this.setPolicePercent(command.percent);
+      return;
+    }
+
+    if (command.control === 'set-auto-budget') {
+      this.setAutoBudget(command.enabled);
+      return;
+    }
+
+    this.openBudgetFromMenu();
+  }
+
+  /**
+   * Tax-rate command semantics for envelope-host budget controls.
+   * Mirrors `SimCmdTaxRate` (`sim TaxRate`) in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private setTaxRate(candidateTaxRate: number): void {
+    this.authorityState.simState.CityTax = normalizeBudgetTaxRate(candidateTaxRate);
+  }
+
+  /**
+   * Road-funding slider semantics for envelope-host budget controls.
+   * Mirrors `SimCmdRoadFund` (`sim RoadFund`) in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private setRoadPercent(candidatePercent: number): void {
+    const percent = normalizeBudgetPercent(candidatePercent);
+    this.authorityState.simState.roadPercent = percent / 100;
+    this.authorityState.simState.RoadSpend = Math.trunc(
+      (this.authorityState.simState.RoadFund * percent) / 100,
+    );
+    updateFundEffects(this.authorityState.simState, this.authorityState.simContext);
+  }
+
+  /**
+   * Fire-funding slider semantics for envelope-host budget controls.
+   * Mirrors `SimCmdFireFund` (`sim FireFund`) in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private setFirePercent(candidatePercent: number): void {
+    const percent = normalizeBudgetPercent(candidatePercent);
+    this.authorityState.simState.firePercent = percent / 100;
+    this.authorityState.simState.FireSpend = Math.trunc(
+      (this.authorityState.simState.FireFund * percent) / 100,
+    );
+    updateFundEffects(this.authorityState.simState, this.authorityState.simContext);
+  }
+
+  /**
+   * Police-funding slider semantics for envelope-host budget controls.
+   * Mirrors `SimCmdPoliceFund` (`sim PoliceFund`) in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private setPolicePercent(candidatePercent: number): void {
+    const percent = normalizeBudgetPercent(candidatePercent);
+    this.authorityState.simState.policePercent = percent / 100;
+    this.authorityState.simState.PoliceSpend = Math.trunc(
+      (this.authorityState.simState.PoliceFund * percent) / 100,
+    );
+    updateFundEffects(this.authorityState.simState, this.authorityState.simContext);
+  }
+
+  /**
+   * Auto-budget toggle semantics for envelope-host budget controls.
+   * Mirrors `SimCmdAutoBudget` (`sim AutoBudget`) in `ref/micropolis/src/sim/w_sim.c`.
+   */
+  private setAutoBudget(enabled: boolean): void {
+    this.authorityState.simState.autoBudget = enabled;
+    this.authorityState.simState.MustUpdateOptions = 1;
+  }
+
+  /**
+   * Windows->Budget menu-open semantics for envelope-host budget controls.
+   * Mirrors `DoBudgetFromMenu` in `ref/micropolis/src/sim/w_budget.c`.
+   */
+  private openBudgetFromMenu(): void {
+    doBudgetFromMenu(this.authorityState.simState, this.authorityState.simContext);
   }
 
   /**
@@ -2550,8 +2648,25 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const hasCityStats =
       cityStats.cityPopulation !== this.lastHudCityPopulation ||
       cityStats.cityClass !== this.lastHudCityClass;
+    const budgetPayload = buildHostHudBudgetPayload(this.authorityState.simState);
+    const hasBudget =
+      this.lastHudBudgetPayload === null ||
+      !areHostHudBudgetPayloadsEqual(this.lastHudBudgetPayload, budgetPayload);
+    const evaluationPayload = buildHostHudEvaluationPayload(this.authorityState.simState);
+    const hasEvaluation =
+      this.lastHudEvaluationPayload === null ||
+      !areHostHudEvaluationPayloadsEqual(this.lastHudEvaluationPayload, evaluationPayload);
 
-    if (!hasFunds && !hasDate && !hasDemand && !hasSpeed && !hasOptions && !hasCityStats) {
+    if (
+      !hasFunds &&
+      !hasDate &&
+      !hasDemand &&
+      !hasSpeed &&
+      !hasOptions &&
+      !hasCityStats &&
+      !hasBudget &&
+      !hasEvaluation
+    ) {
       return undefined;
     }
 
@@ -2586,6 +2701,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.lastHudCityPopulation = cityStats.cityPopulation;
       this.lastHudCityClass = cityStats.cityClass;
     }
+    if (hasBudget) {
+      hudPayload.budget = budgetPayload;
+      this.lastHudBudgetPayload = { ...budgetPayload };
+    }
+    if (hasEvaluation) {
+      hudPayload.evaluation = cloneHostHudEvaluationPayload(evaluationPayload);
+      this.lastHudEvaluationPayload = cloneHostHudEvaluationPayload(evaluationPayload);
+    }
 
     this.pendingHudUiSetKeys.clear();
     return hudPayload;
@@ -2599,8 +2722,12 @@ export class SimCoreEnvelopeHost implements CoreHost {
    */
   private buildHudSnapshotPayload(): NonNullable<HostSnapshotPayload['hud']> {
     const cityStats = readCanonicalCityStatsFromSimState(this.authorityState.simState);
+    const budgetPayload = buildHostHudBudgetPayload(this.authorityState.simState);
+    const evaluationPayload = buildHostHudEvaluationPayload(this.authorityState.simState);
     this.lastHudCityPopulation = cityStats.cityPopulation;
     this.lastHudCityClass = cityStats.cityClass;
+    this.lastHudBudgetPayload = { ...budgetPayload };
+    this.lastHudEvaluationPayload = cloneHostHudEvaluationPayload(evaluationPayload);
     return {
       funds: this.authorityState.simState.TotalFunds,
       fundsLabel: this.hookHudState.fundsLabel,
@@ -2618,6 +2745,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       cityClass: cityStats.cityClass,
       speed: this.simPaused ? 0 : this.authorityState.simState.SimMetaSpeed,
       options: { ...this.hookHudState.options },
+      evaluation: evaluationPayload,
+      budget: budgetPayload,
     };
   }
 }
@@ -2856,6 +2985,260 @@ function normalizePlayableSpeed(candidate: number): number {
 }
 
 /**
+ * Clamps one budget-percent candidate to C slider domain `0..100`.
+ * Mirrors `SimCmdRoadFund`/`SimCmdFireFund`/`SimCmdPoliceFund` validation in
+ * `ref/micropolis/src/sim/w_sim.c`.
+ */
+function normalizeBudgetPercent(candidate: number): number {
+  const percent = Math.trunc(candidate);
+  if (percent < 0) {
+    return 0;
+  }
+  if (percent > 100) {
+    return 100;
+  }
+  return percent;
+}
+
+/**
+ * Clamps one city-tax candidate to C slider domain `0..20`.
+ * Mirrors `SimCmdTaxRate` validation in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function normalizeBudgetTaxRate(candidate: number): number {
+  const taxRate = Math.trunc(candidate);
+  if (taxRate < 0) {
+    return 0;
+  }
+  if (taxRate > 20) {
+    return 20;
+  }
+  return taxRate;
+}
+
+/**
+ * Builds one host HUD budget payload from authoritative sim state.
+ * Mirrors scalar budget values consumed by `UISetBudget` and `UISetBudgetValues`
+ * in `ref/micropolis/src/sim/w_budget.c`.
+ */
+function buildHostHudBudgetPayload(
+  simState: SimCoreRuntimeState['simState'],
+): HostHudBudgetPayload {
+  const roadPercent = normalizeBudgetPercent(Math.trunc(simState.roadPercent * 100));
+  const firePercent = normalizeBudgetPercent(Math.trunc(simState.firePercent * 100));
+  const policePercent = normalizeBudgetPercent(Math.trunc(simState.policePercent * 100));
+  const roadWant = Math.max(0, Math.trunc(simState.RoadFund));
+  const fireWant = Math.max(0, Math.trunc(simState.FireFund));
+  const policeWant = Math.max(0, Math.trunc(simState.PoliceFund));
+  const roadGot = Math.max(0, Math.trunc((roadWant * roadPercent) / 100));
+  const fireGot = Math.max(0, Math.trunc((fireWant * firePercent) / 100));
+  const policeGot = Math.max(0, Math.trunc((policeWant * policePercent) / 100));
+  const taxFund = Math.max(0, Math.trunc(simState.TaxFund));
+  const totalFunds = Math.max(0, Math.trunc(simState.TotalFunds));
+  // `ReallyDrawBudgetWindow` in `w_budget.c` uses computed "got" values for flow.
+  const cashFlow = taxFund - roadGot - fireGot - policeGot;
+
+  return {
+    taxRate: normalizeBudgetTaxRate(simState.CityTax),
+    autoBudget: simState.autoBudget,
+    taxFund,
+    totalFunds,
+    cashFlow,
+    roadPercent,
+    firePercent,
+    policePercent,
+    roadWant,
+    fireWant,
+    policeWant,
+    roadGot,
+    fireGot,
+    policeGot,
+  };
+}
+
+/**
+ * Compares two HUD budget payload objects for transport delta gating.
+ * Mirrors deterministic scalar-head comparison intent from `DoUpdateHeads`
+ * style update coalescing in `ref/micropolis/src/sim/w_update.c`.
+ */
+function areHostHudBudgetPayloadsEqual(
+  left: HostHudBudgetPayload,
+  right: HostHudBudgetPayload,
+): boolean {
+  return (
+    left.taxRate === right.taxRate &&
+    left.autoBudget === right.autoBudget &&
+    left.taxFund === right.taxFund &&
+    left.totalFunds === right.totalFunds &&
+    left.cashFlow === right.cashFlow &&
+    left.roadPercent === right.roadPercent &&
+    left.firePercent === right.firePercent &&
+    left.policePercent === right.policePercent &&
+    left.roadWant === right.roadWant &&
+    left.fireWant === right.fireWant &&
+    left.policeWant === right.policeWant &&
+    left.roadGot === right.roadGot &&
+    left.fireGot === right.fireGot &&
+    left.policeGot === right.policeGot
+  );
+}
+
+const EVALUATION_CITY_CLASS_LABELS = [
+  'VILLAGE',
+  'TOWN',
+  'CITY',
+  'CAPITAL',
+  'METROPOLIS',
+  'MEGALOPOLIS',
+] as const;
+const EVALUATION_CITY_LEVEL_LABELS = ['Easy', 'Medium', 'Hard'] as const;
+const EVALUATION_PROBLEM_LABELS = [
+  'CRIME',
+  'POLLUTION',
+  'HOUSING COSTS',
+  'TAXES',
+  'TRAFFIC',
+  'UNEMPLOYMENT',
+  'FIRES',
+] as const;
+
+/**
+ * Builds one host HUD evaluation payload from authoritative sim state.
+ * Mirrors `SetEvaluation` argument projection in `ref/micropolis/src/sim/w_eval.c`
+ * and `UISetEvaluation` consumption in `ref/micropolis/res/micropolis.tcl`.
+ */
+function buildHostHudEvaluationPayload(
+  simState: SimCoreRuntimeState['simState'],
+): HostHudEvaluationPayload {
+  const titleYear = Math.trunc(simState.CityTime / 48) + Math.trunc(simState.StartingYear);
+  const cityClassIndex = clampInteger(
+    simState.CityClass,
+    0,
+    EVALUATION_CITY_CLASS_LABELS.length - 1,
+  );
+  const cityLevelIndex = clampInteger(
+    simState.GameLevel,
+    0,
+    EVALUATION_CITY_LEVEL_LABELS.length - 1,
+  );
+
+  return {
+    title: `City Evaluation  ${titleYear}`,
+    score: Math.trunc(simState.CityScore).toString(),
+    scoreDelta: Math.trunc(simState.deltaCityScore).toString(),
+    population: Math.max(0, Math.trunc(simState.CityPop)).toString(),
+    populationDelta: Math.trunc(simState.deltaCityPop).toString(),
+    assessedValue: formatDollarDecimalLikeC(Math.max(0, Math.trunc(simState.CityAssValue))),
+    cityClass: EVALUATION_CITY_CLASS_LABELS[cityClassIndex] ?? EVALUATION_CITY_CLASS_LABELS[0],
+    cityLevel: EVALUATION_CITY_LEVEL_LABELS[cityLevelIndex] ?? EVALUATION_CITY_LEVEL_LABELS[0],
+    yesPercent: `${clampInteger(simState.CityYes, 0, 100)}%`,
+    noPercent: `${clampInteger(simState.CityNo, 0, 100)}%`,
+    problems: [
+      buildHostHudEvaluationProblemSlot(simState, 0),
+      buildHostHudEvaluationProblemSlot(simState, 1),
+      buildHostHudEvaluationProblemSlot(simState, 2),
+      buildHostHudEvaluationProblemSlot(simState, 3),
+    ],
+  };
+}
+
+/**
+ * Projects one ranked evaluation problem row.
+ * Mirrors problem name/percent row selection in `doScoreCard` from
+ * `ref/micropolis/src/sim/w_eval.c`.
+ */
+function buildHostHudEvaluationProblemSlot(
+  simState: SimCoreRuntimeState['simState'],
+  rank: number,
+): HostHudEvaluationPayload['problems'][number] {
+  const problemOrder = simState.ProblemOrder[rank];
+  const problemIndex =
+    typeof problemOrder === 'number' && Number.isFinite(problemOrder)
+      ? Math.trunc(problemOrder)
+      : -1;
+  const votesRaw = problemIndex >= 0 ? simState.ProblemVotes[problemIndex] : undefined;
+  const votes =
+    typeof votesRaw === 'number' && Number.isFinite(votesRaw) ? Math.trunc(votesRaw) : 0;
+  if (votes <= 0) {
+    return { name: ' ', percent: ' ' };
+  }
+  const label = EVALUATION_PROBLEM_LABELS[problemIndex] ?? ' ';
+  if (label === ' ') {
+    return { name: ' ', percent: ' ' };
+  }
+  return {
+    name: label,
+    percent: `${votes}%`,
+  };
+}
+
+/**
+ * Compares two HUD evaluation payload objects for transport delta gating.
+ * Mirrors `scoreDoer`/`UISetEvaluation` update coalescing intent in
+ * `ref/micropolis/src/sim/w_eval.c` and `ref/micropolis/res/micropolis.tcl`.
+ */
+function areHostHudEvaluationPayloadsEqual(
+  left: HostHudEvaluationPayload,
+  right: HostHudEvaluationPayload,
+): boolean {
+  return (
+    left.title === right.title &&
+    left.score === right.score &&
+    left.scoreDelta === right.scoreDelta &&
+    left.population === right.population &&
+    left.populationDelta === right.populationDelta &&
+    left.assessedValue === right.assessedValue &&
+    left.cityClass === right.cityClass &&
+    left.cityLevel === right.cityLevel &&
+    left.yesPercent === right.yesPercent &&
+    left.noPercent === right.noPercent &&
+    left.problems[0].name === right.problems[0].name &&
+    left.problems[0].percent === right.problems[0].percent &&
+    left.problems[1].name === right.problems[1].name &&
+    left.problems[1].percent === right.problems[1].percent &&
+    left.problems[2].name === right.problems[2].name &&
+    left.problems[2].percent === right.problems[2].percent &&
+    left.problems[3].name === right.problems[3].name &&
+    left.problems[3].percent === right.problems[3].percent
+  );
+}
+
+/**
+ * Formats one positive dollar amount using C-style grouped separators.
+ * Mirrors `makeDollarDecimalStr` output intent in `ref/micropolis/src/sim/w_util.c`.
+ */
+function formatDollarDecimalLikeC(value: number): string {
+  const raw = Math.max(0, Math.trunc(value)).toString();
+  if (raw.length <= 3) {
+    return `$${raw}`;
+  }
+
+  let left = raw.length % 3;
+  if (left === 0) {
+    left = 3;
+  }
+  let output = `$${raw.slice(0, left)}`;
+  for (let index = left; index < raw.length; index += 3) {
+    output += `,${raw.slice(index, index + 3)}`;
+  }
+  return output;
+}
+
+/**
+ * Clamps one numeric candidate to an integer inclusive range.
+ * Mirrors pervasive int-domain clamp behavior in `ref/micropolis/src/sim/w_sim.c`.
+ */
+function clampInteger(candidate: number, min: number, max: number): number {
+  const integer = Math.trunc(Number.isFinite(candidate) ? candidate : min);
+  if (integer < min) {
+    return min;
+  }
+  if (integer > max) {
+    return max;
+  }
+  return integer;
+}
+
+/**
  * Clamps snapshot replay cursor requests to the known sequenced envelope range.
  * Mirrors bridge snapshot cursor recovery rules from
  * `ref/micropolis/spec/integration/SPEC.md`.
@@ -3001,6 +3384,25 @@ function cloneHostHudNoticePayload(
     return null;
   }
   return { ...notice };
+}
+
+/**
+ * Clones one evaluation payload before envelope emission/replay storage.
+ * Mirrors value-copy transport boundaries around `UISetEvaluation` payload
+ * projection in `ref/micropolis/res/micropolis.tcl`.
+ */
+function cloneHostHudEvaluationPayload(
+  evaluation: HostHudEvaluationPayload,
+): HostHudEvaluationPayload {
+  return {
+    ...evaluation,
+    problems: [
+      { ...evaluation.problems[0] },
+      { ...evaluation.problems[1] },
+      { ...evaluation.problems[2] },
+      { ...evaluation.problems[3] },
+    ],
+  };
 }
 
 /**

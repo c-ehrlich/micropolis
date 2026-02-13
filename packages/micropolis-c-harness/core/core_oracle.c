@@ -145,6 +145,8 @@ short CityScore;
 short TrafficAverage;
 short CrimeAverage;
 short PolluteAverage;
+short CrimeRamp;
+short PolluteRamp;
 short ResPop;
 short ComPop;
 short IndPop;
@@ -153,6 +155,8 @@ short ResZPop;
 short ComZPop;
 short IndZPop;
 short TotalZPop;
+short HospPop;
+short ChurchPop;
 short StadiumPop;
 short PortPop;
 short APortPop;
@@ -195,6 +199,17 @@ short CoalPop;
 short NuclearPop;
 short PwrdZCnt;
 short unPwrdZCnt;
+short NeedHosp;
+short NeedChurch;
+short ResHisMax;
+short ComHisMax;
+short IndHisMax;
+short Res2HisMax;
+short Com2HisMax;
+short Ind2HisMax;
+short Graph10Max;
+short Graph120Max;
+short CensusChanged;
 
 /* s_traf.c defines these globals. */
 extern short TrafMaxX;
@@ -241,8 +256,117 @@ static void SeedRand(int seed) { sim_srand((uint32_t)seed); }
 
 void CityEvaluation(void) {}
 void SetValves(void) {}
-void TakeCensus(void) {}
-void Take2Census(void) {}
+
+static void ChangeCensus(void) { CensusChanged = 1; }
+
+/*
+ * `TakeCensus` from `ref/micropolis/src/sim/s_sim.c`.
+ *
+ * Notes:
+ * - Uses the same integer-division semantics as C (`short` arithmetic).
+ * - History buffers are the persisted `g*His` arrays (`HISTLEN / 2` words).
+ */
+void TakeCensus(void)
+{
+  short x;
+
+  ResHisMax = 0;
+  ComHisMax = 0;
+  IndHisMax = 0;
+  for (x = 118; x >= 0; x--) {
+    if ((gResHis[x + 1] = gResHis[x]) > ResHisMax)
+      ResHisMax = gResHis[x];
+    if ((gComHis[x + 1] = gComHis[x]) > ComHisMax)
+      ComHisMax = gComHis[x];
+    if ((gIndHis[x + 1] = gIndHis[x]) > IndHisMax)
+      IndHisMax = gIndHis[x];
+    gCrimeHis[x + 1] = gCrimeHis[x];
+    gPollutionHis[x + 1] = gPollutionHis[x];
+    gMoneyHis[x + 1] = gMoneyHis[x];
+  }
+
+  Graph10Max = ResHisMax;
+  if (ComHisMax > Graph10Max)
+    Graph10Max = ComHisMax;
+  if (IndHisMax > Graph10Max)
+    Graph10Max = IndHisMax;
+
+  gResHis[0] = ResPop / 8;
+  gComHis[0] = ComPop;
+  gIndHis[0] = IndPop;
+
+  CrimeRamp += (CrimeAverage - CrimeRamp) / 4;
+  gCrimeHis[0] = CrimeRamp;
+
+  PolluteRamp += (PolluteAverage - PolluteRamp) / 4;
+  gPollutionHis[0] = PolluteRamp;
+
+  x = (CashFlow / 20) + 128;
+  if (x < 0)
+    x = 0;
+  if (x > 255)
+    x = 255;
+  gMoneyHis[0] = x;
+
+  if (gCrimeHis[0] > 255)
+    gCrimeHis[0] = 255;
+  if (gPollutionHis[0] > 255)
+    gPollutionHis[0] = 255;
+
+  ChangeCensus();
+
+  if (HospPop < (ResPop >> 8))
+    NeedHosp = TRUE;
+  if (HospPop > (ResPop >> 8))
+    NeedHosp = -1;
+  if (HospPop == (ResPop >> 8))
+    NeedHosp = FALSE;
+
+  if (ChurchPop < (ResPop >> 8))
+    NeedChurch = TRUE;
+  if (ChurchPop > (ResPop >> 8))
+    NeedChurch = -1;
+  if (ChurchPop == (ResPop >> 8))
+    NeedChurch = FALSE;
+}
+
+/*
+ * `Take2Census` from `ref/micropolis/src/sim/s_sim.c`.
+ */
+void Take2Census(void)
+{
+  short x;
+
+  Res2HisMax = 0;
+  Com2HisMax = 0;
+  Ind2HisMax = 0;
+  for (x = 238; x >= 120; x--) {
+    if ((gResHis[x + 1] = gResHis[x]) > Res2HisMax)
+      Res2HisMax = gResHis[x];
+    if ((gComHis[x + 1] = gComHis[x]) > Com2HisMax)
+      Com2HisMax = gComHis[x];
+    if ((gIndHis[x + 1] = gIndHis[x]) > Ind2HisMax)
+      Ind2HisMax = gIndHis[x];
+    gCrimeHis[x + 1] = gCrimeHis[x];
+    gPollutionHis[x + 1] = gPollutionHis[x];
+    gMoneyHis[x + 1] = gMoneyHis[x];
+  }
+
+  Graph120Max = Res2HisMax;
+  if (Com2HisMax > Graph120Max)
+    Graph120Max = Com2HisMax;
+  if (Ind2HisMax > Graph120Max)
+    Graph120Max = Ind2HisMax;
+
+  gResHis[120] = ResPop / 8;
+  gComHis[120] = ComPop;
+  gIndHis[120] = IndPop;
+  gCrimeHis[120] = gCrimeHis[0];
+  gPollutionHis[120] = gPollutionHis[0];
+  gMoneyHis[120] = gMoneyHis[0];
+
+  ChangeCensus();
+}
 void makeDollarDecimalStr(char *numStr, char *dollarStr)
 {
   if ((numStr == NULL) || (dollarStr == NULL)) {
@@ -2701,12 +2825,27 @@ static void ResetStateDefaults(uint32_t seed)
   ComZPop = 0;
   IndZPop = 0;
   TotalZPop = 0;
+  HospPop = 0;
+  ChurchPop = 0;
+  NeedHosp = 0;
+  NeedChurch = 0;
   StadiumPop = 0;
   PortPop = 0;
   APortPop = 0;
   ResCap = 0;
   ComCap = 0;
   IndCap = 0;
+  CrimeRamp = 0;
+  PolluteRamp = 0;
+  ResHisMax = 0;
+  ComHisMax = 0;
+  IndHisMax = 0;
+  Res2HisMax = 0;
+  Com2HisMax = 0;
+  Ind2HisMax = 0;
+  Graph10Max = 0;
+  Graph120Max = 0;
+  CensusChanged = 0;
   TotalFunds = 0;
   TaxFund = 0;
   RoadFund = 0;
@@ -3354,12 +3493,27 @@ static int WriteSnapshotJson(const char *path)
   fprintf(file, "  \"ComZPop\": %d,\n", ComZPop);
   fprintf(file, "  \"IndZPop\": %d,\n", IndZPop);
   fprintf(file, "  \"TotalZPop\": %d,\n", TotalZPop);
+  fprintf(file, "  \"HospPop\": %d,\n", HospPop);
+  fprintf(file, "  \"ChurchPop\": %d,\n", ChurchPop);
+  fprintf(file, "  \"NeedHosp\": %d,\n", NeedHosp);
+  fprintf(file, "  \"NeedChurch\": %d,\n", NeedChurch);
   fprintf(file, "  \"StadiumPop\": %d,\n", StadiumPop);
   fprintf(file, "  \"PortPop\": %d,\n", PortPop);
   fprintf(file, "  \"APortPop\": %d,\n", APortPop);
   fprintf(file, "  \"ResCap\": %d,\n", ResCap);
   fprintf(file, "  \"ComCap\": %d,\n", ComCap);
   fprintf(file, "  \"IndCap\": %d,\n", IndCap);
+  fprintf(file, "  \"CrimeRamp\": %d,\n", CrimeRamp);
+  fprintf(file, "  \"PolluteRamp\": %d,\n", PolluteRamp);
+  fprintf(file, "  \"ResHisMax\": %d,\n", ResHisMax);
+  fprintf(file, "  \"ComHisMax\": %d,\n", ComHisMax);
+  fprintf(file, "  \"IndHisMax\": %d,\n", IndHisMax);
+  fprintf(file, "  \"Res2HisMax\": %d,\n", Res2HisMax);
+  fprintf(file, "  \"Com2HisMax\": %d,\n", Com2HisMax);
+  fprintf(file, "  \"Ind2HisMax\": %d,\n", Ind2HisMax);
+  fprintf(file, "  \"Graph10Max\": %d,\n", Graph10Max);
+  fprintf(file, "  \"Graph120Max\": %d,\n", Graph120Max);
+  fprintf(file, "  \"CensusChanged\": %d,\n", CensusChanged);
   fprintf(file, "  \"NoDisasters\": %d,\n", NoDisasters);
   fprintf(file, "  \"DisasterEvent\": %d,\n", DisasterEvent);
   fprintf(file, "  \"DisasterWait\": %d,\n", DisasterWait);
@@ -3618,12 +3772,27 @@ static int ReadSnapshotJson(const char *path)
   READ_I64("ComZPop", ComZPop, short);
   READ_I64("IndZPop", IndZPop, short);
   READ_I64("TotalZPop", TotalZPop, short);
+  READ_I64("HospPop", HospPop, short);
+  READ_I64("ChurchPop", ChurchPop, short);
+  READ_I64("NeedHosp", NeedHosp, short);
+  READ_I64("NeedChurch", NeedChurch, short);
   READ_I64("StadiumPop", StadiumPop, short);
   READ_I64("PortPop", PortPop, short);
   READ_I64("APortPop", APortPop, short);
   READ_I64("ResCap", ResCap, short);
   READ_I64("ComCap", ComCap, short);
   READ_I64("IndCap", IndCap, short);
+  READ_I64("CrimeRamp", CrimeRamp, short);
+  READ_I64("PolluteRamp", PolluteRamp, short);
+  READ_I64("ResHisMax", ResHisMax, short);
+  READ_I64("ComHisMax", ComHisMax, short);
+  READ_I64("IndHisMax", IndHisMax, short);
+  READ_I64("Res2HisMax", Res2HisMax, short);
+  READ_I64("Com2HisMax", Com2HisMax, short);
+  READ_I64("Ind2HisMax", Ind2HisMax, short);
+  READ_I64("Graph10Max", Graph10Max, short);
+  READ_I64("Graph120Max", Graph120Max, short);
+  READ_I64("CensusChanged", CensusChanged, short);
   READ_I64("NoDisasters", NoDisasters, short);
   READ_I64("DisasterEvent", DisasterEvent, short);
   READ_I64("DisasterWait", DisasterWait, short);
@@ -4252,6 +4421,8 @@ static void PrintUsage(void)
   fprintf(stderr, "  do-power-scan\n");
   fprintf(stderr, "  send-messages\n");
   fprintf(stderr, "  collect-tax\n");
+  fprintf(stderr, "  take-census\n");
+  fprintf(stderr, "  take-2-census\n");
   fprintf(stderr, "  do-budget-now [--from-menu <0|1>]\n");
   fprintf(stderr, "  update-date\n");
   fprintf(stderr, "  do-message\n");
@@ -4525,6 +4696,22 @@ int main(int argc, char **argv)
 
   if (strcmp(command, "collect-tax") == 0) {
     CollectTax();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "take-census") == 0) {
+    TakeCensus();
+    if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "take-2-census") == 0) {
+    Take2Census();
     if (!SaveStateDir(stateDir)) {
       return 1;
     }

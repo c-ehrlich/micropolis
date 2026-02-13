@@ -100,6 +100,42 @@ export function DemandHeadsWidget({
 }
 
 /**
+ * Compact graph preview used as the Graph window launcher in the sidebar.
+ * Mirrors the clickable `graphview` surface in `ref/micropolis/res/whead.tcl`
+ * that opens the full graph window via `ToggleGraphOf`.
+ * Parity note: this is a browser SVG sparkline preview, not the Tcl `graphview` widget.
+ */
+export function GraphPreviewWidget({
+  demandR,
+  demandC,
+  demandI,
+}: {
+  demandR: number;
+  demandC: number;
+  demandI: number;
+}) {
+  const sparkline = [0, demandR, demandC, demandI, 0];
+  const points = sparkline
+    .map((value, index) => {
+      const x = 6 + index * 20;
+      const clamped = Math.max(-15, Math.min(15, Math.trunc(value)));
+      const y = 20 - clamped;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <div className="classicyRuntimeMessageFeed grid h-[60px] w-full place-items-center p-1 text-[10px]">
+      <svg aria-hidden viewBox="0 0 90 40" className="h-9 w-full">
+        <line x1="4" y1="20" x2="86" y2="20" stroke="#444" strokeWidth="1" />
+        <polyline fill="none" points={points} stroke="#1d4ed8" strokeWidth="2" />
+      </svg>
+      <div className="leading-3">R/C/I trend</div>
+    </div>
+  );
+}
+
+/**
  * Computes one vertical demand-bar segment style.
  * Mirrors the Tcl `UISetDemand` branch and coordinate math in
  * `ref/micropolis/res/micropolis.tcl` (1:1 baseline and endpoint behavior).

@@ -308,6 +308,66 @@ export interface PlayableSetSpeedSimCommand {
 }
 
 /**
+ * Set-city-tax command routed through host authority.
+ * Mirrors `SimCmdTaxRate` (`sim TaxRate`) in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface PlayableSetTaxRateSimCommand {
+  kind: 'sim-control';
+  control: 'set-tax-rate';
+  taxRate: number;
+}
+
+/**
+ * Set-road-funding-percent command routed through host authority.
+ * Mirrors `SimCmdRoadFund` (`sim RoadFund`) in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface PlayableSetRoadPercentSimCommand {
+  kind: 'sim-control';
+  control: 'set-road-percent';
+  percent: number;
+}
+
+/**
+ * Set-fire-funding-percent command routed through host authority.
+ * Mirrors `SimCmdFireFund` (`sim FireFund`) in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface PlayableSetFirePercentSimCommand {
+  kind: 'sim-control';
+  control: 'set-fire-percent';
+  percent: number;
+}
+
+/**
+ * Set-police-funding-percent command routed through host authority.
+ * Mirrors `SimCmdPoliceFund` (`sim PoliceFund`) in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface PlayableSetPolicePercentSimCommand {
+  kind: 'sim-control';
+  control: 'set-police-percent';
+  percent: number;
+}
+
+/**
+ * Set-auto-budget toggle command routed through host authority.
+ * Mirrors `SimCmdAutoBudget` (`sim AutoBudget`) in `ref/micropolis/src/sim/w_sim.c`.
+ */
+export interface PlayableSetAutoBudgetSimCommand {
+  kind: 'sim-control';
+  control: 'set-auto-budget';
+  enabled: boolean;
+}
+
+/**
+ * Budget-window menu-open command routed through host authority.
+ * Mirrors `DoBudgetFromMenu` via the Windows->Budget path in
+ * `ref/micropolis/src/sim/w_budget.c` and `ref/micropolis/res/whead.tcl`.
+ */
+export interface PlayableOpenBudgetFromMenuSimCommand {
+  kind: 'sim-control';
+  control: 'open-budget-from-menu';
+}
+
+/**
  * Playable Runtime simulation control command union.
  * Mirrors pause/resume/speed control paths in
  * `ref/micropolis/src/sim/w_util.c` and `ref/micropolis/src/sim/w_sim.c`.
@@ -315,7 +375,13 @@ export interface PlayableSetSpeedSimCommand {
 export type PlayableSimControlCommand =
   | PlayablePauseSimCommand
   | PlayableResumeSimCommand
-  | PlayableSetSpeedSimCommand;
+  | PlayableSetSpeedSimCommand
+  | PlayableSetTaxRateSimCommand
+  | PlayableSetRoadPercentSimCommand
+  | PlayableSetFirePercentSimCommand
+  | PlayableSetPolicePercentSimCommand
+  | PlayableSetAutoBudgetSimCommand
+  | PlayableOpenBudgetFromMenuSimCommand;
 
 /**
  * New-city lifecycle command routed through host authority.
@@ -746,6 +812,62 @@ export interface HostHudOptionsPayload {
 }
 
 /**
+ * One ranked evaluation problem row from the Micropolis evaluation scorecard.
+ * Mirrors per-row name/percent text in `UISetEvaluation` from
+ * `ref/micropolis/res/micropolis.tcl`.
+ */
+export interface HostHudEvaluationProblemSlotPayload {
+  name: string;
+  percent: string;
+}
+
+/**
+ * Authoritative evaluation scorecard payload emitted by host snapshot/patch envelopes.
+ * Mirrors `SetEvaluation` arguments in `ref/micropolis/src/sim/w_eval.c` and
+ * `UISetEvaluation` projection in `ref/micropolis/res/micropolis.tcl`.
+ */
+export interface HostHudEvaluationPayload {
+  title: string;
+  score: string;
+  scoreDelta: string;
+  population: string;
+  populationDelta: string;
+  assessedValue: string;
+  cityClass: string;
+  cityLevel: string;
+  yesPercent: string;
+  noPercent: string;
+  problems: readonly [
+    HostHudEvaluationProblemSlotPayload,
+    HostHudEvaluationProblemSlotPayload,
+    HostHudEvaluationProblemSlotPayload,
+    HostHudEvaluationProblemSlotPayload,
+  ];
+}
+
+/**
+ * Authoritative budget heads payload emitted by host snapshot/patch envelopes.
+ * Mirrors budget-window source values from `ReallyDrawBudgetWindow` and
+ * `ReallyDrawCurrPercents` in `ref/micropolis/src/sim/w_budget.c`.
+ */
+export interface HostHudBudgetPayload {
+  taxRate: number;
+  autoBudget: boolean;
+  taxFund: number;
+  totalFunds: number;
+  cashFlow: number;
+  roadPercent: number;
+  firePercent: number;
+  policePercent: number;
+  roadWant: number;
+  fireWant: number;
+  policeWant: number;
+  roadGot: number;
+  fireGot: number;
+  policeGot: number;
+}
+
+/**
  * One authoritative HUD message payload emitted by host snapshot/patch envelopes.
  * Mirrors `SendMes` / `SendMesAt` payload data in `ref/micropolis/src/sim/s_msg.c`.
  * Parity note: `(x, y) = (0, 0)` is intentionally preserved so runtime can keep
@@ -915,6 +1037,8 @@ export interface HostHudPayload {
   cityClass?: number;
   speed?: number;
   options?: Partial<HostHudOptionsPayload>;
+  evaluation?: HostHudEvaluationPayload;
+  budget?: HostHudBudgetPayload;
   /**
    * Legacy single-message compatibility payload retained while migration from
    * ad-hoc message fields to explicit `messageDeltas` is in flight.
@@ -1168,6 +1292,36 @@ export function isPlayableSimControlCommand(
 
   if (candidate.control === 'set-speed') {
     return candidate.speed === 1 || candidate.speed === 2 || candidate.speed === 3;
+  }
+
+  if (candidate.control === 'set-tax-rate') {
+    return (
+      typeof candidate.taxRate === 'number' &&
+      Number.isFinite(candidate.taxRate) &&
+      Math.trunc(candidate.taxRate) >= 0 &&
+      Math.trunc(candidate.taxRate) <= 20
+    );
+  }
+
+  if (
+    candidate.control === 'set-road-percent' ||
+    candidate.control === 'set-fire-percent' ||
+    candidate.control === 'set-police-percent'
+  ) {
+    return (
+      typeof candidate.percent === 'number' &&
+      Number.isFinite(candidate.percent) &&
+      Math.trunc(candidate.percent) >= 0 &&
+      Math.trunc(candidate.percent) <= 100
+    );
+  }
+
+  if (candidate.control === 'set-auto-budget') {
+    return typeof candidate.enabled === 'boolean';
+  }
+
+  if (candidate.control === 'open-budget-from-menu') {
+    return true;
   }
 
   return false;

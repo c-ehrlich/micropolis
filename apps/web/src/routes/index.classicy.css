@@ -111,6 +111,7 @@
   top: var(--runtime-top-bar-height);
   width: var(--runtime-sidebar-width);
   align-content: start;
+  overflow-x: hidden;
 }
 
 .classicyRuntimeSidebarStats {
@@ -159,6 +160,85 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.classicyRuntimeSidebarBudgetGroup {
+  display: grid;
+  row-gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+
+.classicyRuntimeWindowLauncher {
+  margin: 0 !important;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.classicyRuntimeFloatingWindow {
+  border: var(--window-border-size) solid var(--color-black);
+  background: var(--color-system-02);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07),
+    calc(var(--window-border-size) * 3) calc(var(--window-border-size) * 3) 0 0 rgba(0, 0, 0, 0.3);
+}
+
+.classicyRuntimeFloatingWindowTitleBar {
+  border-bottom: var(--window-border-size) solid var(--color-black);
+  background: color-mix(in srgb, var(--color-system-03) 88%, transparent);
+  user-select: none;
+}
+
+.classicyRuntimeFloatingWindowMenuTitleBar {
+  padding: 2px 6px;
+}
+
+.classicyRuntimeFloatingWindowMenuTitle {
+  font-family: var(--ui-font), sans-serif;
+  font-size: var(--ui-font-size);
+  line-height: 1;
+  text-align: left;
+}
+
+.classicyRuntimeFloatingWindowBody {
+  background: var(--color-system-02);
+}
+
+.classicyRuntimeFloatingWindowClose {
+  margin: 0 !important;
+  min-width: 20px;
+  padding: 0 6px !important;
+  line-height: 1.2;
+}
+
+.classicyRuntimeFloatingBudgetRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.classicyRuntimeRange {
+  width: 100%;
 }
 
 .classicyRuntimeBottomFeed {

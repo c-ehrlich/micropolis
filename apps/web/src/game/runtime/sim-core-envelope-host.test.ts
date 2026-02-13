@@ -426,6 +426,7 @@ describe('SimCoreEnvelopeHost', () => {
             TotalFunds: number;
             CityPop: number;
             CityClass: number;
+            GameLevel: number;
           };
           store: {
             snapshot(layer: 'map'): Uint16Array | unknown;
@@ -467,6 +468,27 @@ describe('SimCoreEnvelopeHost', () => {
       doMessages: expect.any(Boolean),
       doNotices: expect.any(Boolean),
     });
+    expect(hud.evaluation).toMatchObject({
+      title: expect.any(String),
+      score: expect.any(String),
+      scoreDelta: expect.any(String),
+      population: expect.any(String),
+      populationDelta: expect.any(String),
+      assessedValue: expect.any(String),
+      cityClass: expect.any(String),
+      cityLevel: expect.any(String),
+      yesPercent: expect.stringMatching(/^\d+%$/u),
+      noPercent: expect.stringMatching(/^\d+%$/u),
+    });
+    expect(hud.evaluation?.cityClass).toBe(
+      ['VILLAGE', 'TOWN', 'CITY', 'CAPITAL', 'METROPOLIS', 'MEGALOPOLIS'][
+        Math.max(0, Math.min(authorityState.simState.CityClass, 5))
+      ],
+    );
+    expect(hud.evaluation?.cityLevel).toBe(
+      ['Easy', 'Medium', 'Hard'][Math.max(0, Math.min(authorityState.simState.GameLevel, 2))],
+    );
+    expect(hud.evaluation?.problems).toHaveLength(4);
 
     expect(map.tileWords).not.toBe(authoritativeMapLayer);
     expect(map.tileWords).toEqual(authoritativeMapLayer);
@@ -2396,6 +2418,183 @@ describe('SimCoreEnvelopeHost', () => {
     expect(hostInternals.authorityState.simState.SimMetaSpeed).toBe(2);
     expect(hostInternals.simPaused).toBe(false);
     expect(hostInternals.simPausedSpeed).toBe(2);
+  });
+
+  it('applies C-equivalent budget control commands in authoritative sim state', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          CityTax: number;
+          RoadFund: number;
+          FireFund: number;
+          PoliceFund: number;
+          RoadSpend: number;
+          FireSpend: number;
+          PoliceSpend: number;
+          roadPercent: number;
+          firePercent: number;
+          policePercent: number;
+          autoBudget: boolean;
+          MustUpdateOptions: number;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const simState = hostInternals.authorityState.simState;
+    simState.RoadFund = 777;
+    simState.FireFund = 333;
+    simState.PoliceFund = 555;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      commandId: 'cmd-budget-tax',
+      command: {
+        kind: 'sim-control',
+        control: 'set-tax-rate',
+        taxRate: 12,
+      },
+    });
+    expect(simState.CityTax).toBe(12);
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      commandId: 'cmd-budget-road',
+      command: {
+        kind: 'sim-control',
+        control: 'set-road-percent',
+        percent: 37,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      commandId: 'cmd-budget-fire',
+      command: {
+        kind: 'sim-control',
+        control: 'set-fire-percent',
+        percent: 61,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      commandId: 'cmd-budget-police',
+      command: {
+        kind: 'sim-control',
+        control: 'set-police-percent',
+        percent: 43,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-controls',
+      clientId: 'client-budget-controls',
+      commandId: 'cmd-budget-auto',
+      command: {
+        kind: 'sim-control',
+        control: 'set-auto-budget',
+        enabled: false,
+      },
+    });
+
+    // Magic-number/source note:
+    // `SimCmdRoadFund`/`SimCmdFireFund`/`SimCmdPoliceFund` in `w_sim.c` compute
+    // spend as integer division `(fund * percent) / 100` and percent as `percent / 100.0`.
+    expect(simState.roadPercent).toBe(0.37);
+    expect(simState.firePercent).toBe(0.61);
+    expect(simState.policePercent).toBe(0.43);
+    expect(simState.RoadSpend).toBe(Math.trunc((simState.RoadFund * 37) / 100));
+    expect(simState.FireSpend).toBe(Math.trunc((simState.FireFund * 61) / 100));
+    expect(simState.PoliceSpend).toBe(Math.trunc((simState.PoliceFund * 43) / 100));
+    expect(simState.autoBudget).toBe(false);
+    // `SimCmdAutoBudget` sets `MustUpdateOptions = 1` in `w_sim.c`, then the
+    // same command settlement path runs heads update (`updateOptions` in
+    // `w_update.c`) which clears it back to `0`.
+    expect(simState.MustUpdateOptions).toBe(0);
+  });
+
+  it('keeps Windows->Budget command path parity-aligned with C DoBudgetNow(fromMenu=1)', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          TotalFunds: number;
+          TaxFund: number;
+          RoadFund: number;
+          FireFund: number;
+          PoliceFund: number;
+          RoadSpend: number;
+          FireSpend: number;
+          PoliceSpend: number;
+          roadPercent: number;
+          firePercent: number;
+          policePercent: number;
+          autoBudget: boolean;
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-budget-oracle',
+      clientId: 'client-budget-oracle',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    const simState = hostInternals.authorityState.simState;
+    simState.TotalFunds = 540;
+    simState.TaxFund = 300;
+    simState.RoadFund = 260;
+    simState.FireFund = 180;
+    simState.PoliceFund = 150;
+    simState.RoadSpend = 19;
+    simState.FireSpend = 23;
+    simState.PoliceSpend = 29;
+    simState.roadPercent = 0.8;
+    simState.firePercent = 0.7;
+    simState.policePercent = 0.6;
+    simState.autoBudget = false;
+
+    const beforeRoadSpend = simState.RoadSpend;
+    const beforeFireSpend = simState.FireSpend;
+    const beforePoliceSpend = simState.PoliceSpend;
+    const beforeTotalFunds = simState.TotalFunds;
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-budget-oracle',
+      clientId: 'client-budget-oracle',
+      commandId: 'cmd-budget-open-from-menu',
+      command: {
+        kind: 'sim-control',
+        control: 'open-budget-from-menu',
+      },
+    });
+
+    // `DoBudgetNow(fromMenu=1)` in `w_budget.c` shows/draws budget UI but skips
+    // the spend commit path guarded by `if (!fromMenu)` (lines 187-195).
+    expect(simState.RoadSpend).toBe(beforeRoadSpend);
+    expect(simState.FireSpend).toBe(beforeFireSpend);
+    expect(simState.PoliceSpend).toBe(beforePoliceSpend);
+    expect(simState.TotalFunds).toBe(beforeTotalFunds);
   });
 
   it('advances unpowered-zone blink only from ambient sim-timer cadence', () => {
