@@ -1,7 +1,9 @@
 # Future USA Tileset
 
-Source: `resources/tilesets/futureusa/tiles.bmp` from
+Source: `resources/tilesets/futureusa/*` from
 <https://github.com/SimHacker/MicropolisCore/tree/main/resources/tilesets/futureusa>.
 
-The checked-in `tiles.png` is a direct BMP->PNG conversion of that file so the
-web renderer can load it as a static atlas asset.
+The checked-in PNG files are direct BMP->PNG conversions used by the web
+runtime adapters for both map tiles (`tiles.png`) and realtime object sheets
+(`chopper.png`, `plane.png`, `train.png`, `ship.png`, `monster.png`,
+`tornado.png`, `explode.png`).

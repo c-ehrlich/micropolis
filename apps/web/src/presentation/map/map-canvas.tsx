@@ -325,8 +325,9 @@ export function MapCanvas({
         tileSize,
         mapWidth: mapState.width,
         mapHeight: mapState.height,
+        tilesetName,
       }),
-    [mapState.height, mapState.width, realtimeObjects, tileSize],
+    [mapState.height, mapState.width, realtimeObjects, tileSize, tilesetName],
   );
   const hoverToolSpec = useMemo(
     () => (hoverTool === undefined ? null : getPlayableToolSpec(hoverTool)),
@@ -798,6 +799,30 @@ export function MapCanvas({
                 src={sprite.spriteFrameUrl}
                 className="pointer-events-none absolute [image-rendering:pixelated]"
                 style={{
+                  height: sprite.height,
+                  left: sprite.left,
+                  top: sprite.top,
+                  width: sprite.width,
+                  zIndex: getMapCanvasLayerZIndex('realtime-overlay'),
+                }}
+                title={`${sprite.name} frame ${sprite.frame}`}
+              />
+            ) : sprite.spriteSheetUrl !== undefined &&
+              sprite.sourceWidth !== undefined &&
+              sprite.sourceHeight !== undefined &&
+              sprite.sourceX !== undefined &&
+              sprite.sourceY !== undefined &&
+              sprite.spriteSheetPixelWidth !== undefined &&
+              sprite.spriteSheetPixelHeight !== undefined ? (
+              <div
+                aria-hidden="true"
+                key={sprite.key}
+                className="pointer-events-none absolute [image-rendering:pixelated]"
+                style={{
+                  backgroundImage: `url(${sprite.spriteSheetUrl})`,
+                  backgroundPosition: `${-(sprite.sourceX * (sprite.width / sprite.sourceWidth))}px ${-(sprite.sourceY * (sprite.height / sprite.sourceHeight))}px`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundSize: `${sprite.spriteSheetPixelWidth * (sprite.width / sprite.sourceWidth)}px ${sprite.spriteSheetPixelHeight * (sprite.height / sprite.sourceHeight)}px`,
                   height: sprite.height,
                   left: sprite.left,
                   top: sprite.top,

@@ -9,10 +9,12 @@ import {
   lookupTileSprite,
   lookupTileSpriteRectByTileId,
   lookupTileSpriteRectByTileName,
+  resolveMicropolisCoreTilesetDirectoryName,
   resolveMicropolisTileSheetCanonicalIdentityKey,
   resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey,
   resolveTileIdByName,
   resolveTileNameById,
+  RUNTIME_TILESET_CHOICES,
   TILE_ATLAS_CANONICAL_IDENTITY_KEYS,
 } from './tile-sprite-atlas.ts';
 
@@ -36,12 +38,14 @@ describe('tile sprite atlas', () => {
     const mapColorAtlas =
       mapColorKey === undefined ? undefined : getTileAtlasSourceByCanonicalIdentityKey(mapColorKey);
 
-    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toEqual([
-      'ref/micropolis/images/tiles.xpm',
-      'ref/micropolis/images/tilesbw.xpm',
-      'ref/micropolis/images/tilessm.xpm',
-      'ref/micropolis/images/tiles-futureusa.xpm',
-    ]);
+    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toContain('ref/micropolis/images/tiles.xpm');
+    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toContain('ref/micropolis/images/tilesbw.xpm');
+    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toContain('ref/micropolis/images/tilessm.xpm');
+    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toContain(
+      FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
+    );
+    // 3 legacy atlases (`tiles`, `tilesbw`, `tilessm`) + 8 MicropolisCore tilesets.
+    expect(TILE_ATLAS_CANONICAL_IDENTITY_KEYS).toHaveLength(11);
     expect(atlas).toBeDefined();
     expect(atlas?.canonicalIdentityKey).toBe(DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY);
     expect(atlas?.derivedPngPath).toBe('packages/sim-assets/generated-images/images/tiles.png');
@@ -222,9 +226,25 @@ describe('tile sprite atlas', () => {
     expect(resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic')).toBe(
       DEFAULT_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
     );
+    expect(resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classicbw')).toBe(
+      'ref/micropolis/images/tilesbw.xpm',
+    );
     expect(resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('futureusa')).toBe(
       FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
     );
+  });
+
+  it('exposes every runtime tileset choice through atlas + MicropolisCore adapters', () => {
+    for (const choice of RUNTIME_TILESET_CHOICES) {
+      const canonicalIdentityKey = resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey(choice.name);
+      expect(getTileAtlasSourceByCanonicalIdentityKey(canonicalIdentityKey)).toBeDefined();
+      const micropolisCoreDirectoryName = resolveMicropolisCoreTilesetDirectoryName(choice.name);
+      if (choice.name === 'classic' || choice.name === 'classicbw') {
+        expect(micropolisCoreDirectoryName).toBeUndefined();
+      } else {
+        expect(micropolisCoreDirectoryName).toBeDefined();
+      }
+    }
   });
 
   it('supports adapter tile-name lookup and tile-name sprite queries', () => {

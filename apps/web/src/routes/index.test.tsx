@@ -153,7 +153,7 @@ describe('routes/index default gameplay path', () => {
 
     const markup = renderToStaticMarkup(React.createElement(component));
     expect(markup).not.toContain('Sound Test');
-    expect(markup).toContain('Runtime');
+    expect(markup).toContain('Settings');
     expect(markup).toContain('Play');
     expect(markup).toContain('Road: $10');
     expect(markup).toContain('Demand heads R 0, C 0, I 0');

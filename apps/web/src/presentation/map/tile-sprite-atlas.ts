@@ -24,10 +24,13 @@ const MAP_COLOR_TILE_ATLAS_URL = new URL(
   '../../../../../packages/sim-assets/generated-images/images/tilessm.png',
   import.meta.url,
 ).href;
-const FUTURE_USA_TILE_ATLAS_URL = new URL(
-  '../../../../../packages/sim-assets/micropoliscore-tilesets/futureusa/tiles.png',
-  import.meta.url,
-).href;
+const MICROPOLISCORE_TILE_ATLAS_MODULES = import.meta.glob(
+  '../../../../../packages/sim-assets/micropoliscore-tilesets/*/tiles.png',
+  {
+    eager: true,
+    import: 'default',
+  },
+) as Record<string, string>;
 
 const EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey(
   'ref/micropolis/images/tiles.xpm',
@@ -45,34 +48,59 @@ const FUTURE_USA_TILE_ATLAS_CANONICAL_IDENTITY_KEY = toCanonicalImageIdentityKey
 const EDITOR_COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.color);
 const EDITOR_MONOCHROME_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.monochrome);
 const MAP_COLOR_TILE_SHEET_HEADER = parseTileSheetHeader(TILE_SHEET_HEADERS.small);
-const FUTURE_USA_TILE_SHEET_HEADER: TileSheetHeader = {
+const MICROPOLISCORE_TILE_SHEET_HEADER: TileSheetHeader = {
   width: 512,
   height: 480,
   colors: 256,
   charsPerPixel: 1,
 };
 
+interface RuntimeTilesetChoice {
+  readonly name: string;
+  readonly label: string;
+}
+
 /**
  * Runtime-selectable map tilesets.
  * Mirrors Micropolis tile-id semantics in `ref/micropolis/src/sim/headers/sim.h`
  * (`TILE_COUNT`, `LOMASK`) while allowing multiple atlas implementations.
- * Parity note: `classic` is 1:1 Micropolis XPM artwork; `futureusa` reuses
- * tile ids but renders through MicropolisCore grid-formatted art.
  */
-export type RuntimeTilesetName = 'classic' | 'futureusa';
+export const RUNTIME_TILESET_CHOICES = Object.freeze([
+  Object.freeze({ name: 'classic', label: 'Classic' }),
+  Object.freeze({ name: 'classicbw', label: 'Classic (B/W)' }),
+  Object.freeze({ name: 'coreclassic', label: 'Classic (Core)' }),
+  Object.freeze({ name: 'classic95', label: 'Classic 95' }),
+  Object.freeze({ name: 'futureusa', label: 'Future USA' }),
+  Object.freeze({ name: 'futureeurope', label: 'Future Europe' }),
+  Object.freeze({ name: 'ancientasia', label: 'Ancient Asia' }),
+  Object.freeze({ name: 'medievaltimes', label: 'Medieval Times' }),
+  Object.freeze({ name: 'mooncolony', label: 'Moon Colony' }),
+  Object.freeze({ name: 'wildwest', label: 'Wild West' }),
+] as const satisfies readonly RuntimeTilesetChoice[]);
 
 /**
  * Runtime menu choices for map tileset selection.
  * Mirrors C tile-id behavior from `g_bigmap.c` while adding a browser-only
  * selector over alternate atlas implementations.
  */
-export const RUNTIME_TILESET_CHOICES: readonly Readonly<{
-  name: RuntimeTilesetName;
-  label: string;
-}>[] = Object.freeze([
-  Object.freeze({ name: 'classic', label: 'Classic' }),
-  Object.freeze({ name: 'futureusa', label: 'Future USA' }),
-]);
+export type RuntimeTilesetName = (typeof RUNTIME_TILESET_CHOICES)[number]['name'];
+
+const MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY = Object.freeze({
+  coreclassic: 'classic',
+  classic95: 'classic95',
+  futureusa: 'futureusa',
+  futureeurope: 'futureeurope',
+  ancientasia: 'ancientasia',
+  medievaltimes: 'medievaltimes',
+  mooncolony: 'mooncolony',
+  wildwest: 'wildwest',
+} as const);
+type MicropolisCoreRuntimeTilesetName = keyof typeof MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY;
+type MicropolisCoreTilesetDirectoryName =
+  (typeof MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY)[MicropolisCoreRuntimeTilesetName];
+
+const MICROPOLISCORE_TILE_ATLAS_URL_BY_DIRECTORY_NAME =
+  createMicropolisCoreTileAtlasUrlByDirectoryName();
 
 type TileAtlasDerivedPathPolicy =
   | Readonly<{ kind: 'manifest' }>
@@ -92,6 +120,90 @@ interface TileAtlasDefinition {
   readonly drawTileWidth: number;
   readonly drawTileHeight: number;
   readonly layout: TileAtlasLayoutAdapter;
+}
+
+/**
+ * Resolve MicropolisCore directory name for one runtime tileset.
+ * Mirrors Micropolis tile-id identity in `sim.h`; TypeScript extends this with
+ * tileset indirection over MicropolisCore pack directories.
+ */
+export function resolveMicropolisCoreTilesetDirectoryName(
+  tilesetName: RuntimeTilesetName,
+): string | undefined {
+  if (!(tilesetName in MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY)) {
+    return undefined;
+  }
+  return MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY[tilesetName as MicropolisCoreRuntimeTilesetName];
+}
+
+/**
+ * Discover static MicropolisCore tileset atlas URLs from bundled assets.
+ * Mirrors per-tileset image selection in MicropolisCore
+ * `resources/tilesets/<name>/tiles.bmp`, adapted to Vite module URLs.
+ */
+function createMicropolisCoreTileAtlasUrlByDirectoryName(): Readonly<
+  Record<MicropolisCoreTilesetDirectoryName, string>
+> {
+  const urlsByDirectoryName = new Map<string, string>();
+  for (const [modulePath, moduleUrl] of Object.entries(MICROPOLISCORE_TILE_ATLAS_MODULES)) {
+    const match = /\/micropoliscore-tilesets\/([^/]+)\/tiles\.png$/.exec(modulePath);
+    const directoryName = match?.[1];
+    if (directoryName !== undefined) {
+      urlsByDirectoryName.set(directoryName, moduleUrl);
+    }
+  }
+
+  const result: Partial<Record<MicropolisCoreTilesetDirectoryName, string>> = {};
+  for (const directoryName of Object.values(MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY)) {
+    const atlasUrl = urlsByDirectoryName.get(directoryName);
+    assertDefined(atlasUrl, `Missing MicropolisCore tiles atlas for "${directoryName}"`);
+    result[directoryName] = atlasUrl;
+  }
+  return Object.freeze(result as Record<MicropolisCoreTilesetDirectoryName, string>);
+}
+
+/**
+ * Resolve canonical atlas identity key for one MicropolisCore tileset directory.
+ * Mirrors Micropolis `GetViewTiles` source-image identity in `g_setup.c`, with
+ * TypeScript-only keys for non-XPM MicropolisCore art.
+ */
+function resolveMicropolisCoreTileAtlasCanonicalIdentityKey(
+  directoryName: MicropolisCoreTilesetDirectoryName,
+): CanonicalImageIdentityKey {
+  if (directoryName === 'futureusa') {
+    return FUTURE_USA_TILE_ATLAS_CANONICAL_IDENTITY_KEY;
+  }
+  return toCanonicalImageIdentityKey(
+    `ref/micropolis/images/tiles-micropoliscore-${directoryName}.xpm`,
+  );
+}
+
+/**
+ * Build sprite-atlas definitions for all MicropolisCore runtime tilesets.
+ * Mirrors C tile-id lookup ownership (`sim.h`, `g_bigmap.c`) while adapting
+ * MicropolisCore `resources/tilesets/<tileset>/tiles.bmp` grid layout.
+ */
+function createMicropolisCoreTileAtlasDefinitions(): readonly TileAtlasDefinition[] {
+  return Object.freeze(
+    Object.values(MICROPOLISCORE_RUNTIME_TILESET_DIRECTORY).map((directoryName) =>
+      Object.freeze({
+        canonicalIdentityKey: resolveMicropolisCoreTileAtlasCanonicalIdentityKey(directoryName),
+        spriteSheetUrl: MICROPOLISCORE_TILE_ATLAS_URL_BY_DIRECTORY_NAME[directoryName],
+        tileSheetHeader: MICROPOLISCORE_TILE_SHEET_HEADER,
+        pathPolicy: Object.freeze({
+          kind: 'static',
+          derivedPngPath: `packages/sim-assets/micropoliscore-tilesets/${directoryName}/tiles.png`,
+        }),
+        sourceTileWidth: 16,
+        sourceTileHeight: 16,
+        drawTileWidth: 16,
+        drawTileHeight: 16,
+        // MicropolisCore `resources/tilesets/<tileset>/tiles.bmp` stores 960 tiles in
+        // 32x30 grid form (512x480 pixels at 16x16 per tile).
+        layout: Object.freeze({ kind: 'grid', columns: 32 }),
+      } satisfies TileAtlasDefinition),
+    ),
+  );
 }
 
 const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
@@ -130,29 +242,22 @@ const TILE_ATLAS_DEFINITIONS: readonly TileAtlasDefinition[] = Object.freeze([
     drawTileHeight: MAP_COLOR_TILE_SHEET_HEADER.height / Tile.TILE_COUNT,
     layout: Object.freeze({ kind: 'vertical-strip' }),
   }),
-  Object.freeze({
-    canonicalIdentityKey: FUTURE_USA_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
-    spriteSheetUrl: FUTURE_USA_TILE_ATLAS_URL,
-    tileSheetHeader: FUTURE_USA_TILE_SHEET_HEADER,
-    pathPolicy: Object.freeze({
-      kind: 'static',
-      derivedPngPath: 'packages/sim-assets/micropoliscore-tilesets/futureusa/tiles.png',
-    }),
-    sourceTileWidth: 16,
-    sourceTileHeight: 16,
-    drawTileWidth: 16,
-    drawTileHeight: 16,
-    // MicropolisCore `resources/tilesets/*/tiles.bmp` stores 960 tiles in
-    // 32x30 grid form (512x480 pixels at 16x16 per tile).
-    layout: Object.freeze({ kind: 'grid', columns: 32 }),
-  }),
+  ...createMicropolisCoreTileAtlasDefinitions(),
 ]);
 
 const RUNTIME_TILESET_BASE_ATLAS_CANONICAL_IDENTITY_KEY = Object.freeze<
   Record<RuntimeTilesetName, CanonicalImageIdentityKey>
 >({
   classic: EDITOR_COLOR_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  classicbw: EDITOR_MONOCHROME_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  coreclassic: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('classic'),
+  classic95: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('classic95'),
   futureusa: FUTURE_USA_TILE_ATLAS_CANONICAL_IDENTITY_KEY,
+  futureeurope: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('futureeurope'),
+  ancientasia: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('ancientasia'),
+  medievaltimes: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('medievaltimes'),
+  mooncolony: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('mooncolony'),
+  wildwest: resolveMicropolisCoreTileAtlasCanonicalIdentityKey('wildwest'),
 });
 
 const TILE_NAME_TO_ID = createTileNameToId();

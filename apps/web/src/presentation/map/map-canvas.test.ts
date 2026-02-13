@@ -103,6 +103,9 @@ describe('map canvas draw-mode selection', () => {
     expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16, 'futureusa')).toBe(
       FUTURE_USA_TILE_ATLAS_DEFAULT_CANONICAL_IDENTITY_KEY,
     );
+    expect(selectMapCanvasBaseTileAtlasCanonicalIdentityKey(16, 'classicbw')).toBe(
+      'ref/micropolis/images/tilesbw.xpm',
+    );
   });
 
   it('consumes queued frames as single-use entries to avoid stale redraw coalescing', () => {
@@ -220,6 +223,30 @@ describe('map canvas draw-mode selection', () => {
     expect(projected.label).toBe('TRN');
     // `DrawObjects` in `w_sprite.c` uses `(frame - 1)`, so TRA frame `2` draws `obj1-1`.
     expect(projected.spriteFrameUrl).toContain('obj1-1');
+  });
+
+  it('projects MicropolisCore object overlays from themed sheet sprites', () => {
+    const overlays = projectRealtimeOverlaySprites({
+      // `TRA` type is train (`sim.h` / `w_sprite.c`), frame selection is `(frame - 1)`.
+      objects: [{ name: 'TRA', type: 1, x: 64, y: 80, frame: 2 }],
+      tileSize: 4,
+      mapWidth: 120,
+      mapHeight: 100,
+      tilesetName: 'futureusa',
+    });
+
+    expect(overlays).toHaveLength(1);
+    const projected = overlays[0];
+    if (projected === undefined) {
+      throw new Error('Expected one themed realtime overlay sprite projection');
+    }
+
+    expect(projected.spriteFrameUrl).toBeUndefined();
+    expect(projected.spriteSheetUrl).toContain('micropoliscore-tilesets/futureusa/train');
+    expect(projected.sourceX).toBe(32);
+    expect(projected.sourceY).toBe(0);
+    expect(projected.sourceWidth).toBe(32);
+    expect(projected.sourceHeight).toBe(32);
   });
 
   it('skips inactive and out-of-bounds realtime overlay objects', () => {

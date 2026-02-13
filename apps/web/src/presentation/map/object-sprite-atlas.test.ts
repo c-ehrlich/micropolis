@@ -21,6 +21,34 @@ describe('object sprite atlas', () => {
     expect(spriteFrame?.spriteFrameUrl).toContain('obj2-0');
   });
 
+  it('maps MicropolisCore tileset frame lookups to themed sprite sheets', () => {
+    const spriteFrame = lookupObjectSpriteFrame({
+      // Type `2` is COP in `sim.h`; frame indexing stays `(frame - 1)` from `DrawObjects`.
+      spriteType: 2,
+      runtimeFrame: 1,
+      tilesetName: 'futureusa',
+    });
+
+    expect(spriteFrame?.spriteFrameUrl).toBeUndefined();
+    expect(spriteFrame?.spriteSheetUrl).toContain('micropoliscore-tilesets/futureusa/chopper');
+    expect(spriteFrame?.sourceX).toBe(0);
+    expect(spriteFrame?.sourceY).toBe(0);
+    expect(spriteFrame?.sourceWidth).toBe(32);
+    expect(spriteFrame?.sourceHeight).toBe(32);
+  });
+
+  it('falls back to classic object art when a themed tileset has no matching object type', () => {
+    const spriteFrame = lookupObjectSpriteFrame({
+      // Type `8` is BUS in legacy `GetObjectXpms`; MicropolisCore packs do not provide a bus sheet.
+      spriteType: 8,
+      runtimeFrame: 1,
+      tilesetName: 'mooncolony',
+    });
+
+    expect(spriteFrame?.spriteFrameUrl).toContain('obj8-0');
+    expect(spriteFrame?.spriteSheetUrl).toBeUndefined();
+  });
+
   it('returns undefined for inactive frame 0, matching DrawObjects skip behavior', () => {
     expect(
       lookupObjectSpriteFrame({

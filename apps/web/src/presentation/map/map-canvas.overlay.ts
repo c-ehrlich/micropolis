@@ -1,5 +1,6 @@
 import type { RuntimeRealtimeObject } from '../../game/runtime/realtime-state.ts';
 import { lookupObjectSpriteFrame } from './object-sprite-atlas.ts';
+import type { RuntimeTilesetName } from './tile-sprite-atlas.ts';
 
 interface MapCanvasRealtimeSpriteSpec {
   displayName: string;
@@ -26,6 +27,13 @@ export interface MapCanvasRealtimeOverlaySprite {
   label: string;
   color: string;
   spriteFrameUrl?: string;
+  spriteSheetUrl?: string;
+  spriteSheetPixelWidth?: number;
+  spriteSheetPixelHeight?: number;
+  sourceX?: number;
+  sourceY?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   left: number;
   top: number;
   width: number;
@@ -133,11 +141,13 @@ export function projectRealtimeOverlaySprites({
   tileSize,
   mapWidth,
   mapHeight,
+  tilesetName = 'classic',
 }: {
   objects: readonly RuntimeRealtimeObject[];
   tileSize: number;
   mapWidth: number;
   mapHeight: number;
+  tilesetName?: RuntimeTilesetName;
 }): MapCanvasRealtimeOverlaySprite[] {
   const pixelsPerWorldUnit = tileSize / 16;
   const viewportWidth = mapWidth * tileSize;
@@ -156,6 +166,7 @@ export function projectRealtimeOverlaySprites({
     const spriteFrame = lookupObjectSpriteFrame({
       spriteType: object.type,
       runtimeFrame: object.frame,
+      tilesetName,
     });
     const left = (object.x + spec.xOffset) * pixelsPerWorldUnit;
     const top = (object.y + spec.yOffset) * pixelsPerWorldUnit;
@@ -173,6 +184,13 @@ export function projectRealtimeOverlaySprites({
       label: spec.label,
       color: spec.color,
       spriteFrameUrl: spriteFrame?.spriteFrameUrl,
+      spriteSheetUrl: spriteFrame?.spriteSheetUrl,
+      spriteSheetPixelWidth: spriteFrame?.spriteSheetPixelWidth,
+      spriteSheetPixelHeight: spriteFrame?.spriteSheetPixelHeight,
+      sourceX: spriteFrame?.sourceX,
+      sourceY: spriteFrame?.sourceY,
+      sourceWidth: spriteFrame?.sourceWidth,
+      sourceHeight: spriteFrame?.sourceHeight,
       left,
       top,
       width,

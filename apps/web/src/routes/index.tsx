@@ -63,7 +63,7 @@ const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
     return [basenameMatch?.[1] ?? modulePath, moduleUrl];
   }),
 );
-type TopMenubarSection = 'game' | 'disasters' | 'runtime';
+type TopMenubarSection = 'game' | 'disasters' | 'settings';
 type GameDialogKind = 'new' | 'save' | 'load' | 'scenario';
 const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   id: PlayableGameLevel;
@@ -457,20 +457,20 @@ function RuntimePanel() {
           <div className="relative">
             <button
               onClick={() => {
-                setOpenMenubarSection((current) => (current === 'runtime' ? null : 'runtime'));
+                setOpenMenubarSection((current) => (current === 'settings' ? null : 'settings'));
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'runtime' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'settings' ? 'classicyRuntimeMenuButtonActive' : ''}`}
               type="button"
             >
-              Runtime
+              Settings
             </button>
-            {openMenubarSection !== 'runtime' ? null : (
+            {openMenubarSection !== 'settings' ? null : (
               <section className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
-                <label className="grid gap-0.5 text-xs" htmlFor="runtime-tileset-select">
+                <label className="grid gap-0.5 text-xs" htmlFor="settings-tileset-select">
                   Tileset
                   <select
-                    id="runtime-tileset-select"
+                    id="settings-tileset-select"
                     className="classicyRuntimeSelect px-1.5 py-1"
                     onChange={(event) => {
                       const nextTileset = event.currentTarget.value as RuntimeTilesetName;
