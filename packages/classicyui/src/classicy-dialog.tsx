@@ -1,6 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-
-import { joinClassTokens } from './class-token-join.ts';
+import { clsx } from 'clsx';
 
 export interface ClassicyDialogBackdropProps extends HTMLAttributes<HTMLDivElement> {
   readonly children?: ReactNode;
@@ -19,7 +18,7 @@ export function ClassicyDialogBackdrop({
   return (
     <div
       {...backdropProps}
-      className={joinClassTokens(
+      className={clsx(
         'classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-15 flex items-center justify-center',
         className,
       )}
@@ -48,7 +47,7 @@ export function ClassicyDialogPanel({
   return (
     <section
       {...panelProps}
-      className={joinClassTokens(
+      className={clsx(
         modalWindow ? 'classicyWindow classicyWindowActive classicyWindowModal' : null,
         'classicyRuntimeDialog',
         className,

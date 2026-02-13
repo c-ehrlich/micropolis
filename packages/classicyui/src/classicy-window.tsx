@@ -17,7 +17,7 @@ export interface ClassicyWindowFrameProps extends HTMLAttributes<HTMLElement> {
   readonly headerRight?: ReactNode;
   readonly onClose: () => void;
   readonly onHeaderPointerDown?: PointerEventHandler<HTMLElement>;
-  readonly title: ReactNode;
+  readonly windowTitle: ReactNode;
   readonly titleClassName?: string;
 }
 
@@ -36,7 +36,7 @@ export function ClassicyWindowFrame({
   headerRight,
   onClose,
   onHeaderPointerDown,
-  title,
+  windowTitle,
   titleClassName,
   ...windowProps
 }: ClassicyWindowFrameProps) {
@@ -58,7 +58,7 @@ export function ClassicyWindowFrame({
         <strong
           className={joinClassTokens('classicyRuntimeFloatingWindowMenuTitle', titleClassName)}
         >
-          {title}
+          {windowTitle}
         </strong>
         <div className="flex items-center gap-1">
           {headerRight}

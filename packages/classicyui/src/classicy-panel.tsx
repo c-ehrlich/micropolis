@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import { joinClassTokens } from './class-token-join.ts';
 
@@ -11,20 +11,24 @@ export interface ClassicyPanelChromeProps extends HTMLAttributes<HTMLElement> {
  * Mirrors panel framing patterns from `ref/micropolis/res/whead.tcl`.
  * Parity note: this wraps CSS classes only; geometry remains caller-controlled.
  */
-export function ClassicyPanelChrome({
-  children,
-  className,
-  ...panelProps
-}: ClassicyPanelChromeProps) {
-  return (
-    <section
-      {...panelProps}
-      className={joinClassTokens('classicyRuntimePanelChrome', className)}
-    >
-      {children}
-    </section>
-  );
-}
+export const ClassicyPanelChrome = forwardRef<HTMLElement, ClassicyPanelChromeProps>(
+  /**
+   * Ref-forwarding implementation for panel chrome sections.
+   * Mirrors panel container use-sites from `ref/micropolis/res/whead.tcl`.
+   * Parity note: forwards browser element refs for layout observers in React.
+   */
+  function ClassicyPanelChromeWithRef({ children, className, ...panelProps }, ref) {
+    return (
+      <section
+        {...panelProps}
+        ref={ref}
+        className={joinClassTokens('classicyRuntimePanelChrome', className)}
+      >
+        {children}
+      </section>
+    );
+  },
+);
 
 export interface ClassicyPanelTitleProps extends HTMLAttributes<HTMLElement> {
   readonly children?: ReactNode;

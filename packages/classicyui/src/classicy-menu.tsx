@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
+import { clsx } from 'clsx';
 
 import { ClassicyButton, type ClassicyButtonProps } from './classicy-button.tsx';
-import { joinClassTokens } from './class-token-join.ts';
 
 export interface ClassicyMenuPanelProps extends HTMLAttributes<HTMLElement> {}
 
@@ -11,14 +11,7 @@ export interface ClassicyMenuPanelProps extends HTMLAttributes<HTMLElement> {}
  * Parity note: this is a React wrapper over CSS classes, not a Tcl widget port.
  */
 export function ClassicyMenuPanel({ children, className, ...panelProps }: ClassicyMenuPanelProps) {
-  return (
-    <section
-      {...panelProps}
-      className={joinClassTokens('classicyRuntimeMenuPanel', className)}
-    >
-      {children}
-    </section>
-  );
+  return <section {...panelProps} className={clsx('classicyRuntimeMenuPanel', className)}>{children}</section>;
 }
 
 export interface ClassicyMenuItemButtonProps extends ClassicyButtonProps {}
@@ -36,7 +29,7 @@ export function ClassicyMenuItemButton({
   return (
     <ClassicyButton
       {...buttonProps}
-      className={joinClassTokens('classicyRuntimeMenuItem text-left', className)}
+      className={clsx('classicyRuntimeMenuItem text-left', className)}
     >
       {children}
     </ClassicyButton>
@@ -58,7 +51,7 @@ export function ClassicyMenuActionButton({
   return (
     <ClassicyButton
       {...buttonProps}
-      className={joinClassTokens('classicyRuntimeRuntimeAction', className)}
+      className={clsx('classicyRuntimeRuntimeAction', className)}
     >
       {children}
     </ClassicyButton>
@@ -76,5 +69,5 @@ export function ClassicyMenuSeparator({
   className,
   ...separatorProps
 }: ClassicyMenuSeparatorProps) {
-  return <div {...separatorProps} className={joinClassTokens('mx-1 h-px bg-black/35', className)} />;
+  return <div {...separatorProps} className={clsx('mx-1 h-px bg-black/35', className)} />;
 }

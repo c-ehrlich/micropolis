@@ -1,10 +1,5 @@
-import type {
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
-} from 'react';
-
-import { joinClassTokens } from './class-token-join.ts';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import { clsx } from 'clsx';
 
 export interface ClassicyInputProps extends InputHTMLAttributes<HTMLInputElement> {}
 
@@ -14,12 +9,7 @@ export interface ClassicyInputProps extends InputHTMLAttributes<HTMLInputElement
  * Parity note: browser input behavior is preserved; this wrapper only applies classes.
  */
 export function ClassicyInput({ className, ...inputProps }: ClassicyInputProps) {
-  return (
-    <input
-      {...inputProps}
-      className={joinClassTokens('classicyRuntimeInput', className)}
-    />
-  );
+  return <input {...inputProps} className={clsx('classicyRuntimeInput', className)} />;
 }
 
 export interface ClassicySelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -32,14 +22,7 @@ export interface ClassicySelectProps extends SelectHTMLAttributes<HTMLSelectElem
  * Parity note: this does not emulate Tcl menu internals; it uses native HTML select semantics.
  */
 export function ClassicySelect({ children, className, ...selectProps }: ClassicySelectProps) {
-  return (
-    <select
-      {...selectProps}
-      className={joinClassTokens('classicyRuntimeSelect', className)}
-    >
-      {children}
-    </select>
-  );
+  return <select {...selectProps} className={clsx('classicyRuntimeSelect', className)}>{children}</select>;
 }
 
 export interface ClassicyRangeProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {}
@@ -53,7 +36,7 @@ export function ClassicyRange({ className, ...rangeProps }: ClassicyRangeProps) 
   return (
     <input
       {...rangeProps}
-      className={joinClassTokens('classicyRuntimeRange', className)}
+      className={clsx('classicyRuntimeRange', className)}
       type="range"
     />
   );

@@ -1,6 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-
-import { joinClassTokens } from './class-token-join.ts';
+import { clsx } from 'clsx';
 
 type ClassicyButtonShape = 'rectangle' | 'square';
 type ClassicyButtonSize = 'medium' | 'small';
@@ -38,7 +37,7 @@ export function ClassicyButton({
   return (
     <button
       {...buttonProps}
-      className={joinClassTokens(
+      className={clsx(
         'classicyButton',
         isDefault ? 'classicyButtonDefault' : null,
         buttonShape === 'square' ? 'classicyButtonShapeSquare' : null,

@@ -1,3 +1,4 @@
+import { ClassicyButton, ClassicyMessageSurface, ClassicyPanelChrome } from '@city/classicyui';
 import { type CSSProperties } from 'react';
 
 import demandGaugeBackgroundUrl from '../../../../../../packages/sim-assets/generated-images/images/demandg.png';
@@ -35,8 +36,8 @@ export function NoticePanel({
   topInsetPx: number;
 }) {
   return (
-    <section
-      className="classicyRuntimeNoticePanel classicyRuntimePanelChrome pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
+    <ClassicyPanelChrome
+      className="classicyRuntimeNoticePanel pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
       style={{ top: `calc(${topInsetPx}px + var(--window-padding-size))` }}
     >
       <header
@@ -50,11 +51,11 @@ export function NoticePanel({
         {notice.body}
       </pre>
       <div className="flex justify-end">
-        <button className="classicyButton" onClick={onDismiss} type="button">
+        <ClassicyButton onClick={onDismiss} type="button">
           Dismiss
-        </button>
+        </ClassicyButton>
       </div>
-    </section>
+    </ClassicyPanelChrome>
   );
 }
 
@@ -131,10 +132,10 @@ export function GraphPreviewWidget({
   range?: GraphRange;
 }) {
   return (
-    <div className="classicyRuntimeMessageFeed grid h-[60px] w-full place-items-center p-1 text-[10px]">
+    <ClassicyMessageSurface className="grid h-[60px] w-full place-items-center p-1 text-[10px]">
       <GraphLineChart graph={graph} height={40} mask={mask} range={range} width={90} />
       <div className="leading-3">R/C/I trend</div>
-    </div>
+    </ClassicyMessageSurface>
   );
 }
 
@@ -155,7 +156,7 @@ export function GraphWindowChart({
   const visibleSeries = GRAPH_SERIES.filter((series) => (mask & series.bit) !== 0);
 
   return (
-    <div className="classicyRuntimeMessageFeed grid gap-1 p-1">
+    <ClassicyMessageSurface className="grid gap-1 p-1">
       <GraphLineChart graph={graph} height={180} mask={mask} range={range} width={340} />
       <div className="flex flex-wrap gap-2 text-[10px] leading-3">
         {visibleSeries.length === 0 ? (
@@ -173,7 +174,7 @@ export function GraphWindowChart({
           ))
         )}
       </div>
-    </div>
+    </ClassicyMessageSurface>
   );
 }
 
@@ -302,7 +303,7 @@ function resolveDemandBarStyle({
  */
 export function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
   return (
-    <div className="classicyRuntimeMessageFeed h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
+    <ClassicyMessageSurface className="h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
       {messages.length === 0 ? (
         <div className="leading-4">No messages yet.</div>
       ) : (
@@ -322,6 +323,6 @@ export function MessageFeed({ messages }: { messages: readonly RuntimeHudMessage
           );
         })
       )}
-    </div>
+    </ClassicyMessageSurface>
   );
 }

@@ -1004,15 +1004,17 @@ function RuntimePanel() {
                 : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
 
             return (
-              <button
+              <ClassicyButton
                 key={spec.tool}
                 disabled={sessionControlsDisabled}
+                buttonShape="square"
+                buttonSize="small"
                 onClick={() => {
                   setActiveTool(spec.tool);
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                className={`classicyButton classicyButtonShapeSquare classicyButtonSmall classicyRuntimeToolButton flex items-center justify-center border-2 p-0 ${
+                className={`classicyRuntimeToolButton flex items-center justify-center border-2 p-0 ${
                   active ? 'classicyRuntimeToolButtonActive' : 'classicyRuntimeToolButtonInactive'
                 } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
@@ -1030,16 +1032,16 @@ function RuntimePanel() {
                     />
                   </span>
                 )}
-              </button>
+              </ClassicyButton>
             );
           })}
         </div>
         <div className="grid gap-1">
-          <button
+          <ClassicyButton
             onClick={() => {
               openFloatingWindow('evaluation');
             }}
-            className="classicyButton classicyRuntimeWindowLauncher p-0"
+            className="classicyRuntimeWindowLauncher p-0"
             title="Open Evaluation Window"
             type="button"
           >
@@ -1048,12 +1050,12 @@ function RuntimePanel() {
               demandI={state.hudState.demandI}
               demandR={state.hudState.demandR}
             />
-          </button>
-          <button
+          </ClassicyButton>
+          <ClassicyButton
             onClick={() => {
               openFloatingWindow('graph');
             }}
-            className="classicyButton classicyRuntimeWindowLauncher p-0"
+            className="classicyRuntimeWindowLauncher p-0"
             title="Open Graph Window"
             type="button"
           >
@@ -1062,7 +1064,7 @@ function RuntimePanel() {
               mask={HEAD_GRAPH_MASK_RCI}
               range={10}
             />
-          </button>
+          </ClassicyButton>
         </div>
         <div className="classicyRuntimeSidebarStats grid text-[11px]">
           <button
@@ -1079,7 +1081,10 @@ function RuntimePanel() {
             />
             <ClassicyStatRow label="Tax" value={`${state.hudState.budget.taxRate}%`} />
           </button>
-          <ClassicyStatRow label="Date" value={state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')} />
+          <ClassicyStatRow
+            label="Date"
+            value={state.hudState.dateDisplayLabel.replace(/^Date:\s*/u, '')}
+          />
           <ClassicyStatRow
             label="Population"
             value={state.hudState.cityPopulation.toLocaleString('en-US')}
@@ -1135,7 +1140,7 @@ function RuntimePanel() {
             top: floatingWindows.budget.y,
             zIndex: floatingWindows.budget.zIndex,
           }}
-          title="Budget"
+          windowTitle="Budget"
         >
           <div className="grid gap-1.5 md:grid-cols-2">
             <div className="grid gap-1">
@@ -1305,7 +1310,7 @@ function RuntimePanel() {
             top: floatingWindows.evaluation.y,
             zIndex: floatingWindows.evaluation.zIndex,
           }}
-          title="Evaluation"
+          windowTitle="Evaluation"
         >
           <ClassicyPanelTitle className="text-center text-xs">
             {state.hudState.evaluation.title}
@@ -1396,136 +1401,121 @@ function RuntimePanel() {
       ) : null}
 
       {floatingWindows.graph.open ? (
-        <section
+        <ClassicyWindowFrame
+          bodyClassName="grid gap-1.5 p-2 text-xs"
           data-floating-window="graph"
+          onClose={() => {
+            closeFloatingWindow('graph');
+          }}
+          onHeaderPointerDown={(event) => {
+            startFloatingWindowDrag('graph', event);
+          }}
           onPointerDown={() => {
             focusFloatingWindow('graph');
           }}
-          className="classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid min-w-70 max-w-[min(460px,calc(100vw-12px))]"
+          className="min-w-70 max-w-[min(460px,calc(100vw-12px))]"
           style={{
             left: floatingWindows.graph.x,
             top: floatingWindows.graph.y,
             zIndex: floatingWindows.graph.zIndex,
           }}
+          windowTitle="Graph"
         >
-          <header
-            onPointerDown={(event) => {
-              startFloatingWindowDrag('graph', event);
-            }}
-            className="classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2"
-          >
-            <strong className="classicyRuntimeFloatingWindowMenuTitle">Graph</strong>
-            <button
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
+          <div className="grid grid-cols-2 gap-1">
+            <ClassicyButton
               onClick={() => {
-                closeFloatingWindow('graph');
+                setGraphRange(10);
               }}
-              className="classicyButton classicyRuntimeFloatingWindowClose"
+              className="text-[11px]"
+              style={{
+                background: graphRange === 10 ? 'var(--color-theme-03)' : undefined,
+              }}
               type="button"
             >
-              x
-            </button>
-          </header>
-          <div className="classicyRuntimeFloatingWindowBody grid gap-1.5 p-2 text-xs">
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                onClick={() => {
-                  setGraphRange(10);
-                }}
-                className="classicyButton text-[11px]"
-                style={{
-                  background: graphRange === 10 ? 'var(--color-theme-03)' : undefined,
-                }}
-                type="button"
-              >
-                10 Years
-              </button>
-              <button
-                onClick={() => {
-                  setGraphRange(120);
-                }}
-                className="classicyButton text-[11px]"
-                style={{
-                  background: graphRange === 120 ? 'var(--color-theme-03)' : undefined,
-                }}
-                type="button"
-              >
-                120 Years
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {GRAPH_SERIES_TOGGLES.map((series) => (
-                <button
-                  key={series.bit}
-                  onClick={() => {
-                    setGraphMask((currentMask) => currentMask ^ series.bit);
-                  }}
-                  className="classicyButton flex items-center justify-between gap-1 text-[11px]"
-                  style={{
-                    background:
-                      (graphMask & series.bit) !== 0 ? 'var(--color-theme-03)' : undefined,
-                  }}
-                  type="button"
-                >
-                  <span>{series.label}</span>
-                  <span
-                    aria-hidden
-                    className="inline-block h-2.5 w-2.5 border border-black"
-                    style={{ background: series.color }}
-                  />
-                </button>
-              ))}
-            </div>
-            <GraphWindowChart graph={state.hudState.graph} mask={graphMask} range={graphRange} />
-            <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
-              <span>Visible series</span>
-              <strong>
-                {GRAPH_SERIES_TOGGLES.filter((series) => (graphMask & series.bit) !== 0).length}/
-                {GRAPH_SERIES_TOGGLES.length}
-              </strong>
-            </div>
-            <div className="flex justify-between gap-1">
-              <button
-                onClick={() => {
-                  setGraphMask(HEAD_GRAPH_MASK_RCI);
-                  setGraphRange(10);
-                }}
-                className="classicyButton text-[11px]"
-                type="button"
-              >
-                Reset to R/C/I
-              </button>
-              <button
-                onClick={() => {
-                  setGraphMask(ALL_GRAPH_SERIES_MASK);
-                }}
-                className="classicyButton text-[11px]"
-                type="button"
-              >
-                Show All
-              </button>
-            </div>
+              10 Years
+            </ClassicyButton>
+            <ClassicyButton
+              onClick={() => {
+                setGraphRange(120);
+              }}
+              className="text-[11px]"
+              style={{
+                background: graphRange === 120 ? 'var(--color-theme-03)' : undefined,
+              }}
+              type="button"
+            >
+              120 Years
+            </ClassicyButton>
           </div>
-        </section>
+          <div className="grid grid-cols-2 gap-1">
+            {GRAPH_SERIES_TOGGLES.map((series) => (
+              <ClassicyButton
+                key={series.bit}
+                onClick={() => {
+                  setGraphMask((currentMask) => currentMask ^ series.bit);
+                }}
+                className="flex items-center justify-between gap-1 text-[11px]"
+                style={{
+                  background: (graphMask & series.bit) !== 0 ? 'var(--color-theme-03)' : undefined,
+                }}
+                type="button"
+              >
+                <span>{series.label}</span>
+                <span
+                  aria-hidden
+                  className="inline-block h-2.5 w-2.5 border border-black"
+                  style={{ background: series.color }}
+                />
+              </ClassicyButton>
+            ))}
+          </div>
+          <GraphWindowChart graph={state.hudState.graph} mask={graphMask} range={graphRange} />
+          <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+            <span>Visible series</span>
+            <strong>
+              {GRAPH_SERIES_TOGGLES.filter((series) => (graphMask & series.bit) !== 0).length}/
+              {GRAPH_SERIES_TOGGLES.length}
+            </strong>
+          </div>
+          <div className="flex justify-between gap-1">
+            <ClassicyButton
+              onClick={() => {
+                setGraphMask(HEAD_GRAPH_MASK_RCI);
+                setGraphRange(10);
+              }}
+              className="text-[11px]"
+              type="button"
+            >
+              Reset to R/C/I
+            </ClassicyButton>
+            <ClassicyButton
+              onClick={() => {
+                setGraphMask(ALL_GRAPH_SERIES_MASK);
+              }}
+              className="text-[11px]"
+              type="button"
+            >
+              Show All
+            </ClassicyButton>
+          </div>
+        </ClassicyWindowFrame>
       ) : null}
 
       {isBrandDialogOpen ? (
-        <div
+        <ClassicyDialogBackdrop
           onClick={() => {
             setIsBrandDialogOpen(false);
           }}
-          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-15 flex items-center justify-center"
         >
-          <section
+          <ClassicyDialogPanel
+            modalWindow
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="classicyWindow classicyWindowActive classicyWindowModal classicyRuntimeDialog classicyRuntimeBrandDialog grid min-w-70 w-[min(420px,calc(100vw-24px))] gap-2.5"
+            className="classicyRuntimeBrandDialog grid min-w-70 w-[min(420px,calc(100vw-24px))] gap-2.5"
             style={{ position: 'relative' }}
           >
-            <strong className="classicyRuntimePanelTitle text-sm">Micropolis</strong>
+            <ClassicyPanelTitle className="text-sm">Micropolis</ClassicyPanelTitle>
             <div className="grid gap-1 text-sm">
               <p>
                 Developed by Christopher Ehrlich using gpt 5.3-codex:{' '}
@@ -1562,34 +1552,32 @@ function RuntimePanel() {
               </p>
             </div>
             <div className="flex justify-end">
-              <button
-                className="classicyButton"
+              <ClassicyButton
                 onClick={() => {
                   setIsBrandDialogOpen(false);
                 }}
                 type="button"
               >
                 Dismiss
-              </button>
+              </ClassicyButton>
             </div>
-          </section>
-        </div>
+          </ClassicyDialogPanel>
+        </ClassicyDialogBackdrop>
       ) : null}
 
       {gameDialog === null ? null : (
-        <div
+        <ClassicyDialogBackdrop
           onClick={() => {
             if (!isLoadingCityFile) {
               setGameDialog(null);
             }
           }}
-          className="classicyRuntimeDialogBackdrop pointer-events-auto absolute inset-0 z-15 flex items-center justify-center"
         >
-          <section
+          <ClassicyDialogPanel
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="classicyRuntimeDialog grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 p-3"
+            className="grid min-w-[320px] w-[min(420px,calc(100vw-24px))] gap-2.5 p-3"
           >
             {gameDialog !== 'save' ? null : (
               <form
@@ -1609,12 +1597,12 @@ function RuntimePanel() {
                 }}
                 className="grid gap-2.5"
               >
-                <strong className="classicyRuntimePanelTitle text-sm">Save City</strong>
+                <ClassicyPanelTitle className="text-sm">Save City</ClassicyPanelTitle>
                 <label className="grid gap-1 text-xs">
                   File name
-                  <input
+                  <ClassicyInput
                     autoFocus
-                    className="classicyRuntimeInput px-2 py-1"
+                    className="px-2 py-1"
                     disabled={sessionControlsDisabled}
                     onChange={(event) => {
                       setSaveFileNameDraft(event.target.value);
@@ -1624,34 +1612,29 @@ function RuntimePanel() {
                   />
                 </label>
                 <div className="flex justify-end gap-2">
-                  <button
-                    className="classicyButton"
+                  <ClassicyButton
                     onClick={() => {
                       setGameDialog(null);
                     }}
                     type="button"
                   >
                     Cancel
-                  </button>
-                  <button
-                    className="classicyButton"
-                    disabled={sessionControlsDisabled}
-                    type="submit"
-                  >
+                  </ClassicyButton>
+                  <ClassicyButton disabled={sessionControlsDisabled} type="submit">
                     Save
-                  </button>
+                  </ClassicyButton>
                 </div>
               </form>
             )}
 
             {gameDialog !== 'new' ? null : (
               <section className="grid gap-2.5">
-                <strong className="classicyRuntimePanelTitle text-sm">New Game</strong>
+                <ClassicyPanelTitle className="text-sm">New Game</ClassicyPanelTitle>
                 <label className="grid gap-1 text-xs">
                   Difficulty
-                  <select
+                  <ClassicySelect
                     autoFocus
-                    className="classicyRuntimeSelect px-2 py-1"
+                    className="px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -1666,20 +1649,18 @@ function RuntimePanel() {
                         {choice.label} (Starting Funds: {choice.startingFundsLabel})
                       </option>
                     ))}
-                  </select>
+                  </ClassicySelect>
                 </label>
                 <div className="flex justify-end gap-2">
-                  <button
-                    className="classicyButton"
+                  <ClassicyButton
                     onClick={() => {
                       setGameDialog(null);
                     }}
                     type="button"
                   >
                     Cancel
-                  </button>
-                  <button
-                    className="classicyButton"
+                  </ClassicyButton>
+                  <ClassicyButton
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -1694,22 +1675,21 @@ function RuntimePanel() {
                     type="button"
                   >
                     Start New City
-                  </button>
+                  </ClassicyButton>
                 </div>
               </section>
             )}
 
             {gameDialog !== 'load' ? null : (
               <section className="grid gap-2.5">
-                <strong className="classicyRuntimePanelTitle text-sm">Load City</strong>
+                <ClassicyPanelTitle className="text-sm">Load City</ClassicyPanelTitle>
                 <div className="text-xs text-slate-700">
                   {pendingLoadFile === null
                     ? 'No file selected.'
                     : `Selected: ${pendingLoadFile.name}`}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    className="classicyButton"
+                  <ClassicyButton
                     disabled={controlsDisabled || isLoadingCityFile}
                     onClick={() => {
                       loadInputRef.current?.click();
@@ -1717,9 +1697,8 @@ function RuntimePanel() {
                     type="button"
                   >
                     Choose .cty File...
-                  </button>
-                  <button
-                    className="classicyButton"
+                  </ClassicyButton>
+                  <ClassicyButton
                     disabled={controlsDisabled || pendingLoadFile === null || isLoadingCityFile}
                     onClick={async () => {
                       if (pendingLoadFile === null || controlsDisabled) {
@@ -1749,11 +1728,10 @@ function RuntimePanel() {
                     type="button"
                   >
                     {isLoadingCityFile ? 'Loading...' : 'Load'}
-                  </button>
+                  </ClassicyButton>
                 </div>
                 <div className="flex justify-end">
-                  <button
-                    className="classicyButton"
+                  <ClassicyButton
                     disabled={isLoadingCityFile}
                     onClick={() => {
                       setGameDialog(null);
@@ -1761,19 +1739,19 @@ function RuntimePanel() {
                     type="button"
                   >
                     Close
-                  </button>
+                  </ClassicyButton>
                 </div>
               </section>
             )}
 
             {gameDialog !== 'scenario' ? null : (
               <section className="grid gap-2.5">
-                <strong className="classicyRuntimePanelTitle text-sm">Scenario</strong>
+                <ClassicyPanelTitle className="text-sm">Scenario</ClassicyPanelTitle>
                 <label className="grid gap-1 text-xs">
                   Scenario
-                  <select
+                  <ClassicySelect
                     autoFocus
-                    className="classicyRuntimeSelect px-2 py-1"
+                    className="px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       setSelectedScenarioId(Number.parseInt(event.target.value, 10));
@@ -1785,12 +1763,12 @@ function RuntimePanel() {
                         {scenario.id}. {scenario.name} ({scenario.startYear})
                       </option>
                     ))}
-                  </select>
+                  </ClassicySelect>
                 </label>
                 <label className="grid gap-1 text-xs">
                   Difficulty
-                  <select
-                    className="classicyRuntimeSelect px-2 py-1"
+                  <ClassicySelect
+                    className="px-2 py-1"
                     disabled={controlsDisabled}
                     onChange={(event) => {
                       const level = Number.parseInt(event.target.value, 10);
@@ -1805,20 +1783,18 @@ function RuntimePanel() {
                         {choice.label} (Starting Funds: {choice.startingFundsLabel})
                       </option>
                     ))}
-                  </select>
+                  </ClassicySelect>
                 </label>
                 <div className="flex justify-end gap-2">
-                  <button
-                    className="classicyButton"
+                  <ClassicyButton
                     onClick={() => {
                       setGameDialog(null);
                     }}
                     type="button"
                   >
                     Cancel
-                  </button>
-                  <button
-                    className="classicyButton"
+                  </ClassicyButton>
+                  <ClassicyButton
                     disabled={controlsDisabled}
                     onClick={() => {
                       setHasStartedPlayableSession(true);
@@ -1839,12 +1815,12 @@ function RuntimePanel() {
                     type="button"
                   >
                     Start Scenario
-                  </button>
+                  </ClassicyButton>
                 </div>
               </section>
             )}
-          </section>
-        </div>
+          </ClassicyDialogPanel>
+        </ClassicyDialogBackdrop>
       )}
     </section>
   );
