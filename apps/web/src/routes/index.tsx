@@ -1,5 +1,6 @@
 import './index.classicy.css';
 
+import { ClassicyButton } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
 import { getAllThemes, getThemeVars } from 'classicy';
 import {
@@ -494,7 +495,7 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
-  const menubarButtonClass = 'classicyButton classicyRuntimeMenuButton px-2 py-1 text-center';
+  const menubarButtonClass = 'classicyRuntimeMenuButton px-2 py-1 text-center';
   const menubarPanelClass =
     'classicyRuntimeMenuPanel absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
   const runtimeTheme = useMemo(() => {
@@ -611,7 +612,7 @@ function RuntimePanel() {
       >
         <div className="classicyRuntimeTopLeft flex items-center gap-2">
           <div className="relative">
-            <button
+            <ClassicyButton
               onClick={() => {
                 setOpenMenubarSection((current) =>
                   current === 'micropolis' ? null : 'micropolis',
@@ -619,159 +620,167 @@ function RuntimePanel() {
                 setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'micropolis' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              active={openMenubarSection === 'micropolis'}
+              activeClassName="classicyRuntimeMenuButtonActive"
               type="button"
             >
               Micropolis
-            </button>
+            </ClassicyButton>
             {openMenubarSection !== 'micropolis' ? null : (
               <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
-                <button
+                <ClassicyButton
                   onClick={() => {
                     setIsBrandDialogOpen(true);
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   About...
-                </button>
+                </ClassicyButton>
                 <div className="mx-1 h-px bg-black/35" />
-                <button
+                <ClassicyButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('new');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   New
-                </button>
-                <button
+                </ClassicyButton>
+                <ClassicyButton
                   disabled={sessionControlsDisabled}
                   onClick={() => {
                     setSaveFileNameDraft(saveFileName);
                     setGameDialog('save');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Save...
-                </button>
-                <button
+                </ClassicyButton>
+                <ClassicyButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setPendingLoadFile(null);
                     setGameDialog('load');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Load...
-                </button>
-                <button
+                </ClassicyButton>
+                <ClassicyButton
                   disabled={controlsDisabled}
                   onClick={() => {
                     setGameDialog('scenario');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Scenario...
-                </button>
+                </ClassicyButton>
               </section>
             )}
           </div>
           <div className="relative">
-            <button
+            <ClassicyButton
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'windows' ? null : 'windows'));
                 setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'windows' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              active={openMenubarSection === 'windows'}
+              activeClassName="classicyRuntimeMenuButtonActive"
               type="button"
             >
               Windows
-            </button>
+            </ClassicyButton>
             {openMenubarSection !== 'windows' ? null : (
               <section className={`${menubarPanelClass} min-w-51 gap-0.5`}>
-                <button
+                <ClassicyButton
                   onClick={() => {
                     openFloatingWindow('budget');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Budget
-                </button>
-                <button
+                </ClassicyButton>
+                <ClassicyButton
                   onClick={() => {
                     openFloatingWindow('evaluation');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Evaluation
-                </button>
-                <button
+                </ClassicyButton>
+                <ClassicyButton
                   onClick={() => {
                     openFloatingWindow('graph');
                     setOpenMenubarSection(null);
                   }}
-                  className="classicyButton classicyRuntimeMenuItem text-left"
+                  className="classicyRuntimeMenuItem text-left"
                   type="button"
                 >
                   Graph
-                </button>
+                </ClassicyButton>
               </section>
             )}
           </div>
           <div className="relative">
-            <button
+            <ClassicyButton
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
                 setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              active={openMenubarSection === 'disasters'}
+              activeClassName="classicyRuntimeMenuButtonActive"
               type="button"
             >
               Disasters
-            </button>
+            </ClassicyButton>
             {openMenubarSection !== 'disasters' ? null : (
               <section className={`${menubarPanelClass} min-w-51 gap-1`}>
                 {PLAYABLE_DISASTER_CHOICES.map((choice) => (
-                  <button
+                  <ClassicyButton
                     key={choice.id}
                     disabled={sessionControlsDisabled}
                     onClick={() => {
                       setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
                       setOpenMenubarSection(null);
                     }}
-                    className="classicyButton classicyRuntimeMenuItem text-left"
+                    className="classicyRuntimeMenuItem text-left"
                     type="button"
                   >
                     {choice.label.replace('Trigger ', '')}
-                  </button>
+                  </ClassicyButton>
                 ))}
               </section>
             )}
           </div>
           <div className="relative">
-            <button
+            <ClassicyButton
               onClick={() => {
                 setOpenMenubarSection((current) => (current === 'settings' ? null : 'settings'));
                 setIsSpeedMenuOpen(false);
               }}
               className={`${menubarButtonClass} ${openMenubarSection === 'settings' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              active={openMenubarSection === 'settings'}
+              activeClassName="classicyRuntimeMenuButtonActive"
               type="button"
             >
               Settings
-            </button>
+            </ClassicyButton>
             {openMenubarSection !== 'settings' ? null : (
               <section className={`${menubarPanelClass} min-w-72.5 gap-1.5 p-2`}>
                 <label className="grid gap-0.5 text-xs" htmlFor="settings-tileset-select">
@@ -807,28 +816,28 @@ function RuntimePanel() {
                   <div className="text-xs text-green-700">{lastSaveStatus}</div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <button
+                  <ClassicyButton
                     disabled={reconnectDisabled}
                     onClick={() => {
                       runtime.reconnect();
                       setCityIoError('');
                       setLastSaveStatus('');
                     }}
-                    className="classicyButton classicyRuntimeRuntimeAction"
+                    className="classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Reconnect
-                  </button>
-                  <button
+                  </ClassicyButton>
+                  <ClassicyButton
                     disabled={resyncDisabled}
                     onClick={() => {
                       runtime.requestSnapshot('resync');
                     }}
-                    className="classicyButton classicyRuntimeRuntimeAction"
+                    className="classicyRuntimeRuntimeAction"
                     type="button"
                   >
                     Resync Snapshot
-                  </button>
+                  </ClassicyButton>
                 </div>
               </section>
             )}
@@ -847,7 +856,7 @@ function RuntimePanel() {
           </div>
         </div>
         <div className="classicyRuntimeTopControls ml-auto flex items-center gap-2">
-          <button
+          <ClassicyButton
             disabled={sessionControlsDisabled}
             onClick={() => {
               runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
@@ -855,35 +864,33 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            className="classicyButton classicyRuntimeTopControlButton min-w-21 font-bold"
+            className="classicyRuntimeTopControlButton min-w-21 font-bold"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
-          </button>
+          </ClassicyButton>
           <div ref={speedControlRef} className="relative">
-            <button
+            <ClassicyButton
               disabled={sessionControlsDisabled}
               onClick={() => {
                 setOpenMenubarSection(null);
                 setIsSpeedMenuOpen((current) => !current);
               }}
-              className={`classicyButton classicyRuntimeTopControlButton min-w-13.5 px-1.5 font-bold ${
-                isSpeedMenuOpen ? 'classicyRuntimeMenuButtonActive' : ''
-              }`}
+              className="classicyRuntimeTopControlButton min-w-13.5 px-1.5 font-bold"
+              active={isSpeedMenuOpen}
+              activeClassName="classicyRuntimeMenuButtonActive"
               type="button"
             >
               {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
-            </button>
+            </ClassicyButton>
             {isSpeedMenuOpen ? (
               <section className="classicyRuntimeMenuPanel absolute right-0 top-[calc(100%+3px)] z-12 grid min-w-14.5 gap-0.5 p-1">
                 {([1, 2, 3] as const).map((speed) => (
-                  <button
+                  <ClassicyButton
                     key={speed}
-                    className={`classicyButton px-2 py-1 text-left ${
-                      state.hudState.speed === speed
-                        ? 'classicyRuntimeMenuButtonActive font-bold'
-                        : ''
-                    }`}
+                    active={state.hudState.speed === speed}
+                    activeClassName="classicyRuntimeMenuButtonActive font-bold"
+                    className="px-2 py-1 text-left"
                     disabled={sessionControlsDisabled}
                     onClick={() => {
                       runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
@@ -896,12 +903,12 @@ function RuntimePanel() {
                     type="button"
                   >
                     {speed}x
-                  </button>
+                  </ClassicyButton>
                 ))}
               </section>
             ) : null}
           </div>
-          <button
+          <ClassicyButton
             aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
             onClick={() => {
               setIsGameplayMuted((current) => {
@@ -912,9 +919,10 @@ function RuntimePanel() {
                 return nextMuted;
               });
             }}
-            className={`classicyButton classicyRuntimeTopControlButton classicyButtonShapeSquare inline-flex h-(--window-control-size) w-(--window-control-size) items-center justify-center p-0 ${
-              isGameplayMuted ? 'classicyRuntimeMenuButtonActive' : ''
-            }`}
+            active={isGameplayMuted}
+            activeClassName="classicyRuntimeMenuButtonActive"
+            buttonShape="square"
+            className="classicyRuntimeTopControlButton inline-flex h-(--window-control-size) w-(--window-control-size) items-center justify-center p-0"
             title={isGameplayMuted ? 'Unmute' : 'Mute'}
             type="button"
           >
@@ -939,7 +947,7 @@ function RuntimePanel() {
                 </>
               )}
             </svg>
-          </button>
+          </ClassicyButton>
         </div>
         <img
           alt={isSimulationRunning ? 'Simulation running indicator' : 'Simulation paused indicator'}

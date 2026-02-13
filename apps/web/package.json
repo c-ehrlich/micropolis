@@ -13,6 +13,7 @@
     "test:watch": "pnpm -w vitest --root apps/web"
   },
   "dependencies": {
+    "@city/classicyui": "workspace:*",
     "@tanstack/react-router": "1.157.16",
     "@tanstack/react-router-devtools": "1.149.0",
     "classicy": "^0.6.31",

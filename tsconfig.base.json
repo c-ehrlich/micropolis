@@ -11,6 +11,7 @@
     "module": "preserve",
     "baseUrl": ".",
     "paths": {
+      "@city/classicyui": ["packages/classicyui/src/index.ts"],
       "@city/core-bridge": ["packages/core-bridge/src/index.ts"],
       "@city/sim-integration": ["packages/sim-integration/src/index.ts"]
     },
