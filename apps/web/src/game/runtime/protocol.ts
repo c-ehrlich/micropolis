@@ -796,6 +796,31 @@ export interface HostHudDemandPayload {
 }
 
 /**
+ * One graph-series byte payload for one range (`10` or `120` years).
+ * Mirrors one `History10[i]` / `History120[i]` channel buffer populated by
+ * `doAllGraphs` in `ref/micropolis/src/sim/w_graph.c`.
+ * Parity note: transport accepts both `Uint8Array` and JSON-friendly number lists.
+ */
+export interface HostHudGraphSeriesPayload {
+  res: Uint8Array | readonly number[];
+  com: Uint8Array | readonly number[];
+  ind: Uint8Array | readonly number[];
+  money: Uint8Array | readonly number[];
+  crime: Uint8Array | readonly number[];
+  pollution: Uint8Array | readonly number[];
+}
+
+/**
+ * Full graph history payload for both Micropolis graph ranges.
+ * Mirrors `History10[]` and `History120[]` output from
+ * `ref/micropolis/src/sim/w_graph.c` (`drawMonth` / `doAllGraphs`).
+ */
+export interface HostHudGraphPayload {
+  history10: HostHudGraphSeriesPayload;
+  history120: HostHudGraphSeriesPayload;
+}
+
+/**
  * Authoritative options heads payload emitted by host snapshot/patch envelopes.
  * Mirrors `updateOptions` / `UISetOptions` in `ref/micropolis/src/sim/w_update.c`.
  * Parity note: C packs these into one bitfield; bridge payloads expose booleans directly.
@@ -1023,6 +1048,7 @@ export interface HostHudPayload {
   fundsLabel?: string;
   date?: HostHudDatePayload;
   demand?: HostHudDemandPayload;
+  graph?: HostHudGraphPayload;
   /**
    * Authoritative city population scalar (`CityPop`) from sim-core evaluation.
    * Mirrors `CityPop` derivation in `ref/micropolis/src/sim/s_eval.c`.

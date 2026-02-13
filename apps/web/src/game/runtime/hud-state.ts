@@ -1,6 +1,9 @@
 import type { SequencedHostEnvelope } from './protocol.ts';
 
 const MAX_MESSAGE_FEED = 24;
+const HUD_GRAPH_POINT_COUNT = 120;
+const HUD_GRAPH_MIN_VALUE = 0;
+const HUD_GRAPH_MAX_VALUE = 255;
 const HUD_MONTH_LABELS = [
   'Jan',
   'Feb',
@@ -99,6 +102,30 @@ export interface RuntimeHudBudgetState {
 }
 
 /**
+ * One graph-series byte payload for one range (`10` or `120` years).
+ * Mirrors per-series `History10[]` / `History120[]` graph buffers in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+export interface RuntimeHudGraphSeriesState {
+  res: Uint8Array;
+  com: Uint8Array;
+  ind: Uint8Array;
+  money: Uint8Array;
+  crime: Uint8Array;
+  pollution: Uint8Array;
+}
+
+/**
+ * Full graph history payload consumed by the runtime Graph window.
+ * Mirrors `doAllGraphs` output (`History10[]` + `History120[]`) from
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+export interface RuntimeHudGraphState {
+  history10: RuntimeHudGraphSeriesState;
+  history120: RuntimeHudGraphSeriesState;
+}
+
+/**
  * One ranked evaluation problem row shown in the Evaluation window.
  * Mirrors one `ps*` / `pv*` row pair from `UISetEvaluation` in
  * `ref/micropolis/res/micropolis.tcl`.
@@ -135,7 +162,8 @@ export interface RuntimeHudEvaluationState {
  * Runtime HUD projection consumed by Playable Runtime UI components.
  * Mirrors scalar head updates from `DoUpdateHeads`/`updateDate`/`SetDemand`
  * in `ref/micropolis/src/sim/w_update.c`, speed updates from
- * `ref/micropolis/src/sim/w_util.c`, and message delivery from
+ * `ref/micropolis/src/sim/w_util.c`, graph history from
+ * `ref/micropolis/src/sim/w_graph.c`, and message delivery from
  * `ref/micropolis/src/sim/s_msg.c`.
  * Difference: Playable Runtime stores a bounded message feed instead of a single
  * mutable UI label.
@@ -158,6 +186,7 @@ export interface RuntimeHudState {
   options: RuntimeHudOptionsState;
   evaluation: RuntimeHudEvaluationState;
   budget: RuntimeHudBudgetState;
+  graph: RuntimeHudGraphState;
   messages: readonly RuntimeHudMessageEvent[];
   notice: RuntimeHudNoticeEvent | null;
 }
@@ -233,6 +262,7 @@ export function createInitialRuntimeHudState(): RuntimeHudState {
       fireGot: 0,
       policeGot: 0,
     },
+    graph: createEmptyHudGraphState(),
     messages: [],
     notice: null,
   };
@@ -290,6 +320,7 @@ export function projectRuntimeHudState(
       parsed.options === undefined ? state.options : mergeOptions(state.options, parsed.options),
     evaluation: parsed.evaluation ?? state.evaluation,
     budget: parsed.budget ?? state.budget,
+    graph: parsed.graph ?? state.graph,
     messages:
       envelope.kind === 'snapshot'
         ? parsed.messages
@@ -318,6 +349,7 @@ interface ParsedHudPayload {
   options?: Partial<RuntimeHudOptionsState>;
   evaluation?: RuntimeHudEvaluationState;
   budget?: RuntimeHudBudgetState;
+  graph?: RuntimeHudGraphState;
   messages: RuntimeHudMessageEvent[];
   notice?: RuntimeHudNoticeEvent | null;
 }
@@ -395,6 +427,14 @@ function parseHudPayload(
       const i = readRangeInteger(demandRecord.i, -15, 15);
       if (i !== null) {
         parsed.demandI = i;
+      }
+    }
+
+    const graphRecord = readRecord(hudRecord.graph);
+    if (graphRecord !== null) {
+      const parsedGraph = parseHudGraphFromRecord(graphRecord);
+      if (parsedGraph !== null) {
+        parsed.graph = parsedGraph;
       }
     }
 
@@ -633,6 +673,92 @@ function parseNoticeInput(
     tick: replayTick ?? tick,
     serverSeq: replayServerSeq ?? serverSeq,
   };
+}
+
+/**
+ * Parses one graph payload record from host HUD transport.
+ * Mirrors `doAllGraphs` (`History10[]` / `History120[]`) output ownership in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+function parseHudGraphFromRecord(record: Record<string, unknown>): RuntimeHudGraphState | null {
+  const history10Record = readRecord(record.history10);
+  const history120Record = readRecord(record.history120);
+  if (history10Record === null || history120Record === null) {
+    return null;
+  }
+
+  const history10 = parseHudGraphSeriesFromRecord(history10Record);
+  const history120 = parseHudGraphSeriesFromRecord(history120Record);
+  if (history10 === null || history120 === null) {
+    return null;
+  }
+
+  return {
+    history10,
+    history120,
+  };
+}
+
+/**
+ * Parses one six-series graph range record from host HUD transport.
+ * Mirrors `HISTORIES` ordering (`RES, COM, IND, MONEY, CRIME, POLLUTION`) in
+ * `ref/micropolis/src/sim/headers/sim.h` and draw output in `w_graph.c`.
+ */
+function parseHudGraphSeriesFromRecord(
+  record: Record<string, unknown>,
+): RuntimeHudGraphSeriesState | null {
+  const res = parseHudGraphSeriesBytes(record.res);
+  const com = parseHudGraphSeriesBytes(record.com);
+  const ind = parseHudGraphSeriesBytes(record.ind);
+  const money = parseHudGraphSeriesBytes(record.money);
+  const crime = parseHudGraphSeriesBytes(record.crime);
+  const pollution = parseHudGraphSeriesBytes(record.pollution);
+  if (
+    res === null ||
+    com === null ||
+    ind === null ||
+    money === null ||
+    crime === null ||
+    pollution === null
+  ) {
+    return null;
+  }
+  return {
+    res,
+    com,
+    ind,
+    money,
+    crime,
+    pollution,
+  };
+}
+
+/**
+ * Parses one 120-point graph byte series from host transport payloads.
+ * Mirrors `drawMonth` byte range (`0..255`) and fixed point count (`120`) in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+function parseHudGraphSeriesBytes(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) {
+    if (value.length !== HUD_GRAPH_POINT_COUNT) {
+      return null;
+    }
+    return new Uint8Array(value);
+  }
+
+  if (!Array.isArray(value) || value.length !== HUD_GRAPH_POINT_COUNT) {
+    return null;
+  }
+
+  const bytes = new Uint8Array(HUD_GRAPH_POINT_COUNT);
+  for (let index = 0; index < HUD_GRAPH_POINT_COUNT; index += 1) {
+    const point = readRangeInteger(value[index], HUD_GRAPH_MIN_VALUE, HUD_GRAPH_MAX_VALUE);
+    if (point === null) {
+      return null;
+    }
+    bytes[index] = point;
+  }
+  return bytes;
 }
 
 function parseHudOptionsFromRecord(
@@ -929,6 +1055,7 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     left.budget.roadGot !== right.budget.roadGot ||
     left.budget.fireGot !== right.budget.fireGot ||
     left.budget.policeGot !== right.budget.policeGot ||
+    !isHudGraphStateEqual(left.graph, right.graph) ||
     left.messages.length !== right.messages.length
   ) {
     return false;
@@ -969,6 +1096,81 @@ function isHudStateEqual(left: RuntimeHudState, right: RuntimeHudState): boolean
     }
   }
 
+  return true;
+}
+
+/**
+ * Builds the empty graph-history baseline before the first snapshot.
+ * Mirrors zero-initialized `History10[]` / `History120[]` semantics prior to
+ * the first `doAllGraphs` pass in `ref/micropolis/src/sim/w_graph.c`.
+ */
+function createEmptyHudGraphState(): RuntimeHudGraphState {
+  return {
+    history10: createEmptyHudGraphSeriesState(),
+    history120: createEmptyHudGraphSeriesState(),
+  };
+}
+
+/**
+ * Builds one zeroed six-series graph range.
+ * Mirrors fixed-width graph buffers (`120` points per series) in `w_graph.c`.
+ */
+function createEmptyHudGraphSeriesState(): RuntimeHudGraphSeriesState {
+  return {
+    res: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+    com: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+    ind: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+    money: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+    crime: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+    pollution: new Uint8Array(HUD_GRAPH_POINT_COUNT),
+  };
+}
+
+/**
+ * Deep-equality check for graph ranges/series.
+ * Mirrors deterministic byte-series equality of `History10[]` / `History120[]`
+ * emitted from `doAllGraphs` in `ref/micropolis/src/sim/w_graph.c`.
+ */
+function isHudGraphStateEqual(left: RuntimeHudGraphState, right: RuntimeHudGraphState): boolean {
+  return (
+    areHudGraphSeriesEqual(left.history10, right.history10) &&
+    areHudGraphSeriesEqual(left.history120, right.history120)
+  );
+}
+
+/**
+ * Deep-equality check for one six-series graph range.
+ * Mirrors equality expectations for one `History*` range in `w_graph.c`.
+ */
+function areHudGraphSeriesEqual(
+  left: RuntimeHudGraphSeriesState,
+  right: RuntimeHudGraphSeriesState,
+): boolean {
+  return (
+    areGraphBytesEqual(left.res, right.res) &&
+    areGraphBytesEqual(left.com, right.com) &&
+    areGraphBytesEqual(left.ind, right.ind) &&
+    areGraphBytesEqual(left.money, right.money) &&
+    areGraphBytesEqual(left.crime, right.crime) &&
+    areGraphBytesEqual(left.pollution, right.pollution)
+  );
+}
+
+/**
+ * Byte-wise equality for one graph line.
+ * Mirrors unsigned-byte graph sample buffers from `drawMonth` in `w_graph.c`.
+ */
+function areGraphBytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = left[index];
+    const rightValue = right[index];
+    if (leftValue === undefined || rightValue === undefined || leftValue !== rightValue) {
+      return false;
+    }
+  }
   return true;
 }
 

@@ -61,6 +61,17 @@
 #define HALF_BYTE_COUNT (HWLDX * HWLDY)
 #define QUARTER_BYTE_COUNT (QWX * QWY)
 #define SMALL_WORD_COUNT (SmX * SmY)
+#define ORACLE_GRAPH_HISTORY_COUNT 6
+#define ORACLE_GRAPH_POINT_COUNT 120
+
+enum {
+  ORACLE_RES_HIST = 0,
+  ORACLE_COM_HIST = 1,
+  ORACLE_IND_HIST = 2,
+  ORACLE_MONEY_HIST = 3,
+  ORACLE_CRIME_HIST = 4,
+  ORACLE_POLLUTION_HIST = 5
+};
 
 /* --- Reference-sim globals required by core parity commands. --- */
 
@@ -81,6 +92,8 @@ static short gCrimeHis[CTY_HISTORY_WORDS];
 static short gPollutionHis[CTY_HISTORY_WORDS];
 static short gMoneyHis[CTY_HISTORY_WORDS];
 static short gMiscHis[CTY_MISC_WORDS];
+static unsigned char gHistory10[ORACLE_GRAPH_HISTORY_COUNT][ORACLE_GRAPH_POINT_COUNT];
+static unsigned char gHistory120[ORACLE_GRAPH_HISTORY_COUNT][ORACLE_GRAPH_POINT_COUNT];
 short RateOGMem[SmX][SmY];
 short FireStMap[SmX][SmY];
 short PoliceMap[SmX][SmY];
@@ -367,6 +380,117 @@ void Take2Census(void)
 
   ChangeCensus();
 }
+
+/*
+ * Graph sample projection for one 120-point history range.
+ *
+ * Mirrors `drawMonth` in `ref/micropolis/src/sim/w_graph.c`:
+ * - `val = hist[x] * scale` assigned to `short` (truncate toward zero)
+ * - clamp to `0..255`
+ * - reverse index write `s[119 - x]`.
+ */
+static void OracleDrawMonth(short *hist, unsigned char *series, float scale)
+{
+  short x;
+
+  for (x = 0; x < ORACLE_GRAPH_POINT_COUNT; x++) {
+    short val = (short)(hist[x] * scale);
+    if (val < 0) {
+      val = 0;
+    }
+    if (val > 255) {
+      val = 255;
+    }
+    series[(ORACLE_GRAPH_POINT_COUNT - 1) - x] = (unsigned char)val;
+  }
+}
+
+/*
+ * Full graph rendering for 10-year and 120-year ranges.
+ *
+ * Mirrors `doAllGraphs` in `ref/micropolis/src/sim/w_graph.c`, using
+ * `TakeCensus`-maintained max fields for scale selection.
+ */
+static void OracleDoAllGraphs(void)
+{
+  float scaleValue;
+  short allMax;
+
+  allMax = 0;
+  if (ResHisMax > allMax)
+    allMax = ResHisMax;
+  if (ComHisMax > allMax)
+    allMax = ComHisMax;
+  if (IndHisMax > allMax)
+    allMax = IndHisMax;
+  if (allMax <= 128)
+    allMax = 0;
+
+  if (allMax) {
+    scaleValue = 128.0f / allMax;
+  } else {
+    scaleValue = 1.0f;
+  }
+
+  OracleDrawMonth(gResHis, gHistory10[ORACLE_RES_HIST], scaleValue);
+  OracleDrawMonth(gComHis, gHistory10[ORACLE_COM_HIST], scaleValue);
+  OracleDrawMonth(gIndHis, gHistory10[ORACLE_IND_HIST], scaleValue);
+  OracleDrawMonth(gMoneyHis, gHistory10[ORACLE_MONEY_HIST], 1.0f);
+  OracleDrawMonth(gCrimeHis, gHistory10[ORACLE_CRIME_HIST], 1.0f);
+  OracleDrawMonth(gPollutionHis, gHistory10[ORACLE_POLLUTION_HIST], 1.0f);
+
+  allMax = 0;
+  if (Res2HisMax > allMax)
+    allMax = Res2HisMax;
+  if (Com2HisMax > allMax)
+    allMax = Com2HisMax;
+  if (Ind2HisMax > allMax)
+    allMax = Ind2HisMax;
+  if (allMax <= 128)
+    allMax = 0;
+
+  if (allMax) {
+    scaleValue = 128.0f / allMax;
+  } else {
+    scaleValue = 1.0f;
+  }
+
+  OracleDrawMonth(gResHis + 120, gHistory120[ORACLE_RES_HIST], scaleValue);
+  OracleDrawMonth(gComHis + 120, gHistory120[ORACLE_COM_HIST], scaleValue);
+  OracleDrawMonth(gIndHis + 120, gHistory120[ORACLE_IND_HIST], scaleValue);
+  OracleDrawMonth(gMoneyHis + 120, gHistory120[ORACLE_MONEY_HIST], 1.0f);
+  OracleDrawMonth(gCrimeHis + 120, gHistory120[ORACLE_CRIME_HIST], 1.0f);
+  OracleDrawMonth(gPollutionHis + 120, gHistory120[ORACLE_POLLUTION_HIST], 1.0f);
+}
+
+/*
+ * Emits rendered graph bytes to stdout for parity tests.
+ *
+ * Output layout:
+ * - 10-year history (`History10`) series in C order:
+ *   `res`, `com`, `ind`, `money`, `crime`, `pollution`
+ * - then 120-year history (`History120`) in the same order.
+ * Each series is exactly 120 bytes.
+ */
+static int WriteOracleAllGraphsToStdout(void)
+{
+  int i;
+
+  for (i = 0; i < ORACLE_GRAPH_HISTORY_COUNT; i++) {
+    if (fwrite(gHistory10[i], 1u, ORACLE_GRAPH_POINT_COUNT, stdout) != ORACLE_GRAPH_POINT_COUNT) {
+      fprintf(stderr, "failed to write 10-year graph bytes\n");
+      return 0;
+    }
+  }
+  for (i = 0; i < ORACLE_GRAPH_HISTORY_COUNT; i++) {
+    if (fwrite(gHistory120[i], 1u, ORACLE_GRAPH_POINT_COUNT, stdout) != ORACLE_GRAPH_POINT_COUNT) {
+      fprintf(stderr, "failed to write 120-year graph bytes\n");
+      return 0;
+    }
+  }
+  return 1;
+}
+
 void makeDollarDecimalStr(char *numStr, char *dollarStr)
 {
   if ((numStr == NULL) || (dollarStr == NULL)) {
@@ -4423,6 +4547,7 @@ static void PrintUsage(void)
   fprintf(stderr, "  collect-tax\n");
   fprintf(stderr, "  take-census\n");
   fprintf(stderr, "  take-2-census\n");
+  fprintf(stderr, "  do-all-graphs\n");
   fprintf(stderr, "  do-budget-now [--from-menu <0|1>]\n");
   fprintf(stderr, "  update-date\n");
   fprintf(stderr, "  do-message\n");
@@ -4713,6 +4838,14 @@ int main(int argc, char **argv)
   if (strcmp(command, "take-2-census") == 0) {
     Take2Census();
     if (!SaveStateDir(stateDir)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  if (strcmp(command, "do-all-graphs") == 0) {
+    OracleDoAllGraphs();
+    if (!WriteOracleAllGraphsToStdout()) {
       return 1;
     }
     return 0;

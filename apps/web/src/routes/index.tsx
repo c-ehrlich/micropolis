@@ -25,6 +25,7 @@ import {
 import {
   DemandHeadsWidget,
   GraphPreviewWidget,
+  GraphWindowChart,
   MessageFeed,
   NoticePanel,
 } from '../features/playable-runtime/presentation/runtime-panel-components.tsx';
@@ -103,6 +104,16 @@ const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   { id: 1, label: 'Medium', startingFundsLabel: '$10,000' },
   { id: 2, label: 'Hard', startingFundsLabel: '$5,000' },
 ];
+const HEAD_GRAPH_MASK_RCI = 0b111;
+const ALL_GRAPH_SERIES_MASK = 0b11_1111;
+const GRAPH_SERIES_TOGGLES = [
+  { bit: 1 << 0, color: '#1b8f3a', label: 'Residential' },
+  { bit: 1 << 1, color: '#1b2fe0', label: 'Commercial' },
+  { bit: 1 << 2, color: '#ff7a1a', label: 'Industrial' },
+  { bit: 1 << 3, color: '#222222', label: 'Money' },
+  { bit: 1 << 4, color: '#b00020', label: 'Crime' },
+  { bit: 1 << 5, color: '#7a4f00', label: 'Pollution' },
+] as const;
 
 /**
  * Creates initial floating-window positions for budget/evaluation/graph windows.
@@ -206,6 +217,8 @@ function RuntimePanel() {
   const [floatingWindows, setFloatingWindows] = useState<RuntimeFloatingWindowsState>(() =>
     createInitialRuntimeFloatingWindows(),
   );
+  const [graphRange, setGraphRange] = useState<10 | 120>(10);
+  const [graphMask, setGraphMask] = useState(HEAD_GRAPH_MASK_RCI);
   const [floatingWindowZCounter, setFloatingWindowZCounter] = useState(30);
   const floatingWindowDragRef = useRef<FloatingWindowDragState | null>(null);
   const budgetWindowOriginalStateRef = useRef({ ...state.hudState.budget });
@@ -492,6 +505,19 @@ function RuntimePanel() {
     return getThemeVars(theme);
   }, []);
   const isClassicBwTheme = selectedRuntimeTileset === 'classicbw';
+  const yesPercentValueRaw = Number.parseInt(state.hudState.evaluation.yesPercent, 10);
+  const yesPercentValue = Number.isFinite(yesPercentValueRaw)
+    ? Math.max(0, Math.min(yesPercentValueRaw, 100))
+    : 0;
+  const noPercentValueRaw = Number.parseInt(state.hudState.evaluation.noPercent, 10);
+  const noPercentValue = Number.isFinite(noPercentValueRaw)
+    ? Math.max(0, Math.min(noPercentValueRaw, 100))
+    : 0;
+  const opinionTotalPercent = yesPercentValue + noPercentValue;
+  const opinionYesChartWidthPercent =
+    opinionTotalPercent > 0 ? (yesPercentValue / opinionTotalPercent) * 100 : 50;
+  const opinionNoChartWidthPercent =
+    opinionTotalPercent > 0 ? (noPercentValue / opinionTotalPercent) * 100 : 50;
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -997,20 +1023,36 @@ function RuntimePanel() {
             );
           })}
         </div>
-        <button
-          onClick={() => {
-            openFloatingWindow('evaluation');
-          }}
-          className="classicyButton classicyRuntimeWindowLauncher p-0"
-          title="Open Evaluation Window"
-          type="button"
-        >
-          <DemandHeadsWidget
-            demandC={state.hudState.demandC}
-            demandI={state.hudState.demandI}
-            demandR={state.hudState.demandR}
-          />
-        </button>
+        <div className="grid gap-1">
+          <button
+            onClick={() => {
+              openFloatingWindow('evaluation');
+            }}
+            className="classicyButton classicyRuntimeWindowLauncher p-0"
+            title="Open Evaluation Window"
+            type="button"
+          >
+            <DemandHeadsWidget
+              demandC={state.hudState.demandC}
+              demandI={state.hudState.demandI}
+              demandR={state.hudState.demandR}
+            />
+          </button>
+          <button
+            onClick={() => {
+              openFloatingWindow('graph');
+            }}
+            className="classicyButton classicyRuntimeWindowLauncher p-0"
+            title="Open Graph Window"
+            type="button"
+          >
+            <GraphPreviewWidget
+              graph={state.hudState.graph}
+              mask={HEAD_GRAPH_MASK_RCI}
+              range={10}
+            />
+          </button>
+        </div>
         <div className="classicyRuntimeSidebarStats grid text-[11px]">
           <button
             onClick={() => {
@@ -1314,13 +1356,29 @@ function RuntimePanel() {
               <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
                 <strong className="text-[11px]">Public Opinion</strong>
                 <div className="text-[11px]">Is the mayor doing a good job?</div>
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>YES</span>
-                  <strong>{state.hudState.evaluation.yesPercent}</strong>
-                </div>
-                <div className="classicyRuntimeFloatingBudgetRow">
-                  <span>NO</span>
-                  <strong>{state.hudState.evaluation.noPercent}</strong>
+                <div
+                  className="classicyRuntimeEvaluationOpinionChart"
+                  role="img"
+                  aria-label={`Public opinion: yes ${state.hudState.evaluation.yesPercent}, no ${state.hudState.evaluation.noPercent}`}
+                >
+                  <div className="classicyRuntimeEvaluationOpinionTrack">
+                    <div
+                      className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentYes"
+                      style={{ width: `${opinionYesChartWidthPercent}%` }}
+                    />
+                    <div
+                      className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentNo"
+                      style={{ width: `${opinionNoChartWidthPercent}%` }}
+                    />
+                  </div>
+                  <div className="classicyRuntimeEvaluationOpinionLabels">
+                    <strong className="classicyRuntimeEvaluationOpinionLabel">
+                      Yes {state.hudState.evaluation.yesPercent}
+                    </strong>
+                    <strong className="classicyRuntimeEvaluationOpinionLabel">
+                      No {state.hudState.evaluation.noPercent}
+                    </strong>
+                  </div>
                 </div>
                 <strong className="mt-1 text-[11px]">Worst Problems</strong>
                 {state.hudState.evaluation.problems.map((problem, index) => (
@@ -1415,20 +1473,83 @@ function RuntimePanel() {
             </button>
           </header>
           <div className="classicyRuntimeFloatingWindowBody grid gap-1.5 p-2 text-xs">
-            <GraphPreviewWidget
-              demandC={state.hudState.demandC}
-              demandI={state.hudState.demandI}
-              demandR={state.hudState.demandR}
-            />
-            <div className="classicyRuntimeFloatingBudgetRow">
-              <span>Demand R/C/I</span>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                onClick={() => {
+                  setGraphRange(10);
+                }}
+                className="classicyButton text-[11px]"
+                style={{
+                  background: graphRange === 10 ? 'var(--color-theme-03)' : undefined,
+                }}
+                type="button"
+              >
+                10 Years
+              </button>
+              <button
+                onClick={() => {
+                  setGraphRange(120);
+                }}
+                className="classicyButton text-[11px]"
+                style={{
+                  background: graphRange === 120 ? 'var(--color-theme-03)' : undefined,
+                }}
+                type="button"
+              >
+                120 Years
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {GRAPH_SERIES_TOGGLES.map((series) => (
+                <button
+                  key={series.bit}
+                  onClick={() => {
+                    setGraphMask((currentMask) => currentMask ^ series.bit);
+                  }}
+                  className="classicyButton flex items-center justify-between gap-1 text-[11px]"
+                  style={{
+                    background:
+                      (graphMask & series.bit) !== 0 ? 'var(--color-theme-03)' : undefined,
+                  }}
+                  type="button"
+                >
+                  <span>{series.label}</span>
+                  <span
+                    aria-hidden
+                    className="inline-block h-2.5 w-2.5 border border-black"
+                    style={{ background: series.color }}
+                  />
+                </button>
+              ))}
+            </div>
+            <GraphWindowChart graph={state.hudState.graph} mask={graphMask} range={graphRange} />
+            <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <span>Visible series</span>
               <strong>
-                {state.hudState.demandR} / {state.hudState.demandC} / {state.hudState.demandI}
+                {GRAPH_SERIES_TOGGLES.filter((series) => (graphMask & series.bit) !== 0).length}/
+                {GRAPH_SERIES_TOGGLES.length}
               </strong>
             </div>
-            <div className="text-[11px] text-slate-700">
-              Graph window is wired to the same launcher paths as classic Micropolis (Windows/Graph
-              menu and graph-area click in the head panel).
+            <div className="flex justify-between gap-1">
+              <button
+                onClick={() => {
+                  setGraphMask(HEAD_GRAPH_MASK_RCI);
+                  setGraphRange(10);
+                }}
+                className="classicyButton text-[11px]"
+                type="button"
+              >
+                Reset to R/C/I
+              </button>
+              <button
+                onClick={() => {
+                  setGraphMask(ALL_GRAPH_SERIES_MASK);
+                }}
+                className="classicyButton text-[11px]"
+                type="button"
+              >
+                Show All
+              </button>
             </div>
           </div>
         </section>

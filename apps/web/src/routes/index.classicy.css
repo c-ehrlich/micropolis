@@ -237,6 +237,56 @@
   gap: 8px;
 }
 
+.classicyRuntimeEvaluationOpinionChart {
+  position: relative;
+  height: 20px;
+  overflow: hidden;
+  border: var(--window-border-size) solid var(--color-window-border);
+  background: color-mix(in srgb, var(--color-system-03) 90%, transparent);
+  box-shadow:
+    inset calc(var(--window-border-size) * -1) calc(var(--window-border-size) * -1) 0 0
+      var(--color-system-05),
+    inset calc(var(--window-border-size) * 1) calc(var(--window-border-size) * 1) 0 0
+      var(--color-system-07);
+}
+
+.classicyRuntimeEvaluationOpinionTrack {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.classicyRuntimeEvaluationOpinionSegment {
+  height: 100%;
+  flex: 0 0 auto;
+}
+
+.classicyRuntimeEvaluationOpinionSegmentYes {
+  background: color-mix(in srgb, #6fbf7c 72%, var(--color-system-03));
+}
+
+.classicyRuntimeEvaluationOpinionSegmentNo {
+  border-left: var(--window-border-size) solid
+    color-mix(in srgb, var(--color-black) 45%, transparent);
+  background: color-mix(in srgb, #d78686 74%, var(--color-system-03));
+}
+
+.classicyRuntimeEvaluationOpinionLabels {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+.classicyRuntimeEvaluationOpinionLabel {
+  font-size: 11px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--color-black) 92%, #101010);
+}
+
 .classicyRuntimeRange {
   width: 100%;
 }

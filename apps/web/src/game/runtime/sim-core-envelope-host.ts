@@ -8,6 +8,7 @@ import {
 import { resolveSimUiPlayableToolDidToolSoundIntent } from '../../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   applyToolAction,
+  buildCensusGraphData,
   cityEvaluation,
   clearCensus,
   collectTax,
@@ -82,6 +83,7 @@ import type {
   HostEnvelope,
   HostHudBudgetPayload,
   HostHudEvaluationPayload,
+  HostHudGraphPayload,
   HostHudMessagePayload,
   HostHudNoticePayload,
   HostHudOptionsPayload,
@@ -262,6 +264,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly scenarioResourceLoader: (fileName: string) => Promise<Uint8Array>;
   private readonly hookHudState: HookHudState = createInitialHookHudState();
   private readonly pendingHudUiSetKeys = new Set<HudUiSetKey>();
+  private graphHudDirty = true;
   private lastHudCityPopulation = 0;
   private lastHudCityClass = 0;
   private lastHudBudgetPayload: HostHudBudgetPayload | null = null;
@@ -286,6 +289,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
         makeSound: (channel, sound) => this.captureSimCoreHookSound(channel, sound),
         sendMes: (id) => this.captureMessage(id),
         sendMesAt: (id, x, y) => this.captureMessageAt(id, x, y),
+        doAllGraphs: () => this.captureGraphDirty(),
+        changeCensus: () => this.captureGraphDirty(),
         doLoseGame: () => this.captureLoseGame(),
         doWinGame: () => this.captureWinGame(),
       },
@@ -1510,6 +1515,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.pendingHudUiSetKeys.clear();
     this.consumeMapInvalidationCycleAfterSnapshot();
     const snapshotPayload = this.buildSnapshotPayload();
+    this.graphHudDirty = false;
     this.resetRealtimeDeltaBaseline();
     this.applyPendingHookMessagesToSnapshotPayload(snapshotPayload);
     this.emitSnapshotFromPayload(roomId, clientId, snapshotPayload, tickOverride, options);
@@ -2345,6 +2351,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
+   * Marks graph HUD payloads dirty after census/graph hooks.
+   * Mirrors `ChangeCensus` + `doAllGraphs` invalidation ownership in
+   * `ref/micropolis/src/sim/w_graph.c`.
+   */
+  private captureGraphDirty(): void {
+    this.graphHudDirty = true;
+  }
+
+  /**
    * Captures one authoritative `SendMes` hook delivery from sim-core.
    * Mirrors `SendMes` dispatch ownership in `ref/micropolis/src/sim/s_msg.c`.
    */
@@ -2656,6 +2671,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const hasEvaluation =
       this.lastHudEvaluationPayload === null ||
       !areHostHudEvaluationPayloadsEqual(this.lastHudEvaluationPayload, evaluationPayload);
+    const hasGraph = this.graphHudDirty;
 
     if (
       !hasFunds &&
@@ -2665,7 +2681,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       !hasOptions &&
       !hasCityStats &&
       !hasBudget &&
-      !hasEvaluation
+      !hasEvaluation &&
+      !hasGraph
     ) {
       return undefined;
     }
@@ -2709,6 +2726,10 @@ export class SimCoreEnvelopeHost implements CoreHost {
       hudPayload.evaluation = cloneHostHudEvaluationPayload(evaluationPayload);
       this.lastHudEvaluationPayload = cloneHostHudEvaluationPayload(evaluationPayload);
     }
+    if (hasGraph) {
+      hudPayload.graph = buildHostHudGraphPayload(this.authorityState.simState);
+      this.graphHudDirty = false;
+    }
 
     this.pendingHudUiSetKeys.clear();
     return hudPayload;
@@ -2747,6 +2768,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       options: { ...this.hookHudState.options },
       evaluation: evaluationPayload,
       budget: budgetPayload,
+      graph: buildHostHudGraphPayload(this.authorityState.simState),
     };
   }
 }
@@ -3601,6 +3623,33 @@ function buildSnapshotTileWordsFromSimCoreMap(
 interface CanonicalCityStats {
   cityPopulation: number;
   cityClass: number;
+}
+
+/**
+ * Builds one HUD graph payload from authoritative sim census histories.
+ * Mirrors `doAllGraphs` output ownership in `ref/micropolis/src/sim/w_graph.c`,
+ * via sim-core `buildCensusGraphData` parity helper.
+ */
+function buildHostHudGraphPayload(simState: SimCoreRuntimeState['simState']): HostHudGraphPayload {
+  const graphData = buildCensusGraphData(simState);
+  return {
+    history10: {
+      res: new Uint8Array(graphData.history10.res),
+      com: new Uint8Array(graphData.history10.com),
+      ind: new Uint8Array(graphData.history10.ind),
+      money: new Uint8Array(graphData.history10.money),
+      crime: new Uint8Array(graphData.history10.crime),
+      pollution: new Uint8Array(graphData.history10.pollution),
+    },
+    history120: {
+      res: new Uint8Array(graphData.history120.res),
+      com: new Uint8Array(graphData.history120.com),
+      ind: new Uint8Array(graphData.history120.ind),
+      money: new Uint8Array(graphData.history120.money),
+      crime: new Uint8Array(graphData.history120.crime),
+      pollution: new Uint8Array(graphData.history120.pollution),
+    },
+  };
 }
 
 /**

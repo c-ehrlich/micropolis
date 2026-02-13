@@ -1,7 +1,23 @@
 import { type CSSProperties } from 'react';
 
 import demandGaugeBackgroundUrl from '../../../../../../packages/sim-assets/generated-images/images/demandg.png';
-import type { RuntimeHudMessageEvent, RuntimeHudNoticeEvent } from '../../../game/runtime/index.ts';
+import type {
+  RuntimeHudGraphState,
+  RuntimeHudMessageEvent,
+  RuntimeHudNoticeEvent,
+} from '../../../game/runtime/index.ts';
+
+const GRAPH_POINT_COUNT = 120;
+const GRAPH_SERIES = [
+  { bit: 1 << 0, key: 'res', label: 'Res', color: '#1b8f3a' },
+  { bit: 1 << 1, key: 'com', label: 'Com', color: '#1b2fe0' },
+  { bit: 1 << 2, key: 'ind', label: 'Ind', color: '#ff7a1a' },
+  { bit: 1 << 3, key: 'money', label: 'Money', color: '#222222' },
+  { bit: 1 << 4, key: 'crime', label: 'Crime', color: '#b00020' },
+  { bit: 1 << 5, key: 'pollution', label: 'Pollution', color: '#7a4f00' },
+] as const;
+
+type GraphRange = 10 | 120;
 
 /**
  * Authoritative Runtime notice panel.
@@ -106,33 +122,150 @@ export function DemandHeadsWidget({
  * Parity note: this is a browser SVG sparkline preview, not the Tcl `graphview` widget.
  */
 export function GraphPreviewWidget({
-  demandR,
-  demandC,
-  demandI,
+  graph,
+  mask = 0b111,
+  range = 10,
 }: {
-  demandR: number;
-  demandC: number;
-  demandI: number;
+  graph: RuntimeHudGraphState;
+  mask?: number;
+  range?: GraphRange;
 }) {
-  const sparkline = [0, demandR, demandC, demandI, 0];
-  const points = sparkline
-    .map((value, index) => {
-      const x = 6 + index * 20;
-      const clamped = Math.max(-15, Math.min(15, Math.trunc(value)));
-      const y = 20 - clamped;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
   return (
     <div className="classicyRuntimeMessageFeed grid h-[60px] w-full place-items-center p-1 text-[10px]">
-      <svg aria-hidden viewBox="0 0 90 40" className="h-9 w-full">
-        <line x1="4" y1="20" x2="86" y2="20" stroke="#444" strokeWidth="1" />
-        <polyline fill="none" points={points} stroke="#1d4ed8" strokeWidth="2" />
-      </svg>
+      <GraphLineChart graph={graph} height={40} mask={mask} range={range} width={90} />
       <div className="leading-3">R/C/I trend</div>
     </div>
   );
+}
+
+/**
+ * Full graph-window chart surface with 10/120-year range support and all 6 series.
+ * Mirrors `graphview` rendering intent in `ref/micropolis/src/sim/w_graph.c`,
+ * including mask-gated per-series overlays from `Mask`.
+ */
+export function GraphWindowChart({
+  graph,
+  mask,
+  range,
+}: {
+  graph: RuntimeHudGraphState;
+  mask: number;
+  range: GraphRange;
+}) {
+  const visibleSeries = GRAPH_SERIES.filter((series) => (mask & series.bit) !== 0);
+
+  return (
+    <div className="classicyRuntimeMessageFeed grid gap-1 p-1">
+      <GraphLineChart graph={graph} height={180} mask={mask} range={range} width={340} />
+      <div className="flex flex-wrap gap-2 text-[10px] leading-3">
+        {visibleSeries.length === 0 ? (
+          <span>No series selected</span>
+        ) : (
+          visibleSeries.map((series) => (
+            <span key={series.key} className="inline-flex items-center gap-1">
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 border border-black"
+                style={{ backgroundColor: series.color }}
+              />
+              {series.label}
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Draws one graph chart for the selected range and mask.
+ * Mirrors series line projection in `DoUpdateGraph` from `ref/micropolis/src/sim/w_graph.c`,
+ * using the already-rendered `History10[]` / `History120[]` bytes.
+ */
+function GraphLineChart({
+  graph,
+  range,
+  mask,
+  width,
+  height,
+}: {
+  graph: RuntimeHudGraphState;
+  range: GraphRange;
+  mask: number;
+  width: number;
+  height: number;
+}) {
+  const chartPaddingLeft = 6;
+  const chartPaddingRight = 4;
+  const chartPaddingTop = 4;
+  const chartPaddingBottom = 4;
+  const plotWidth = Math.max(1, width - chartPaddingLeft - chartPaddingRight);
+  const plotHeight = Math.max(1, height - chartPaddingTop - chartPaddingBottom);
+  const history = range === 10 ? graph.history10 : graph.history120;
+
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${width} ${height}`}
+      className="block h-auto w-full"
+      style={{ maxHeight: `${height}px` }}
+    >
+      <rect
+        x={chartPaddingLeft}
+        y={chartPaddingTop}
+        width={plotWidth}
+        height={plotHeight}
+        fill="#d8d8d8"
+        stroke="#444"
+        strokeWidth="1"
+      />
+      {GRAPH_SERIES.map((series) => {
+        if ((mask & series.bit) === 0) {
+          return null;
+        }
+        const values = history[series.key];
+        const points = buildGraphSeriesPoints(
+          values,
+          chartPaddingLeft,
+          chartPaddingTop,
+          plotWidth,
+          plotHeight,
+        );
+        return (
+          <polyline
+            key={`${range}-${series.key}`}
+            fill="none"
+            points={points}
+            stroke={series.color}
+            strokeWidth={2}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * Converts one 120-byte history series into SVG polyline coordinates.
+ * Mirrors x/y projection used by `DoUpdateGraph` in `ref/micropolis/src/sim/w_graph.c`,
+ * where `x` advances across 120 points and `y` maps graph byte values to chart height.
+ */
+function buildGraphSeriesPoints(
+  values: Uint8Array,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): string {
+  const xStep = width / (GRAPH_POINT_COUNT - 1);
+  const points: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index] ?? 0;
+    const x = left + index * xStep;
+    const y = top + (1 - value / 255) * height;
+    points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+  }
+  return points.join(' ');
 }
 
 /**

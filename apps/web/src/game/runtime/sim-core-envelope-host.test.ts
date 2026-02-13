@@ -21,6 +21,7 @@ import { projectRealtimeOverlaySprites } from '../../presentation/map/map-canvas
 import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {
   type HostEnvelope,
+  type HostHudGraphPayload,
   type HostHudMessagePayload,
   type HostHudNoticePayload,
   type HostHudPayload,
@@ -173,6 +174,19 @@ function readHudPayloadFromEnvelope(envelope: HostEnvelope): HostHudPayload | nu
   }
 
   return hudPayload as HostHudPayload;
+}
+
+/**
+ * Reads HUD graph payloads from snapshot/patch envelopes.
+ * Mirrors `doAllGraphs` graph projection ownership in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+function readHudGraphPayloadFromEnvelope(envelope: HostEnvelope): HostHudGraphPayload | null {
+  const hudPayload = readHudPayloadFromEnvelope(envelope);
+  if (hudPayload === null || hudPayload.graph === undefined) {
+    return null;
+  }
+  return hudPayload.graph;
 }
 
 /**
@@ -458,6 +472,26 @@ describe('SimCoreEnvelopeHost', () => {
       c: expect.any(Number),
       i: expect.any(Number),
     });
+    expect(hud.graph).toEqual({
+      history10: {
+        res: expect.any(Uint8Array),
+        com: expect.any(Uint8Array),
+        ind: expect.any(Uint8Array),
+        money: expect.any(Uint8Array),
+        crime: expect.any(Uint8Array),
+        pollution: expect.any(Uint8Array),
+      },
+      history120: {
+        res: expect.any(Uint8Array),
+        com: expect.any(Uint8Array),
+        ind: expect.any(Uint8Array),
+        money: expect.any(Uint8Array),
+        crime: expect.any(Uint8Array),
+        pollution: expect.any(Uint8Array),
+      },
+    });
+    expect(hud.graph?.history10.res).toHaveLength(120);
+    expect(hud.graph?.history120.pollution).toHaveLength(120);
     expect(hud.options).toMatchObject({
       autoBudget: expect.any(Boolean),
       autoGo: expect.any(Boolean),
@@ -556,6 +590,62 @@ describe('SimCoreEnvelopeHost', () => {
       const bridgeIndex = getCoreBridgeV1SnapshotTileIndex(probe.x, probe.y, height);
       expect(map.tileWords[bridgeIndex]).toBe(probe.bridgeTileWord);
     }
+  });
+
+  it('emits graph HUD deltas when census hooks mark graph history dirty', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simContext: {
+          hooks: {
+            changeCensus(): void;
+          };
+        };
+      };
+    };
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-graph-dirty',
+      clientId: 'client-graph-dirty',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    hostInternals.authorityState.simContext.hooks.changeCensus();
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-graph-dirty',
+      clientId: 'client-graph-dirty',
+      commandId: 'cmd-graph-dirty',
+      command: {
+        kind: 'sim-control',
+        control: 'play',
+      },
+    });
+
+    const patch = captured.envelopes.at(-1);
+    if (patch === undefined || patch.kind !== 'patch') {
+      throw new Error('expected patch envelope after graph-dirty command');
+    }
+    const graph = readHudGraphPayloadFromEnvelope(patch);
+    if (graph === null) {
+      throw new Error('expected graph HUD payload on graph-dirty patch');
+    }
+    expect(graph.history10.res).toHaveLength(120);
+    expect(graph.history10.com).toHaveLength(120);
+    expect(graph.history10.ind).toHaveLength(120);
+    expect(graph.history10.money).toHaveLength(120);
+    expect(graph.history10.crime).toHaveLength(120);
+    expect(graph.history10.pollution).toHaveLength(120);
+    expect(graph.history120.res).toHaveLength(120);
+    expect(graph.history120.com).toHaveLength(120);
+    expect(graph.history120.ind).toHaveLength(120);
+    expect(graph.history120.money).toHaveLength(120);
+    expect(graph.history120.crime).toHaveLength(120);
+    expect(graph.history120.pollution).toHaveLength(120);
   });
 
   it('ports realtime snapshot/delta/object payloads from sim-core sprite hooks without forced copter seeding', () => {

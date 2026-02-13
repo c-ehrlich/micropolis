@@ -41,6 +41,10 @@ export const CORE_MISC_WORD_COUNT = 120;
 export const CORE_POWER_WORD_COUNT = ((CORE_WORLD_X + 15) >> 4) * CORE_WORLD_Y;
 /** Byte count for `PowerStackX/Y[PWRSTKSIZE]` in Micropolis C. */
 export const CORE_POWER_STACK_COUNT = (CORE_WORLD_X * CORE_WORLD_Y) >> 2;
+/** Rendered point count per graph range (`10`/`120`) in `w_graph.c`. */
+export const CORE_GRAPH_POINT_COUNT = 120;
+/** Rendered graph series count (`RES..POLLUTION`) in `w_graph.c`. */
+export const CORE_GRAPH_SERIES_COUNT = 6;
 
 const HARNESS_PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CORE_BIN = path.join(HARNESS_PKG, 'build', 'core', 'micropolis-core-oracle');
@@ -384,6 +388,32 @@ export interface CoreOracleApplyToolResult {
 export interface CoreOracleDoBudgetNowOptions {
   state: CoreOracleState;
   fromMenu?: boolean;
+}
+
+/**
+ * One rendered oracle graph-series payload for one range (`10` or `120` years).
+ *
+ * Mirrors `History10[]` / `History120[]` per-series byte buffers filled by
+ * `doAllGraphs` + `drawMonth` in `ref/micropolis/src/sim/w_graph.c`.
+ */
+export interface CoreOracleGraphSeriesData {
+  res: Uint8Array;
+  com: Uint8Array;
+  ind: Uint8Array;
+  money: Uint8Array;
+  crime: Uint8Array;
+  pollution: Uint8Array;
+}
+
+/**
+ * Full rendered graph payload from the oracle `do-all-graphs` command.
+ *
+ * Layout mirrors `History10[]` and `History120[]` in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+export interface CoreOracleGraphData {
+  history10: CoreOracleGraphSeriesData;
+  history120: CoreOracleGraphSeriesData;
 }
 
 interface CoreOracleSnapshotJson {
@@ -1532,6 +1562,37 @@ export function runCoreOracleTake2Census(state: CoreOracleState): CoreOracleStat
 }
 
 /**
+ * Runs C `doAllGraphs` and returns rendered graph-byte series for both ranges.
+ *
+ * Mirrors `doAllGraphs`/`drawMonth` in `ref/micropolis/src/sim/w_graph.c`.
+ * Output bytes are read from oracle stdout in this fixed layout:
+ * - `history10`: `res, com, ind, money, crime, pollution` (each 120 bytes)
+ * - `history120`: same order.
+ */
+export function runCoreOracleDoAllGraphs(state: CoreOracleState): CoreOracleGraphData {
+  return withTempStateDir((stateDir) => {
+    writeCoreOracleState(stateDir, state);
+    const raw = new Uint8Array(runCoreOracle(['do-all-graphs', '--state-dir', stateDir]));
+    const expectedLength = CORE_GRAPH_POINT_COUNT * CORE_GRAPH_SERIES_COUNT * 2;
+    if (raw.length !== expectedLength) {
+      throw new Error(
+        `unexpected do-all-graphs byte length: ${raw.length} (expected ${expectedLength})`,
+      );
+    }
+
+    const history10 = decodeCoreOracleGraphSeries(raw, 0);
+    const history120 = decodeCoreOracleGraphSeries(
+      raw,
+      CORE_GRAPH_POINT_COUNT * CORE_GRAPH_SERIES_COUNT,
+    );
+    return {
+      history10,
+      history120,
+    };
+  });
+}
+
+/**
  * Runs C `DoBudgetNow` and returns the updated snapshot state.
  *
  * Mirrors `DoBudgetNow` in `ref/micropolis/src/sim/w_budget.c`.
@@ -1665,4 +1726,37 @@ export function runCoreOracleSnapshot(state: CoreOracleState): Record<string, nu
     const raw = runCoreOracle(['snapshot', '--state-dir', stateDir]);
     return JSON.parse(raw.toString('utf8')) as Record<string, number>;
   });
+}
+
+/**
+ * Decodes one six-series graph range from oracle `do-all-graphs` stdout bytes.
+ *
+ * Mirrors C `HISTORIES` order (`RES, COM, IND, MONEY, CRIME, POLLUTION`) from
+ * `ref/micropolis/src/sim/headers/sim.h`.
+ */
+function decodeCoreOracleGraphSeries(bytes: Uint8Array, offset: number): CoreOracleGraphSeriesData {
+  const res = bytes.slice(offset + CORE_GRAPH_POINT_COUNT * 0, offset + CORE_GRAPH_POINT_COUNT * 1);
+  const com = bytes.slice(offset + CORE_GRAPH_POINT_COUNT * 1, offset + CORE_GRAPH_POINT_COUNT * 2);
+  const ind = bytes.slice(offset + CORE_GRAPH_POINT_COUNT * 2, offset + CORE_GRAPH_POINT_COUNT * 3);
+  const money = bytes.slice(
+    offset + CORE_GRAPH_POINT_COUNT * 3,
+    offset + CORE_GRAPH_POINT_COUNT * 4,
+  );
+  const crime = bytes.slice(
+    offset + CORE_GRAPH_POINT_COUNT * 4,
+    offset + CORE_GRAPH_POINT_COUNT * 5,
+  );
+  const pollution = bytes.slice(
+    offset + CORE_GRAPH_POINT_COUNT * 5,
+    offset + CORE_GRAPH_POINT_COUNT * 6,
+  );
+
+  return {
+    res,
+    com,
+    ind,
+    money,
+    crime,
+    pollution,
+  };
 }

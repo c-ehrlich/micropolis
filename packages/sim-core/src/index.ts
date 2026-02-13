@@ -27,6 +27,7 @@ export * from './systems/date-time.ts';
 export * from './systems/disasters.ts';
 export * from './systems/evaluation.ts';
 export * from './systems/fire-coverage.ts';
+export * from './systems/graphs.ts';
 export * from './systems/init.ts';
 export * from './systems/map-scan.ts';
 export * from './systems/messages.ts';

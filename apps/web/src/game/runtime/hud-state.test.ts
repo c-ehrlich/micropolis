@@ -7,6 +7,35 @@ import {
   type HostPatchPayload,
 } from './protocol.ts';
 
+/**
+ * Builds deterministic graph payload fixtures for HUD parsing tests.
+ * Mirrors 120-point graph-series layout from `doAllGraphs` in
+ * `ref/micropolis/src/sim/w_graph.c`.
+ */
+function makeHudGraphPayload(seed: number) {
+  const makeSeries = (offset: number) =>
+    Uint8Array.from({ length: 120 }, (_, index) => (seed + offset + index) & 0xff);
+
+  return {
+    history10: {
+      res: makeSeries(1),
+      com: makeSeries(2),
+      ind: makeSeries(3),
+      money: makeSeries(4),
+      crime: makeSeries(5),
+      pollution: makeSeries(6),
+    },
+    history120: {
+      res: makeSeries(11),
+      com: makeSeries(12),
+      ind: makeSeries(13),
+      money: makeSeries(14),
+      crime: makeSeries(15),
+      pollution: makeSeries(16),
+    },
+  };
+}
+
 describe('runtime HUD projection', () => {
   it('hydrates funds/date/demand/speed/messages from authoritative snapshot payload', () => {
     const initial = createInitialRuntimeHudState();
@@ -88,6 +117,65 @@ describe('runtime HUD projection', () => {
         serverSeq: 1,
       },
     ]);
+  });
+
+  it('hydrates graph history payloads from authoritative HUD snapshots', () => {
+    const initial = createInitialRuntimeHudState();
+    const graph = makeHudGraphPayload(40);
+
+    const next = projectRuntimeHudState(initial, {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 2,
+      serverSeq: 1,
+      payload: {
+        hud: {
+          graph,
+        },
+      },
+    });
+
+    expect(next.graph.history10.res).toEqual(graph.history10.res);
+    expect(next.graph.history10.com).toEqual(graph.history10.com);
+    expect(next.graph.history120.ind).toEqual(graph.history120.ind);
+    expect(next.graph.history120.pollution).toEqual(graph.history120.pollution);
+  });
+
+  it('ignores malformed graph payloads and keeps existing graph history', () => {
+    const baselineGraph = makeHudGraphPayload(7);
+    const afterSnapshot = projectRuntimeHudState(createInitialRuntimeHudState(), {
+      kind: 'snapshot',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 0,
+      serverSeq: 1,
+      payload: {
+        hud: {
+          graph: baselineGraph,
+        },
+      },
+    });
+
+    const next = projectRuntimeHudState(afterSnapshot, {
+      kind: 'patch',
+      roomId: DEFAULT_LOCAL_ROOM_ID,
+      clientId: DEFAULT_LOCAL_CLIENT_ID,
+      tick: 1,
+      serverSeq: 2,
+      payload: {
+        hud: {
+          graph: {
+            history10: {
+              // Invalid length: must be exactly 120 points.
+              res: [1, 2, 3],
+            },
+          },
+        },
+      } as unknown as HostPatchPayload,
+    });
+
+    expect(next).toBe(afterSnapshot);
   });
 
   it('applies patch deltas and appends new message events in sequence order', () => {
