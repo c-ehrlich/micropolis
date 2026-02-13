@@ -158,19 +158,13 @@ export function parseIndexedBmpToPaletteIndexes(bmpBytes, sourcePath = '<inline>
 }
 
 /**
- * Compute a per-pixel transparency mask using border-connected matte fill per frame.
+ * Compute a per-pixel transparency mask using frame-local matte color-keying.
  * Related C behavior: classic Micropolis sprite rendering applies explicit object masks via
  * `XSetClipMask` in `DrawSprite` (`w_sprite.c`). This adapter reconstructs an alpha mask
- * for MicropolisCore BMP strips by treating each frame's top-left index as matte and only
- * clearing pixels connected to the frame border.
+ * for MicropolisCore BMP strips by treating each frame's top-left palette index as the matte
+ * key and clearing all matching pixels in that frame.
  */
-export function createBorderConnectedFrameMatteMask({
-  indexes,
-  width,
-  height,
-  frameWidth,
-  frameHeight,
-}) {
+export function createFrameColorKeyMatteMask({ indexes, width, height, frameWidth, frameHeight }) {
   if (indexes.length !== width * height) {
     throw new Error(
       `Index buffer length mismatch: expected ${width * height}, found ${indexes.length}`,
@@ -195,67 +189,15 @@ export function createBorderConnectedFrameMatteMask({
         throw new Error(`Missing matte index for frame (${frameColumn}, ${frameRow})`);
       }
 
-      const frameVisited = new Uint8Array(frameWidth * frameHeight);
-      const queue = [];
-      let queueHead = 0;
-
-      const enqueueIfMatte = (localX, localY) => {
-        const localOffset = localY * frameWidth + localX;
-        if (frameVisited[localOffset] === 1) {
-          return;
-        }
-        const globalX = frameX + localX;
-        const globalY = frameY + localY;
-        const globalOffset = globalY * width + globalX;
-        if (indexes[globalOffset] !== matteIndex) {
-          return;
-        }
-        frameVisited[localOffset] = 1;
-        queue.push(localX, localY);
-      };
-
-      for (let localX = 0; localX < frameWidth; localX += 1) {
-        enqueueIfMatte(localX, 0);
-        enqueueIfMatte(localX, frameHeight - 1);
-      }
-      for (let localY = 1; localY < frameHeight - 1; localY += 1) {
-        enqueueIfMatte(0, localY);
-        enqueueIfMatte(frameWidth - 1, localY);
-      }
-
-      while (queueHead < queue.length) {
-        const localX = queue[queueHead];
-        const localY = queue[queueHead + 1];
-        queueHead += 2;
-
-        const neighbors = [
-          [localX + 1, localY],
-          [localX - 1, localY],
-          [localX, localY + 1],
-          [localX, localY - 1],
-        ];
-        for (const [neighborX, neighborY] of neighbors) {
-          if (
-            neighborX < 0 ||
-            neighborY < 0 ||
-            neighborX >= frameWidth ||
-            neighborY >= frameHeight
-          ) {
-            continue;
-          }
-          enqueueIfMatte(neighborX, neighborY);
-        }
-      }
-
       for (let localY = 0; localY < frameHeight; localY += 1) {
         for (let localX = 0; localX < frameWidth; localX += 1) {
-          const localOffset = localY * frameWidth + localX;
-          if (frameVisited[localOffset] !== 1) {
-            continue;
-          }
           const globalX = frameX + localX;
           const globalY = frameY + localY;
-          transparentMask[globalY * width + globalX] = 1;
+          const globalOffset = globalY * width + globalX;
+          if (indexes[globalOffset] !== matteIndex) {
+            continue;
+          }
+          transparentMask[globalOffset] = 1;
         }
       }
     }
@@ -277,7 +219,7 @@ export function bakeMicropolisCoreObjectSheetToRgba({
   frameWidth,
   frameHeight,
 }) {
-  const transparentMask = createBorderConnectedFrameMatteMask({
+  const transparentMask = createFrameColorKeyMatteMask({
     width,
     height,
     indexes,

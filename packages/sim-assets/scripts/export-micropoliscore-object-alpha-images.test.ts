@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   bakeMicropolisCoreObjectSheetToRgba,
-  createBorderConnectedFrameMatteMask,
+  createFrameColorKeyMatteMask,
 } from './export-micropoliscore-object-alpha-images.mjs';
 
 function toIndexes(rows: readonly (readonly number[])[]): Uint8Array {
@@ -11,7 +11,7 @@ function toIndexes(rows: readonly (readonly number[])[]): Uint8Array {
 }
 
 describe('export-micropoliscore-object-alpha-images', () => {
-  it('marks only border-connected matte pixels transparent inside one frame', () => {
+  it('treats every frame-local matte pixel as transparent', () => {
     const width = 5;
     const height = 5;
     const indexes = toIndexes([
@@ -21,7 +21,7 @@ describe('export-micropoliscore-object-alpha-images', () => {
       [0, 1, 1, 1, 0],
       [0, 0, 0, 0, 0],
     ]);
-    const transparentMask = createBorderConnectedFrameMatteMask({
+    const transparentMask = createFrameColorKeyMatteMask({
       indexes,
       width,
       height,
@@ -29,9 +29,8 @@ describe('export-micropoliscore-object-alpha-images', () => {
       frameHeight: 5,
     });
 
-    // The center pixel is matte-colored (`0`) but enclosed by non-matte pixels,
-    // so it must remain opaque.
-    expect(transparentMask[2 * width + 2]).toBe(0);
+    // The center pixel is matte-colored (`0`) and therefore transparent.
+    expect(transparentMask[2 * width + 2]).toBe(1);
     expect(transparentMask[0]).toBe(1);
     expect(transparentMask[4]).toBe(1);
   });
@@ -67,8 +66,8 @@ describe('export-micropoliscore-object-alpha-images', () => {
     // Frame 0 matte index is `0`.
     expect(alphaAt(0, 0)).toBe(0);
     expect(alphaAt(2, 2)).toBe(255);
-    // Frame 1 matte index is `2`; enclosed matte pixel remains opaque.
+    // Frame 1 matte index is `2`; enclosed matte pixel is transparent.
     expect(alphaAt(5, 0)).toBe(0);
-    expect(alphaAt(7, 2)).toBe(255);
+    expect(alphaAt(7, 2)).toBe(0);
   });
 });
