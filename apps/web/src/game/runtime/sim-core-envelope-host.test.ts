@@ -2398,6 +2398,42 @@ describe('SimCoreEnvelopeHost', () => {
     expect(hostInternals.simPausedSpeed).toBe(2);
   });
 
+  it('advances unpowered-zone blink only from ambient sim-timer cadence', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      blinkUnpoweredZoneCenter: boolean;
+      buildMapPatchPayload(mapPatch: null): HostPatchPayload['map'] | undefined;
+      advanceBlinkPhaseForAmbientTick(): void;
+    };
+
+    // Consume any pending redraw markers so this test isolates blink-only map payload emission.
+    hostInternals.buildMapPatchPayload(null);
+
+    // Magic-number source:
+    // - `sim_delay = 50` in `ref/micropolis/src/sim/sim.c` (default timer interval).
+    // - `flagBlink` is "off" for `< 500000usec` and "on" for `>= 500000usec`
+    //   in `ref/micropolis/src/sim/sim.c`, consumed by `g_bigmap.c`.
+    expect(hostInternals.blinkUnpoweredZoneCenter).toBe(false);
+    for (let ambientTick = 0; ambientTick < 9; ambientTick += 1) {
+      hostInternals.advanceBlinkPhaseForAmbientTick();
+      expect(hostInternals.buildMapPatchPayload(null)).toBeUndefined();
+    }
+
+    hostInternals.advanceBlinkPhaseForAmbientTick();
+    const toggledPayload = hostInternals.buildMapPatchPayload(null);
+    if (
+      toggledPayload === undefined ||
+      !('blinkUnpoweredZoneCenter' in toggledPayload) ||
+      typeof toggledPayload.blinkUnpoweredZoneCenter !== 'boolean'
+    ) {
+      throw new Error('expected blink-aware map patch payload');
+    }
+    expect(toggledPayload.blinkUnpoweredZoneCenter).toBe(true);
+
+    // Without another ambient timer step, blink phase stays frozen.
+    expect(hostInternals.buildMapPatchPayload(null)).toBeUndefined();
+  });
+
   it('supports every playable tool currently exposed by route "/"', () => {
     const host = new SimCoreEnvelopeHost();
     const captured = connectAndCapture(host);

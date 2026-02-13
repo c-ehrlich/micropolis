@@ -42,6 +42,27 @@ describe('object sprite atlas', () => {
     expect(spriteFrame?.sourceHeight).toBe(32);
   });
 
+  it('remaps MicropolisCore train runtime frame ids to strip frame order', () => {
+    const leftRightFrame = lookupObjectSpriteFrame({
+      // `DoTrainSprite` in `w_sprite.c` uses runtime frame `2` for west/east movement.
+      spriteType: 1,
+      runtimeFrame: 2,
+      tilesetName: 'futureusa',
+    });
+    const railOnlyFrame = lookupObjectSpriteFrame({
+      // Runtime frame `5` is the special straight-rail pose in `DoTrainSprite`.
+      spriteType: 1,
+      runtimeFrame: 5,
+      tilesetName: 'futureusa',
+    });
+
+    // MicropolisCore train strips store horizontal art at frame index `2`.
+    expect(leftRightFrame?.sourceFrame).toBe(2);
+    expect(leftRightFrame?.sourceX).toBe(64);
+    expect(railOnlyFrame?.sourceFrame).toBe(2);
+    expect(railOnlyFrame?.sourceX).toBe(64);
+  });
+
   it('falls back to classic object art when a themed tileset has no matching object type', () => {
     const spriteFrame = lookupObjectSpriteFrame({
       // Type `8` is BUS in legacy `GetObjectXpms`; MicropolisCore packs do not provide a bus sheet.

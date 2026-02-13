@@ -186,6 +186,8 @@ const NEW_CITY_CURVE_LEVEL = -1;
 const NEW_CITY_CREATE_ISLAND = -1;
 // C runtime timer default from `sim_delay = 50` in `ref/micropolis/src/sim/sim.c`.
 const DEFAULT_PATCH_INTERVAL_MS = 50;
+const MICROPOLIS_FLAG_BLINK_PERIOD_MS = 1000;
+const MICROPOLIS_FLAG_BLINK_ONSET_MS = 500;
 // `map_state` index 0 selects `ALMAP` in `setUpMapProcs` (`g_map.c`).
 const ACTIVE_MAP_STATE = 0;
 const TOOL_SOUND_CHANNEL = 'edit';
@@ -267,6 +269,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly realtimeObjectIds = new WeakMap<SimSprite, string>();
   private nextRealtimeObjectId = 1;
   private lastRealtimeObjectsById = new Map<string, HostRealtimeObjectWithIdPayload>();
+  private blinkElapsedMs = 0;
+  private blinkUnpoweredZoneCenter = false;
+  private lastEmittedMapBlinkUnpoweredZoneCenter: boolean | null = null;
 
   public constructor(options: PlayableRuntimeHostOptions = {}) {
     this.authorityState = new SimCoreRuntimeState({
@@ -714,6 +719,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
 
     const { roomId, clientId } = this.lifecycle;
     this.advanceCommandTick();
+    this.advanceBlinkPhaseForAmbientTick();
     let mapPatch: Patch | null = null;
     this.authorityState.simContext.store.beginTick();
     try {
@@ -848,14 +854,31 @@ export class SimCoreEnvelopeHost implements CoreHost {
     const redrawPlan = this.planAndConsumeMapRedraw(mapPatch);
     const tileWordDeltas = toHostMapTileWordDeltas(mapPatch, this.mapHeight);
     const hasPlanDrivenRedraw = redrawPlan.fullRedraw || redrawPlan.dirtyRects.length > 0;
-    if (tileWordDeltas.length === 0 && !hasPlanDrivenRedraw) {
+    const hasBlinkPhaseChanged =
+      this.lastEmittedMapBlinkUnpoweredZoneCenter === null ||
+      this.lastEmittedMapBlinkUnpoweredZoneCenter !== this.blinkUnpoweredZoneCenter;
+    if (tileWordDeltas.length === 0 && !hasPlanDrivenRedraw && !hasBlinkPhaseChanged) {
       return undefined;
     }
 
+    this.lastEmittedMapBlinkUnpoweredZoneCenter = this.blinkUnpoweredZoneCenter;
+
     return {
       tileWordDeltas,
+      blinkUnpoweredZoneCenter: this.blinkUnpoweredZoneCenter,
       redrawPlan,
     };
+  }
+
+  /**
+   * Advances the authoritative blink-phase clock from one ambient sim timer step.
+   * Mirrors `flagBlink` refresh cadence in `sim_update` (`ref/micropolis/src/sim/sim.c`),
+   * adapted to this host's interval-driven ambient tick loop.
+   */
+  private advanceBlinkPhaseForAmbientTick(): void {
+    const intervalMs = this.patchIntervalMs ?? DEFAULT_PATCH_INTERVAL_MS;
+    this.blinkElapsedMs += intervalMs;
+    this.blinkUnpoweredZoneCenter = isEnvelopeHostUnpoweredZoneBlinkPhase(this.blinkElapsedMs);
   }
 
   /**
@@ -1901,6 +1924,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     const tileWords = buildSnapshotTileWordsFromSimCoreMap(mapLayer, this.mapWidth, this.mapHeight);
+    this.lastEmittedMapBlinkUnpoweredZoneCenter = this.blinkUnpoweredZoneCenter;
     const hud = this.buildHudSnapshotPayload();
     const notice = this.activeNotice === null ? null : cloneHostHudNoticePayload(this.activeNotice);
     if (this.messageLog.length === 0) {
@@ -1909,6 +1933,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
           width: this.mapWidth,
           height: this.mapHeight,
           tileWords,
+          blinkUnpoweredZoneCenter: this.blinkUnpoweredZoneCenter,
         },
         hud,
         notice,
@@ -1922,6 +1947,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
         width: this.mapWidth,
         height: this.mapHeight,
         tileWords,
+        blinkUnpoweredZoneCenter: this.blinkUnpoweredZoneCenter,
       },
       hud: withLegacyHudMessageCompatibility(hud, snapshotMessages),
       notice,
@@ -2799,6 +2825,19 @@ function normalizePatchIntervalMs(candidate: number | undefined): number | undef
   }
 
   return Math.trunc(candidate);
+}
+
+/**
+ * Resolves the unpowered-zone blink phase from the host-side blink clock.
+ * Mirrors `flagBlink = (now_time.tv_usec < 500000) ? 1 : -1` in
+ * `ref/micropolis/src/sim/sim.c` and `flagBlink <= 0` gating in
+ * `ref/micropolis/src/sim/g_bigmap.c`, expressed in millisecond phase space.
+ */
+function isEnvelopeHostUnpoweredZoneBlinkPhase(elapsedMs: number): boolean {
+  const blinkPhaseMs =
+    ((Math.trunc(elapsedMs) % MICROPOLIS_FLAG_BLINK_PERIOD_MS) + MICROPOLIS_FLAG_BLINK_PERIOD_MS) %
+    MICROPOLIS_FLAG_BLINK_PERIOD_MS;
+  return blinkPhaseMs >= MICROPOLIS_FLAG_BLINK_ONSET_MS;
 }
 
 /**

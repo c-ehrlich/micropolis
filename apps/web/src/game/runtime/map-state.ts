@@ -42,6 +42,13 @@ export interface RuntimeMapState {
   width: number;
   height: number;
   tiles: Uint16Array;
+  /**
+   * Current unpowered-zone blink phase sampled by authoritative host timer ticks.
+   * Mirrors `flagBlink` phase consumption in `MemDrawBeegMapRect` from
+   * `ref/micropolis/src/sim/g_bigmap.c`, where unpowered zone centers substitute
+   * `LIGHTNINGBOLT` when `flagBlink <= 0`.
+   */
+  blinkUnpoweredZoneCenter: boolean;
   dirtyTileIndexes: Uint32Array;
   dirtyRects: readonly RuntimeMapDirtyRect[];
   drawMode: RuntimeMapDrawMode;
@@ -58,6 +65,7 @@ export function createInitialRuntimeMapState(): RuntimeMapState {
     width: 0,
     height: 0,
     tiles: new Uint16Array(0),
+    blinkUnpoweredZoneCenter: false,
     dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
     dirtyRects: EMPTY_DIRTY_RECTS,
     drawMode: 'none',
@@ -143,6 +151,7 @@ interface SnapshotPayload {
   width: number;
   height: number;
   tiles: Uint16Array;
+  blinkUnpoweredZoneCenter: boolean;
 }
 
 interface PatchTileDelta {
@@ -158,6 +167,7 @@ interface ParsedMapRedrawPlan {
 interface ParsedPatchPayload {
   deltas: PatchTileDelta[];
   redrawPlan: ParsedMapRedrawPlan | null;
+  blinkUnpoweredZoneCenter: boolean | undefined;
 }
 
 function applySnapshotPayload(state: RuntimeMapState, payload: unknown): RuntimeMapState {
@@ -171,6 +181,7 @@ function applySnapshotPayload(state: RuntimeMapState, payload: unknown): Runtime
     width: parsed.width,
     height: parsed.height,
     tiles: parsed.tiles,
+    blinkUnpoweredZoneCenter: parsed.blinkUnpoweredZoneCenter,
     dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
     dirtyRects: EMPTY_DIRTY_RECTS,
     drawMode: 'snapshot',
@@ -190,6 +201,9 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
 
   const deltas = parsed.deltas;
   const redrawPlan = parsed.redrawPlan;
+  const hasBlinkPhaseChange =
+    parsed.blinkUnpoweredZoneCenter !== undefined &&
+    parsed.blinkUnpoweredZoneCenter !== state.blinkUnpoweredZoneCenter;
   let nextTiles: Uint16Array | null = null;
   const dirty: number[] = [];
   for (const delta of deltas) {
@@ -213,7 +227,7 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
   const hasTileChanges = nextTiles !== null && dirty.length > 0;
   const hasPlanDrivenRedraw =
     redrawPlan?.fullRedraw === true || (redrawPlan?.dirtyRects.length ?? 0) > 0;
-  if (!hasTileChanges && !hasPlanDrivenRedraw) {
+  if (!hasTileChanges && !hasPlanDrivenRedraw && !hasBlinkPhaseChange) {
     return state;
   }
 
@@ -230,6 +244,10 @@ function applyPatchPayload(state: RuntimeMapState, payload: unknown): RuntimeMap
   return {
     ...state,
     tiles: hasTileChanges && nextTiles !== null ? nextTiles : state.tiles,
+    blinkUnpoweredZoneCenter:
+      hasBlinkPhaseChange && parsed.blinkUnpoweredZoneCenter !== undefined
+        ? parsed.blinkUnpoweredZoneCenter
+        : state.blinkUnpoweredZoneCenter,
     dirtyTileIndexes,
     dirtyRects,
     drawMode: redrawPlan?.fullRedraw === true ? 'snapshot' : 'patch',
@@ -250,6 +268,8 @@ function parseSnapshotPayload(payload: unknown): SnapshotPayload | null {
   }
 
   const tileCount = width * height;
+  const blinkUnpoweredZoneCenter =
+    readOptionalBooleanField(map, 'blinkUnpoweredZoneCenter') ?? false;
   if ('tileWords' in map) {
     const tileWords = toUint16Array(map.tileWords, tileCount);
     if (tileWords === null) {
@@ -259,6 +279,7 @@ function parseSnapshotPayload(payload: unknown): SnapshotPayload | null {
       width,
       height,
       tiles: convertSnapshotTileWordsToRuntimeTiles(tileWords, width, height),
+      blinkUnpoweredZoneCenter,
     };
   }
 
@@ -267,7 +288,7 @@ function parseSnapshotPayload(payload: unknown): SnapshotPayload | null {
     return null;
   }
 
-  return { width, height, tiles: legacyTiles };
+  return { width, height, tiles: legacyTiles, blinkUnpoweredZoneCenter };
 }
 
 function parsePatchPayload(
@@ -281,10 +302,12 @@ function parsePatchPayload(
   }
 
   const redrawPlan = parseMapRedrawPlan(map.redrawPlan);
+  const blinkUnpoweredZoneCenter = readOptionalBooleanField(map, 'blinkUnpoweredZoneCenter');
   if (Array.isArray(map.tileWordDeltas)) {
     return {
       deltas: parseTileWordCoordinateDeltas(map.tileWordDeltas, width, height),
       redrawPlan,
+      blinkUnpoweredZoneCenter,
     };
   }
 
@@ -292,16 +315,18 @@ function parsePatchPayload(
     return {
       deltas: parseLegacyIndexDeltas(map.tiles),
       redrawPlan,
+      blinkUnpoweredZoneCenter,
     };
   }
 
-  if (redrawPlan === null) {
+  if (redrawPlan === null && blinkUnpoweredZoneCenter === undefined) {
     return null;
   }
 
   return {
     deltas: [],
     redrawPlan,
+    blinkUnpoweredZoneCenter,
   };
 }
 
@@ -440,6 +465,27 @@ function readMapObject(payload: unknown): Record<string, unknown> | null {
   }
 
   return mapValue;
+}
+
+/**
+ * Reads one optional boolean field from a decoded map payload record.
+ * Mirrors tolerant payload parsing strategy used during Playable Runtime bridge
+ * migration in `ref/micropolis/spec/integration/SPEC.md`.
+ * Parity note: C does not decode typed bridge payloads; this helper is
+ * TypeScript transport parsing glue for optional map metadata.
+ */
+function readOptionalBooleanField(
+  record: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  if (!(key in record)) {
+    return undefined;
+  }
+  const value = record[key];
+  if (typeof value !== 'boolean') {
+    return undefined;
+  }
+  return value;
 }
 
 /**

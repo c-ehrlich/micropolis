@@ -67,6 +67,7 @@ function createPatchEnvelope(
   tick: number,
   tileWordDeltas: readonly HostMapPatchTileWordDelta[],
   redrawPlan?: HostMapRedrawPlanPayload,
+  blinkUnpoweredZoneCenter?: boolean,
 ): SequencedHostEnvelope {
   return {
     kind: 'patch',
@@ -77,6 +78,7 @@ function createPatchEnvelope(
     payload: {
       map: {
         tileWordDeltas,
+        blinkUnpoweredZoneCenter,
         redrawPlan,
       },
     },
@@ -265,6 +267,40 @@ describe('runtime map projection', () => {
     expect(noOpPatch.dirtyRects).toEqual([]);
     expect(noOpPatch.renderEpoch).toBe(afterSnapshot.renderEpoch);
     expect(Array.from(noOpPatch.tiles)).toEqual(Array.from(afterSnapshot.tiles));
+  });
+
+  it('consumes blink-only map patches from authoritative sim-timer phase updates', () => {
+    const initial = createInitialRuntimeMapState();
+    const afterSnapshot = projectRuntimeMapState(
+      initial,
+      createSnapshotEnvelope(1, 0, 2, 2, [0, 2, 1, 3]),
+    );
+
+    const afterBlinkPatch = projectRuntimeMapState(
+      afterSnapshot,
+      createPatchEnvelope(
+        2,
+        1,
+        [],
+        undefined,
+        // C draw parity source:
+        // - `flagBlink = (now_time.tv_usec < 500000) ? 1 : -1` in `sim.c`
+        // - blink substitution when `flagBlink <= 0` in `g_bigmap.c`.
+        true,
+      ),
+    );
+
+    expect(afterBlinkPatch.blinkUnpoweredZoneCenter).toBe(true);
+    expect(afterBlinkPatch.drawMode).toBe('patch');
+    expect(Array.from(afterBlinkPatch.dirtyTileIndexes)).toEqual([]);
+    expect(afterBlinkPatch.dirtyRects).toEqual([]);
+    expect(afterBlinkPatch.renderEpoch).toBe(afterSnapshot.renderEpoch + 1);
+
+    const unchangedBlinkPatch = projectRuntimeMapState(
+      afterBlinkPatch,
+      createPatchEnvelope(3, 2, [], undefined, true),
+    );
+    expect(unchangedBlinkPatch).toBe(afterBlinkPatch);
   });
 
   it('coalesces patch dirty indexes into deterministic redraw rects', () => {

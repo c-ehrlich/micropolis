@@ -631,6 +631,15 @@ export interface HostMapSnapshotPayload {
   width: number;
   height: number;
   tileWords: readonly number[] | Uint16Array;
+  /**
+   * Unpowered-zone blink phase sampled by the authoritative sim timer.
+   * Mirrors `flagBlink` assignment in `ref/micropolis/src/sim/sim.c` and
+   * lightning substitution gating (`flagBlink <= 0`) in
+   * `ref/micropolis/src/sim/g_bigmap.c`.
+   * Parity note: this carries the already-resolved boolean phase used by
+   * renderer tile selection (`LIGHTNINGBOLT` vs base zone tile).
+   */
+  blinkUnpoweredZoneCenter?: boolean;
   redrawPlan?: HostMapRedrawPlanPayload;
 }
 
@@ -688,6 +697,13 @@ export interface HostMapRedrawPlanPayload {
  */
 export interface HostMapPatchPayload {
   tileWordDeltas: readonly HostMapPatchTileWordDelta[];
+  /**
+   * Unpowered-zone blink phase sampled by the authoritative sim timer.
+   * Mirrors `flagBlink` assignment in `ref/micropolis/src/sim/sim.c` and
+   * lightning substitution gating (`flagBlink <= 0`) in
+   * `ref/micropolis/src/sim/g_bigmap.c`.
+   */
+  blinkUnpoweredZoneCenter?: boolean;
   redrawPlan?: HostMapRedrawPlanPayload;
 }
 

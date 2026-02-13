@@ -96,6 +96,20 @@ const MICROPOLISCORE_OBJECT_SHEET_FRAME_COUNT_OVERRIDES = Object.freeze({
   'futureusa:train': 8,
 } as const);
 
+const MICROPOLISCORE_TRAIN_SOURCE_FRAME_BY_RUNTIME_FRAME = Object.freeze({
+  // Runtime frame semantics from `DoTrainSprite` in `ref/micropolis/src/sim/w_sprite.c`.
+  // MicropolisCore object strips encode train orientations in a different order:
+  // frame0 vertical, frame1 diagonal, frame2 horizontal, frame3 diagonal.
+  // Remap runtime train frames so cardinal/diagonal facings stay parity-aligned.
+  1: 0,
+  2: 2,
+  3: 3,
+  4: 1,
+  // Runtime frame `5` is the special rail-only train pose in C; MicropolisCore strips
+  // do not carry the classic empty/invisible slot, so reuse horizontal art.
+  5: 2,
+} as const);
+
 const MICROPOLISCORE_OBJECT_SPRITE_SHEET_ASSET_BY_KEY =
   createMicropolisCoreObjectSpriteSheetUrlByKey();
 
@@ -283,7 +297,13 @@ function lookupMicropolisCoreObjectSpriteFrame({
     assetBasename: spriteSheetSpec.assetBasename,
     defaultFrameCount: spriteSheetSpec.defaultFrameCount,
   });
-  if (sourceFrame >= frameCount) {
+  const resolvedSourceFrame = resolveMicropolisCoreObjectSourceFrame({
+    spriteType,
+    runtimeFrame,
+    sourceFrame,
+    frameCount,
+  });
+  if (resolvedSourceFrame === undefined) {
     return undefined;
   }
 
@@ -302,11 +322,11 @@ function lookupMicropolisCoreObjectSpriteFrame({
   return {
     spriteType,
     runtimeFrame,
-    sourceFrame,
+    sourceFrame: resolvedSourceFrame,
     canonicalIdentityKey,
     derivedPngPath: `packages/sim-assets/micropoliscore-tilesets/${directoryName}/${spriteSheetAsset.assetFileBasename}.png`,
     spriteSheetUrl: spriteSheetAsset.spriteSheetUrl,
-    sourceX: sourceFrame * spriteSheetSpec.frameWidth,
+    sourceX: resolvedSourceFrame * spriteSheetSpec.frameWidth,
     sourceY: 0,
     sourceWidth: spriteSheetSpec.frameWidth,
     sourceHeight: spriteSheetSpec.frameHeight,
@@ -344,6 +364,37 @@ function resolveMicropolisCoreObjectFrameCount({
   const overrideKey =
     `${directoryName}:${assetBasename}` as keyof typeof MICROPOLISCORE_OBJECT_SHEET_FRAME_COUNT_OVERRIDES;
   return MICROPOLISCORE_OBJECT_SHEET_FRAME_COUNT_OVERRIDES[overrideKey] ?? defaultFrameCount;
+}
+
+/**
+ * Resolve source-frame index for one MicropolisCore object strip.
+ * Mirrors runtime frame ownership from `DrawObjects` in `w_sprite.c`.
+ * Difference: MicropolisCore train strips order directional frames differently, so
+ * TypeScript remaps train frame ids while keeping non-train sprites 1:1.
+ */
+function resolveMicropolisCoreObjectSourceFrame({
+  spriteType,
+  runtimeFrame,
+  sourceFrame,
+  frameCount,
+}: Readonly<{
+  spriteType: number;
+  runtimeFrame: number;
+  sourceFrame: number;
+  frameCount: number;
+}>): number | undefined {
+  if (spriteType !== 1) {
+    return sourceFrame < frameCount ? sourceFrame : undefined;
+  }
+
+  const remappedSourceFrame =
+    MICROPOLISCORE_TRAIN_SOURCE_FRAME_BY_RUNTIME_FRAME[
+      runtimeFrame as keyof typeof MICROPOLISCORE_TRAIN_SOURCE_FRAME_BY_RUNTIME_FRAME
+    ];
+  if (remappedSourceFrame === undefined) {
+    return sourceFrame < frameCount ? sourceFrame : undefined;
+  }
+  return remappedSourceFrame < frameCount ? remappedSourceFrame : undefined;
 }
 
 /**

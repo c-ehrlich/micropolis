@@ -242,8 +242,8 @@ describe('map canvas draw-mode selection', () => {
     }
 
     expect(projected.spriteFrameUrl).toBeUndefined();
-    expect(projected.spriteSheetUrl).toContain('micropoliscore-tilesets/futureusa/train');
-    expect(projected.sourceX).toBe(32);
+    expect(projected.spriteSheetUrl).toContain('micropoliscore-tilesets/futureusa/train-alpha');
+    expect(projected.sourceX).toBe(64);
     expect(projected.sourceY).toBe(0);
     expect(projected.sourceWidth).toBe(32);
     expect(projected.sourceHeight).toBe(32);

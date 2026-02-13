@@ -27,9 +27,7 @@ import {
   DEFAULT_MAP_CANVAS_VIEWPORT_HEIGHT_PX,
   DEFAULT_MAP_CANVAS_VIEWPORT_WIDTH_PX,
   getMapCanvasCameraMetrics,
-  isMapCanvasUnpoweredZoneBlinkPhase,
   isMapCanvasZoomWheelGesture,
-  MAP_CANVAS_BLINK_PHASE_SAMPLE_INTERVAL_MS,
   type MapCanvasPanDragState,
   type MapCanvasViewportBounds,
   normalizeMapCanvasWheelDeltaToPixels,
@@ -110,9 +108,6 @@ export function MapCanvas({
   const lastRenderedBlinkUnpoweredZoneCenterRef = useRef<boolean | null>(null);
   const lastRenderedEpochRef = useRef(0);
   const [tileAtlasRenderVersion, setTileAtlasRenderVersion] = useState(0);
-  const [blinkUnpoweredZoneCenter, setBlinkUnpoweredZoneCenter] = useState(() =>
-    isMapCanvasUnpoweredZoneBlinkPhase(Date.now()),
-  );
   const [cameraZoom, setCameraZoom] = useState(1);
   const [cameraOffsetPx, setCameraOffsetPx] = useState<{
     x: number;
@@ -174,26 +169,6 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!mapState.hasSnapshot) {
-      return;
-    }
-    const syncBlinkPhase = (): void => {
-      setBlinkUnpoweredZoneCenter((current) => {
-        const next = isMapCanvasUnpoweredZoneBlinkPhase(Date.now());
-        return current === next ? current : next;
-      });
-    };
-    syncBlinkPhase();
-    const intervalId = window.setInterval(
-      syncBlinkPhase,
-      MAP_CANVAS_BLINK_PHASE_SAMPLE_INTERVAL_MS,
-    );
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [mapState.hasSnapshot]);
-
-  useEffect(() => {
-    if (!mapState.hasSnapshot) {
       queuedMapFrameRef.current = null;
       if (pendingAnimationFrameRef.current !== null) {
         cancelAnimationFrame(pendingAnimationFrameRef.current);
@@ -209,7 +184,7 @@ export function MapCanvas({
       tileSize,
       tileRenderer: {
         baseTileAtlasCanonicalIdentityKey,
-        blinkUnpoweredZoneCenter,
+        blinkUnpoweredZoneCenter: mapState.blinkUnpoweredZoneCenter,
         tileAtlasImagesByCanonicalIdentityKey: tileAtlasImagesByCanonicalIdentityKeyRef.current,
       },
     };
@@ -240,13 +215,7 @@ export function MapCanvas({
       });
       lastRenderedBlinkUnpoweredZoneCenterRef.current = frame.tileRenderer.blinkUnpoweredZoneCenter;
     });
-  }, [
-    baseTileAtlasCanonicalIdentityKey,
-    blinkUnpoweredZoneCenter,
-    mapState,
-    tileAtlasRenderVersion,
-    tileSize,
-  ]);
+  }, [baseTileAtlasCanonicalIdentityKey, mapState, tileAtlasRenderVersion, tileSize]);
 
   useEffect(() => {
     return () => {
