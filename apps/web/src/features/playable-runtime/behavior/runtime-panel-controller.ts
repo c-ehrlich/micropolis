@@ -64,6 +64,56 @@ interface FloatingWindowDragState {
   windowHeight: number;
 }
 
+/**
+ * Raises one floating runtime window above all sibling runtime windows.
+ * Mirrors detached-window raise/focus behavior in `ref/micropolis/res/whead.tcl`.
+ * Parity note: Tk window-manager stacking is represented as explicit `zIndex`
+ * state in the web runtime.
+ */
+export function raiseFloatingWindowToFront(
+  currentWindows: RuntimeFloatingWindowsState,
+  windowId: RuntimeFloatingWindowId,
+): RuntimeFloatingWindowsState {
+  const topZIndex = Math.max(
+    currentWindows.budget.zIndex,
+    currentWindows.evaluation.zIndex,
+    currentWindows.graph.zIndex,
+  );
+  const targetWindow = currentWindows[windowId];
+  if (targetWindow.zIndex >= topZIndex) {
+    return currentWindows;
+  }
+  return {
+    ...currentWindows,
+    [windowId]: {
+      ...targetWindow,
+      zIndex: topZIndex + 1,
+    },
+  };
+}
+
+/**
+ * Opens one floating runtime window and ensures it is frontmost.
+ * Mirrors runtime window open/raise intent in `ref/micropolis/res/whead.tcl`.
+ */
+export function openFloatingWindowInState(
+  currentWindows: RuntimeFloatingWindowsState,
+  windowId: RuntimeFloatingWindowId,
+): RuntimeFloatingWindowsState {
+  const raisedWindows = raiseFloatingWindowToFront(currentWindows, windowId);
+  const targetWindow = raisedWindows[windowId];
+  if (targetWindow.open) {
+    return raisedWindows;
+  }
+  return {
+    ...raisedWindows,
+    [windowId]: {
+      ...targetWindow,
+      open: true,
+    },
+  };
+}
+
 export interface RuntimeLayoutInsets {
   left: number;
   top: number;
@@ -347,33 +397,14 @@ export function useFloatingWindowsState() {
     createInitialRuntimeFloatingWindows(),
   );
   const floatingWindowDragRef = useRef<FloatingWindowDragState | null>(null);
-  const floatingWindowZCounterRef = useRef(30);
 
   const focusFloatingWindow = useCallback((windowId: RuntimeFloatingWindowId): void => {
-    const nextZIndex = floatingWindowZCounterRef.current + 1;
-    floatingWindowZCounterRef.current = nextZIndex;
-    setFloatingWindows((current) => ({
-      ...current,
-      [windowId]: {
-        ...current[windowId],
-        zIndex: nextZIndex,
-      },
-    }));
+    setFloatingWindows((current) => raiseFloatingWindowToFront(current, windowId));
   }, []);
 
-  const openFloatingWindow = useCallback(
-    (windowId: RuntimeFloatingWindowId): void => {
-      focusFloatingWindow(windowId);
-      setFloatingWindows((current) => ({
-        ...current,
-        [windowId]: {
-          ...current[windowId],
-          open: true,
-        },
-      }));
-    },
-    [focusFloatingWindow],
-  );
+  const openFloatingWindow = useCallback((windowId: RuntimeFloatingWindowId): void => {
+    setFloatingWindows((current) => openFloatingWindowInState(current, windowId));
+  }, []);
 
   const closeFloatingWindow = useCallback((windowId: RuntimeFloatingWindowId): void => {
     setFloatingWindows((current) => ({

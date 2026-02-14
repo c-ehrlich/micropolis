@@ -46,7 +46,7 @@ export function RuntimeFloatingWindowsLayer(props: RuntimeFloatingWindowsLayerPr
   } = props;
 
   return (
-    <>
+    <section className="pointer-events-none absolute inset-0 z-9">
       <BudgetWindow
         applyBudgetControlState={applyBudgetControlState}
         budgetActions={budgetActions}
@@ -65,6 +65,6 @@ export function RuntimeFloatingWindowsLayer(props: RuntimeFloatingWindowsLayerPr
         session={session}
         windowActions={windowActions}
       />
-    </>
+    </section>
   );
 }

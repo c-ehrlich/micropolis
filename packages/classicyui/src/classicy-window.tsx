@@ -28,6 +28,8 @@ export interface ClassicyWindowFrameProps extends HTMLAttributes<HTMLElement> {
  * Floating runtime window shell with shared title bar and close control.
  * Mirrors detached budget/evaluation/graph window chrome in `ref/micropolis/res/whead.tcl`.
  * Parity note: this wraps shared frame structure while callers own placement, z-order, and content.
+ * The `classicyWindowActive` class is intentionally omitted because upstream CSS
+ * pins `z-index` with `!important`, which breaks caller-managed stacking order.
  */
 export function ClassicyWindowFrame({
   bodyClassName,
@@ -47,7 +49,7 @@ export function ClassicyWindowFrame({
     <section
       {...windowProps}
       className={clsx(
-        'classicyWindow classicyWindowActive pointer-events-auto absolute grid',
+        'classicyWindow pointer-events-auto absolute grid',
         'border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)]',
         CLASSICY_FLOATING_WINDOW_SHADOW,
         className,
