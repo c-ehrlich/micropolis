@@ -3,10 +3,9 @@ import type { RefObject } from 'react';
 
 import { resolveSimUiToolIconAssetLookup } from '../../../../../../../../packages/sim-assets/src/sim-ui.ts';
 import { PLAYABLE_TOOL_SPECS } from '../../../../../game/runtime/index.ts';
-import { DemandHeadsWidget, GraphPreviewWidget } from '../../runtime-panel-components.tsx';
+import { DemandHeadsWidget } from '../../runtime-panel-components.tsx';
 import {
   CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS,
-  HEAD_GRAPH_MASK_RCI,
   PLAYABLE_TOOL_ICON_URL_BY_BASENAME,
 } from '../runtime-panel-constants.ts';
 import type {
@@ -109,20 +108,6 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
             demandC={session.state.hudState.demandC}
             demandI={session.state.hudState.demandI}
             demandR={session.state.hudState.demandR}
-          />
-        </ClassicyButton>
-        <ClassicyButton
-          onClick={() => {
-            windowActions.openFloatingWindow('graph');
-          }}
-          className={CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS}
-          title="Open Graph Window"
-          type="button"
-        >
-          <GraphPreviewWidget
-            graph={session.state.hudState.graph}
-            mask={HEAD_GRAPH_MASK_RCI}
-            range={10}
           />
         </ClassicyButton>
       </div>
