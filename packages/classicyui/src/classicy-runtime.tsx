@@ -1,6 +1,7 @@
 import { ClassicyAppManagerProvider } from 'classicy';
-import classicyCssText from 'classicy/dist/classicy.css?raw';
 import type { ComponentProps } from 'react';
+
+import classicyCssText from '../node_modules/classicy/dist/classicy.css?raw';
 
 const CLASSICY_STYLE_ELEMENT_ID = 'classicy-runtime-style-sheet';
 

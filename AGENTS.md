@@ -1,4 +1,4 @@
-- make sure to run `pnpm typecheck`, `pnpm lint`, and `pnpm format` when you're done. don't run them after every single step, just before you cede control back to me.
+- make sure to run `pnpm typecheck`, `pnpm lint`, and `pnpm format` when you're done. don't run them after every single step, just before you cede control back to me. you may skip this if there have not been any code changes.
 - if i asked you to make some changes, and you had already opened a PR, push these changes to the PR and again give me a link to visit the pr on github.
 - reminder that the code we're porting from is in C, so some aspects of math will be different (for example division of two integers), be sure to reference source files where necessary to check what the original behaviour is and implement something that will behave the same in typescript
 - if you get type errors related to undefined / unchecked index, look at the `assertDefined` function
