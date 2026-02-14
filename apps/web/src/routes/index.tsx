@@ -17,26 +17,23 @@ import {
   getThemeVars,
 } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
-import {
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import micropolisRunningIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropolisg.png';
 import micropolisPausedIndicatorUrl from '../../../../packages/sim-assets/generated-images/images/micropoliss.png';
 import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
 import {
   downloadCityBytes,
-  formatRuntimePhaseStatus,
-  nextCommandId,
   normalizeCitySaveFileName,
   triggerRouteDisasterControl,
 } from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
+import {
+  type RuntimeFloatingWindowId,
+  useFloatingWindowsState,
+  useRuntimeLayoutInsets,
+  useRuntimeSession,
+  useRuntimeUiState,
+} from '../features/playable-runtime/behavior/runtime-panel-controller.ts';
 import {
   DemandHeadsWidget,
   GraphPreviewWidget,
@@ -44,31 +41,20 @@ import {
   MessageFeed,
   NoticePanel,
 } from '../features/playable-runtime/presentation/runtime-panel-components.tsx';
-import { createMicropolisGameplayAudioConsumer } from '../game/audio/micropolis-gameplay-audio-consumer.ts';
-import { createMicropolisGameplaySoundPlaybackPolicy } from '../game/audio/micropolis-gameplay-sound-playback-policy.ts';
-import { routeMicropolisGameplaySoundDeltas } from '../game/audio/micropolis-runtime-envelope-sound-routing.ts';
-import { createCoalescedStateDispatcher } from '../game/runtime/frame-coalescer.ts';
 import {
-  coalesceQueuedRuntimeMapState,
-  createWebHostRuntime,
   getPlayableToolSpec,
   PLAYABLE_TOOL_SPECS,
   type PlayableSimSpeed,
-  type PlayableToolName,
   type WebRuntimeState,
 } from '../game/runtime/index.ts';
 import {
-  createPlayableRuntimeHost,
+  type CityExportPayload,
   PLAYABLE_DISASTER_CHOICES,
   PLAYABLE_SCENARIO_CHOICES,
-  readCityExportPayload,
 } from '../game/runtime/playable-runtime-host.ts';
 import { type PlayableGameLevel } from '../game/runtime/protocol.ts';
 import { MapCanvas } from '../presentation/map/map-canvas.tsx';
-import {
-  RUNTIME_TILESET_CHOICES,
-  type RuntimeTilesetName,
-} from '../presentation/map/tile-sprite-atlas.ts';
+import { type RuntimeTilesetName } from '../presentation/map/tile-sprite-atlas.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -88,28 +74,6 @@ const PLAYABLE_TOOL_ICON_URL_BY_BASENAME = new Map<string, string>(
     return [basenameMatch?.[1] ?? modulePath, moduleUrl];
   }),
 );
-type TopMenubarSection = 'micropolis' | 'windows' | 'disasters' | 'settings';
-type GameDialogKind = 'new' | 'save' | 'load' | 'scenario';
-type RuntimeFloatingWindowId = 'budget' | 'evaluation' | 'graph';
-
-interface RuntimeFloatingWindowState {
-  open: boolean;
-  x: number;
-  y: number;
-  zIndex: number;
-}
-
-interface RuntimeFloatingWindowsState {
-  budget: RuntimeFloatingWindowState;
-  evaluation: RuntimeFloatingWindowState;
-  graph: RuntimeFloatingWindowState;
-}
-
-interface FloatingWindowDragState {
-  windowId: RuntimeFloatingWindowId;
-  offsetX: number;
-  offsetY: number;
-}
 const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
   id: PlayableGameLevel;
   label: 'Easy' | 'Medium' | 'Hard';
@@ -136,18 +100,6 @@ const CLASSICY_MENU_BUTTON_ACTIVE_CLASS = '!text-[var(--color-white)] !bg-[var(-
 const CLASSICY_FLOATING_BUDGET_ROW_CLASS = 'flex items-center justify-between gap-2';
 const CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS =
   '!m-0 w-full max-w-full !min-w-0 box-border !p-0 !border-0 !bg-transparent !shadow-none';
-
-/**
- * Creates initial floating-window positions for budget/evaluation/graph windows.
- * Mirrors independent top-level window placement in `ref/micropolis/res/whead.tcl`.
- */
-function createInitialRuntimeFloatingWindows(): RuntimeFloatingWindowsState {
-  return {
-    budget: { open: false, x: 140, y: 76, zIndex: 20 },
-    evaluation: { open: false, x: 190, y: 116, zIndex: 21 },
-    graph: { open: false, x: 240, y: 156, zIndex: 22 },
-  };
-}
 
 /**
  * Formats HUD budget amounts with a C-style signed currency prefix.
@@ -191,234 +143,141 @@ function HomePage() {
  * with the full authoritative map/HUD/control projection path.
  */
 function RuntimePanel() {
-  const host = useMemo(() => createPlayableRuntimeHost(), []);
-  const runtime = useMemo(() => createWebHostRuntime({ host }), [host]);
-  const gameplayAudioConsumer = useMemo(() => createMicropolisGameplayAudioConsumer(), []);
-  const gameplaySoundPlaybackPolicy = useMemo(
-    () => createMicropolisGameplaySoundPlaybackPolicy({ mode: 'applied-only' }),
-    [],
+  const {
+    activeTool,
+    applyCityExportPayload,
+    cityIoError,
+    dismissedNoticeSignature,
+    gameDialog,
+    graphMask,
+    graphRange,
+    hasStartedPlayableSession,
+    isBrandDialogOpen,
+    isLoadingCityFile,
+    isSpeedMenuOpen,
+    lastSaveStatus,
+    openMenubarSection,
+    pendingLoadFile,
+    runtimeTilesetMenuChoices,
+    saveFileName,
+    saveFileNameDraft,
+    selectedGameLevel,
+    selectedRuntimeTileset,
+    selectedScenarioId,
+    setActiveTool,
+    setCityIoError,
+    setDismissedNoticeSignature,
+    setGameDialog,
+    setGraphMask,
+    setGraphRange,
+    setHasStartedPlayableSession,
+    setIsBrandDialogOpen,
+    setIsLoadingCityFile,
+    setIsSpeedMenuOpen,
+    setLastSaveStatus,
+    setOpenMenubarSection,
+    setPendingLoadFile,
+    setSaveFileName,
+    setSaveFileNameDraft,
+    setSelectedGameLevel,
+    setSelectedRuntimeTileset,
+    setSelectedScenarioId,
+  } = useRuntimeUiState();
+  const onCityExport = useCallback(
+    (payload: CityExportPayload): void => {
+      downloadCityBytes(payload.fileName, payload.cityBytes);
+      applyCityExportPayload(payload);
+    },
+    [applyCityExportPayload],
   );
-  const [state, setState] = useState<WebRuntimeState>(() => runtime.getState());
-  const [isGameplayMuted, setIsGameplayMuted] = useState(false);
-  const isGameplayMutedRef = useRef(isGameplayMuted);
-  /**
-   * Coalesces host-driven runtime projections to one browser paint commit.
-   * Mirrors Micropolis cadence where map/head updates are consumed on UI update
-   * boundaries (`sim_update_maps` / `DoUpdateHeads`) rather than every internal
-   * simulation mutation (`ref/micropolis/src/sim/sim.c`, `w_update.c`).
-   */
-  const stateCommitDispatcher = useMemo(
-    () =>
-      createCoalescedStateDispatcher<WebRuntimeState>({
-        scheduleFrame: (flush) => requestAnimationFrame(flush),
-        cancelFrame: (frameHandle) => cancelAnimationFrame(frameHandle),
-        commitState: (nextState) => {
-          setState(nextState);
-        },
-        coalesceQueuedState: (queuedState, nextState) => {
-          return {
-            ...nextState,
-            mapState: coalesceQueuedRuntimeMapState(queuedState.mapState, nextState.mapState),
-          };
-        },
-      }),
-    [],
-  );
-  const [activeTool, setActiveTool] = useState<PlayableToolName>('road');
-  const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
-    PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
-  );
-  const [selectedGameLevel, setSelectedGameLevel] = useState<PlayableGameLevel>(0);
-  const [hasStartedPlayableSession, setHasStartedPlayableSession] = useState(false);
-  const [saveFileName, setSaveFileName] = useState('newcity.cty');
-  const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
-  const [cityIoError, setCityIoError] = useState<string>('');
-  const [_disasterStatus, setDisasterStatus] = useState<string>('');
-  const [openMenubarSection, setOpenMenubarSection] = useState<TopMenubarSection | null>(null);
-  const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
-  const [floatingWindows, setFloatingWindows] = useState<RuntimeFloatingWindowsState>(() =>
-    createInitialRuntimeFloatingWindows(),
-  );
-  const [graphRange, setGraphRange] = useState<10 | 120>(10);
-  const [graphMask, setGraphMask] = useState(HEAD_GRAPH_MASK_RCI);
-  const [floatingWindowZCounter, setFloatingWindowZCounter] = useState(30);
-  const floatingWindowDragRef = useRef<FloatingWindowDragState | null>(null);
+  const {
+    controlsDisabled,
+    host,
+    isGameplayMuted,
+    isSimulationRunning,
+    reconnect,
+    reconnectDisabled,
+    requestResyncSnapshot,
+    resyncDisabled,
+    runtimePhaseStatus,
+    sendCityIoCommand,
+    sendCityLifecycleCommand,
+    sendScenarioCommand,
+    sendSimControlCommand,
+    sendToolCommand,
+    state,
+    toggleGameplayMuted,
+  } = useRuntimeSession({ onCityExport });
+  const {
+    closeFloatingWindow,
+    floatingWindows,
+    focusFloatingWindow,
+    openFloatingWindow: openFloatingWindowBase,
+    startFloatingWindowDrag,
+  } = useFloatingWindowsState();
   const budgetWindowOriginalStateRef = useRef({ ...state.hudState.budget });
-  const [gameDialog, setGameDialog] = useState<GameDialogKind | null>(null);
-  const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false);
-  const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
-  const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
-  const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
-  const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
-  const [layoutInsets, setLayoutInsets] = useState({ left: 96, top: 34 });
-  const [selectedRuntimeTileset, setSelectedRuntimeTileset] =
-    useState<RuntimeTilesetName>('classic');
-  // Temporarily hide `ancientasia` because upstream tileset files are incorrect.
-  // Tracking: https://github.com/SimHacker/MicropolisCore/issues/9
-  const runtimeTilesetMenuChoices = useMemo(
-    () => RUNTIME_TILESET_CHOICES.filter((choice) => choice.name !== 'ancientasia'),
-    [],
-  );
   const menubarRef = useRef<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const speedControlRef = useRef<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
-  const commandCounter = useRef(1);
+  const layoutInsets = useRuntimeLayoutInsets({ menubarRef, sidebarRef });
 
-  /**
-   * Raises one floating window to the top of the local z-order stack.
-   * Mirrors front-window focus behavior for `budget/evaluation/graph` windows in
-   * `ref/micropolis/res/whead.tcl`.
-   */
-  const focusFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
-    const nextZIndex = floatingWindowZCounter + 1;
-    setFloatingWindowZCounter(nextZIndex);
-    setFloatingWindows((current) => ({
-      ...current,
-      [windowId]: {
-        ...current[windowId],
-        zIndex: nextZIndex,
-      },
-    }));
-  };
-
-  /**
-   * Opens one floating runtime window and optionally runs menu-open side effects.
-   * Mirrors menu-triggered window creation in `ref/micropolis/res/whead.tcl`.
-   */
-  const openFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
-    focusFloatingWindow(windowId);
-    setFloatingWindows((current) => ({
-      ...current,
-      [windowId]: {
-        ...current[windowId],
-        open: true,
-      },
-    }));
-    if (windowId === 'budget') {
+  const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
+  const openFloatingWindow = useCallback(
+    (windowId: RuntimeFloatingWindowId): void => {
+      openFloatingWindowBase(windowId);
+      if (windowId !== 'budget') {
+        return;
+      }
       budgetWindowOriginalStateRef.current = { ...state.hudState.budget };
       if (!sessionControlsDisabled) {
-        runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+        sendSimControlCommand({
           kind: 'sim-control',
           control: 'open-budget-from-menu',
         });
       }
-    }
-  };
-
-  /**
-   * Closes one floating runtime window.
-   * Mirrors user-dismissed auxiliary windows in `ref/micropolis/res/whead.tcl`.
-   */
-  const closeFloatingWindow = (windowId: RuntimeFloatingWindowId): void => {
-    setFloatingWindows((current) => ({
-      ...current,
-      [windowId]: {
-        ...current[windowId],
-        open: false,
-      },
-    }));
-  };
-
-  /**
-   * Starts drag movement for one floating runtime window.
-   * Mirrors window title-bar drag behavior in classic Micropolis Tk windows.
-   */
-  const startFloatingWindowDrag = (
-    windowId: RuntimeFloatingWindowId,
-    event: ReactPointerEvent<HTMLElement>,
-  ): void => {
-    const windowElement = event.currentTarget.closest<HTMLElement>('[data-floating-window]');
-    if (windowElement === null) {
-      return;
-    }
-    const bounds = windowElement.getBoundingClientRect();
-    floatingWindowDragRef.current = {
-      windowId,
-      offsetX: event.clientX - bounds.left,
-      offsetY: event.clientY - bounds.top,
-    };
-    focusFloatingWindow(windowId);
-  };
+    },
+    [openFloatingWindowBase, sendSimControlCommand, sessionControlsDisabled, state.hudState.budget],
+  );
 
   /**
    * Applies one full budget control state to authoritative sim runtime.
    * Mirrors `BudgetReset` restore semantics in `ref/micropolis/res/micropolis.tcl`.
    */
-  const applyBudgetControlState = (nextBudgetState: typeof state.hudState.budget): void => {
-    if (sessionControlsDisabled) {
-      return;
-    }
-    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-      kind: 'sim-control',
-      control: 'set-tax-rate',
-      taxRate: nextBudgetState.taxRate,
-    });
-    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-      kind: 'sim-control',
-      control: 'set-road-percent',
-      percent: nextBudgetState.roadPercent,
-    });
-    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-      kind: 'sim-control',
-      control: 'set-fire-percent',
-      percent: nextBudgetState.firePercent,
-    });
-    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-      kind: 'sim-control',
-      control: 'set-police-percent',
-      percent: nextBudgetState.policePercent,
-    });
-    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
-      kind: 'sim-control',
-      control: 'set-auto-budget',
-      enabled: nextBudgetState.autoBudget,
-    });
-  };
-
-  useEffect(() => {
-    isGameplayMutedRef.current = isGameplayMuted;
-  }, [isGameplayMuted]);
-
-  useEffect(() => {
-    const unsubscribe = runtime.subscribe((event) => {
-      stateCommitDispatcher.queue(event.state);
-
-      const runtimeEnvelope = event.envelope;
-      if (runtimeEnvelope === undefined) {
+  const applyBudgetControlState = useCallback(
+    (nextBudgetState: WebRuntimeState['hudState']['budget']): void => {
+      if (sessionControlsDisabled) {
         return;
       }
-
-      routeMicropolisGameplaySoundDeltas({
-        envelope: runtimeEnvelope,
-        reducerOutcome: event.outcome,
-        userSoundOn: event.state.hudState.options.userSoundOn && !isGameplayMutedRef.current,
-        gameplayAudioConsumer,
-        gameplaySoundPlaybackPolicy,
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-tax-rate',
+        taxRate: nextBudgetState.taxRate,
       });
-
-      if (runtimeEnvelope.kind !== 'patch') {
-        return;
-      }
-
-      const savePayload = readCityExportPayload(runtimeEnvelope.payload);
-      if (savePayload !== null) {
-        downloadCityBytes(savePayload.fileName, savePayload.cityBytes);
-        setSaveFileName(savePayload.fileName);
-        setLastSaveStatus(`Saved ${savePayload.cityName} -> ${savePayload.fileName}`);
-        setCityIoError('');
-      }
-    });
-
-    runtime.connect();
-    return () => {
-      unsubscribe();
-      stateCommitDispatcher.dispose();
-      runtime.disconnect();
-      gameplayAudioConsumer.dispose();
-    };
-  }, [runtime, stateCommitDispatcher, gameplayAudioConsumer, gameplaySoundPlaybackPolicy]);
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-road-percent',
+        percent: nextBudgetState.roadPercent,
+      });
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-fire-percent',
+        percent: nextBudgetState.firePercent,
+      });
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-police-percent',
+        percent: nextBudgetState.policePercent,
+      });
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-auto-budget',
+        enabled: nextBudgetState.autoBudget,
+      });
+    },
+    [sendSimControlCommand, sessionControlsDisabled],
+  );
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -455,58 +314,16 @@ function RuntimePanel() {
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [openMenubarSection, isSpeedMenuOpen]);
+  }, [
+    openMenubarSection,
+    isSpeedMenuOpen,
+    setGameDialog,
+    setIsBrandDialogOpen,
+    setIsSpeedMenuOpen,
+    setOpenMenubarSection,
+  ]);
 
-  useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      const dragState = floatingWindowDragRef.current;
-      if (dragState === null) {
-        return;
-      }
-
-      const unclampedX = Math.trunc(event.clientX - dragState.offsetX);
-      const unclampedY = Math.trunc(event.clientY - dragState.offsetY);
-      const maxX = Math.max(0, window.innerWidth - 220);
-      const maxY = Math.max(0, window.innerHeight - 120);
-      const clampedX = Math.max(0, Math.min(unclampedX, maxX));
-      const clampedY = Math.max(0, Math.min(unclampedY, maxY));
-      setFloatingWindows((current) => ({
-        ...current,
-        [dragState.windowId]: {
-          ...current[dragState.windowId],
-          x: clampedX,
-          y: clampedY,
-        },
-      }));
-    };
-
-    const stopDrag = () => {
-      floatingWindowDragRef.current = null;
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', stopDrag);
-    window.addEventListener('pointercancel', stopDrag);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopDrag);
-      window.removeEventListener('pointercancel', stopDrag);
-    };
-  }, []);
-
-  const controlsDisabled = state.phase !== 'ready';
-  const sessionControlsDisabled = controlsDisabled || !hasStartedPlayableSession;
-  const reconnectDisabled =
-    state.phase === 'connecting' || state.phase === 'negotiating' || state.phase === 'reconnecting';
-  const resyncDisabled =
-    state.phase === 'disconnected' ||
-    state.phase === 'connecting' ||
-    state.phase === 'negotiating' ||
-    state.phase === 'reconnecting' ||
-    state.phase === 'failed';
   const activeToolSpec = getPlayableToolSpec(activeTool);
-  const isSimulationRunning = state.hudState.speed > 0;
-  const runtimePhaseStatus = formatRuntimePhaseStatus(state.phase);
   const activeNotice = state.hudState.notice;
   const activeNoticeSignature =
     activeNotice === null ? null : `${activeNotice.serverSeq}:${activeNotice.id}`;
@@ -553,45 +370,7 @@ function RuntimePanel() {
     setHasStartedPlayableSession(false);
     setOpenMenubarSection(null);
     setGameDialog('scenario');
-  }, [state.hudState.notice]);
-
-  useLayoutEffect(() => {
-    const menubarElement = menubarRef.current;
-    const sidebarElement = sidebarRef.current;
-    if (
-      menubarElement === null ||
-      sidebarElement === null ||
-      typeof ResizeObserver === 'undefined'
-    ) {
-      return;
-    }
-
-    const updateInsets = () => {
-      const nextTopInset = Math.ceil(menubarElement.getBoundingClientRect().height);
-      const nextLeftInset = Math.ceil(sidebarElement.getBoundingClientRect().width);
-      setLayoutInsets((currentInsets) => {
-        if (currentInsets.top === nextTopInset && currentInsets.left === nextLeftInset) {
-          return currentInsets;
-        }
-        return { top: nextTopInset, left: nextLeftInset };
-      });
-    };
-
-    updateInsets();
-
-    const observer = new ResizeObserver(() => {
-      updateInsets();
-    });
-    observer.observe(menubarElement);
-    observer.observe(sidebarElement);
-    window.addEventListener('resize', updateInsets);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', updateInsets);
-    };
-  }, []);
-
+  }, [setGameDialog, setHasStartedPlayableSession, setOpenMenubarSection, state.hudState.notice]);
   return (
     <section
       className={`relative h-full w-full overflow-hidden [--runtime-top-bar-padding-y:4px] [--runtime-top-bar-height:calc(var(--window-control-size)+(var(--runtime-top-bar-padding-y)*2))] [--runtime-sidebar-width:94px] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] ${
@@ -611,14 +390,7 @@ function RuntimePanel() {
             if (sessionControlsDisabled) {
               return;
             }
-
-            const commandId = nextCommandId(commandCounter, 'tool');
-            runtime.sendCommand(commandId, {
-              kind: 'tool',
-              tool: activeTool,
-              x,
-              y,
-            });
+            sendToolCommand(activeTool, x, y);
           }}
           pendingTools={state.pendingTools}
           realtimeObjects={state.realtimeState.objects}
@@ -769,7 +541,7 @@ function RuntimePanel() {
                     key={choice.id}
                     disabled={sessionControlsDisabled}
                     onClick={() => {
-                      setDisasterStatus(triggerRouteDisasterControl(host, choice.id, choice.label));
+                      triggerRouteDisasterControl(host, choice.id, choice.label);
                       setOpenMenubarSection(null);
                     }}
                     type="button"
@@ -831,7 +603,7 @@ function RuntimePanel() {
                   <ClassicyMenuActionButton
                     disabled={reconnectDisabled}
                     onClick={() => {
-                      runtime.reconnect();
+                      reconnect();
                       setCityIoError('');
                       setLastSaveStatus('');
                     }}
@@ -842,7 +614,7 @@ function RuntimePanel() {
                   <ClassicyMenuActionButton
                     disabled={resyncDisabled}
                     onClick={() => {
-                      runtime.requestSnapshot('resync');
+                      requestResyncSnapshot();
                     }}
                     type="button"
                   >
@@ -871,7 +643,7 @@ function RuntimePanel() {
           <ClassicyButton
             disabled={sessionControlsDisabled}
             onClick={() => {
-              runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+              sendSimControlCommand({
                 kind: 'sim-control',
                 control: isSimulationRunning ? 'pause' : 'play',
               });
@@ -905,7 +677,7 @@ function RuntimePanel() {
                     className="px-2 py-1 text-left"
                     disabled={sessionControlsDisabled}
                     onClick={() => {
-                      runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                      sendSimControlCommand({
                         kind: 'sim-control',
                         control: 'set-speed',
                         speed: speed as PlayableSimSpeed,
@@ -923,13 +695,7 @@ function RuntimePanel() {
           <ClassicyButton
             aria-label={isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
             onClick={() => {
-              setIsGameplayMuted((current) => {
-                const nextMuted = !current;
-                if (nextMuted) {
-                  gameplayAudioConsumer.dispose();
-                }
-                return nextMuted;
-              });
+              toggleGameplayMuted();
             }}
             active={isGameplayMuted}
             activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
@@ -1188,7 +954,7 @@ function RuntimePanel() {
                   max={100}
                   min={0}
                   onChange={(event) => {
-                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    sendSimControlCommand({
                       kind: 'sim-control',
                       control: 'set-road-percent',
                       percent: Math.trunc(Number(event.currentTarget.value)),
@@ -1208,7 +974,7 @@ function RuntimePanel() {
                   max={100}
                   min={0}
                   onChange={(event) => {
-                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    sendSimControlCommand({
                       kind: 'sim-control',
                       control: 'set-fire-percent',
                       percent: Math.trunc(Number(event.currentTarget.value)),
@@ -1228,7 +994,7 @@ function RuntimePanel() {
                   max={100}
                   min={0}
                   onChange={(event) => {
-                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    sendSimControlCommand({
                       kind: 'sim-control',
                       control: 'set-police-percent',
                       percent: Math.trunc(Number(event.currentTarget.value)),
@@ -1244,7 +1010,7 @@ function RuntimePanel() {
                   max={20}
                   min={0}
                   onChange={(event) => {
-                    runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                    sendSimControlCommand({
                       kind: 'sim-control',
                       control: 'set-tax-rate',
                       taxRate: Math.trunc(Number(event.currentTarget.value)),
@@ -1259,7 +1025,7 @@ function RuntimePanel() {
             <ClassicyButton
               disabled={sessionControlsDisabled}
               onClick={() => {
-                runtime.sendCommand(nextCommandId(commandCounter, 'sim'), {
+                sendSimControlCommand({
                   kind: 'sim-control',
                   control: 'set-auto-budget',
                   enabled: !state.hudState.budget.autoBudget,
@@ -1599,7 +1365,7 @@ function RuntimePanel() {
                   }
                   const fileName = normalizeCitySaveFileName(saveFileNameDraft);
                   setSaveFileName(fileName);
-                  runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                  sendCityIoCommand({
                     kind: 'city-io',
                     action: 'save-city',
                     fileName,
@@ -1676,7 +1442,7 @@ function RuntimePanel() {
                     onClick={() => {
                       setHasStartedPlayableSession(true);
                       setSaveFileName('newcity.cty');
-                      runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                      sendCityLifecycleCommand({
                         kind: 'city-lifecycle',
                         action: 'new-city',
                         gameLevel: selectedGameLevel,
@@ -1721,7 +1487,7 @@ function RuntimePanel() {
                         const cityBytes = new Uint8Array(await pendingLoadFile.arrayBuffer());
                         setHasStartedPlayableSession(true);
                         setSaveFileName(pendingLoadFile.name);
-                        runtime.sendCommand(nextCommandId(commandCounter, 'city'), {
+                        sendCityIoCommand({
                           kind: 'city-io',
                           action: 'load-city',
                           fileName: pendingLoadFile.name,
@@ -1815,7 +1581,7 @@ function RuntimePanel() {
                       if (scenario !== undefined) {
                         setSaveFileName(`${scenario.fileName}.cty`);
                       }
-                      runtime.sendCommand(nextCommandId(commandCounter, 'scenario'), {
+                      sendScenarioCommand({
                         kind: 'scenario',
                         action: 'load-scenario',
                         scenarioId: selectedScenarioId,
