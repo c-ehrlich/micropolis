@@ -2,11 +2,13 @@ import { ClassicyButton, ClassicyPanelTitle, ClassicySelect } from '@city/classi
 
 import { PLAYABLE_SCENARIO_CHOICES } from '../../../../../game/runtime/playable-runtime-host.ts';
 import { PLAYABLE_GAME_LEVEL_CHOICES } from '../runtime-panel-constants.ts';
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface ScenarioDialogProps {
-  session: RuntimeSessionController;
-  ui: RuntimeUiController;
+  actions: RuntimePanelActions;
+  controlsDisabled: boolean;
+  selectedGameLevel: RuntimeUiController['selectedGameLevel'];
+  selectedScenarioId: RuntimeUiController['selectedScenarioId'];
 }
 
 /**
@@ -14,7 +16,7 @@ interface ScenarioDialogProps {
  * Mirrors scenario startup controls in `ref/micropolis/res/micropolis.tcl`.
  */
 export function ScenarioDialog(props: ScenarioDialogProps) {
-  const { session, ui } = props;
+  const { actions, controlsDisabled, selectedGameLevel, selectedScenarioId } = props;
 
   return (
     <section className="grid gap-2.5">
@@ -24,11 +26,11 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
         <ClassicySelect
           autoFocus
           className="px-2 py-1"
-          disabled={session.controlsDisabled}
+          disabled={controlsDisabled}
           onChange={(event) => {
-            ui.setSelectedScenarioId(Number.parseInt(event.target.value, 10));
+            actions.selectScenario(Number.parseInt(event.target.value, 10));
           }}
-          value={ui.selectedScenarioId}
+          value={selectedScenarioId}
         >
           {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
             <option key={scenario.id} value={scenario.id}>
@@ -41,14 +43,14 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
         Difficulty
         <ClassicySelect
           className="px-2 py-1"
-          disabled={session.controlsDisabled}
+          disabled={controlsDisabled}
           onChange={(event) => {
             const level = Number.parseInt(event.target.value, 10);
             if (level === 0 || level === 1 || level === 2) {
-              ui.setSelectedGameLevel(level);
+              actions.setGameLevel(level);
             }
           }}
-          value={ui.selectedGameLevel}
+          value={selectedGameLevel}
         >
           {PLAYABLE_GAME_LEVEL_CHOICES.map((choice) => (
             <option key={choice.id} value={choice.id}>
@@ -60,29 +62,16 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            ui.setGameDialog(null);
+            actions.closeGameDialog();
           }}
           type="button"
         >
           Cancel
         </ClassicyButton>
         <ClassicyButton
-          disabled={session.controlsDisabled}
+          disabled={controlsDisabled}
           onClick={() => {
-            ui.setHasStartedPlayableSession(true);
-            const scenario = PLAYABLE_SCENARIO_CHOICES.find(
-              (entry) => entry.id === ui.selectedScenarioId,
-            );
-            if (scenario !== undefined) {
-              ui.setSaveFileName(`${scenario.fileName}.cty`);
-            }
-            session.sendScenarioCommand({
-              kind: 'scenario',
-              action: 'load-scenario',
-              scenarioId: ui.selectedScenarioId,
-              gameLevel: ui.selectedGameLevel,
-            });
-            ui.setGameDialog(null);
+            actions.startScenario();
           }}
           type="button"
         >

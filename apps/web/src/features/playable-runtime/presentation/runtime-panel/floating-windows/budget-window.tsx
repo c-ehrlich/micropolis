@@ -9,10 +9,12 @@ import {
 import type {
   RuntimeBudgetState,
   RuntimeFloatingWindowsController,
+  RuntimePanelActions,
   RuntimeSessionController,
 } from '../runtime-panel-types.ts';
 
 interface BudgetWindowProps {
+  actions: RuntimePanelActions;
   applyBudgetControlState: (nextBudgetState: RuntimeBudgetState) => void;
   budgetWindowOriginalStateRef: MutableRefObject<RuntimeBudgetState>;
   floating: RuntimeFloatingWindowsController;
@@ -26,6 +28,7 @@ interface BudgetWindowProps {
  */
 export function BudgetWindow(props: BudgetWindowProps) {
   const {
+    actions,
     applyBudgetControlState,
     budgetWindowOriginalStateRef,
     floating,
@@ -43,13 +46,13 @@ export function BudgetWindow(props: BudgetWindowProps) {
       bodyClassName="grid gap-2 p-2 text-xs"
       data-floating-window="budget"
       onClose={() => {
-        floating.closeFloatingWindow('budget');
+        actions.closeFloatingWindow('budget');
       }}
       onHeaderPointerDown={(event) => {
-        floating.startFloatingWindowDrag('budget', event);
+        actions.startFloatingWindowDrag('budget', event);
       }}
       onPointerDown={() => {
-        floating.focusFloatingWindow('budget');
+        actions.focusFloatingWindow('budget');
       }}
       className="min-w-88 max-w-[min(520px,calc(100vw-12px))]"
       style={{
@@ -94,11 +97,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                session.sendSimControlCommand({
-                  kind: 'sim-control',
-                  control: 'set-road-percent',
-                  percent: Math.trunc(Number(event.currentTarget.value)),
-                });
+                actions.setBudgetRoadPercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.roadPercent}
             />
@@ -114,11 +113,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                session.sendSimControlCommand({
-                  kind: 'sim-control',
-                  control: 'set-fire-percent',
-                  percent: Math.trunc(Number(event.currentTarget.value)),
-                });
+                actions.setBudgetFirePercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.firePercent}
             />
@@ -134,11 +129,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                session.sendSimControlCommand({
-                  kind: 'sim-control',
-                  control: 'set-police-percent',
-                  percent: Math.trunc(Number(event.currentTarget.value)),
-                });
+                actions.setBudgetPolicePercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.policePercent}
             />
@@ -150,11 +141,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={20}
               min={0}
               onChange={(event) => {
-                session.sendSimControlCommand({
-                  kind: 'sim-control',
-                  control: 'set-tax-rate',
-                  taxRate: Math.trunc(Number(event.currentTarget.value)),
-                });
+                actions.setBudgetTaxRate(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.taxRate}
             />
@@ -165,11 +152,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
         <ClassicyButton
           disabled={sessionControlsDisabled}
           onClick={() => {
-            session.sendSimControlCommand({
-              kind: 'sim-control',
-              control: 'set-auto-budget',
-              enabled: !session.state.hudState.budget.autoBudget,
-            });
+            actions.setBudgetAuto(!session.state.hudState.budget.autoBudget);
           }}
           type="button"
         >
@@ -178,7 +161,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
         <div className="flex flex-wrap justify-end gap-2">
           <ClassicyButton
             onClick={() => {
-              floating.closeFloatingWindow('budget');
+              actions.closeFloatingWindow('budget');
             }}
             type="button"
           >
@@ -197,7 +180,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
             disabled={sessionControlsDisabled}
             onClick={() => {
               applyBudgetControlState(budgetWindowOriginalStateRef.current);
-              floating.closeFloatingWindow('budget');
+              actions.closeFloatingWindow('budget');
             }}
             type="button"
           >

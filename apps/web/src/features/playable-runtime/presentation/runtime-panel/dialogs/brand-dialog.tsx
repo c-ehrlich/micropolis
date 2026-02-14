@@ -5,10 +5,11 @@ import {
   ClassicyPanelTitle,
 } from '@city/classicyui';
 
-import type { RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions } from '../runtime-panel-types.ts';
 
 interface RuntimeBrandDialogProps {
-  ui: RuntimeUiController;
+  actions: RuntimePanelActions;
+  isOpen: boolean;
 }
 
 /**
@@ -16,14 +17,14 @@ interface RuntimeBrandDialogProps {
  * No direct Micropolis C equivalent; this is web-only metadata and credits UI.
  */
 export function RuntimeBrandDialog(props: RuntimeBrandDialogProps) {
-  if (!props.ui.isBrandDialogOpen) {
+  if (!props.isOpen) {
     return null;
   }
 
   return (
     <ClassicyDialogBackdrop
       onClick={() => {
-        props.ui.setIsBrandDialogOpen(false);
+        props.actions.closeBrandDialog();
       }}
     >
       <ClassicyDialogPanel
@@ -73,7 +74,7 @@ export function RuntimeBrandDialog(props: RuntimeBrandDialogProps) {
         <div className="flex justify-end">
           <ClassicyButton
             onClick={() => {
-              props.ui.setIsBrandDialogOpen(false);
+              props.actions.closeBrandDialog();
             }}
             type="button"
           >

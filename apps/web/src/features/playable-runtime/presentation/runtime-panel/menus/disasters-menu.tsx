@@ -1,16 +1,15 @@
 import { ClassicyMenuItemButton } from '@city/classicyui';
 
 import { PLAYABLE_DISASTER_CHOICES } from '../../../../../game/runtime/playable-runtime-host.ts';
-import { triggerRouteDisasterControl } from '../../../behavior/runtime-panel-behavior.ts';
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface DisastersMenuProps {
+  actions: RuntimePanelActions;
   buttonClassName: string;
+  openMenubarSection: RuntimeUiController['openMenubarSection'];
   panelClassName: string;
-  session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
-  ui: RuntimeUiController;
 }
 
 /**
@@ -18,15 +17,15 @@ interface DisastersMenuProps {
  * Mirrors disaster-menu command entries in `ref/micropolis/res/whead.tcl`.
  */
 export function DisastersMenu(props: DisastersMenuProps) {
-  const { buttonClassName, panelClassName, session, sessionControlsDisabled, ui } = props;
+  const { actions, buttonClassName, openMenubarSection, panelClassName, sessionControlsDisabled } =
+    props;
   return (
     <RuntimeTopMenuShell
       buttonClassName={buttonClassName}
-      isOpen={ui.openMenubarSection === 'disasters'}
+      isOpen={openMenubarSection === 'disasters'}
       label="Disasters"
       onToggle={() => {
-        ui.setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
-        ui.setIsSpeedMenuOpen(false);
+        actions.toggleMenu('disasters');
       }}
       panelClassName={`${panelClassName} min-w-51 gap-1`}
     >
@@ -35,8 +34,7 @@ export function DisastersMenu(props: DisastersMenuProps) {
           key={choice.id}
           disabled={sessionControlsDisabled}
           onClick={() => {
-            triggerRouteDisasterControl(session.host, choice.id, choice.label);
-            ui.setOpenMenubarSection(null);
+            actions.triggerDisaster(choice.id, choice.label);
           }}
           type="button"
         >

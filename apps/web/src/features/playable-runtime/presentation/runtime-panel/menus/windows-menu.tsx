@@ -1,13 +1,13 @@
 import { ClassicyMenuItemButton } from '@city/classicyui';
 
-import type { RuntimeOpenFloatingWindow, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface WindowsMenuProps {
+  actions: RuntimePanelActions;
   buttonClassName: string;
-  openFloatingWindow: RuntimeOpenFloatingWindow;
+  openMenubarSection: RuntimeUiController['openMenubarSection'];
   panelClassName: string;
-  ui: RuntimeUiController;
 }
 
 /**
@@ -15,22 +15,21 @@ interface WindowsMenuProps {
  * Mirrors window launch entries in `ref/micropolis/res/whead.tcl`.
  */
 export function WindowsMenu(props: WindowsMenuProps) {
-  const { buttonClassName, openFloatingWindow, panelClassName, ui } = props;
+  const { actions, buttonClassName, openMenubarSection, panelClassName } = props;
   return (
     <RuntimeTopMenuShell
       buttonClassName={buttonClassName}
-      isOpen={ui.openMenubarSection === 'windows'}
+      isOpen={openMenubarSection === 'windows'}
       label="Windows"
       onToggle={() => {
-        ui.setOpenMenubarSection((current) => (current === 'windows' ? null : 'windows'));
-        ui.setIsSpeedMenuOpen(false);
+        actions.toggleMenu('windows');
       }}
       panelClassName={`${panelClassName} min-w-51 gap-0.5`}
     >
       <ClassicyMenuItemButton
         onClick={() => {
-          openFloatingWindow('budget');
-          ui.setOpenMenubarSection(null);
+          actions.openFloatingWindow('budget');
+          actions.closeMenu();
         }}
         type="button"
       >
@@ -38,8 +37,8 @@ export function WindowsMenu(props: WindowsMenuProps) {
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
         onClick={() => {
-          openFloatingWindow('evaluation');
-          ui.setOpenMenubarSection(null);
+          actions.openFloatingWindow('evaluation');
+          actions.closeMenu();
         }}
         type="button"
       >
@@ -47,8 +46,8 @@ export function WindowsMenu(props: WindowsMenuProps) {
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
         onClick={() => {
-          openFloatingWindow('graph');
-          ui.setOpenMenubarSection(null);
+          actions.openFloatingWindow('graph');
+          actions.closeMenu();
         }}
         type="button"
       >

@@ -1,13 +1,12 @@
 import { ClassicyButton, ClassicyInput, ClassicyPanelTitle } from '@city/classicyui';
 import type { FormEvent } from 'react';
 
-import { normalizeCitySaveFileName } from '../../../behavior/runtime-panel-behavior.ts';
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface SaveCityDialogProps {
-  session: RuntimeSessionController;
+  actions: RuntimePanelActions;
+  saveFileNameDraft: RuntimeUiController['saveFileNameDraft'];
   sessionControlsDisabled: boolean;
-  ui: RuntimeUiController;
 }
 
 /**
@@ -15,21 +14,14 @@ interface SaveCityDialogProps {
  * Mirrors save controls in `ref/micropolis/res/micropolis.tcl`.
  */
 export function SaveCityDialog(props: SaveCityDialogProps) {
-  const { session, sessionControlsDisabled, ui } = props;
+  const { actions, saveFileNameDraft, sessionControlsDisabled } = props;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sessionControlsDisabled) {
       return;
     }
-    const fileName = normalizeCitySaveFileName(ui.saveFileNameDraft);
-    ui.setSaveFileName(fileName);
-    session.sendCityIoCommand({
-      kind: 'city-io',
-      action: 'save-city',
-      fileName,
-    });
-    ui.setGameDialog(null);
+    actions.saveCityFromDraft();
   };
 
   return (
@@ -42,16 +34,16 @@ export function SaveCityDialog(props: SaveCityDialogProps) {
           className="px-2 py-1"
           disabled={sessionControlsDisabled}
           onChange={(event) => {
-            ui.setSaveFileNameDraft(event.target.value);
+            actions.setSaveFileNameDraft(event.target.value);
           }}
           type="text"
-          value={ui.saveFileNameDraft}
+          value={saveFileNameDraft}
         />
       </label>
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            ui.setGameDialog(null);
+            actions.closeGameDialog();
           }}
           type="button"
         >

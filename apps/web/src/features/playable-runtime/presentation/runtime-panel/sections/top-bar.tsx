@@ -14,14 +14,14 @@ import {
   micropolisRunningIndicatorUrl,
 } from '../runtime-panel-constants.ts';
 import type {
-  RuntimeOpenFloatingWindow,
+  RuntimePanelActions,
   RuntimeSessionController,
   RuntimeUiController,
 } from '../runtime-panel-types.ts';
 
 interface RuntimeTopBarSectionProps {
+  actions: RuntimePanelActions;
   menubarRef: RefObject<HTMLElement | null>;
-  openFloatingWindow: RuntimeOpenFloatingWindow;
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
   speedControlRef: RefObject<HTMLDivElement | null>;
@@ -35,8 +35,7 @@ interface RuntimeTopBarSectionProps {
  * Difference: browser menu popovers and button interactions replace Tk widgets.
  */
 export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
-  const { menubarRef, openFloatingWindow, session, sessionControlsDisabled, speedControlRef, ui } =
-    props;
+  const { actions, menubarRef, session, sessionControlsDisabled, speedControlRef, ui } = props;
   const activeToolSpec = getPlayableToolSpec(ui.activeTool);
   const menubarButtonClass =
     '!m-0 min-w-[calc(var(--window-control-size)*7)] px-2 py-1 text-center';
@@ -50,29 +49,36 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
       <div className="min-w-max flex items-center gap-2">
         <MicropolisMenu
           buttonClassName={menubarButtonClass}
+          controlsDisabled={session.controlsDisabled}
+          openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
-          session={session}
+          saveFileName={ui.saveFileName}
           sessionControlsDisabled={sessionControlsDisabled}
-          ui={ui}
+          actions={actions}
         />
         <WindowsMenu
+          actions={actions}
           buttonClassName={menubarButtonClass}
-          openFloatingWindow={openFloatingWindow}
+          openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
-          ui={ui}
         />
         <DisastersMenu
+          actions={actions}
           buttonClassName={menubarButtonClass}
+          openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
-          session={session}
           sessionControlsDisabled={sessionControlsDisabled}
-          ui={ui}
         />
         <SettingsMenu
+          actions={actions}
           buttonClassName={menubarButtonClass}
+          cityIoError={ui.cityIoError}
+          lastSaveStatus={ui.lastSaveStatus}
+          openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
+          runtimeTilesetMenuChoices={ui.runtimeTilesetMenuChoices}
+          selectedRuntimeTileset={ui.selectedRuntimeTileset}
           session={session}
-          ui={ui}
         />
       </div>
       <div
@@ -93,10 +99,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         <ClassicyButton
           disabled={sessionControlsDisabled}
           onClick={() => {
-            session.sendSimControlCommand({
-              kind: 'sim-control',
-              control: session.isSimulationRunning ? 'pause' : 'play',
-            });
+            actions.playPauseSimulation();
           }}
           className="!m-0 min-w-21 font-bold"
           type="button"
@@ -104,12 +107,17 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
           {session.isSimulationRunning ? 'Pause' : 'Play'}
         </ClassicyButton>
         <div ref={speedControlRef} className="relative">
-          <SpeedMenu session={session} sessionControlsDisabled={sessionControlsDisabled} ui={ui} />
+          <SpeedMenu
+            actions={actions}
+            isOpen={ui.isSpeedMenuOpen}
+            sessionControlsDisabled={sessionControlsDisabled}
+            speed={session.state.hudState.speed}
+          />
         </div>
         <ClassicyButton
           aria-label={session.isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
           onClick={() => {
-            session.toggleGameplayMuted();
+            actions.toggleGameplayMuted();
           }}
           active={session.isGameplayMuted}
           activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
@@ -150,16 +158,12 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         aria-label="Open Micropolis popup"
         draggable={false}
         onClick={() => {
-          ui.setOpenMenubarSection(null);
-          ui.setIsSpeedMenuOpen(false);
-          ui.setIsBrandDialogOpen(true);
+          actions.openBrandDialog();
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            ui.setOpenMenubarSection(null);
-            ui.setIsSpeedMenuOpen(false);
-            ui.setIsBrandDialogOpen(true);
+            actions.openBrandDialog();
           }
         }}
         role="button"

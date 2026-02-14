@@ -1,12 +1,14 @@
 import { ClassicyButton, ClassicyPanelTitle } from '@city/classicyui';
 import type { RefObject } from 'react';
 
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface LoadCityDialogProps {
+  actions: RuntimePanelActions;
+  controlsDisabled: boolean;
+  isLoadingCityFile: boolean;
   loadInputRef: RefObject<HTMLInputElement | null>;
-  session: RuntimeSessionController;
-  ui: RuntimeUiController;
+  pendingLoadFile: RuntimeUiController['pendingLoadFile'];
 }
 
 /**
@@ -15,17 +17,17 @@ interface LoadCityDialogProps {
  * Difference: browser file APIs replace Tcl file dialogs.
  */
 export function LoadCityDialog(props: LoadCityDialogProps) {
-  const { loadInputRef, session, ui } = props;
+  const { actions, controlsDisabled, isLoadingCityFile, loadInputRef, pendingLoadFile } = props;
 
   return (
     <section className="grid gap-2.5">
       <ClassicyPanelTitle className="text-sm">Load City</ClassicyPanelTitle>
       <div className="text-xs text-slate-700">
-        {ui.pendingLoadFile === null ? 'No file selected.' : `Selected: ${ui.pendingLoadFile.name}`}
+        {pendingLoadFile === null ? 'No file selected.' : `Selected: ${pendingLoadFile.name}`}
       </div>
       <div className="flex flex-wrap gap-2">
         <ClassicyButton
-          disabled={session.controlsDisabled || ui.isLoadingCityFile}
+          disabled={controlsDisabled || isLoadingCityFile}
           onClick={() => {
             loadInputRef.current?.click();
           }}
@@ -34,42 +36,23 @@ export function LoadCityDialog(props: LoadCityDialogProps) {
           Choose .cty File...
         </ClassicyButton>
         <ClassicyButton
-          disabled={session.controlsDisabled || ui.pendingLoadFile === null || ui.isLoadingCityFile}
+          disabled={controlsDisabled || pendingLoadFile === null || isLoadingCityFile}
           onClick={async () => {
-            if (ui.pendingLoadFile === null || session.controlsDisabled) {
+            if (pendingLoadFile === null || controlsDisabled) {
               return;
             }
-
-            ui.setIsLoadingCityFile(true);
-            try {
-              const cityBytes = new Uint8Array(await ui.pendingLoadFile.arrayBuffer());
-              ui.setHasStartedPlayableSession(true);
-              ui.setSaveFileName(ui.pendingLoadFile.name);
-              session.sendCityIoCommand({
-                kind: 'city-io',
-                action: 'load-city',
-                fileName: ui.pendingLoadFile.name,
-                cityBytes,
-              });
-              ui.setCityIoError('');
-              ui.setPendingLoadFile(null);
-              ui.setGameDialog(null);
-            } catch {
-              ui.setCityIoError('Failed to read selected city file.');
-            } finally {
-              ui.setIsLoadingCityFile(false);
-            }
+            await actions.loadPendingCityFile();
           }}
           type="button"
         >
-          {ui.isLoadingCityFile ? 'Loading...' : 'Load'}
+          {isLoadingCityFile ? 'Loading...' : 'Load'}
         </ClassicyButton>
       </div>
       <div className="flex justify-end">
         <ClassicyButton
-          disabled={ui.isLoadingCityFile}
+          disabled={isLoadingCityFile}
           onClick={() => {
-            ui.setGameDialog(null);
+            actions.closeGameDialog();
           }}
           type="button"
         >

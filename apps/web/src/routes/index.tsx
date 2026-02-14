@@ -2,7 +2,11 @@ import { getAllThemes, getThemeVars } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
 import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
 
-import { downloadCityBytes } from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
+import {
+  downloadCityBytes,
+  normalizeCitySaveFileName,
+  triggerRouteDisasterControl,
+} from '../features/playable-runtime/behavior/runtime-panel-behavior.ts';
 import {
   type RuntimeFloatingWindowId,
   useFloatingWindowsState,
@@ -10,8 +14,13 @@ import {
   useRuntimeSession,
   useRuntimeUiState,
 } from '../features/playable-runtime/behavior/runtime-panel-controller.ts';
+import { ALL_GRAPH_SERIES_MASK } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
+import { type RuntimePanelActions } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-types.ts';
 import { RuntimePanelView } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-view.tsx';
-import { type CityExportPayload } from '../game/runtime/playable-runtime-host.ts';
+import {
+  type CityExportPayload,
+  PLAYABLE_SCENARIO_CHOICES,
+} from '../game/runtime/playable-runtime-host.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -46,13 +55,31 @@ function RuntimePanel() {
     applyCityExportPayload,
     dismissedNoticeSignature,
     hasStartedPlayableSession,
+    isLoadingCityFile,
     isSpeedMenuOpen,
     openMenubarSection,
+    pendingLoadFile,
+    saveFileNameDraft,
+    selectedGameLevel,
+    selectedScenarioId,
+    setActiveTool,
+    setCityIoError,
+    setDismissedNoticeSignature,
     setGameDialog,
+    setGraphMask,
+    setGraphRange,
     setHasStartedPlayableSession,
     setIsBrandDialogOpen,
+    setIsLoadingCityFile,
     setIsSpeedMenuOpen,
+    setLastSaveStatus,
     setOpenMenubarSection,
+    setPendingLoadFile,
+    setSaveFileName,
+    setSaveFileNameDraft,
+    setSelectedGameLevel,
+    setSelectedRuntimeTileset,
+    setSelectedScenarioId,
   } = ui;
 
   const onCityExport = useCallback(
@@ -64,7 +91,20 @@ function RuntimePanel() {
   );
 
   const session = useRuntimeSession({ onCityExport });
-  const { controlsDisabled, sendSimControlCommand, state } = session;
+  const {
+    controlsDisabled,
+    host,
+    isSimulationRunning,
+    reconnect,
+    requestResyncSnapshot,
+    sendCityIoCommand,
+    sendCityLifecycleCommand,
+    sendScenarioCommand,
+    sendSimControlCommand,
+    sendToolCommand,
+    state,
+    toggleGameplayMuted,
+  } = session;
   const floating = useFloatingWindowsState();
   const { openFloatingWindow: openFloatingWindowBase } = floating;
   const runtimeBudget = state.hudState.budget;
@@ -133,6 +173,29 @@ function RuntimePanel() {
     [sendSimControlCommand, sessionControlsDisabled],
   );
 
+  const closeTopBarOverlays = useCallback((): void => {
+    setOpenMenubarSection(null);
+    setIsSpeedMenuOpen(false);
+  }, [setIsSpeedMenuOpen, setOpenMenubarSection]);
+
+  const toggleMenu = useCallback(
+    (section: 'micropolis' | 'windows' | 'disasters' | 'settings'): void => {
+      setOpenMenubarSection((current) => (current === section ? null : section));
+      setIsSpeedMenuOpen(false);
+    },
+    [setIsSpeedMenuOpen, setOpenMenubarSection],
+  );
+
+  const toggleSpeedMenu = useCallback((): void => {
+    setOpenMenubarSection(null);
+    setIsSpeedMenuOpen((current) => !current);
+  }, [setIsSpeedMenuOpen, setOpenMenubarSection]);
+
+  const openBrandDialog = useCallback((): void => {
+    closeTopBarOverlays();
+    setIsBrandDialogOpen(true);
+  }, [closeTopBarOverlays, setIsBrandDialogOpen]);
+
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) {
@@ -156,9 +219,10 @@ function RuntimePanel() {
       if (event.key !== 'Escape') {
         return;
       }
-      setOpenMenubarSection(null);
-      setGameDialog(null);
-      setIsSpeedMenuOpen(false);
+      closeTopBarOverlays();
+      if (!isLoadingCityFile) {
+        setGameDialog(null);
+      }
       setIsBrandDialogOpen(false);
     };
 
@@ -170,11 +234,13 @@ function RuntimePanel() {
     };
   }, [
     isSpeedMenuOpen,
+    isLoadingCityFile,
     openMenubarSection,
     setGameDialog,
     setIsBrandDialogOpen,
     setIsSpeedMenuOpen,
     setOpenMenubarSection,
+    closeTopBarOverlays,
   ]);
 
   const activeNotice = state.hudState.notice;
@@ -189,6 +255,207 @@ function RuntimePanel() {
 
   const theme = getAllThemes()[0];
   const runtimeTheme = theme === undefined ? {} : getThemeVars(theme);
+
+  const actions: RuntimePanelActions = {
+    closeBrandDialog: () => {
+      setIsBrandDialogOpen(false);
+    },
+    closeFloatingWindow: (windowId) => {
+      floating.closeFloatingWindow(windowId);
+    },
+    closeGameDialog: () => {
+      setGameDialog(null);
+    },
+    closeMenu: () => {
+      setOpenMenubarSection(null);
+    },
+    closeSpeedMenu: () => {
+      setIsSpeedMenuOpen(false);
+    },
+    dismissNotice: (signature) => {
+      setDismissedNoticeSignature(signature);
+    },
+    focusFloatingWindow: (windowId) => {
+      floating.focusFloatingWindow(windowId);
+    },
+    loadPendingCityFile: async () => {
+      if (pendingLoadFile === null || controlsDisabled) {
+        return;
+      }
+
+      setIsLoadingCityFile(true);
+      try {
+        const cityBytes = new Uint8Array(await pendingLoadFile.arrayBuffer());
+        setHasStartedPlayableSession(true);
+        setSaveFileName(pendingLoadFile.name);
+        sendCityIoCommand({
+          kind: 'city-io',
+          action: 'load-city',
+          fileName: pendingLoadFile.name,
+          cityBytes,
+        });
+        setCityIoError('');
+        setPendingLoadFile(null);
+        setGameDialog(null);
+      } catch {
+        setCityIoError('Failed to read selected city file.');
+      } finally {
+        setIsLoadingCityFile(false);
+      }
+    },
+    openBrandDialog,
+    openFloatingWindow,
+    openGameDialog: (kind) => {
+      closeTopBarOverlays();
+      setGameDialog(kind);
+    },
+    placeTool: (tool, x, y) => {
+      if (sessionControlsDisabled) {
+        return;
+      }
+      sendToolCommand(tool, x, y);
+    },
+    playPauseSimulation: () => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: isSimulationRunning ? 'pause' : 'play',
+      });
+    },
+    reconnectRuntime: () => {
+      reconnect();
+      setCityIoError('');
+      setLastSaveStatus('');
+    },
+    requestResyncSnapshot: () => {
+      requestResyncSnapshot();
+    },
+    saveCityFromDraft: () => {
+      if (sessionControlsDisabled) {
+        return;
+      }
+      const fileName = normalizeCitySaveFileName(saveFileNameDraft);
+      setSaveFileName(fileName);
+      sendCityIoCommand({
+        kind: 'city-io',
+        action: 'save-city',
+        fileName,
+      });
+      setGameDialog(null);
+    },
+    selectScenario: (scenarioId) => {
+      setSelectedScenarioId(scenarioId);
+    },
+    selectTool: (tool) => {
+      setActiveTool(tool);
+    },
+    setBudgetAuto: (enabled) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-auto-budget',
+        enabled,
+      });
+    },
+    setBudgetFirePercent: (percent) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-fire-percent',
+        percent,
+      });
+    },
+    setBudgetPolicePercent: (percent) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-police-percent',
+        percent,
+      });
+    },
+    setBudgetRoadPercent: (percent) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-road-percent',
+        percent,
+      });
+    },
+    setBudgetTaxRate: (taxRate) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-tax-rate',
+        taxRate,
+      });
+    },
+    setGameLevel: (level) => {
+      setSelectedGameLevel(level);
+    },
+    setGraphMask,
+    setGraphRange,
+    setPendingLoadFile: (file) => {
+      setPendingLoadFile(file);
+      if (file !== null) {
+        setCityIoError('');
+      }
+    },
+    setRuntimeTileset: (tileset) => {
+      setSelectedRuntimeTileset(tileset);
+    },
+    setSaveFileNameDraft: (draft) => {
+      setSaveFileNameDraft(draft);
+    },
+    setSimulationSpeed: (speed) => {
+      sendSimControlCommand({
+        kind: 'sim-control',
+        control: 'set-speed',
+        speed,
+      });
+    },
+    showAllGraphSeries: () => {
+      setGraphMask(ALL_GRAPH_SERIES_MASK);
+    },
+    startFloatingWindowDrag: (windowId, event) => {
+      floating.startFloatingWindowDrag(windowId, event);
+    },
+    startNewCity: () => {
+      if (controlsDisabled) {
+        return;
+      }
+      setHasStartedPlayableSession(true);
+      setSaveFileName('newcity.cty');
+      sendCityLifecycleCommand({
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        gameLevel: selectedGameLevel,
+      });
+      setGameDialog(null);
+    },
+    startScenario: () => {
+      if (controlsDisabled) {
+        return;
+      }
+      setHasStartedPlayableSession(true);
+      const scenario = PLAYABLE_SCENARIO_CHOICES.find((entry) => entry.id === selectedScenarioId);
+      if (scenario !== undefined) {
+        setSaveFileName(`${scenario.fileName}.cty`);
+      }
+      sendScenarioCommand({
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioId: selectedScenarioId,
+        gameLevel: selectedGameLevel,
+      });
+      setGameDialog(null);
+    },
+    toggleGameplayMuted: () => {
+      toggleGameplayMuted();
+    },
+    toggleGraphSeriesBit: (bit) => {
+      setGraphMask((currentMask) => currentMask ^ bit);
+    },
+    toggleMenu,
+    toggleSpeedMenu,
+    triggerDisaster: (disasterId, label) => {
+      triggerRouteDisasterControl(host, disasterId, label);
+      setOpenMenubarSection(null);
+    },
+  };
 
   useEffect(() => {
     const notice = state.hudState.notice;
@@ -207,13 +474,13 @@ function RuntimePanel() {
   return (
     <RuntimePanelView
       activeNoticeSignature={activeNoticeSignature}
+      actions={actions}
       applyBudgetControlState={applyBudgetControlState}
       budgetWindowOriginalStateRef={budgetWindowOriginalStateRef}
       floating={floating}
       layoutInsets={layoutInsets}
       loadInputRef={loadInputRef}
       menubarRef={menubarRef}
-      openFloatingWindow={openFloatingWindow}
       runtimeTheme={runtimeTheme as CSSProperties}
       session={session}
       sessionControlsDisabled={sessionControlsDisabled}

@@ -1,5 +1,10 @@
+import type { PlayableDisasterChoiceId } from '../../../../game/runtime/playable-runtime-host.ts';
+import type { PlayableGameLevel, PlayableSimSpeed } from '../../../../game/runtime/protocol.ts';
+import type { RuntimeTilesetName } from '../../../../presentation/map/tile-sprite-atlas.ts';
 import type {
+  GameDialogKind,
   RuntimeFloatingWindowId,
+  TopMenubarSection,
   useFloatingWindowsState,
   useRuntimeSession,
   useRuntimeUiState,
@@ -15,3 +20,50 @@ export type RuntimeSessionController = ReturnType<typeof useRuntimeSession>;
 export type RuntimeFloatingWindowsController = ReturnType<typeof useFloatingWindowsState>;
 export type RuntimeBudgetState = RuntimeSessionController['state']['hudState']['budget'];
 export type RuntimeOpenFloatingWindow = (windowId: RuntimeFloatingWindowId) => void;
+
+/**
+ * Semantically grouped write/command actions for runtime-panel presentation.
+ * Mirrors route-level command dispatch ownership from `ref/micropolis/src/sim/w_update.c`
+ * while keeping React presentation components free of direct controller mutation calls.
+ */
+export interface RuntimePanelActions {
+  closeBrandDialog: () => void;
+  closeFloatingWindow: (windowId: RuntimeFloatingWindowId) => void;
+  closeGameDialog: () => void;
+  closeMenu: () => void;
+  closeSpeedMenu: () => void;
+  dismissNotice: (signature: string | null) => void;
+  focusFloatingWindow: (windowId: RuntimeFloatingWindowId) => void;
+  loadPendingCityFile: () => Promise<void>;
+  openBrandDialog: () => void;
+  openFloatingWindow: RuntimeOpenFloatingWindow;
+  openGameDialog: (kind: GameDialogKind) => void;
+  placeTool: (tool: RuntimeUiController['activeTool'], x: number, y: number) => void;
+  playPauseSimulation: () => void;
+  reconnectRuntime: () => void;
+  requestResyncSnapshot: () => void;
+  saveCityFromDraft: () => void;
+  selectScenario: (scenarioId: number) => void;
+  selectTool: RuntimeUiController['setActiveTool'];
+  setBudgetAuto: (enabled: boolean) => void;
+  setBudgetFirePercent: (percent: number) => void;
+  setBudgetPolicePercent: (percent: number) => void;
+  setBudgetRoadPercent: (percent: number) => void;
+  setBudgetTaxRate: (taxRate: number) => void;
+  setGameLevel: (level: PlayableGameLevel) => void;
+  setGraphMask: RuntimeUiController['setGraphMask'];
+  setGraphRange: RuntimeUiController['setGraphRange'];
+  setPendingLoadFile: (file: File | null) => void;
+  setRuntimeTileset: (tileset: RuntimeTilesetName) => void;
+  setSaveFileNameDraft: (draft: string) => void;
+  setSimulationSpeed: (speed: PlayableSimSpeed) => void;
+  showAllGraphSeries: () => void;
+  startFloatingWindowDrag: RuntimeFloatingWindowsController['startFloatingWindowDrag'];
+  startNewCity: () => void;
+  startScenario: () => void;
+  toggleGameplayMuted: () => void;
+  toggleGraphSeriesBit: (bit: number) => void;
+  toggleMenu: (section: TopMenubarSection) => void;
+  toggleSpeedMenu: () => void;
+  triggerDisaster: (disasterId: PlayableDisasterChoiceId, label: string) => void;
+}

@@ -1,14 +1,16 @@
 import { ClassicyMenuItemButton, ClassicyMenuSeparator } from '@city/classicyui';
 
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface MicropolisMenuProps {
+  actions: RuntimePanelActions;
   buttonClassName: string;
+  controlsDisabled: boolean;
+  openMenubarSection: RuntimeUiController['openMenubarSection'];
   panelClassName: string;
-  session: RuntimeSessionController;
+  saveFileName: string;
   sessionControlsDisabled: boolean;
-  ui: RuntimeUiController;
 }
 
 /**
@@ -16,22 +18,28 @@ interface MicropolisMenuProps {
  * Mirrors top-level city lifecycle menu actions in `ref/micropolis/res/whead.tcl`.
  */
 export function MicropolisMenu(props: MicropolisMenuProps) {
-  const { buttonClassName, panelClassName, session, sessionControlsDisabled, ui } = props;
+  const {
+    actions,
+    buttonClassName,
+    controlsDisabled,
+    openMenubarSection,
+    panelClassName,
+    saveFileName,
+    sessionControlsDisabled,
+  } = props;
   return (
     <RuntimeTopMenuShell
       buttonClassName={buttonClassName}
-      isOpen={ui.openMenubarSection === 'micropolis'}
+      isOpen={openMenubarSection === 'micropolis'}
       label="Micropolis"
       onToggle={() => {
-        ui.setOpenMenubarSection((current) => (current === 'micropolis' ? null : 'micropolis'));
-        ui.setIsSpeedMenuOpen(false);
+        actions.toggleMenu('micropolis');
       }}
       panelClassName={`${panelClassName} min-w-51 gap-0.5`}
     >
       <ClassicyMenuItemButton
         onClick={() => {
-          ui.setIsBrandDialogOpen(true);
-          ui.setOpenMenubarSection(null);
+          actions.openBrandDialog();
         }}
         type="button"
       >
@@ -39,10 +47,9 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       </ClassicyMenuItemButton>
       <ClassicyMenuSeparator />
       <ClassicyMenuItemButton
-        disabled={session.controlsDisabled}
+        disabled={controlsDisabled}
         onClick={() => {
-          ui.setGameDialog('new');
-          ui.setOpenMenubarSection(null);
+          actions.openGameDialog('new');
         }}
         type="button"
       >
@@ -51,30 +58,27 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       <ClassicyMenuItemButton
         disabled={sessionControlsDisabled}
         onClick={() => {
-          ui.setSaveFileNameDraft(ui.saveFileName);
-          ui.setGameDialog('save');
-          ui.setOpenMenubarSection(null);
+          actions.setSaveFileNameDraft(saveFileName);
+          actions.openGameDialog('save');
         }}
         type="button"
       >
         Save...
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
-        disabled={session.controlsDisabled}
+        disabled={controlsDisabled}
         onClick={() => {
-          ui.setPendingLoadFile(null);
-          ui.setGameDialog('load');
-          ui.setOpenMenubarSection(null);
+          actions.setPendingLoadFile(null);
+          actions.openGameDialog('load');
         }}
         type="button"
       >
         Load...
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
-        disabled={session.controlsDisabled}
+        disabled={controlsDisabled}
         onClick={() => {
-          ui.setGameDialog('scenario');
-          ui.setOpenMenubarSection(null);
+          actions.openGameDialog('scenario');
         }}
         type="button"
       >

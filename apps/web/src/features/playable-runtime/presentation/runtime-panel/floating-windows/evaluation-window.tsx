@@ -6,10 +6,12 @@ import {
 } from '../runtime-panel-constants.ts';
 import type {
   RuntimeFloatingWindowsController,
+  RuntimePanelActions,
   RuntimeSessionController,
 } from '../runtime-panel-types.ts';
 
 interface EvaluationWindowProps {
+  actions: RuntimePanelActions;
   floating: RuntimeFloatingWindowsController;
   session: RuntimeSessionController;
 }
@@ -19,7 +21,7 @@ interface EvaluationWindowProps {
  * Mirrors evaluation window behavior in `ref/micropolis/src/sim/w_eval.c`.
  */
 export function EvaluationWindow(props: EvaluationWindowProps) {
-  const { floating, session } = props;
+  const { actions, floating, session } = props;
   const evaluationWindow = floating.floatingWindows.evaluation;
 
   if (!evaluationWindow.open) {
@@ -45,13 +47,13 @@ export function EvaluationWindow(props: EvaluationWindowProps) {
       bodyClassName="grid gap-1.5 p-2 text-xs"
       data-floating-window="evaluation"
       onClose={() => {
-        floating.closeFloatingWindow('evaluation');
+        actions.closeFloatingWindow('evaluation');
       }}
       onHeaderPointerDown={(event) => {
-        floating.startFloatingWindowDrag('evaluation', event);
+        actions.startFloatingWindowDrag('evaluation', event);
       }}
       onPointerDown={() => {
-        floating.focusFloatingWindow('evaluation');
+        actions.focusFloatingWindow('evaluation');
       }}
       className="min-w-70 max-w-[min(460px,calc(100vw-12px))]"
       style={{
@@ -139,7 +141,7 @@ export function EvaluationWindow(props: EvaluationWindowProps) {
       <div className="flex justify-center">
         <ClassicyButton
           onClick={() => {
-            floating.closeFloatingWindow('evaluation');
+            actions.closeFloatingWindow('evaluation');
           }}
           type="button"
         >

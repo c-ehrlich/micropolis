@@ -1,11 +1,12 @@
 import { ClassicyButton, ClassicyPanelTitle, ClassicySelect } from '@city/classicyui';
 
 import { PLAYABLE_GAME_LEVEL_CHOICES } from '../runtime-panel-constants.ts';
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface NewCityDialogProps {
-  session: RuntimeSessionController;
-  ui: RuntimeUiController;
+  actions: RuntimePanelActions;
+  controlsDisabled: boolean;
+  selectedGameLevel: RuntimeUiController['selectedGameLevel'];
 }
 
 /**
@@ -13,7 +14,7 @@ interface NewCityDialogProps {
  * Mirrors new-city flow in `ref/micropolis/res/micropolis.tcl`.
  */
 export function NewCityDialog(props: NewCityDialogProps) {
-  const { session, ui } = props;
+  const { actions, controlsDisabled, selectedGameLevel } = props;
 
   return (
     <section className="grid gap-2.5">
@@ -23,14 +24,14 @@ export function NewCityDialog(props: NewCityDialogProps) {
         <ClassicySelect
           autoFocus
           className="px-2 py-1"
-          disabled={session.controlsDisabled}
+          disabled={controlsDisabled}
           onChange={(event) => {
             const level = Number.parseInt(event.target.value, 10);
             if (level === 0 || level === 1 || level === 2) {
-              ui.setSelectedGameLevel(level);
+              actions.setGameLevel(level);
             }
           }}
-          value={ui.selectedGameLevel}
+          value={selectedGameLevel}
         >
           {PLAYABLE_GAME_LEVEL_CHOICES.map((choice) => (
             <option key={choice.id} value={choice.id}>
@@ -42,23 +43,16 @@ export function NewCityDialog(props: NewCityDialogProps) {
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            ui.setGameDialog(null);
+            actions.closeGameDialog();
           }}
           type="button"
         >
           Cancel
         </ClassicyButton>
         <ClassicyButton
-          disabled={session.controlsDisabled}
+          disabled={controlsDisabled}
           onClick={() => {
-            ui.setHasStartedPlayableSession(true);
-            ui.setSaveFileName('newcity.cty');
-            session.sendCityLifecycleCommand({
-              kind: 'city-lifecycle',
-              action: 'new-city',
-              gameLevel: ui.selectedGameLevel,
-            });
-            ui.setGameDialog(null);
+            actions.startNewCity();
           }}
           type="button"
         >

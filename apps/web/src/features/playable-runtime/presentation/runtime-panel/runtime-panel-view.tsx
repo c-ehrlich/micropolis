@@ -11,7 +11,7 @@ import { MAP_TILE_SIZE } from './runtime-panel-constants.ts';
 import type {
   RuntimeBudgetState,
   RuntimeFloatingWindowsController,
-  RuntimeOpenFloatingWindow,
+  RuntimePanelActions,
   RuntimeSessionController,
   RuntimeUiController,
 } from './runtime-panel-types.ts';
@@ -21,13 +21,13 @@ import { RuntimeTopBarSection } from './sections/top-bar.tsx';
 
 interface RuntimePanelViewProps {
   activeNoticeSignature: string | null;
+  actions: RuntimePanelActions;
   applyBudgetControlState: (nextBudgetState: RuntimeBudgetState) => void;
   budgetWindowOriginalStateRef: MutableRefObject<RuntimeBudgetState>;
   floating: RuntimeFloatingWindowsController;
   layoutInsets: RuntimeLayoutInsets;
   loadInputRef: RefObject<HTMLInputElement | null>;
   menubarRef: RefObject<HTMLElement | null>;
-  openFloatingWindow: RuntimeOpenFloatingWindow;
   runtimeTheme: CSSProperties;
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
@@ -45,13 +45,13 @@ interface RuntimePanelViewProps {
 export function RuntimePanelView(props: RuntimePanelViewProps) {
   const {
     activeNoticeSignature,
+    actions,
     applyBudgetControlState,
     budgetWindowOriginalStateRef,
     floating,
     layoutInsets,
     loadInputRef,
     menubarRef,
-    openFloatingWindow,
     runtimeTheme,
     session,
     sessionControlsDisabled,
@@ -80,10 +80,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
           hoverTool={sessionControlsDisabled ? undefined : ui.activeTool}
           mapState={session.state.mapState}
           onTileClick={(x, y) => {
-            if (sessionControlsDisabled) {
-              return;
-            }
-            session.sendToolCommand(ui.activeTool, x, y);
+            actions.placeTool(ui.activeTool, x, y);
           }}
           pendingTools={session.state.pendingTools}
           realtimeObjects={session.state.realtimeState.objects}
@@ -93,8 +90,8 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
       </div>
 
       <RuntimeTopBarSection
+        actions={actions}
         menubarRef={menubarRef}
-        openFloatingWindow={openFloatingWindow}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
         speedControlRef={speedControlRef}
@@ -105,14 +102,14 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
         <NoticePanel
           notice={visibleNotice}
           onDismiss={() => {
-            ui.setDismissedNoticeSignature(activeNoticeSignature);
+            actions.dismissNotice(activeNoticeSignature);
           }}
           topInsetPx={layoutInsets.top}
         />
       )}
 
       <RuntimeSidebarSection
-        openFloatingWindow={openFloatingWindow}
+        actions={actions}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
         sidebarRef={sidebarRef}
@@ -123,21 +120,29 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
       <RuntimeMessageFeedDock session={session} />
 
       <RuntimeFloatingWindowsLayer
+        actions={actions}
         applyBudgetControlState={applyBudgetControlState}
         budgetWindowOriginalStateRef={budgetWindowOriginalStateRef}
         floating={floating}
+        graphMask={ui.graphMask}
+        graphRange={ui.graphRange}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
-        ui={ui}
       />
 
-      <RuntimeBrandDialog ui={ui} />
+      <RuntimeBrandDialog actions={actions} isOpen={ui.isBrandDialogOpen} />
 
       <RuntimeGameDialogs
+        actions={actions}
+        isLoadingCityFile={ui.isLoadingCityFile}
+        pendingLoadFile={ui.pendingLoadFile}
+        selectedGameLevel={ui.selectedGameLevel}
+        selectedScenarioId={ui.selectedScenarioId}
+        gameDialog={ui.gameDialog}
         loadInputRef={loadInputRef}
-        session={session}
+        controlsDisabled={session.controlsDisabled}
+        saveFileNameDraft={ui.saveFileNameDraft}
         sessionControlsDisabled={sessionControlsDisabled}
-        ui={ui}
       />
     </section>
   );

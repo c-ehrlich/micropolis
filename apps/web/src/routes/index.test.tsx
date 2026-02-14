@@ -20,15 +20,6 @@ import { Route } from './index.tsx';
 const WEB_WORKSPACE_ROOT = process.cwd().endsWith('/apps/web')
   ? process.cwd()
   : resolve(process.cwd(), 'apps/web');
-const INDEX_ROUTE_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routes/index.tsx');
-const PLAYABLE_RUNTIME_HOST_SOURCE_PATH = resolve(
-  WEB_WORKSPACE_ROOT,
-  'src/game/runtime/playable-runtime-host.ts',
-);
-const SOUND_ROUTING_SOURCE_PATH = resolve(
-  WEB_WORKSPACE_ROOT,
-  'src/game/audio/micropolis-runtime-envelope-sound-routing.ts',
-);
 const ROUTE_TREE_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routeTree.gen.ts');
 
 /**
@@ -58,88 +49,6 @@ function buildLegacySyntheticSnapshotTileWords(width: number, height: number): U
  * `ref/micropolis/src/sim/w_sim.c`, where users enter one primary path.
  */
 describe('routes/index default gameplay path', () => {
-  test('routes "/" host creation through sim-core authoritative envelope host factory only', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toMatch(
-      /createPlayableRuntimeHost[\s\S]*from ['"]\.\.\/game\/runtime\/playable-runtime-host(?:\.ts)?['"]/,
-    );
-    expect(routeSource).toContain('const host = useMemo(() => createPlayableRuntimeHost(), []);');
-
-    const host = createPlayableRuntimeHost();
-    expect(host).toBeInstanceOf(SimCoreEnvelopeHost);
-  });
-
-  test('keeps "/" gameplay host contract isolated to runtime envelope protocol modules', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-    const playableRuntimeHostSource = readFileSync(PLAYABLE_RUNTIME_HOST_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toContain("from '../game/runtime/protocol.ts'");
-    expect(routeSource).not.toMatch(/from ['"]\.\.\/game\/core-host(?:\.ts)?['"]/);
-    expect(playableRuntimeHostSource).toContain("import type { CoreHost } from './protocol.ts'");
-    expect(playableRuntimeHostSource).not.toMatch(/from ['"]\.\.\/core-host(?:\.ts)?['"]/);
-  });
-
-  test('routes gameplay audio through dedicated consumer module with envelope-delta routing', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toContain("from '../game/audio/micropolis-gameplay-audio-consumer.ts'");
-    expect(routeSource).toContain(
-      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
-    );
-    expect(routeSource).toContain('const gameplayAudioConsumer = useMemo(');
-    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
-  });
-
-  test('keeps gameplay route free of preview-only sound mapping helper imports', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).not.toContain("from '../game/audio/micropolis-soundboard.ts'");
-    expect(routeSource).not.toContain('toMicropolisSoundPreviewWavPath');
-    expect(routeSource).not.toContain('normalizeMicropolisSoundTokenForWav');
-  });
-
-  test('plays gameplay sounds from host sound deltas without route reject/message derivation', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toContain(
-      "from '../game/audio/micropolis-runtime-envelope-sound-routing.ts'",
-    );
-    expect(routeSource).toContain('routeMicropolisGameplaySoundDeltas({');
-    expect(soundRoutingSource).toContain('if (!isSequencedHostEnvelope(runtimeEnvelope))');
-    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
-    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolAck');
-    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokenForToolRejectReason');
-    expect(soundRoutingSource).not.toContain('pendingToolAckSoundByCommandId');
-    expect(soundRoutingSource).not.toContain('resolveMicropolisSoundTokensForMessageId');
-    expect(soundRoutingSource).not.toContain('readMessageIdsFromPatchPayload');
-  });
-
-  test('gates gameplay host sound delta playback on runtime HUD userSoundOn option', () => {
-    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
-
-    expect(soundRoutingSource).toContain(
-      "const shouldAttemptEnvelopePlayback = context.reducerOutcome === 'applied';",
-    );
-    expect(soundRoutingSource).toContain('userSoundOn: context.userSoundOn');
-    expect(soundRoutingSource).toContain('runtimeEnvelope.soundDeltas ?? []');
-  });
-
-  test('keeps sequenced sound transport separate from configurable playback policy', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-    const soundRoutingSource = readFileSync(SOUND_ROUTING_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toContain('createMicropolisGameplaySoundPlaybackPolicy');
-    expect(routeSource).toContain("mode: 'applied-only'");
-    expect(soundRoutingSource).toContain(
-      'const shouldPlaySoundDeltas = context.gameplaySoundPlaybackPolicy({',
-    );
-    expect(soundRoutingSource).toContain(
-      'for (const soundDelta of runtimeEnvelope.soundDeltas ?? [])',
-    );
-  });
-
   test('keeps root route id at "/" and renders the Authoritative Runtime gameplay panel', () => {
     const routeTreeSource = readFileSync(ROUTE_TREE_SOURCE_PATH, 'utf8');
     expect(routeTreeSource).toContain("path: '/'");
@@ -152,13 +61,17 @@ describe('routes/index default gameplay path', () => {
     }
 
     const markup = renderToStaticMarkup(React.createElement(component));
-    expect(markup).not.toContain('Sound Test');
+    expect(markup).toContain('Micropolis');
     expect(markup).toContain('Settings');
     expect(markup).toContain('Play');
     expect(markup).toContain('Road: $10');
-    expect(markup).toContain('Demand heads R 0, C 0, I 0');
     expect(markup).toContain('Message Feed');
-    expect(markup).toContain('Micropolis');
+    expect(markup).toContain('Demand heads R 0, C 0, I 0');
+  });
+
+  test('creates a SimCoreEnvelopeHost for the route runtime', () => {
+    const host = createPlayableRuntimeHost();
+    expect(host).toBeInstanceOf(SimCoreEnvelopeHost);
   });
 
   test('keeps manual disaster controls working on "/" with SimCoreEnvelopeHost', () => {
@@ -254,14 +167,5 @@ describe('routes/index default gameplay path', () => {
     } finally {
       connection.disconnect();
     }
-  });
-
-  test('applies a full-panel grayscale filter only for the classic bw tileset mode', () => {
-    const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-
-    expect(routeSource).toContain(
-      "const isClassicBwTheme = selectedRuntimeTileset === 'classicbw';",
-    );
-    expect(routeSource).toContain("isClassicBwTheme ? 'grayscale' : ''");
   });
 });

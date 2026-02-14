@@ -1,14 +1,23 @@
 import { ClassicyMenuActionButton, ClassicySelect } from '@city/classicyui';
 
 import type { RuntimeTilesetName } from '../../../../../presentation/map/tile-sprite-atlas.ts';
-import type { RuntimeSessionController, RuntimeUiController } from '../runtime-panel-types.ts';
+import type {
+  RuntimePanelActions,
+  RuntimeSessionController,
+  RuntimeUiController,
+} from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface SettingsMenuProps {
+  actions: RuntimePanelActions;
   buttonClassName: string;
+  cityIoError: string;
+  lastSaveStatus: string;
+  openMenubarSection: RuntimeUiController['openMenubarSection'];
   panelClassName: string;
+  runtimeTilesetMenuChoices: RuntimeUiController['runtimeTilesetMenuChoices'];
+  selectedRuntimeTileset: RuntimeUiController['selectedRuntimeTileset'];
   session: RuntimeSessionController;
-  ui: RuntimeUiController;
 }
 
 /**
@@ -17,15 +26,24 @@ interface SettingsMenuProps {
  * `ref/micropolis/res/whead.tcl`, adapted for web runtime phases.
  */
 export function SettingsMenu(props: SettingsMenuProps) {
-  const { buttonClassName, panelClassName, session, ui } = props;
+  const {
+    actions,
+    buttonClassName,
+    cityIoError,
+    lastSaveStatus,
+    openMenubarSection,
+    panelClassName,
+    runtimeTilesetMenuChoices,
+    selectedRuntimeTileset,
+    session,
+  } = props;
   return (
     <RuntimeTopMenuShell
       buttonClassName={buttonClassName}
-      isOpen={ui.openMenubarSection === 'settings'}
+      isOpen={openMenubarSection === 'settings'}
       label="Settings"
       onToggle={() => {
-        ui.setOpenMenubarSection((current) => (current === 'settings' ? null : 'settings'));
-        ui.setIsSpeedMenuOpen(false);
+        actions.toggleMenu('settings');
       }}
       panelClassName={`${panelClassName} min-w-72.5 gap-1.5 p-2`}
     >
@@ -36,11 +54,11 @@ export function SettingsMenu(props: SettingsMenuProps) {
           className="px-1.5 py-1"
           onChange={(event) => {
             const nextTileset = event.currentTarget.value as RuntimeTilesetName;
-            ui.setSelectedRuntimeTileset(nextTileset);
+            actions.setRuntimeTileset(nextTileset);
           }}
-          value={ui.selectedRuntimeTileset}
+          value={selectedRuntimeTileset}
         >
-          {ui.runtimeTilesetMenuChoices.map((choice) => (
+          {runtimeTilesetMenuChoices.map((choice) => (
             <option key={choice.name} value={choice.name}>
               {choice.label}
             </option>
@@ -56,17 +74,15 @@ export function SettingsMenu(props: SettingsMenuProps) {
       {session.state.lastRejectReason === null ? null : (
         <div className="text-xs text-red-700">{`last reject: ${session.state.lastRejectReason}`}</div>
       )}
-      {ui.cityIoError === '' ? null : <div className="text-xs text-red-700">{ui.cityIoError}</div>}
-      {ui.lastSaveStatus === '' ? null : (
-        <div className="text-xs text-green-700">{ui.lastSaveStatus}</div>
+      {cityIoError === '' ? null : <div className="text-xs text-red-700">{cityIoError}</div>}
+      {lastSaveStatus === '' ? null : (
+        <div className="text-xs text-green-700">{lastSaveStatus}</div>
       )}
       <div className="flex flex-wrap gap-2">
         <ClassicyMenuActionButton
           disabled={session.reconnectDisabled}
           onClick={() => {
-            session.reconnect();
-            ui.setCityIoError('');
-            ui.setLastSaveStatus('');
+            actions.reconnectRuntime();
           }}
           type="button"
         >
@@ -75,7 +91,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
         <ClassicyMenuActionButton
           disabled={session.resyncDisabled}
           onClick={() => {
-            session.requestResyncSnapshot();
+            actions.requestResyncSnapshot();
           }}
           type="button"
         >
