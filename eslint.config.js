@@ -44,6 +44,10 @@ export default [
       ...reactHooks.configs.recommended.rules,
       '@tanstack/router/create-route-property-order': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-empty-object-type': [
+        'error',
+        { allowInterfaces: 'with-single-extends' },
+      ],
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

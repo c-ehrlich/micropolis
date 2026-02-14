@@ -29,7 +29,6 @@ const SOUND_ROUTING_SOURCE_PATH = resolve(
   WEB_WORKSPACE_ROOT,
   'src/game/audio/micropolis-runtime-envelope-sound-routing.ts',
 );
-const CLASSICY_ROUTE_CSS_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routes/index.classicy.css');
 const ROUTE_TREE_SOURCE_PATH = resolve(WEB_WORKSPACE_ROOT, 'src/routeTree.gen.ts');
 
 /**
@@ -259,13 +258,10 @@ describe('routes/index default gameplay path', () => {
 
   test('applies a full-panel grayscale filter only for the classic bw tileset mode', () => {
     const routeSource = readFileSync(INDEX_ROUTE_SOURCE_PATH, 'utf8');
-    const routeCssSource = readFileSync(CLASSICY_ROUTE_CSS_SOURCE_PATH, 'utf8');
 
     expect(routeSource).toContain(
       "const isClassicBwTheme = selectedRuntimeTileset === 'classicbw';",
     );
-    expect(routeSource).toContain("isClassicBwTheme ? 'classicyRuntimePanelClassicBw' : ''");
-    expect(routeCssSource).toContain('.classicyRuntimePanelClassicBw');
-    expect(routeCssSource).toContain('filter: grayscale(1);');
+    expect(routeSource).toContain("isClassicBwTheme ? 'grayscale' : ''");
   });
 });

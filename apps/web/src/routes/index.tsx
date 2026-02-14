@@ -1,5 +1,3 @@
-import './index.classicy.css';
-
 import {
   ClassicyButton,
   ClassicyDialogBackdrop,
@@ -15,9 +13,10 @@ import {
   ClassicySelect,
   ClassicyStatRow,
   ClassicyWindowFrame,
+  getAllThemes,
+  getThemeVars,
 } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
-import { getAllThemes, getThemeVars } from 'classicy';
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -130,6 +129,13 @@ const GRAPH_SERIES_TOGGLES = [
   { bit: 1 << 4, color: '#b00020', label: 'Crime' },
   { bit: 1 << 5, color: '#7a4f00', label: 'Pollution' },
 ] as const;
+const CLASSICY_INSET_BEVEL_SHADOW =
+  '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]';
+const CLASSICY_MESSAGE_SURFACE_CHROME = `text-[var(--color-black)] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-03)_90%,transparent)] ${CLASSICY_INSET_BEVEL_SHADOW}`;
+const CLASSICY_MENU_BUTTON_ACTIVE_CLASS = '!text-[var(--color-white)] !bg-[var(--color-theme-04)]';
+const CLASSICY_FLOATING_BUDGET_ROW_CLASS = 'flex items-center justify-between gap-2';
+const CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS =
+  '!m-0 w-full max-w-full !min-w-0 box-border !p-0 !border-0 !bg-transparent !shadow-none';
 
 /**
  * Creates initial floating-window positions for budget/evaluation/graph windows.
@@ -510,7 +516,8 @@ function RuntimePanel() {
     activeNoticeSignature === dismissedNoticeSignature
       ? null
       : activeNotice;
-  const menubarButtonClass = 'classicyRuntimeMenuButton px-2 py-1 text-center';
+  const menubarButtonClass =
+    '!m-0 min-w-[calc(var(--window-control-size)*7)] px-2 py-1 text-center';
   const menubarPanelClass = 'absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
   const runtimeTheme = useMemo(() => {
     const theme = getAllThemes()[0];
@@ -587,13 +594,13 @@ function RuntimePanel() {
 
   return (
     <section
-      className={`classicyRuntimePanel relative h-full w-full overflow-hidden ${
-        isClassicBwTheme ? 'classicyRuntimePanelClassicBw' : ''
+      className={`relative h-full w-full overflow-hidden [--runtime-top-bar-padding-y:4px] [--runtime-top-bar-height:calc(var(--window-control-size)+(var(--runtime-top-bar-padding-y)*2))] [--runtime-sidebar-width:94px] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] ${
+        isClassicBwTheme ? 'grayscale' : ''
       }`}
       style={runtimeTheme as CSSProperties}
     >
       <div
-        className="classicyRuntimeMapArea absolute"
+        className="absolute right-0 bottom-0"
         style={{ left: layoutInsets.left, top: layoutInsets.top }}
       >
         <MapCanvas
@@ -622,9 +629,9 @@ function RuntimePanel() {
 
       <header
         ref={menubarRef}
-        className="classicyRuntimeMenuBar classicyRuntimeTopBar pointer-events-auto absolute left-0 right-0 top-0 z-10 flex items-center justify-between gap-2 pl-2 pr-0"
+        className="pointer-events-auto absolute left-0 right-0 top-0 z-10 flex min-h-(--runtime-top-bar-height) items-center justify-between gap-2 bg-[var(--color-system-02)] py-(--runtime-top-bar-padding-y) pl-2 pr-0 [border-bottom:calc(var(--window-border-size)*2)_solid_var(--color-black)] [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]"
       >
-        <div className="classicyRuntimeTopLeft flex items-center gap-2">
+        <div className="min-w-max flex items-center gap-2">
           <div className="relative">
             <ClassicyButton
               onClick={() => {
@@ -633,9 +640,9 @@ function RuntimePanel() {
                 );
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'micropolis' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'micropolis' ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
               active={openMenubarSection === 'micropolis'}
-              activeClassName="classicyRuntimeMenuButtonActive"
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               type="button"
             >
               Micropolis
@@ -703,9 +710,9 @@ function RuntimePanel() {
                 setOpenMenubarSection((current) => (current === 'windows' ? null : 'windows'));
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'windows' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'windows' ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
               active={openMenubarSection === 'windows'}
-              activeClassName="classicyRuntimeMenuButtonActive"
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               type="button"
             >
               Windows
@@ -748,9 +755,9 @@ function RuntimePanel() {
                 setOpenMenubarSection((current) => (current === 'disasters' ? null : 'disasters'));
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'disasters' ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
               active={openMenubarSection === 'disasters'}
-              activeClassName="classicyRuntimeMenuButtonActive"
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               type="button"
             >
               Disasters
@@ -779,9 +786,9 @@ function RuntimePanel() {
                 setOpenMenubarSection((current) => (current === 'settings' ? null : 'settings'));
                 setIsSpeedMenuOpen(false);
               }}
-              className={`${menubarButtonClass} ${openMenubarSection === 'settings' ? 'classicyRuntimeMenuButtonActive' : ''}`}
+              className={`${menubarButtonClass} ${openMenubarSection === 'settings' ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
               active={openMenubarSection === 'settings'}
-              activeClassName="classicyRuntimeMenuButtonActive"
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               type="button"
             >
               Settings
@@ -846,7 +853,9 @@ function RuntimePanel() {
             )}
           </div>
         </div>
-        <div className="classicyRuntimeTopStatus pointer-events-none absolute left-1/2 top-1/2 z- 11 flex -translate-x-1/2 -translate-y-1/2 flex-col px-2 py-0.5">
+        <div
+          className={`pointer-events-none absolute left-1/2 top-1/2 z-[11] flex w-[min(280px,30vw)] max-[960px]:w-[min(220px,34vw)] -translate-x-1/2 -translate-y-1/2 flex-col border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-02)_92%,transparent)] px-2 py-0.5 ${CLASSICY_INSET_BEVEL_SHADOW}`}
+        >
           <div className="text-[12px] font-bold leading-4">
             {activeToolSpec.label}: ${activeToolSpec.baseCost}
           </div>
@@ -858,7 +867,7 @@ function RuntimePanel() {
                 : 'Click map tiles to place tool.'}
           </div>
         </div>
-        <div className="classicyRuntimeTopControls ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <ClassicyButton
             disabled={sessionControlsDisabled}
             onClick={() => {
@@ -867,7 +876,7 @@ function RuntimePanel() {
                 control: isSimulationRunning ? 'pause' : 'play',
               });
             }}
-            className="classicyRuntimeTopControlButton min-w-21 font-bold"
+            className="!m-0 min-w-21 font-bold"
             type="button"
           >
             {isSimulationRunning ? 'Pause' : 'Play'}
@@ -879,9 +888,9 @@ function RuntimePanel() {
                 setOpenMenubarSection(null);
                 setIsSpeedMenuOpen((current) => !current);
               }}
-              className="classicyRuntimeTopControlButton min-w-13.5 px-1.5 font-bold"
+              className="!m-0 min-w-13.5 px-1.5 font-bold"
               active={isSpeedMenuOpen}
-              activeClassName="classicyRuntimeMenuButtonActive"
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               type="button"
             >
               {state.hudState.speed > 0 ? `${state.hudState.speed}x` : '1x'} ▾
@@ -892,7 +901,7 @@ function RuntimePanel() {
                   <ClassicyButton
                     key={speed}
                     active={state.hudState.speed === speed}
-                    activeClassName="classicyRuntimeMenuButtonActive font-bold"
+                    activeClassName={`${CLASSICY_MENU_BUTTON_ACTIVE_CLASS} font-bold`}
                     className="px-2 py-1 text-left"
                     disabled={sessionControlsDisabled}
                     onClick={() => {
@@ -923,9 +932,9 @@ function RuntimePanel() {
               });
             }}
             active={isGameplayMuted}
-            activeClassName="classicyRuntimeMenuButtonActive"
+            activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
             buttonShape="square"
-            className="classicyRuntimeTopControlButton inline-flex h-(--window-control-size) w-(--window-control-size) items-center justify-center p-0"
+            className="!m-0 inline-flex h-(--window-control-size) w-(--window-control-size) items-center justify-center p-0"
             title={isGameplayMuted ? 'Unmute' : 'Mute'}
             type="button"
           >
@@ -973,7 +982,7 @@ function RuntimePanel() {
           src={isSimulationRunning ? micropolisRunningIndicatorUrl : micropolisPausedIndicatorUrl}
           tabIndex={0}
           title="Micropolis"
-          className="classicyRuntimeBrandIcon [image-rendering:pixelated]"
+          className="block self-stretch !mt-[calc((var(--runtime-top-bar-padding-y)*-1)+var(--window-border-size))] !mb-[calc(var(--runtime-top-bar-padding-y)*-1)] h-auto w-auto shrink-0 max-h-none cursor-pointer select-none [image-rendering:pixelated]"
         />
       </header>
       {visibleNotice === null ? null : (
@@ -988,7 +997,7 @@ function RuntimePanel() {
 
       <ClassicyPanelChrome
         ref={sidebarRef}
-        className="classicyRuntimeSidebar pointer-events-auto absolute bottom-0 left-0 z-6 grid gap-1.5 overflow-y-auto px-2 py-3"
+        className="pointer-events-auto absolute bottom-0 left-0 z-6 grid w-(--runtime-sidebar-width) content-start gap-1.5 overflow-x-hidden overflow-y-auto px-2 py-3"
         style={{ top: layoutInsets.top }}
       >
         <div className="mx-auto grid grid-cols-2 justify-center gap-x-1.5 gap-y-1">
@@ -1014,12 +1023,14 @@ function RuntimePanel() {
                 }}
                 title={`${spec.label} ($${spec.baseCost})`}
                 type="button"
-                className={`classicyRuntimeToolButton flex items-center justify-center border-2 p-0 ${
-                  active ? 'classicyRuntimeToolButtonActive' : 'classicyRuntimeToolButtonInactive'
+                className={`!m-0 flex h-9 min-h-9 max-h-9 w-9 min-w-9 max-w-9 items-center justify-center border-2 p-0 ${
+                  active
+                    ? '!border-[var(--color-theme-07)] !bg-[var(--color-theme-03)]'
+                    : '!border-[var(--color-black)] !bg-[var(--color-system-02)]'
                 } ${sessionControlsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 {iconUrl === undefined ? (
-                  <span className="classicyRuntimeToolButtonLabel font-bold">
+                  <span className="[font-family:var(--ui-font),sans-serif] [font-size:calc(var(--ui-font-size)*0.75)] text-[var(--color-black)] font-bold">
                     {spec.label.slice(0, 2).toUpperCase()}
                   </span>
                 ) : (
@@ -1041,7 +1052,7 @@ function RuntimePanel() {
             onClick={() => {
               openFloatingWindow('evaluation');
             }}
-            className="classicyRuntimeWindowLauncher p-0"
+            className={CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS}
             title="Open Evaluation Window"
             type="button"
           >
@@ -1055,7 +1066,7 @@ function RuntimePanel() {
             onClick={() => {
               openFloatingWindow('graph');
             }}
-            className="classicyRuntimeWindowLauncher p-0"
+            className={CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS}
             title="Open Graph Window"
             type="button"
           >
@@ -1066,12 +1077,12 @@ function RuntimePanel() {
             />
           </ClassicyButton>
         </div>
-        <div className="classicyRuntimeSidebarStats grid text-[11px]">
+        <div className="grid min-w-0 content-start auto-rows-max gap-y-1 text-[11px]">
           <button
             onClick={() => {
               openFloatingWindow('budget');
             }}
-            className="classicyRuntimeSidebarBudgetGroup"
+            className={`${CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS} grid gap-y-1 text-inherit [font:inherit] text-left`}
             title="Open Budget Window"
             type="button"
           >
@@ -1099,8 +1110,8 @@ function RuntimePanel() {
         </div>
       </ClassicyPanelChrome>
 
-      <ClassicyPanelChrome className="classicyRuntimeBottomFeed pointer-events-auto absolute left-1/2 z-6 grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
-        <div className="classicyRuntimeSidebarStatLabel classicyRuntimeMessageFeedLabel">
+      <ClassicyPanelChrome className="pointer-events-auto absolute left-1/2 bottom-[calc(var(--window-padding-size)*2)] z-6 grid w-[min(560px,calc(100vw-24px))] -translate-x-1/2 gap-0.5 px-2 py-1">
+        <div className="[font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] leading-none p-0 text-center">
           Message Feed
         </div>
         <MessageFeed messages={state.hudState.messages} />
@@ -1144,19 +1155,19 @@ function RuntimePanel() {
         >
           <div className="grid gap-1.5 md:grid-cols-2">
             <div className="grid gap-1">
-              <div className="classicyRuntimeFloatingBudgetRow">
+              <div className={CLASSICY_FLOATING_BUDGET_ROW_CLASS}>
                 <span>Taxes Collected</span>
                 <strong>{formatBudgetAmount(state.hudState.budget.taxFund)}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow">
+              <div className={CLASSICY_FLOATING_BUDGET_ROW_CLASS}>
                 <span>Cash Flow</span>
                 <strong>{formatSignedBudgetAmount(state.hudState.budget.cashFlow)}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow">
+              <div className={CLASSICY_FLOATING_BUDGET_ROW_CLASS}>
                 <span>Previous Funds</span>
                 <strong>{formatBudgetAmount(state.hudState.budget.totalFunds)}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow">
+              <div className={CLASSICY_FLOATING_BUDGET_ROW_CLASS}>
                 <span>Current Funds</span>
                 <strong>
                   {formatBudgetAmount(
@@ -1316,29 +1327,29 @@ function RuntimePanel() {
             {state.hudState.evaluation.title}
           </ClassicyPanelTitle>
           <div className="grid gap-2 md:grid-cols-2">
-            <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+            <section className={`${CLASSICY_MESSAGE_SURFACE_CHROME} grid gap-1 p-1.5`}>
               <strong className="text-[11px]">Public Opinion</strong>
               <div className="text-[11px]">Is the mayor doing a good job?</div>
               <div
-                className="classicyRuntimeEvaluationOpinionChart"
+                className={`${CLASSICY_MESSAGE_SURFACE_CHROME} relative h-5 overflow-hidden`}
                 role="img"
                 aria-label={`Public opinion: yes ${state.hudState.evaluation.yesPercent}, no ${state.hudState.evaluation.noPercent}`}
               >
-                <div className="classicyRuntimeEvaluationOpinionTrack">
+                <div className="flex h-full w-full">
                   <div
-                    className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentYes"
+                    className="h-full shrink-0 [background:color-mix(in_srgb,#6fbf7c_72%,var(--color-system-03))]"
                     style={{ width: `${opinionYesChartWidthPercent}%` }}
                   />
                   <div
-                    className="classicyRuntimeEvaluationOpinionSegment classicyRuntimeEvaluationOpinionSegmentNo"
+                    className="h-full shrink-0 [border-left:var(--window-border-size)_solid_color-mix(in_srgb,var(--color-black)_45%,transparent)] [background:color-mix(in_srgb,#d78686_74%,var(--color-system-03))]"
                     style={{ width: `${opinionNoChartWidthPercent}%` }}
                   />
                 </div>
-                <div className="classicyRuntimeEvaluationOpinionLabels">
-                  <strong className="classicyRuntimeEvaluationOpinionLabel">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-1">
+                  <strong className="text-[11px] leading-none [color:color-mix(in_srgb,var(--color-black)_92%,#101010)]">
                     Yes {state.hudState.evaluation.yesPercent}
                   </strong>
-                  <strong className="classicyRuntimeEvaluationOpinionLabel">
+                  <strong className="text-[11px] leading-none [color:color-mix(in_srgb,var(--color-black)_92%,#101010)]">
                     No {state.hudState.evaluation.noPercent}
                   </strong>
                 </div>
@@ -1347,41 +1358,41 @@ function RuntimePanel() {
               {state.hudState.evaluation.problems.map((problem, index) => (
                 <div
                   key={`evaluation-problem-${index}`}
-                  className="classicyRuntimeFloatingBudgetRow text-[11px]"
+                  className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}
                 >
                   <span>{problem.name}</span>
                   <strong>{problem.percent}</strong>
                 </div>
               ))}
             </section>
-            <section className="classicyRuntimeMessageFeed grid gap-1 p-1.5">
+            <section className={`${CLASSICY_MESSAGE_SURFACE_CHROME} grid gap-1 p-1.5`}>
               <strong className="text-[11px]">Statistics</strong>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Population</span>
                 <strong>{state.hudState.evaluation.population}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Net Migration (last year)</span>
                 <strong>{state.hudState.evaluation.populationDelta}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Assessed Value</span>
                 <strong>{state.hudState.evaluation.assessedValue}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Category</span>
                 <strong>{state.hudState.evaluation.cityClass}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Game Level</span>
                 <strong>{state.hudState.evaluation.cityLevel}</strong>
               </div>
               <strong className="mt-1 text-[11px]">Overall City Score (0 - 1000)</strong>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Current Score</span>
                 <strong>{state.hudState.evaluation.score}</strong>
               </div>
-              <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+              <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
                 <span>Annual Change</span>
                 <strong>{state.hudState.evaluation.scoreDelta}</strong>
               </div>
@@ -1470,7 +1481,7 @@ function RuntimePanel() {
             ))}
           </div>
           <GraphWindowChart graph={state.hudState.graph} mask={graphMask} range={graphRange} />
-          <div className="classicyRuntimeFloatingBudgetRow text-[11px]">
+          <div className={`${CLASSICY_FLOATING_BUDGET_ROW_CLASS} text-[11px]`}>
             <span>Visible series</span>
             <strong>
               {GRAPH_SERIES_TOGGLES.filter((series) => (graphMask & series.bit) !== 0).length}/
@@ -1512,7 +1523,7 @@ function RuntimePanel() {
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="classicyRuntimeBrandDialog grid min-w-70 w-[min(420px,calc(100vw-24px))] gap-2.5"
+            className="grid min-w-70 w-[min(420px,calc(100vw-24px))] !p-2 gap-2.5"
             style={{ position: 'relative' }}
           >
             <ClassicyPanelTitle className="text-sm">Micropolis</ClassicyPanelTitle>

@@ -1,6 +1,9 @@
 import { clsx } from 'clsx';
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
+const CLASSICY_INPUT_CHROME =
+  '[font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-white)] [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)]';
+
 export interface ClassicyInputProps extends InputHTMLAttributes<HTMLInputElement> {}
 
 /**
@@ -9,7 +12,7 @@ export interface ClassicyInputProps extends InputHTMLAttributes<HTMLInputElement
  * Parity note: browser input behavior is preserved; this wrapper only applies classes.
  */
 export function ClassicyInput({ className, ...inputProps }: ClassicyInputProps) {
-  return <input {...inputProps} className={clsx('classicyRuntimeInput', className)} />;
+  return <input {...inputProps} className={clsx(CLASSICY_INPUT_CHROME, className)} />;
 }
 
 export interface ClassicySelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -23,7 +26,7 @@ export interface ClassicySelectProps extends SelectHTMLAttributes<HTMLSelectElem
  */
 export function ClassicySelect({ children, className, ...selectProps }: ClassicySelectProps) {
   return (
-    <select {...selectProps} className={clsx('classicyRuntimeSelect', className)}>
+    <select {...selectProps} className={clsx(CLASSICY_INPUT_CHROME, className)}>
       {children}
     </select>
   );
@@ -37,5 +40,5 @@ export interface ClassicyRangeProps extends Omit<InputHTMLAttributes<HTMLInputEl
  * Parity note: value-to-command mapping is managed by callers; this component only styles the slider.
  */
 export function ClassicyRange({ className, ...rangeProps }: ClassicyRangeProps) {
-  return <input {...rangeProps} className={clsx('classicyRuntimeRange', className)} type="range" />;
+  return <input {...rangeProps} className={clsx('w-full', className)} type="range" />;
 }

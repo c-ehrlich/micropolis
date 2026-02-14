@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { clsx } from 'clsx';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type ClassicyButtonShape = 'rectangle' | 'square';
 type ClassicyButtonSize = 'medium' | 'small';

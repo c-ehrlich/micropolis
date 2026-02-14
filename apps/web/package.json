@@ -16,7 +16,6 @@
     "@city/classicyui": "workspace:*",
     "@tanstack/react-router": "1.157.16",
     "@tanstack/react-router-devtools": "1.149.0",
-    "classicy": "^0.6.31",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

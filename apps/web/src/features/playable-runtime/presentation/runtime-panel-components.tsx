@@ -17,6 +17,8 @@ const GRAPH_SERIES = [
   { bit: 1 << 4, key: 'crime', label: 'Crime', color: '#b00020' },
   { bit: 1 << 5, key: 'pollution', label: 'Pollution', color: '#7a4f00' },
 ] as const;
+const CLASSICY_MESSAGE_SURFACE_CHROME =
+  'text-[var(--color-black)] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-03)_90%,transparent)] [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]';
 
 type GraphRange = 10 | 120;
 
@@ -37,7 +39,7 @@ export function NoticePanel({
 }) {
   return (
     <ClassicyPanelChrome
-      className="classicyRuntimeNoticePanel pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
+      className="pointer-events-auto absolute right-3 z-[13] grid max-h-[min(45vh,320px)] w-[min(520px,calc(100vw-24px))] max-w-[min(520px,calc(100vw-24px))] gap-2.5 overflow-hidden p-2.5"
       style={{ top: `calc(${topInsetPx}px + var(--window-padding-size))` }}
     >
       <header
@@ -47,7 +49,9 @@ export function NoticePanel({
         <strong className="text-xs">{notice.title}</strong>
         <span className="text-[11px]">#{notice.id}</span>
       </header>
-      <pre className="classicyRuntimeMessageFeed m-0 overflow-auto whitespace-pre-wrap p-2 text-xs leading-[18px]">
+      <pre
+        className={`${CLASSICY_MESSAGE_SURFACE_CHROME} m-0 overflow-auto whitespace-pre-wrap p-2 text-xs leading-[18px]`}
+      >
         {notice.body}
       </pre>
       <div className="flex justify-end">

@@ -1,12 +1,15 @@
+import { clsx } from 'clsx';
 import type {
   HTMLAttributes,
   PointerEvent as ReactPointerEvent,
   PointerEventHandler,
   ReactNode,
 } from 'react';
-import { clsx } from 'clsx';
 
 import { ClassicyButton } from './classicy-button.tsx';
+
+const CLASSICY_FLOATING_WINDOW_SHADOW =
+  '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07),calc(var(--window-border-size)*3)_calc(var(--window-border-size)*3)_0_0_rgba(0,0,0,0.3)]';
 
 export interface ClassicyWindowFrameProps extends HTMLAttributes<HTMLElement> {
   readonly bodyClassName?: string;
@@ -44,24 +47,33 @@ export function ClassicyWindowFrame({
     <section
       {...windowProps}
       className={clsx(
-        'classicyWindow classicyWindowActive classicyRuntimeFloatingWindow pointer-events-auto absolute grid',
+        'classicyWindow classicyWindowActive pointer-events-auto absolute grid',
+        'border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)]',
+        CLASSICY_FLOATING_WINDOW_SHADOW,
         className,
       )}
     >
       <header
         onPointerDown={onHeaderPointerDown}
         className={clsx(
-          'classicyRuntimeFloatingWindowTitleBar classicyRuntimeFloatingWindowMenuTitleBar flex cursor-move items-center justify-between gap-2',
+          'flex cursor-move select-none items-center justify-between gap-2',
+          '[border-bottom:var(--window-border-size)_solid_var(--color-black)]',
+          '[background:color-mix(in_srgb,var(--color-system-03)_88%,transparent)] px-1.5 py-0.5',
           headerClassName,
         )}
       >
-        <strong className={clsx('classicyRuntimeFloatingWindowMenuTitle', titleClassName)}>
+        <strong
+          className={clsx(
+            '[font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] leading-none text-left',
+            titleClassName,
+          )}
+        >
           {windowTitle}
         </strong>
         <div className="flex items-center gap-1">
           {headerRight}
           <ClassicyButton
-            className="classicyRuntimeFloatingWindowClose"
+            className="!m-0 min-w-5 !px-1.5 [line-height:1.2]"
             onPointerDown={stopPropagationOnPointerDown}
             onClick={onClose}
             title={closeButtonTitle}
@@ -71,7 +83,7 @@ export function ClassicyWindowFrame({
           </ClassicyButton>
         </div>
       </header>
-      <div className={clsx('classicyRuntimeFloatingWindowBody', bodyClassName)}>{children}</div>
+      <div className={clsx('bg-[var(--color-system-02)]', bodyClassName)}>{children}</div>
     </section>
   );
 }

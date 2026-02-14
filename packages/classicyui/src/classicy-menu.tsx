@@ -1,7 +1,10 @@
-import type { HTMLAttributes } from 'react';
 import { clsx } from 'clsx';
+import type { HTMLAttributes } from 'react';
 
 import { ClassicyButton, type ClassicyButtonProps } from './classicy-button.tsx';
+
+const CLASSICY_MENU_PANEL_SHADOW =
+  '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07),calc(var(--window-border-size)*2)_calc(var(--window-border-size)*2)_0_0_var(--color-black)]';
 
 export interface ClassicyMenuPanelProps extends HTMLAttributes<HTMLElement> {}
 
@@ -12,7 +15,14 @@ export interface ClassicyMenuPanelProps extends HTMLAttributes<HTMLElement> {}
  */
 export function ClassicyMenuPanel({ children, className, ...panelProps }: ClassicyMenuPanelProps) {
   return (
-    <section {...panelProps} className={clsx('classicyRuntimeMenuPanel', className)}>
+    <section
+      {...panelProps}
+      className={clsx(
+        'border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)]',
+        CLASSICY_MENU_PANEL_SHADOW,
+        className,
+      )}
+    >
       {children}
     </section>
   );
@@ -33,7 +43,7 @@ export function ClassicyMenuItemButton({
   return (
     <ClassicyButton
       {...buttonProps}
-      className={clsx('classicyRuntimeMenuItem text-left', className)}
+      className={clsx('!m-[calc(var(--window-padding-size)/2)] text-left', className)}
     >
       {children}
     </ClassicyButton>
@@ -53,7 +63,10 @@ export function ClassicyMenuActionButton({
   ...buttonProps
 }: ClassicyMenuActionButtonProps) {
   return (
-    <ClassicyButton {...buttonProps} className={clsx('classicyRuntimeRuntimeAction', className)}>
+    <ClassicyButton
+      {...buttonProps}
+      className={clsx('!m-[calc(var(--window-padding-size)/2)]', className)}
+    >
       {children}
     </ClassicyButton>
   );
