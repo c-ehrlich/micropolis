@@ -60,6 +60,8 @@ interface FloatingWindowDragState {
   windowId: RuntimeFloatingWindowId;
   offsetX: number;
   offsetY: number;
+  windowWidth: number;
+  windowHeight: number;
 }
 
 export interface RuntimeLayoutInsets {
@@ -394,6 +396,8 @@ export function useFloatingWindowsState() {
         windowId,
         offsetX: event.clientX - bounds.left,
         offsetY: event.clientY - bounds.top,
+        windowWidth: Math.max(1, Math.ceil(bounds.width)),
+        windowHeight: Math.max(1, Math.ceil(bounds.height)),
       };
       focusFloatingWindow(windowId);
     },
@@ -409,8 +413,8 @@ export function useFloatingWindowsState() {
 
       const unclampedX = Math.trunc(event.clientX - dragState.offsetX);
       const unclampedY = Math.trunc(event.clientY - dragState.offsetY);
-      const maxX = Math.max(0, window.innerWidth - 220);
-      const maxY = Math.max(0, window.innerHeight - 120);
+      const maxX = Math.max(0, window.innerWidth - dragState.windowWidth);
+      const maxY = Math.max(0, window.innerHeight - dragState.windowHeight);
       const clampedX = Math.max(0, Math.min(unclampedX, maxX));
       const clampedY = Math.max(0, Math.min(unclampedY, maxY));
       setFloatingWindows((current) => ({
