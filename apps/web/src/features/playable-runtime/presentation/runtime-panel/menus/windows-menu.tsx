@@ -1,10 +1,10 @@
 import { ClassicyMenuItemButton } from '@city/classicyui';
 
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeMenuActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface WindowsMenuProps {
-  actions: RuntimePanelActions;
+  menuActions: RuntimeMenuActions;
   buttonClassName: string;
   openMenubarSection: RuntimeUiController['openMenubarSection'];
   panelClassName: string;
@@ -15,21 +15,21 @@ interface WindowsMenuProps {
  * Mirrors window launch entries in `ref/micropolis/res/whead.tcl`.
  */
 export function WindowsMenu(props: WindowsMenuProps) {
-  const { actions, buttonClassName, openMenubarSection, panelClassName } = props;
+  const { menuActions, buttonClassName, openMenubarSection, panelClassName } = props;
   return (
     <RuntimeTopMenuShell
       buttonClassName={buttonClassName}
       isOpen={openMenubarSection === 'windows'}
       label="Windows"
       onToggle={() => {
-        actions.toggleMenu('windows');
+        menuActions.toggleMenu('windows');
       }}
       panelClassName={`${panelClassName} min-w-51 gap-0.5`}
     >
       <ClassicyMenuItemButton
         onClick={() => {
-          actions.openFloatingWindow('budget');
-          actions.closeMenu();
+          menuActions.openFloatingWindow('budget');
+          menuActions.closeMenu();
         }}
         type="button"
       >
@@ -37,8 +37,8 @@ export function WindowsMenu(props: WindowsMenuProps) {
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
         onClick={() => {
-          actions.openFloatingWindow('evaluation');
-          actions.closeMenu();
+          menuActions.openFloatingWindow('evaluation');
+          menuActions.closeMenu();
         }}
         type="button"
       >
@@ -46,8 +46,8 @@ export function WindowsMenu(props: WindowsMenuProps) {
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
         onClick={() => {
-          actions.openFloatingWindow('graph');
-          actions.closeMenu();
+          menuActions.openFloatingWindow('graph');
+          menuActions.closeMenu();
         }}
         type="button"
       >

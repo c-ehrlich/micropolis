@@ -9,11 +9,21 @@ import { RuntimeGameDialogs } from './dialogs/game-dialogs.tsx';
 import { RuntimeFloatingWindowsLayer } from './floating-windows/floating-windows-layer.tsx';
 import { MAP_TILE_SIZE } from './runtime-panel-constants.ts';
 import type {
+  RuntimeBrandActions,
+  RuntimeBudgetActions,
   RuntimeBudgetState,
+  RuntimeDialogActions,
   RuntimeFloatingWindowsController,
+  RuntimeGraphActions,
+  RuntimeMenuActions,
+  RuntimeNoticeActions,
   RuntimePanelActions,
   RuntimeSessionController,
+  RuntimeSimulationActions,
+  RuntimeSpeedActions,
+  RuntimeToolActions,
   RuntimeUiController,
+  RuntimeWindowActions,
 } from './runtime-panel-types.ts';
 import { RuntimeMessageFeedDock } from './sections/message-feed-dock.tsx';
 import { RuntimeSidebarSection } from './sections/sidebar.tsx';
@@ -63,6 +73,69 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
 
   const activeToolSpec = getPlayableToolSpec(ui.activeTool);
   const isClassicBwTheme = ui.selectedRuntimeTileset === 'classicbw';
+  const brandActions: RuntimeBrandActions = {
+    closeBrandDialog: actions.closeBrandDialog,
+    openBrandDialog: actions.openBrandDialog,
+  };
+  const budgetActions: RuntimeBudgetActions = {
+    setBudgetAuto: actions.setBudgetAuto,
+    setBudgetFirePercent: actions.setBudgetFirePercent,
+    setBudgetPolicePercent: actions.setBudgetPolicePercent,
+    setBudgetRoadPercent: actions.setBudgetRoadPercent,
+    setBudgetTaxRate: actions.setBudgetTaxRate,
+  };
+  const dialogActions: RuntimeDialogActions = {
+    closeGameDialog: actions.closeGameDialog,
+    loadPendingCityFile: actions.loadPendingCityFile,
+    saveCityFromDraft: actions.saveCityFromDraft,
+    selectScenario: actions.selectScenario,
+    setGameLevel: actions.setGameLevel,
+    setPendingLoadFile: actions.setPendingLoadFile,
+    setSaveFileNameDraft: actions.setSaveFileNameDraft,
+    startNewCity: actions.startNewCity,
+    startScenario: actions.startScenario,
+  };
+  const graphActions: RuntimeGraphActions = {
+    setGraphMask: actions.setGraphMask,
+    setGraphRange: actions.setGraphRange,
+    showAllGraphSeries: actions.showAllGraphSeries,
+    toggleGraphSeriesBit: actions.toggleGraphSeriesBit,
+  };
+  const menuActions: RuntimeMenuActions = {
+    closeMenu: actions.closeMenu,
+    openBrandDialog: actions.openBrandDialog,
+    openFloatingWindow: actions.openFloatingWindow,
+    openGameDialog: actions.openGameDialog,
+    reconnectRuntime: actions.reconnectRuntime,
+    requestResyncSnapshot: actions.requestResyncSnapshot,
+    setPendingLoadFile: actions.setPendingLoadFile,
+    setRuntimeTileset: actions.setRuntimeTileset,
+    setSaveFileNameDraft: actions.setSaveFileNameDraft,
+    toggleMenu: actions.toggleMenu,
+    triggerDisaster: actions.triggerDisaster,
+  };
+  const noticeActions: RuntimeNoticeActions = {
+    dismissNotice: actions.dismissNotice,
+  };
+  const simulationActions: RuntimeSimulationActions = {
+    playPauseSimulation: actions.playPauseSimulation,
+    toggleGameplayMuted: actions.toggleGameplayMuted,
+  };
+  const speedActions: RuntimeSpeedActions = {
+    closeSpeedMenu: actions.closeSpeedMenu,
+    setSimulationSpeed: actions.setSimulationSpeed,
+    toggleSpeedMenu: actions.toggleSpeedMenu,
+  };
+  const toolActions: RuntimeToolActions = {
+    placeTool: actions.placeTool,
+    selectTool: actions.selectTool,
+  };
+  const windowActions: RuntimeWindowActions = {
+    closeFloatingWindow: actions.closeFloatingWindow,
+    focusFloatingWindow: actions.focusFloatingWindow,
+    openFloatingWindow: actions.openFloatingWindow,
+    startFloatingWindowDrag: actions.startFloatingWindowDrag,
+  };
 
   return (
     <section
@@ -80,7 +153,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
           hoverTool={sessionControlsDisabled ? undefined : ui.activeTool}
           mapState={session.state.mapState}
           onTileClick={(x, y) => {
-            actions.placeTool(ui.activeTool, x, y);
+            toolActions.placeTool(ui.activeTool, x, y);
           }}
           pendingTools={session.state.pendingTools}
           realtimeObjects={session.state.realtimeState.objects}
@@ -90,10 +163,12 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
       </div>
 
       <RuntimeTopBarSection
-        actions={actions}
+        menuActions={menuActions}
         menubarRef={menubarRef}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
+        simulationActions={simulationActions}
+        speedActions={speedActions}
         speedControlRef={speedControlRef}
         ui={ui}
       />
@@ -102,38 +177,41 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
         <NoticePanel
           notice={visibleNotice}
           onDismiss={() => {
-            actions.dismissNotice(activeNoticeSignature);
+            noticeActions.dismissNotice(activeNoticeSignature);
           }}
           topInsetPx={layoutInsets.top}
         />
       )}
 
       <RuntimeSidebarSection
-        actions={actions}
+        toolActions={toolActions}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
         sidebarRef={sidebarRef}
         topInsetPx={layoutInsets.top}
         ui={ui}
+        windowActions={windowActions}
       />
 
       <RuntimeMessageFeedDock session={session} />
 
       <RuntimeFloatingWindowsLayer
-        actions={actions}
         applyBudgetControlState={applyBudgetControlState}
+        budgetActions={budgetActions}
         budgetWindowOriginalStateRef={budgetWindowOriginalStateRef}
         floating={floating}
+        graphActions={graphActions}
         graphMask={ui.graphMask}
         graphRange={ui.graphRange}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
+        windowActions={windowActions}
       />
 
-      <RuntimeBrandDialog actions={actions} isOpen={ui.isBrandDialogOpen} />
+      <RuntimeBrandDialog actions={brandActions} isOpen={ui.isBrandDialogOpen} />
 
       <RuntimeGameDialogs
-        actions={actions}
+        dialogActions={dialogActions}
         isLoadingCityFile={ui.isLoadingCityFile}
         pendingLoadFile={ui.pendingLoadFile}
         selectedGameLevel={ui.selectedGameLevel}

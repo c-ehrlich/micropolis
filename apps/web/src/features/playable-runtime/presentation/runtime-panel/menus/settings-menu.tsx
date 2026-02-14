@@ -2,14 +2,14 @@ import { ClassicyMenuActionButton, ClassicySelect } from '@city/classicyui';
 
 import type { RuntimeTilesetName } from '../../../../../presentation/map/tile-sprite-atlas.ts';
 import type {
-  RuntimePanelActions,
+  RuntimeMenuActions,
   RuntimeSessionController,
   RuntimeUiController,
 } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface SettingsMenuProps {
-  actions: RuntimePanelActions;
+  menuActions: RuntimeMenuActions;
   buttonClassName: string;
   cityIoError: string;
   lastSaveStatus: string;
@@ -27,7 +27,7 @@ interface SettingsMenuProps {
  */
 export function SettingsMenu(props: SettingsMenuProps) {
   const {
-    actions,
+    menuActions,
     buttonClassName,
     cityIoError,
     lastSaveStatus,
@@ -43,7 +43,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
       isOpen={openMenubarSection === 'settings'}
       label="Settings"
       onToggle={() => {
-        actions.toggleMenu('settings');
+        menuActions.toggleMenu('settings');
       }}
       panelClassName={`${panelClassName} min-w-72.5 gap-1.5 p-2`}
     >
@@ -54,7 +54,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
           className="px-1.5 py-1"
           onChange={(event) => {
             const nextTileset = event.currentTarget.value as RuntimeTilesetName;
-            actions.setRuntimeTileset(nextTileset);
+            menuActions.setRuntimeTileset(nextTileset);
           }}
           value={selectedRuntimeTileset}
         >
@@ -82,7 +82,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
         <ClassicyMenuActionButton
           disabled={session.reconnectDisabled}
           onClick={() => {
-            actions.reconnectRuntime();
+            menuActions.reconnectRuntime();
           }}
           type="button"
         >
@@ -91,7 +91,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
         <ClassicyMenuActionButton
           disabled={session.resyncDisabled}
           onClick={() => {
-            actions.requestResyncSnapshot();
+            menuActions.requestResyncSnapshot();
           }}
           type="button"
         >

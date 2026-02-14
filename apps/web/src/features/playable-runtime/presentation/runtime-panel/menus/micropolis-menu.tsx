@@ -1,10 +1,10 @@
 import { ClassicyMenuItemButton, ClassicyMenuSeparator } from '@city/classicyui';
 
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeMenuActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { RuntimeTopMenuShell } from './menu-shell.tsx';
 
 interface MicropolisMenuProps {
-  actions: RuntimePanelActions;
+  menuActions: RuntimeMenuActions;
   buttonClassName: string;
   controlsDisabled: boolean;
   openMenubarSection: RuntimeUiController['openMenubarSection'];
@@ -19,7 +19,7 @@ interface MicropolisMenuProps {
  */
 export function MicropolisMenu(props: MicropolisMenuProps) {
   const {
-    actions,
+    menuActions,
     buttonClassName,
     controlsDisabled,
     openMenubarSection,
@@ -33,13 +33,13 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       isOpen={openMenubarSection === 'micropolis'}
       label="Micropolis"
       onToggle={() => {
-        actions.toggleMenu('micropolis');
+        menuActions.toggleMenu('micropolis');
       }}
       panelClassName={`${panelClassName} min-w-51 gap-0.5`}
     >
       <ClassicyMenuItemButton
         onClick={() => {
-          actions.openBrandDialog();
+          menuActions.openBrandDialog();
         }}
         type="button"
       >
@@ -49,7 +49,7 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       <ClassicyMenuItemButton
         disabled={controlsDisabled}
         onClick={() => {
-          actions.openGameDialog('new');
+          menuActions.openGameDialog('new');
         }}
         type="button"
       >
@@ -58,8 +58,8 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       <ClassicyMenuItemButton
         disabled={sessionControlsDisabled}
         onClick={() => {
-          actions.setSaveFileNameDraft(saveFileName);
-          actions.openGameDialog('save');
+          menuActions.setSaveFileNameDraft(saveFileName);
+          menuActions.openGameDialog('save');
         }}
         type="button"
       >
@@ -68,8 +68,8 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       <ClassicyMenuItemButton
         disabled={controlsDisabled}
         onClick={() => {
-          actions.setPendingLoadFile(null);
-          actions.openGameDialog('load');
+          menuActions.setPendingLoadFile(null);
+          menuActions.openGameDialog('load');
         }}
         type="button"
       >
@@ -78,7 +78,7 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
       <ClassicyMenuItemButton
         disabled={controlsDisabled}
         onClick={() => {
-          actions.openGameDialog('scenario');
+          menuActions.openGameDialog('scenario');
         }}
         type="button"
       >

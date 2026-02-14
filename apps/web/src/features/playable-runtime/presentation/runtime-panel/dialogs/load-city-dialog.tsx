@@ -1,10 +1,10 @@
 import { ClassicyButton, ClassicyPanelTitle } from '@city/classicyui';
 import type { RefObject } from 'react';
 
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeDialogActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface LoadCityDialogProps {
-  actions: RuntimePanelActions;
+  dialogActions: RuntimeDialogActions;
   controlsDisabled: boolean;
   isLoadingCityFile: boolean;
   loadInputRef: RefObject<HTMLInputElement | null>;
@@ -17,7 +17,8 @@ interface LoadCityDialogProps {
  * Difference: browser file APIs replace Tcl file dialogs.
  */
 export function LoadCityDialog(props: LoadCityDialogProps) {
-  const { actions, controlsDisabled, isLoadingCityFile, loadInputRef, pendingLoadFile } = props;
+  const { dialogActions, controlsDisabled, isLoadingCityFile, loadInputRef, pendingLoadFile } =
+    props;
 
   return (
     <section className="grid gap-2.5">
@@ -41,7 +42,7 @@ export function LoadCityDialog(props: LoadCityDialogProps) {
             if (pendingLoadFile === null || controlsDisabled) {
               return;
             }
-            await actions.loadPendingCityFile();
+            await dialogActions.loadPendingCityFile();
           }}
           type="button"
         >
@@ -52,7 +53,7 @@ export function LoadCityDialog(props: LoadCityDialogProps) {
         <ClassicyButton
           disabled={isLoadingCityFile}
           onClick={() => {
-            actions.closeGameDialog();
+            dialogActions.closeGameDialog();
           }}
           type="button"
         >

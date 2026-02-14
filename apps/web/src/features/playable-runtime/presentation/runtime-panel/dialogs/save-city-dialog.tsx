@@ -1,10 +1,10 @@
 import { ClassicyButton, ClassicyInput, ClassicyPanelTitle } from '@city/classicyui';
 import type { FormEvent } from 'react';
 
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeDialogActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface SaveCityDialogProps {
-  actions: RuntimePanelActions;
+  dialogActions: RuntimeDialogActions;
   saveFileNameDraft: RuntimeUiController['saveFileNameDraft'];
   sessionControlsDisabled: boolean;
 }
@@ -14,14 +14,14 @@ interface SaveCityDialogProps {
  * Mirrors save controls in `ref/micropolis/res/micropolis.tcl`.
  */
 export function SaveCityDialog(props: SaveCityDialogProps) {
-  const { actions, saveFileNameDraft, sessionControlsDisabled } = props;
+  const { dialogActions, saveFileNameDraft, sessionControlsDisabled } = props;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sessionControlsDisabled) {
       return;
     }
-    actions.saveCityFromDraft();
+    dialogActions.saveCityFromDraft();
   };
 
   return (
@@ -34,7 +34,7 @@ export function SaveCityDialog(props: SaveCityDialogProps) {
           className="px-2 py-1"
           disabled={sessionControlsDisabled}
           onChange={(event) => {
-            actions.setSaveFileNameDraft(event.target.value);
+            dialogActions.setSaveFileNameDraft(event.target.value);
           }}
           type="text"
           value={saveFileNameDraft}
@@ -43,7 +43,7 @@ export function SaveCityDialog(props: SaveCityDialogProps) {
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            actions.closeGameDialog();
+            dialogActions.closeGameDialog();
           }}
           type="button"
         >

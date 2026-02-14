@@ -1,25 +1,29 @@
 import type { MutableRefObject } from 'react';
 
 import type {
+  RuntimeBudgetActions,
   RuntimeBudgetState,
   RuntimeFloatingWindowsController,
-  RuntimePanelActions,
+  RuntimeGraphActions,
   RuntimeSessionController,
   RuntimeUiController,
+  RuntimeWindowActions,
 } from '../runtime-panel-types.ts';
 import { BudgetWindow } from './budget-window.tsx';
 import { EvaluationWindow } from './evaluation-window.tsx';
 import { GraphWindow } from './graph-window.tsx';
 
 interface RuntimeFloatingWindowsLayerProps {
-  actions: RuntimePanelActions;
   applyBudgetControlState: (nextBudgetState: RuntimeBudgetState) => void;
+  budgetActions: RuntimeBudgetActions;
   budgetWindowOriginalStateRef: MutableRefObject<RuntimeBudgetState>;
   floating: RuntimeFloatingWindowsController;
+  graphActions: RuntimeGraphActions;
   graphMask: RuntimeUiController['graphMask'];
   graphRange: RuntimeUiController['graphRange'];
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
+  windowActions: RuntimeWindowActions;
 }
 
 /**
@@ -29,33 +33,37 @@ interface RuntimeFloatingWindowsLayerProps {
  */
 export function RuntimeFloatingWindowsLayer(props: RuntimeFloatingWindowsLayerProps) {
   const {
-    actions,
     applyBudgetControlState,
+    budgetActions,
     budgetWindowOriginalStateRef,
     floating,
+    graphActions,
     graphMask,
     graphRange,
     session,
     sessionControlsDisabled,
+    windowActions,
   } = props;
 
   return (
     <>
       <BudgetWindow
-        actions={actions}
         applyBudgetControlState={applyBudgetControlState}
+        budgetActions={budgetActions}
         budgetWindowOriginalStateRef={budgetWindowOriginalStateRef}
         floating={floating}
         session={session}
         sessionControlsDisabled={sessionControlsDisabled}
+        windowActions={windowActions}
       />
-      <EvaluationWindow actions={actions} floating={floating} session={session} />
+      <EvaluationWindow floating={floating} session={session} windowActions={windowActions} />
       <GraphWindow
-        actions={actions}
         floating={floating}
+        graphActions={graphActions}
         graphMask={graphMask}
         graphRange={graphRange}
         session={session}
+        windowActions={windowActions}
       />
     </>
   );

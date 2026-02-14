@@ -5,10 +5,10 @@ import {
   ClassicyPanelTitle,
 } from '@city/classicyui';
 
-import type { RuntimePanelActions } from '../runtime-panel-types.ts';
+import type { RuntimeBrandActions } from '../runtime-panel-types.ts';
 
 interface RuntimeBrandDialogProps {
-  actions: RuntimePanelActions;
+  actions: RuntimeBrandActions;
   isOpen: boolean;
 }
 

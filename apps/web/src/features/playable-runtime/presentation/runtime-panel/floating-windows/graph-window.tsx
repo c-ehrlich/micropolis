@@ -8,17 +8,19 @@ import {
 } from '../runtime-panel-constants.ts';
 import type {
   RuntimeFloatingWindowsController,
-  RuntimePanelActions,
+  RuntimeGraphActions,
   RuntimeSessionController,
   RuntimeUiController,
+  RuntimeWindowActions,
 } from '../runtime-panel-types.ts';
 
 interface GraphWindowProps {
-  actions: RuntimePanelActions;
   floating: RuntimeFloatingWindowsController;
+  graphActions: RuntimeGraphActions;
   graphMask: RuntimeUiController['graphMask'];
   graphRange: RuntimeUiController['graphRange'];
   session: RuntimeSessionController;
+  windowActions: RuntimeWindowActions;
 }
 
 /**
@@ -26,7 +28,7 @@ interface GraphWindowProps {
  * Mirrors graph controls and plotting from `ref/micropolis/src/sim/w_graph.c`.
  */
 export function GraphWindow(props: GraphWindowProps) {
-  const { actions, floating, graphMask, graphRange, session } = props;
+  const { floating, graphActions, graphMask, graphRange, session, windowActions } = props;
   const graphWindow = floating.floatingWindows.graph;
 
   if (!graphWindow.open) {
@@ -38,13 +40,13 @@ export function GraphWindow(props: GraphWindowProps) {
       bodyClassName="grid gap-1.5 p-2 text-xs"
       data-floating-window="graph"
       onClose={() => {
-        actions.closeFloatingWindow('graph');
+        windowActions.closeFloatingWindow('graph');
       }}
       onHeaderPointerDown={(event) => {
-        actions.startFloatingWindowDrag('graph', event);
+        windowActions.startFloatingWindowDrag('graph', event);
       }}
       onPointerDown={() => {
-        actions.focusFloatingWindow('graph');
+        windowActions.focusFloatingWindow('graph');
       }}
       className="min-w-70 max-w-[min(460px,calc(100vw-12px))]"
       style={{
@@ -57,7 +59,7 @@ export function GraphWindow(props: GraphWindowProps) {
       <div className="grid grid-cols-2 gap-1">
         <ClassicyButton
           onClick={() => {
-            actions.setGraphRange(10);
+            graphActions.setGraphRange(10);
           }}
           className="text-[11px]"
           style={{
@@ -69,7 +71,7 @@ export function GraphWindow(props: GraphWindowProps) {
         </ClassicyButton>
         <ClassicyButton
           onClick={() => {
-            actions.setGraphRange(120);
+            graphActions.setGraphRange(120);
           }}
           className="text-[11px]"
           style={{
@@ -85,7 +87,7 @@ export function GraphWindow(props: GraphWindowProps) {
           <ClassicyButton
             key={series.bit}
             onClick={() => {
-              actions.toggleGraphSeriesBit(series.bit);
+              graphActions.toggleGraphSeriesBit(series.bit);
             }}
             className="flex items-center justify-between gap-1 text-[11px]"
             style={{
@@ -113,8 +115,8 @@ export function GraphWindow(props: GraphWindowProps) {
       <div className="flex justify-between gap-1">
         <ClassicyButton
           onClick={() => {
-            actions.setGraphMask(HEAD_GRAPH_MASK_RCI);
-            actions.setGraphRange(10);
+            graphActions.setGraphMask(HEAD_GRAPH_MASK_RCI);
+            graphActions.setGraphRange(10);
           }}
           className="text-[11px]"
           type="button"
@@ -123,7 +125,7 @@ export function GraphWindow(props: GraphWindowProps) {
         </ClassicyButton>
         <ClassicyButton
           onClick={() => {
-            actions.showAllGraphSeries();
+            graphActions.showAllGraphSeries();
           }}
           className="text-[11px]"
           type="button"

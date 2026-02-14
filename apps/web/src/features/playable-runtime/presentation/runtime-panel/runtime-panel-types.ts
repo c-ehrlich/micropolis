@@ -67,3 +67,62 @@ export interface RuntimePanelActions {
   toggleSpeedMenu: () => void;
   triggerDisaster: (disasterId: PlayableDisasterChoiceId, label: string) => void;
 }
+
+/**
+ * Focused action bundles consumed by presentation sections.
+ * Mirrors Tcl menu/dialog/window command grouping in
+ * `ref/micropolis/res/whead.tcl`, adapted to route-owned React actions.
+ */
+export type RuntimeBrandActions = Pick<RuntimePanelActions, 'closeBrandDialog' | 'openBrandDialog'>;
+export type RuntimeBudgetActions = Pick<
+  RuntimePanelActions,
+  | 'setBudgetAuto'
+  | 'setBudgetFirePercent'
+  | 'setBudgetPolicePercent'
+  | 'setBudgetRoadPercent'
+  | 'setBudgetTaxRate'
+>;
+export type RuntimeDialogActions = Pick<
+  RuntimePanelActions,
+  | 'closeGameDialog'
+  | 'loadPendingCityFile'
+  | 'saveCityFromDraft'
+  | 'selectScenario'
+  | 'setGameLevel'
+  | 'setPendingLoadFile'
+  | 'setSaveFileNameDraft'
+  | 'startNewCity'
+  | 'startScenario'
+>;
+export type RuntimeGraphActions = Pick<
+  RuntimePanelActions,
+  'setGraphMask' | 'setGraphRange' | 'showAllGraphSeries' | 'toggleGraphSeriesBit'
+>;
+export type RuntimeMenuActions = Pick<
+  RuntimePanelActions,
+  | 'closeMenu'
+  | 'openBrandDialog'
+  | 'openFloatingWindow'
+  | 'openGameDialog'
+  | 'reconnectRuntime'
+  | 'requestResyncSnapshot'
+  | 'setPendingLoadFile'
+  | 'setRuntimeTileset'
+  | 'setSaveFileNameDraft'
+  | 'toggleMenu'
+  | 'triggerDisaster'
+>;
+export type RuntimeNoticeActions = Pick<RuntimePanelActions, 'dismissNotice'>;
+export type RuntimeSimulationActions = Pick<
+  RuntimePanelActions,
+  'playPauseSimulation' | 'toggleGameplayMuted'
+>;
+export type RuntimeSpeedActions = Pick<
+  RuntimePanelActions,
+  'closeSpeedMenu' | 'setSimulationSpeed' | 'toggleSpeedMenu'
+>;
+export type RuntimeToolActions = Pick<RuntimePanelActions, 'placeTool' | 'selectTool'>;
+export type RuntimeWindowActions = Pick<
+  RuntimePanelActions,
+  'closeFloatingWindow' | 'focusFloatingWindow' | 'openFloatingWindow' | 'startFloatingWindowDrag'
+>;

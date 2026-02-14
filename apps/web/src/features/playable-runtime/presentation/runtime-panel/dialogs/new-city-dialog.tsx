@@ -1,10 +1,10 @@
 import { ClassicyButton, ClassicyPanelTitle, ClassicySelect } from '@city/classicyui';
 
 import { PLAYABLE_GAME_LEVEL_CHOICES } from '../runtime-panel-constants.ts';
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeDialogActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface NewCityDialogProps {
-  actions: RuntimePanelActions;
+  dialogActions: RuntimeDialogActions;
   controlsDisabled: boolean;
   selectedGameLevel: RuntimeUiController['selectedGameLevel'];
 }
@@ -14,7 +14,7 @@ interface NewCityDialogProps {
  * Mirrors new-city flow in `ref/micropolis/res/micropolis.tcl`.
  */
 export function NewCityDialog(props: NewCityDialogProps) {
-  const { actions, controlsDisabled, selectedGameLevel } = props;
+  const { dialogActions, controlsDisabled, selectedGameLevel } = props;
 
   return (
     <section className="grid gap-2.5">
@@ -28,7 +28,7 @@ export function NewCityDialog(props: NewCityDialogProps) {
           onChange={(event) => {
             const level = Number.parseInt(event.target.value, 10);
             if (level === 0 || level === 1 || level === 2) {
-              actions.setGameLevel(level);
+              dialogActions.setGameLevel(level);
             }
           }}
           value={selectedGameLevel}
@@ -43,7 +43,7 @@ export function NewCityDialog(props: NewCityDialogProps) {
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            actions.closeGameDialog();
+            dialogActions.closeGameDialog();
           }}
           type="button"
         >
@@ -52,7 +52,7 @@ export function NewCityDialog(props: NewCityDialogProps) {
         <ClassicyButton
           disabled={controlsDisabled}
           onClick={() => {
-            actions.startNewCity();
+            dialogActions.startNewCity();
           }}
           type="button"
         >

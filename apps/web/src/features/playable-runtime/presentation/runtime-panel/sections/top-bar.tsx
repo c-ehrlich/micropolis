@@ -14,16 +14,20 @@ import {
   micropolisRunningIndicatorUrl,
 } from '../runtime-panel-constants.ts';
 import type {
-  RuntimePanelActions,
+  RuntimeMenuActions,
   RuntimeSessionController,
+  RuntimeSimulationActions,
+  RuntimeSpeedActions,
   RuntimeUiController,
 } from '../runtime-panel-types.ts';
 
 interface RuntimeTopBarSectionProps {
-  actions: RuntimePanelActions;
+  menuActions: RuntimeMenuActions;
   menubarRef: RefObject<HTMLElement | null>;
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
+  simulationActions: RuntimeSimulationActions;
+  speedActions: RuntimeSpeedActions;
   speedControlRef: RefObject<HTMLDivElement | null>;
   ui: RuntimeUiController;
 }
@@ -35,7 +39,16 @@ interface RuntimeTopBarSectionProps {
  * Difference: browser menu popovers and button interactions replace Tk widgets.
  */
 export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
-  const { actions, menubarRef, session, sessionControlsDisabled, speedControlRef, ui } = props;
+  const {
+    menuActions,
+    menubarRef,
+    session,
+    sessionControlsDisabled,
+    simulationActions,
+    speedActions,
+    speedControlRef,
+    ui,
+  } = props;
   const activeToolSpec = getPlayableToolSpec(ui.activeTool);
   const menubarButtonClass =
     '!m-0 min-w-[calc(var(--window-control-size)*7)] px-2 py-1 text-center';
@@ -54,23 +67,23 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
           panelClassName={menubarPanelClass}
           saveFileName={ui.saveFileName}
           sessionControlsDisabled={sessionControlsDisabled}
-          actions={actions}
+          menuActions={menuActions}
         />
         <WindowsMenu
-          actions={actions}
+          menuActions={menuActions}
           buttonClassName={menubarButtonClass}
           openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
         />
         <DisastersMenu
-          actions={actions}
+          menuActions={menuActions}
           buttonClassName={menubarButtonClass}
           openMenubarSection={ui.openMenubarSection}
           panelClassName={menubarPanelClass}
           sessionControlsDisabled={sessionControlsDisabled}
         />
         <SettingsMenu
-          actions={actions}
+          menuActions={menuActions}
           buttonClassName={menubarButtonClass}
           cityIoError={ui.cityIoError}
           lastSaveStatus={ui.lastSaveStatus}
@@ -99,7 +112,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         <ClassicyButton
           disabled={sessionControlsDisabled}
           onClick={() => {
-            actions.playPauseSimulation();
+            simulationActions.playPauseSimulation();
           }}
           className="!m-0 min-w-21 font-bold"
           type="button"
@@ -108,7 +121,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         </ClassicyButton>
         <div ref={speedControlRef} className="relative">
           <SpeedMenu
-            actions={actions}
+            speedActions={speedActions}
             isOpen={ui.isSpeedMenuOpen}
             sessionControlsDisabled={sessionControlsDisabled}
             speed={session.state.hudState.speed}
@@ -117,7 +130,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         <ClassicyButton
           aria-label={session.isGameplayMuted ? 'Unmute audio' : 'Mute audio'}
           onClick={() => {
-            actions.toggleGameplayMuted();
+            simulationActions.toggleGameplayMuted();
           }}
           active={session.isGameplayMuted}
           activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
@@ -158,12 +171,12 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
         aria-label="Open Micropolis popup"
         draggable={false}
         onClick={() => {
-          actions.openBrandDialog();
+          menuActions.openBrandDialog();
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            actions.openBrandDialog();
+            menuActions.openBrandDialog();
           }
         }}
         role="button"

@@ -7,19 +7,21 @@ import {
   formatSignedBudgetAmount,
 } from '../runtime-panel-constants.ts';
 import type {
+  RuntimeBudgetActions,
   RuntimeBudgetState,
   RuntimeFloatingWindowsController,
-  RuntimePanelActions,
   RuntimeSessionController,
+  RuntimeWindowActions,
 } from '../runtime-panel-types.ts';
 
 interface BudgetWindowProps {
-  actions: RuntimePanelActions;
   applyBudgetControlState: (nextBudgetState: RuntimeBudgetState) => void;
+  budgetActions: RuntimeBudgetActions;
   budgetWindowOriginalStateRef: MutableRefObject<RuntimeBudgetState>;
   floating: RuntimeFloatingWindowsController;
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
+  windowActions: RuntimeWindowActions;
 }
 
 /**
@@ -28,12 +30,13 @@ interface BudgetWindowProps {
  */
 export function BudgetWindow(props: BudgetWindowProps) {
   const {
-    actions,
     applyBudgetControlState,
+    budgetActions,
     budgetWindowOriginalStateRef,
     floating,
     session,
     sessionControlsDisabled,
+    windowActions,
   } = props;
   const budgetWindow = floating.floatingWindows.budget;
 
@@ -46,13 +49,13 @@ export function BudgetWindow(props: BudgetWindowProps) {
       bodyClassName="grid gap-2 p-2 text-xs"
       data-floating-window="budget"
       onClose={() => {
-        actions.closeFloatingWindow('budget');
+        windowActions.closeFloatingWindow('budget');
       }}
       onHeaderPointerDown={(event) => {
-        actions.startFloatingWindowDrag('budget', event);
+        windowActions.startFloatingWindowDrag('budget', event);
       }}
       onPointerDown={() => {
-        actions.focusFloatingWindow('budget');
+        windowActions.focusFloatingWindow('budget');
       }}
       className="min-w-88 max-w-[min(520px,calc(100vw-12px))]"
       style={{
@@ -97,7 +100,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                actions.setBudgetRoadPercent(Math.trunc(Number(event.currentTarget.value)));
+                budgetActions.setBudgetRoadPercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.roadPercent}
             />
@@ -113,7 +116,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                actions.setBudgetFirePercent(Math.trunc(Number(event.currentTarget.value)));
+                budgetActions.setBudgetFirePercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.firePercent}
             />
@@ -129,7 +132,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={100}
               min={0}
               onChange={(event) => {
-                actions.setBudgetPolicePercent(Math.trunc(Number(event.currentTarget.value)));
+                budgetActions.setBudgetPolicePercent(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.policePercent}
             />
@@ -141,7 +144,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
               max={20}
               min={0}
               onChange={(event) => {
-                actions.setBudgetTaxRate(Math.trunc(Number(event.currentTarget.value)));
+                budgetActions.setBudgetTaxRate(Math.trunc(Number(event.currentTarget.value)));
               }}
               value={session.state.hudState.budget.taxRate}
             />
@@ -152,7 +155,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
         <ClassicyButton
           disabled={sessionControlsDisabled}
           onClick={() => {
-            actions.setBudgetAuto(!session.state.hudState.budget.autoBudget);
+            budgetActions.setBudgetAuto(!session.state.hudState.budget.autoBudget);
           }}
           type="button"
         >
@@ -161,7 +164,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
         <div className="flex flex-wrap justify-end gap-2">
           <ClassicyButton
             onClick={() => {
-              actions.closeFloatingWindow('budget');
+              windowActions.closeFloatingWindow('budget');
             }}
             type="button"
           >
@@ -180,7 +183,7 @@ export function BudgetWindow(props: BudgetWindowProps) {
             disabled={sessionControlsDisabled}
             onClick={() => {
               applyBudgetControlState(budgetWindowOriginalStateRef.current);
-              actions.closeFloatingWindow('budget');
+              windowActions.closeFloatingWindow('budget');
             }}
             type="button"
           >

@@ -2,10 +2,10 @@ import { ClassicyButton, ClassicyPanelTitle, ClassicySelect } from '@city/classi
 
 import { PLAYABLE_SCENARIO_CHOICES } from '../../../../../game/runtime/playable-runtime-host.ts';
 import { PLAYABLE_GAME_LEVEL_CHOICES } from '../runtime-panel-constants.ts';
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeDialogActions, RuntimeUiController } from '../runtime-panel-types.ts';
 
 interface ScenarioDialogProps {
-  actions: RuntimePanelActions;
+  dialogActions: RuntimeDialogActions;
   controlsDisabled: boolean;
   selectedGameLevel: RuntimeUiController['selectedGameLevel'];
   selectedScenarioId: RuntimeUiController['selectedScenarioId'];
@@ -16,7 +16,7 @@ interface ScenarioDialogProps {
  * Mirrors scenario startup controls in `ref/micropolis/res/micropolis.tcl`.
  */
 export function ScenarioDialog(props: ScenarioDialogProps) {
-  const { actions, controlsDisabled, selectedGameLevel, selectedScenarioId } = props;
+  const { dialogActions, controlsDisabled, selectedGameLevel, selectedScenarioId } = props;
 
   return (
     <section className="grid gap-2.5">
@@ -28,7 +28,7 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
           className="px-2 py-1"
           disabled={controlsDisabled}
           onChange={(event) => {
-            actions.selectScenario(Number.parseInt(event.target.value, 10));
+            dialogActions.selectScenario(Number.parseInt(event.target.value, 10));
           }}
           value={selectedScenarioId}
         >
@@ -47,7 +47,7 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
           onChange={(event) => {
             const level = Number.parseInt(event.target.value, 10);
             if (level === 0 || level === 1 || level === 2) {
-              actions.setGameLevel(level);
+              dialogActions.setGameLevel(level);
             }
           }}
           value={selectedGameLevel}
@@ -62,7 +62,7 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
       <div className="flex justify-end gap-2">
         <ClassicyButton
           onClick={() => {
-            actions.closeGameDialog();
+            dialogActions.closeGameDialog();
           }}
           type="button"
         >
@@ -71,7 +71,7 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
         <ClassicyButton
           disabled={controlsDisabled}
           onClick={() => {
-            actions.startScenario();
+            dialogActions.startScenario();
           }}
           type="button"
         >

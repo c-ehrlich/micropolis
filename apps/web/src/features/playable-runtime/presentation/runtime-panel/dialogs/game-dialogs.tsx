@@ -1,14 +1,14 @@
 import { ClassicyDialogBackdrop, ClassicyDialogPanel } from '@city/classicyui';
 import type { RefObject } from 'react';
 
-import type { RuntimePanelActions, RuntimeUiController } from '../runtime-panel-types.ts';
+import type { RuntimeDialogActions, RuntimeUiController } from '../runtime-panel-types.ts';
 import { LoadCityDialog } from './load-city-dialog.tsx';
 import { NewCityDialog } from './new-city-dialog.tsx';
 import { SaveCityDialog } from './save-city-dialog.tsx';
 import { ScenarioDialog } from './scenario-dialog.tsx';
 
 interface RuntimeGameDialogsProps {
-  actions: RuntimePanelActions;
+  dialogActions: RuntimeDialogActions;
   controlsDisabled: boolean;
   gameDialog: RuntimeUiController['gameDialog'];
   isLoadingCityFile: boolean;
@@ -28,7 +28,7 @@ interface RuntimeGameDialogsProps {
  */
 export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
   const {
-    actions,
+    dialogActions,
     controlsDisabled,
     gameDialog,
     isLoadingCityFile,
@@ -48,7 +48,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
           const input = event.currentTarget;
           const file = input.files?.[0] ?? null;
           input.value = '';
-          actions.setPendingLoadFile(file);
+          dialogActions.setPendingLoadFile(file);
         }}
         ref={loadInputRef}
         className="hidden"
@@ -59,7 +59,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
         <ClassicyDialogBackdrop
           onClick={() => {
             if (!isLoadingCityFile) {
-              actions.closeGameDialog();
+              dialogActions.closeGameDialog();
             }
           }}
         >
@@ -71,21 +71,21 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
           >
             {gameDialog === 'save' ? (
               <SaveCityDialog
-                actions={actions}
+                dialogActions={dialogActions}
                 saveFileNameDraft={saveFileNameDraft}
                 sessionControlsDisabled={sessionControlsDisabled}
               />
             ) : null}
             {gameDialog === 'new' ? (
               <NewCityDialog
-                actions={actions}
+                dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
                 selectedGameLevel={selectedGameLevel}
               />
             ) : null}
             {gameDialog === 'load' ? (
               <LoadCityDialog
-                actions={actions}
+                dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
                 isLoadingCityFile={isLoadingCityFile}
                 loadInputRef={loadInputRef}
@@ -94,7 +94,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
             ) : null}
             {gameDialog === 'scenario' ? (
               <ScenarioDialog
-                actions={actions}
+                dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
                 selectedGameLevel={selectedGameLevel}
                 selectedScenarioId={selectedScenarioId}

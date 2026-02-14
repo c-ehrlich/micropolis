@@ -1,10 +1,10 @@
 import { ClassicyButton, ClassicyMenuPanel } from '@city/classicyui';
 
 import { CLASSICY_MENU_BUTTON_ACTIVE_CLASS } from '../runtime-panel-constants.ts';
-import type { RuntimePanelActions, RuntimeSessionController } from '../runtime-panel-types.ts';
+import type { RuntimeSessionController, RuntimeSpeedActions } from '../runtime-panel-types.ts';
 
 interface SpeedMenuProps {
-  actions: RuntimePanelActions;
+  speedActions: RuntimeSpeedActions;
   isOpen: boolean;
   sessionControlsDisabled: boolean;
   speed: RuntimeSessionController['state']['hudState']['speed'];
@@ -15,13 +15,13 @@ interface SpeedMenuProps {
  * Mirrors speed controls from `ref/micropolis/res/whead.tcl`.
  */
 export function SpeedMenu(props: SpeedMenuProps) {
-  const { actions, isOpen, sessionControlsDisabled, speed } = props;
+  const { speedActions, isOpen, sessionControlsDisabled, speed } = props;
   return (
     <>
       <ClassicyButton
         disabled={sessionControlsDisabled}
         onClick={() => {
-          actions.toggleSpeedMenu();
+          speedActions.toggleSpeedMenu();
         }}
         className="!m-0 min-w-13.5 px-1.5 font-bold"
         active={isOpen}
@@ -40,8 +40,8 @@ export function SpeedMenu(props: SpeedMenuProps) {
               className="px-2 py-1 text-left"
               disabled={sessionControlsDisabled}
               onClick={() => {
-                actions.setSimulationSpeed(speed);
-                actions.closeSpeedMenu();
+                speedActions.setSimulationSpeed(speed);
+                speedActions.closeSpeedMenu();
               }}
               type="button"
             >

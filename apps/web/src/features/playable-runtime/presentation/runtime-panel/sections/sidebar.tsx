@@ -10,18 +10,20 @@ import {
   PLAYABLE_TOOL_ICON_URL_BY_BASENAME,
 } from '../runtime-panel-constants.ts';
 import type {
-  RuntimePanelActions,
   RuntimeSessionController,
+  RuntimeToolActions,
   RuntimeUiController,
+  RuntimeWindowActions,
 } from '../runtime-panel-types.ts';
 
 interface RuntimeSidebarSectionProps {
-  actions: RuntimePanelActions;
   session: RuntimeSessionController;
   sessionControlsDisabled: boolean;
   sidebarRef: RefObject<HTMLElement | null>;
   topInsetPx: number;
+  toolActions: RuntimeToolActions;
   ui: RuntimeUiController;
+  windowActions: RuntimeWindowActions;
 }
 
 /**
@@ -31,7 +33,15 @@ interface RuntimeSidebarSectionProps {
  * Difference: icon resolution and window launchers are React components.
  */
 export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
-  const { actions, session, sessionControlsDisabled, sidebarRef, topInsetPx, ui } = props;
+  const {
+    session,
+    sessionControlsDisabled,
+    sidebarRef,
+    toolActions,
+    topInsetPx,
+    ui,
+    windowActions,
+  } = props;
 
   return (
     <ClassicyPanelChrome
@@ -58,7 +68,7 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
               buttonShape="square"
               buttonSize="small"
               onClick={() => {
-                actions.selectTool(spec.tool);
+                toolActions.selectTool(spec.tool);
               }}
               title={`${spec.label} ($${spec.baseCost})`}
               type="button"
@@ -89,7 +99,7 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
       <div className="grid gap-1">
         <ClassicyButton
           onClick={() => {
-            actions.openFloatingWindow('evaluation');
+            windowActions.openFloatingWindow('evaluation');
           }}
           className={CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS}
           title="Open Evaluation Window"
@@ -103,7 +113,7 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
         </ClassicyButton>
         <ClassicyButton
           onClick={() => {
-            actions.openFloatingWindow('graph');
+            windowActions.openFloatingWindow('graph');
           }}
           className={CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS}
           title="Open Graph Window"
@@ -119,7 +129,7 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
       <div className="grid min-w-0 content-start auto-rows-max gap-y-1 text-[11px]">
         <button
           onClick={() => {
-            actions.openFloatingWindow('budget');
+            windowActions.openFloatingWindow('budget');
           }}
           className={`${CLASSICY_WINDOW_LAUNCHER_BUTTON_CLASS} grid gap-y-1 text-inherit [font:inherit] text-left`}
           title="Open Budget Window"
