@@ -1,4 +1,5 @@
 import { getAllThemes, getThemeVars } from '@city/classicyui';
+import { useHotkey } from '@tanstack/react-hotkeys';
 import { createFileRoute } from '@tanstack/react-router';
 import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
 
@@ -21,10 +22,165 @@ import {
   type CityExportPayload,
   PLAYABLE_SCENARIO_CHOICES,
 } from '../game/runtime/playable-runtime-host.ts';
+import type { PlayableToolName } from '../game/runtime/protocol.ts';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
+
+const RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS = {
+  ignoreInputs: true,
+  preventDefault: true,
+  requireReset: true,
+  stopPropagation: true,
+} as const;
+
+/**
+ * Runtime keyboard shortcuts for tool selection and window opening.
+ * Mirrors classic tool/menu intent from `ref/micropolis/src/sim/w_tool.c` and
+ * `ref/micropolis/res/whead.tcl`.
+ * Difference: this is a web-specific single-key map powered by TanStack Hotkeys.
+ */
+function useRuntimePanelHotkeys(options: {
+  selectTool: (tool: PlayableToolName) => void;
+  openFloatingWindow: (windowId: RuntimeFloatingWindowId) => void;
+}): void {
+  const { openFloatingWindow, selectTool } = options;
+
+  useHotkey(
+    'R',
+    () => {
+      selectTool('res');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'C',
+    () => {
+      selectTool('com');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'I',
+    () => {
+      selectTool('ind');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'F',
+    () => {
+      selectTool('fire');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'Q',
+    () => {
+      selectTool('query');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'P',
+    () => {
+      selectTool('police');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'W',
+    () => {
+      selectTool('wire');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'Z',
+    () => {
+      selectTool('bulldoze');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'L',
+    () => {
+      selectTool('rail');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'O',
+    () => {
+      selectTool('road');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'M',
+    () => {
+      selectTool('stadium');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'K',
+    () => {
+      selectTool('park');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'S',
+    () => {
+      selectTool('seaport');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'T',
+    () => {
+      selectTool('coal');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'N',
+    () => {
+      selectTool('nuclear');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'A',
+    () => {
+      selectTool('airport');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'B',
+    () => {
+      openFloatingWindow('budget');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'E',
+    () => {
+      openFloatingWindow('evaluation');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+  useHotkey(
+    'G',
+    () => {
+      openFloatingWindow('graph');
+    },
+    RUNTIME_SINGLE_KEY_HOTKEY_OPTIONS,
+  );
+}
 
 /**
  * Primary Authoritative Runtime gameplay route rendered at `/`.
@@ -134,6 +290,11 @@ function RuntimePanel() {
     },
     [openFloatingWindowBase, runtimeBudget, sendSimControlCommand, sessionControlsDisabled],
   );
+
+  useRuntimePanelHotkeys({
+    openFloatingWindow,
+    selectTool: setActiveTool,
+  });
 
   /**
    * Applies one full budget control state to authoritative sim runtime.

@@ -69,6 +69,9 @@ importers:
       '@city/classicyui':
         specifier: workspace:*
         version: link:../../packages/classicyui
+      '@tanstack/react-hotkeys':
+        specifier: ^0.1.0
+        version: 0.1.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tanstack/react-router':
         specifier: 1.157.16
         version: 1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1570,6 +1573,17 @@ packages:
   '@tanstack/history@1.154.14':
     resolution: {integrity: sha512-xyIfof8eHBuub1CkBnbKNKQXeRZC4dClhmzePHVOEel4G7lk/dW+TQ16da7CFdeNLv6u6Owf5VoBQxoo6DFTSA==}
     engines: {node: '>=12'}
+
+  '@tanstack/hotkeys@0.1.0':
+    resolution: {integrity: sha512-2ypLO3C2vKxMbCjiOfA3RzDaUIUYsQtyLc+Qwl6oKzQvWxReGlQN7DOQZSeKyX9D395d3E65e2v7Fm14BzUGew==}
+    engines: {node: '>=18'}
+
+  '@tanstack/react-hotkeys@0.1.0':
+    resolution: {integrity: sha512-Hteo+hdPKdR2G7uAwTmScu1JUHM/f03lVihxVfR/A3XMyVJmbzi4SJieRk/kLgYKeXFRGIUx/xSI3mHeVc6DbQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=16.8'
+      react-dom: '>=16.8'
 
   '@tanstack/react-router-devtools@1.149.0':
     resolution: {integrity: sha512-QJ6epMhRKTS8WrBmcMFjK1v+jDaimMQuySCSNA8NR1ZROKv3xx0gY8AjyVVgQ1h78HSXXRMYH3aql2kWYjc31g==}
@@ -5581,6 +5595,17 @@ snapshots:
       - typescript
 
   '@tanstack/history@1.154.14': {}
+
+  '@tanstack/hotkeys@0.1.0':
+    dependencies:
+      '@tanstack/store': 0.8.0
+
+  '@tanstack/react-hotkeys@0.1.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@tanstack/hotkeys': 0.1.0
+      '@tanstack/react-store': 0.8.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   '@tanstack/react-router-devtools@1.149.0(@tanstack/react-router@1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@tanstack/router-core@1.157.16)(csstype@3.2.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
