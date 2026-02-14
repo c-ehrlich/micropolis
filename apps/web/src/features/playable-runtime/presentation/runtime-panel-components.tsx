@@ -7,18 +7,12 @@ import type {
   RuntimeHudMessageEvent,
   RuntimeHudNoticeEvent,
 } from '../../../game/runtime/index.ts';
+import {
+  CLASSICY_MESSAGE_SURFACE_CHROME,
+  RUNTIME_GRAPH_SERIES,
+} from './runtime-panel/runtime-panel-constants.ts';
 
 const GRAPH_POINT_COUNT = 120;
-const GRAPH_SERIES = [
-  { bit: 1 << 0, key: 'res', label: 'Res', color: '#1b8f3a' },
-  { bit: 1 << 1, key: 'com', label: 'Com', color: '#1b2fe0' },
-  { bit: 1 << 2, key: 'ind', label: 'Ind', color: '#ff7a1a' },
-  { bit: 1 << 3, key: 'money', label: 'Money', color: '#222222' },
-  { bit: 1 << 4, key: 'crime', label: 'Crime', color: '#b00020' },
-  { bit: 1 << 5, key: 'pollution', label: 'Pollution', color: '#7a4f00' },
-] as const;
-const CLASSICY_MESSAGE_SURFACE_CHROME =
-  'text-[var(--color-black)] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-03)_90%,transparent)] [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]';
 
 type GraphRange = 10 | 120;
 
@@ -95,18 +89,18 @@ export function DemandHeadsWidget({
         role="img"
         className="relative h-[110px] w-[78px]"
       >
-        <div className="absolute left-0 top-0 h-[55px] w-[39px] origin-top-left [transform:scale(2)]">
+        <div className="absolute left-0 top-0 h-[55px] w-[39px] origin-top-left transform-[scale(2)]">
           <img
             alt=""
             aria-hidden
             draggable={false}
             src={demandGaugeBackgroundUrl}
-            className="pointer-events-none absolute left-0 top-1 block h-[47px] w-[39px] [image-rendering:pixelated]"
+            className="pointer-events-none absolute left-0 top-1 block h-11.75 w-9.75 [image-rendering:pixelated]"
           />
           {demandBars.map((bar) => (
             <div
               key={bar.channel}
-              className="pointer-events-none absolute w-[7px]"
+              className="pointer-events-none absolute w-1.75"
               style={resolveDemandBarStyle({
                 demand: bar.demand,
                 fillColor: bar.fillColor,
@@ -157,7 +151,7 @@ export function GraphWindowChart({
   mask: number;
   range: GraphRange;
 }) {
-  const visibleSeries = GRAPH_SERIES.filter((series) => (mask & series.bit) !== 0);
+  const visibleSeries = RUNTIME_GRAPH_SERIES.filter((series) => (mask & series.bit) !== 0);
 
   return (
     <ClassicyMessageSurface className="grid gap-1 p-1">
@@ -173,7 +167,7 @@ export function GraphWindowChart({
                 className="inline-block h-2 w-2 border border-black"
                 style={{ backgroundColor: series.color }}
               />
-              {series.label}
+              {series.shortLabel}
             </span>
           ))
         )}
@@ -224,7 +218,7 @@ function GraphLineChart({
         stroke="#444"
         strokeWidth="1"
       />
-      {GRAPH_SERIES.map((series) => {
+      {RUNTIME_GRAPH_SERIES.map((series) => {
         if ((mask & series.bit) === 0) {
           return null;
         }
@@ -307,7 +301,7 @@ function resolveDemandBarStyle({
  */
 export function MessageFeed({ messages }: { messages: readonly RuntimeHudMessageEvent[] }) {
   return (
-    <ClassicyMessageSurface className="h-[58px] overflow-y-auto px-1.5 py-1 text-xs">
+    <ClassicyMessageSurface className="h-14.5 overflow-y-auto px-1.5 py-1 text-xs">
       {messages.length === 0 ? (
         <div className="leading-4">No messages yet.</div>
       ) : (

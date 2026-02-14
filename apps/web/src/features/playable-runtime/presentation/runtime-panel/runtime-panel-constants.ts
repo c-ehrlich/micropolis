@@ -1,3 +1,4 @@
+import type { RuntimeHudGraphSeriesState } from '../../../../game/runtime/index.ts';
 import type { PlayableGameLevel } from '../../../../game/runtime/protocol.ts';
 
 export { default as micropolisRunningIndicatorUrl } from '../../../../../../../packages/sim-assets/generated-images/images/micropolisg.png';
@@ -30,14 +31,31 @@ export const PLAYABLE_GAME_LEVEL_CHOICES: ReadonlyArray<{
 
 export const HEAD_GRAPH_MASK_RCI = 0b111;
 export const ALL_GRAPH_SERIES_MASK = 0b11_1111;
-export const GRAPH_SERIES_TOGGLES = [
-  { bit: 1 << 0, color: '#1b8f3a', label: 'Residential' },
-  { bit: 1 << 1, color: '#1b2fe0', label: 'Commercial' },
-  { bit: 1 << 2, color: '#ff7a1a', label: 'Industrial' },
-  { bit: 1 << 3, color: '#222222', label: 'Money' },
-  { bit: 1 << 4, color: '#b00020', label: 'Crime' },
-  { bit: 1 << 5, color: '#7a4f00', label: 'Pollution' },
-] as const;
+export const RUNTIME_GRAPH_SERIES = [
+  { bit: 1 << 0, color: '#1b8f3a', key: 'res', label: 'Residential', shortLabel: 'Res' },
+  { bit: 1 << 1, color: '#1b2fe0', key: 'com', label: 'Commercial', shortLabel: 'Com' },
+  { bit: 1 << 2, color: '#ff7a1a', key: 'ind', label: 'Industrial', shortLabel: 'Ind' },
+  { bit: 1 << 3, color: '#222222', key: 'money', label: 'Money', shortLabel: 'Money' },
+  { bit: 1 << 4, color: '#b00020', key: 'crime', label: 'Crime', shortLabel: 'Crime' },
+  {
+    bit: 1 << 5,
+    color: '#7a4f00',
+    key: 'pollution',
+    label: 'Pollution',
+    shortLabel: 'Pollution',
+  },
+] as const satisfies ReadonlyArray<{
+  bit: number;
+  color: string;
+  key: keyof RuntimeHudGraphSeriesState;
+  label: string;
+  shortLabel: string;
+}>;
+export const GRAPH_SERIES_TOGGLES: ReadonlyArray<{
+  bit: number;
+  color: string;
+  label: string;
+}> = RUNTIME_GRAPH_SERIES.map(({ bit, color, label }) => ({ bit, color, label }));
 
 export const CLASSICY_INSET_BEVEL_SHADOW =
   '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]';
