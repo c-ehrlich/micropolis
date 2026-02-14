@@ -392,6 +392,11 @@ export interface PlayableNewCityCommand {
   kind: 'city-lifecycle';
   action: 'new-city';
   gameLevel?: PlayableGameLevel;
+  /**
+   * Optional explicit terrain seed for deterministic new-city terrain selection.
+   * Mirrors `GenerateSomeCity(int r)` seed input in `ref/micropolis/src/sim/s_gen.c`.
+   */
+  terrainSeed?: number;
 }
 
 /**
@@ -1363,6 +1368,21 @@ function isPlayableGameLevel(value: unknown): value is PlayableGameLevel {
 }
 
 /**
+ * Returns true when a new-city terrain seed matches the classic 16-bit range.
+ * Mirrors `Rand16`-sourced seed usage for `GenerateSomeCity(int r)` in
+ * `ref/micropolis/src/sim/s_gen.c`.
+ */
+function isPlayableTerrainSeed(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 0xffff
+  );
+}
+
+/**
  * Returns true when a client payload is a Playable Runtime city lifecycle command.
  * Mirrors city lifecycle command gatekeeping in `ref/micropolis/src/sim/w_sim.c`.
  */
@@ -1377,7 +1397,8 @@ export function isPlayableCityLifecycleCommand(
   return (
     candidate.kind === 'city-lifecycle' &&
     candidate.action === 'new-city' &&
-    (candidate.gameLevel === undefined || isPlayableGameLevel(candidate.gameLevel))
+    (candidate.gameLevel === undefined || isPlayableGameLevel(candidate.gameLevel)) &&
+    (candidate.terrainSeed === undefined || isPlayableTerrainSeed(candidate.terrainSeed))
   );
 }
 

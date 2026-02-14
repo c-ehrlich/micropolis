@@ -273,6 +273,23 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
         gameLevel: 3,
       }),
     ).toBe(false);
+    // Magic-number source: new-city terrain seeds in this route mirror
+    // `Rand16()` output (`0..65535`) feeding `GenerateSomeCity(int r)` in
+    // `ref/micropolis/src/sim/s_gen.c`.
+    expect(
+      isPlayableCityLifecycleCommand({
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        terrainSeed: 65_535,
+      }),
+    ).toBe(true);
+    expect(
+      isPlayableCityLifecycleCommand({
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        terrainSeed: 65_536,
+      }),
+    ).toBe(false);
 
     expect(
       isPlayableScenarioCommand({

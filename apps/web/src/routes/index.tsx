@@ -18,6 +18,7 @@ import {
 import { ALL_GRAPH_SERIES_MASK } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
 import { type RuntimePanelActions } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-types.ts';
 import { RuntimePanelView } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-view.tsx';
+import { createRandomNewCityTerrainSeed } from '../game/runtime/new-city.ts';
 import {
   type CityExportPayload,
   PLAYABLE_SCENARIO_CHOICES,
@@ -213,6 +214,7 @@ function RuntimePanel() {
     hasStartedPlayableSession,
     isLoadingCityFile,
     isSpeedMenuOpen,
+    newCityTerrainSeed,
     openMenubarSection,
     pendingLoadFile,
     saveFileNameDraft,
@@ -229,6 +231,7 @@ function RuntimePanel() {
     setIsLoadingCityFile,
     setIsSpeedMenuOpen,
     setLastSaveStatus,
+    setNewCityTerrainSeed,
     setOpenMenubarSection,
     setPendingLoadFile,
     setSaveFileName,
@@ -468,6 +471,9 @@ function RuntimePanel() {
     openFloatingWindow,
     openGameDialog: (kind) => {
       closeTopBarOverlays();
+      if (kind === 'new') {
+        setNewCityTerrainSeed(createRandomNewCityTerrainSeed());
+      }
       setGameDialog(kind);
     },
     placeTool: (tool, x, y) => {
@@ -481,6 +487,9 @@ function RuntimePanel() {
         kind: 'sim-control',
         control: isSimulationRunning ? 'pause' : 'play',
       });
+    },
+    regenerateNewCityTerrainSeed: () => {
+      setNewCityTerrainSeed(createRandomNewCityTerrainSeed());
     },
     reconnectRuntime: () => {
       reconnect();
@@ -575,7 +584,7 @@ function RuntimePanel() {
       floating.startFloatingWindowDrag(windowId, event);
     },
     startNewCity: () => {
-      if (controlsDisabled) {
+      if (controlsDisabled || newCityTerrainSeed === null) {
         return;
       }
       setHasStartedPlayableSession(true);
@@ -584,6 +593,7 @@ function RuntimePanel() {
         kind: 'city-lifecycle',
         action: 'new-city',
         gameLevel: selectedGameLevel,
+        terrainSeed: newCityTerrainSeed,
       });
       setGameDialog(null);
     },

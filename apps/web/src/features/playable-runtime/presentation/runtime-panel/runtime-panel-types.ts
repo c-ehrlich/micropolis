@@ -40,6 +40,7 @@ export interface RuntimePanelActions {
   openGameDialog: (kind: GameDialogKind) => void;
   placeTool: (tool: RuntimeUiController['activeTool'], x: number, y: number) => void;
   playPauseSimulation: () => void;
+  regenerateNewCityTerrainSeed: () => void;
   reconnectRuntime: () => void;
   requestResyncSnapshot: () => void;
   saveCityFromDraft: () => void;
@@ -86,6 +87,7 @@ export type RuntimeDialogActions = Pick<
   RuntimePanelActions,
   | 'closeGameDialog'
   | 'loadPendingCityFile'
+  | 'regenerateNewCityTerrainSeed'
   | 'saveCityFromDraft'
   | 'selectScenario'
   | 'setGameLevel'

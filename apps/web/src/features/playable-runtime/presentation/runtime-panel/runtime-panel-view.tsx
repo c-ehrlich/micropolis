@@ -87,6 +87,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
   const dialogActions: RuntimeDialogActions = {
     closeGameDialog: actions.closeGameDialog,
     loadPendingCityFile: actions.loadPendingCityFile,
+    regenerateNewCityTerrainSeed: actions.regenerateNewCityTerrainSeed,
     saveCityFromDraft: actions.saveCityFromDraft,
     selectScenario: actions.selectScenario,
     setGameLevel: actions.setGameLevel,
@@ -213,6 +214,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
       <RuntimeGameDialogs
         dialogActions={dialogActions}
         isLoadingCityFile={ui.isLoadingCityFile}
+        newCityTerrainSeed={ui.newCityTerrainSeed}
         pendingLoadFile={ui.pendingLoadFile}
         selectedGameLevel={ui.selectedGameLevel}
         selectedScenarioId={ui.selectedScenarioId}

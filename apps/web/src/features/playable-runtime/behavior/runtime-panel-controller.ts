@@ -314,6 +314,7 @@ export function useRuntimeUiState() {
     PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
   );
   const [selectedGameLevel, setSelectedGameLevel] = useState<PlayableGameLevel>(0);
+  const [newCityTerrainSeed, setNewCityTerrainSeed] = useState<number | null>(null);
   const [hasStartedPlayableSession, setHasStartedPlayableSession] = useState(false);
   const [saveFileName, setSaveFileName] = useState('newcity.cty');
   const [lastSaveStatus, setLastSaveStatus] = useState<string>('');
@@ -356,6 +357,7 @@ export function useRuntimeUiState() {
     isLoadingCityFile,
     isSpeedMenuOpen,
     lastSaveStatus,
+    newCityTerrainSeed,
     openMenubarSection,
     pendingLoadFile,
     runtimeTilesetMenuChoices,
@@ -375,6 +377,7 @@ export function useRuntimeUiState() {
     setIsLoadingCityFile,
     setIsSpeedMenuOpen,
     setLastSaveStatus,
+    setNewCityTerrainSeed,
     setOpenMenubarSection,
     setPendingLoadFile,
     setSaveFileName,

@@ -93,6 +93,50 @@ function connectAndCapture(host: SimCoreEnvelopeHost): {
 }
 
 /**
+ * Reads snapshot map tile words emitted immediately after one acknowledged command.
+ * Mirrors host command settlement ordering (`ack` then map update) in
+ * `ref/micropolis/src/sim/w_sim.c` and `ref/micropolis/src/sim/w_update.c`.
+ */
+function readSnapshotTileWordsForCommand(
+  envelopes: readonly HostEnvelope[],
+  commandId: string,
+): Uint16Array {
+  const ackIndex = envelopes.findIndex(
+    (envelope) => envelope.kind === 'ack' && envelope.commandId === commandId,
+  );
+  if (ackIndex < 0) {
+    throw new Error(`missing ack for ${commandId}`);
+  }
+
+  const snapshotEnvelope = envelopes[ackIndex + 1];
+  if (snapshotEnvelope === undefined || snapshotEnvelope.kind !== 'snapshot') {
+    throw new Error(`missing snapshot settlement for ${commandId}`);
+  }
+
+  const mapPayload = snapshotEnvelope.payload.map;
+  if (mapPayload === undefined) {
+    throw new Error(`expected map payload for ${commandId}`);
+  }
+  const tileWordsCandidate =
+    'tileWords' in mapPayload
+      ? mapPayload.tileWords
+      : 'tiles' in mapPayload
+        ? mapPayload.tiles
+        : null;
+  const tileWords =
+    tileWordsCandidate instanceof Uint16Array
+      ? tileWordsCandidate
+      : Array.isArray(tileWordsCandidate)
+        ? Uint16Array.from(tileWordsCandidate)
+        : null;
+  if (tileWords === null) {
+    throw new Error(`expected Uint16Array tileWords for ${commandId}`);
+  }
+
+  return tileWords;
+}
+
+/**
  * Reads save-city export bytes from a patch payload.
  * Mirrors `SaveCityAs` byte export delivery from `ref/micropolis/src/sim/s_fileio.c`.
  */
@@ -1323,6 +1367,65 @@ describe('SimCoreEnvelopeHost', () => {
       throw new Error('expected scenario snapshot envelope');
     }
     expect(scenarioSnapshot.payload.hud?.funds).toBe(10_000);
+  });
+
+  it('applies explicit new-city terrain seeds deterministically', () => {
+    const host = new SimCoreEnvelopeHost();
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-terrain-seed',
+      clientId: 'client-terrain-seed',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+
+    captured.send({
+      kind: 'command',
+      roomId: 'room-terrain-seed',
+      clientId: 'client-terrain-seed',
+      commandId: 'cmd-new-city-seed-a',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        terrainSeed: 0x1234,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-terrain-seed',
+      clientId: 'client-terrain-seed',
+      commandId: 'cmd-new-city-seed-a-repeat',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        terrainSeed: 0x1234,
+      },
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-terrain-seed',
+      clientId: 'client-terrain-seed',
+      commandId: 'cmd-new-city-seed-b',
+      command: {
+        kind: 'city-lifecycle',
+        action: 'new-city',
+        terrainSeed: 0x1235,
+      },
+    });
+
+    const mapA = readSnapshotTileWordsForCommand(captured.envelopes, 'cmd-new-city-seed-a');
+    const mapARepeat = readSnapshotTileWordsForCommand(
+      captured.envelopes,
+      'cmd-new-city-seed-a-repeat',
+    );
+    const mapB = readSnapshotTileWordsForCommand(captured.envelopes, 'cmd-new-city-seed-b');
+
+    // `GenerateSomeCity(int r)` in `ref/micropolis/src/sim/s_gen.c` is deterministic for
+    // the same seed and should diverge when the seed differs.
+    expect(mapA).toEqual(mapARepeat);
+    expect(mapA).not.toEqual(mapB);
   });
 
   it('captures makeSound/sendMes/sendMesAt hooks into patch deltas and preserves replay metadata on snapshots', () => {

@@ -74,6 +74,7 @@ import {
   SCENARIO_TABLE,
 } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
+import { NEW_CITY_TERRAIN_OPTIONS } from './new-city.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import type {
@@ -186,10 +187,6 @@ const HARD_GAME_LEVEL = 2;
 const EASY_GAME_LEVEL_STARTING_FUNDS = 20_000;
 const MEDIUM_GAME_LEVEL_STARTING_FUNDS = 10_000;
 const HARD_GAME_LEVEL_STARTING_FUNDS = 5_000;
-const NEW_CITY_TREE_LEVEL = -1;
-const NEW_CITY_LAKE_LEVEL = -1;
-const NEW_CITY_CURVE_LEVEL = -1;
-const NEW_CITY_CREATE_ISLAND = -1;
 // C runtime timer default from `sim_delay = 50` in `ref/micropolis/src/sim/sim.c`.
 const DEFAULT_PATCH_INTERVAL_MS = 50;
 const MICROPOLIS_FLAG_BLINK_PERIOD_MS = 1000;
@@ -1249,15 +1246,14 @@ export class SimCoreEnvelopeHost implements CoreHost {
    * Mirrors `GenerateSomeCity` command intent in `ref/micropolis/src/sim/s_gen.c`:
    * regenerate terrain, re-run init lifecycle, and reset city metadata to defaults.
    * Parity note: host-only UI/eval calls in C remain outside this envelope host.
+   * If `terrainSeed` is omitted, this mirrors classic random-seed behavior by
+   * sourcing one fresh `next16()` value from the authoritative RNG.
    */
   private applyCityLifecycleCommand(command: PlayableCityLifecycleCommand): void {
-    const terrainSeed = this.authorityState.simContext.rng.next16();
+    const terrainSeed = command.terrainSeed ?? this.authorityState.simContext.rng.next16();
     resetForNewCityFromSeed(this.authorityState.simState, this.authorityState.simContext, {
       seed: terrainSeed,
-      treeLevel: NEW_CITY_TREE_LEVEL,
-      lakeLevel: NEW_CITY_LAKE_LEVEL,
-      curveLevel: NEW_CITY_CURVE_LEVEL,
-      createIsland: NEW_CITY_CREATE_ISLAND,
+      ...NEW_CITY_TERRAIN_OPTIONS,
     });
 
     const gameLevel = command.gameLevel ?? EASY_GAME_LEVEL;

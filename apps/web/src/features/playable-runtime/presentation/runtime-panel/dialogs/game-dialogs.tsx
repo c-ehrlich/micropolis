@@ -13,6 +13,7 @@ interface RuntimeGameDialogsProps {
   gameDialog: RuntimeUiController['gameDialog'];
   isLoadingCityFile: boolean;
   loadInputRef: RefObject<HTMLInputElement | null>;
+  newCityTerrainSeed: RuntimeUiController['newCityTerrainSeed'];
   pendingLoadFile: RuntimeUiController['pendingLoadFile'];
   saveFileNameDraft: RuntimeUiController['saveFileNameDraft'];
   selectedGameLevel: RuntimeUiController['selectedGameLevel'];
@@ -33,6 +34,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
     gameDialog,
     isLoadingCityFile,
     loadInputRef,
+    newCityTerrainSeed,
     pendingLoadFile,
     saveFileNameDraft,
     selectedGameLevel,
@@ -80,6 +82,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
               <NewCityDialog
                 dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
+                newCityTerrainSeed={newCityTerrainSeed}
                 selectedGameLevel={selectedGameLevel}
               />
             ) : null}
