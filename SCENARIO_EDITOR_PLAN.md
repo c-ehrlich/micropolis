@@ -44,7 +44,7 @@
 - [x] **0.1** Create `packages/scenario-core` with canonical TS types + Zod schemas for `ScenarioBundleV1`.
 - [x] **0.2** Implement `cityFileBytes`/`tileWords` read support and canonical write-to-`cityFileBytes` behavior.
 - [x] **0.3** Add validation for mutual exclusivity of map forms and key namespace conventions (`builtin/*`, `user/*`).
-- [ ] **0.4** Add deterministic transcoders and package-level APIs for map round-trip conversion.
+- [x] **0.4** Add deterministic transcoders and package-level APIs for map round-trip conversion.
 - [ ] **0.5** Wire consumers to read scenario definitions via `scenario-core` instead of ad hoc types.
 
 ### Good Tests

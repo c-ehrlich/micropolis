@@ -4,6 +4,7 @@ import {
   SCENARIO_BUNDLE_V1_TILE_COUNT,
   type ScenarioBundleV1,
   type ScenarioMapCityFileBytesV1,
+  type ScenarioMapTileWordsV1,
   type ScenarioMapV1,
 } from './scenario-bundle-v1.ts';
 
@@ -64,6 +65,21 @@ export function readScenarioMapTileWordsV1(map: ScenarioMapV1): Uint16Array {
 }
 
 /**
+ * Deterministically transcode any v1 map payload into `tile-words` form.
+ * Mirrors map word decode order from `loadFile` in
+ * `ref/micropolis/src/sim/s_fileio.c` (`_load_short` over `WORLD_X * WORLD_Y`).
+ * Parity note: unlike C file IO, this returns JSON-safe number arrays.
+ */
+export function transcodeScenarioMapTileWordsV1(map: ScenarioMapV1): ScenarioMapTileWordsV1 {
+  return {
+    kind: 'tile-words',
+    width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+    height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+    tileWords: Array.from(readScenarioMapTileWordsV1(map)),
+  };
+}
+
+/**
  * Canonically write map words to the `cityFileBytes` payload form.
  * Mirrors `_save_short((&Map[0][0]), WORLD_X * WORLD_Y, ...)` in
  * `ref/micropolis/src/sim/s_fileio.c` for map serialization order and endianness.
@@ -71,7 +87,7 @@ export function readScenarioMapTileWordsV1(map: ScenarioMapV1): Uint16Array {
  * deterministic compiled-map payload for Stage 0 bundles.
  */
 export function writeScenarioMapCityFileBytesV1(map: ScenarioMapV1): ScenarioMapCityFileBytesV1 {
-  const tileWords = readScenarioMapTileWordsV1(map);
+  const tileWords = transcodeScenarioMapTileWordsV1(map).tileWords;
   const cityFileBytes = new Uint8Array(SCENARIO_BUNDLE_V1_CITY_FILE_BYTE_LENGTH);
   const cityFileView = new DataView(cityFileBytes.buffer, cityFileBytes.byteOffset);
 
@@ -89,6 +105,34 @@ export function writeScenarioMapCityFileBytesV1(map: ScenarioMapV1): ScenarioMap
 }
 
 /**
+ * Deterministically transcode any v1 map payload into canonical `city-file-bytes` form.
+ * Mirrors map persistence byte layout from `saveFile` in
+ * `ref/micropolis/src/sim/s_fileio.c` (`_save_short` into `Map[WORLD_X][WORLD_Y]` region).
+ * Parity difference: header words outside map storage are zeroed for stable JSON export.
+ */
+export function transcodeScenarioMapCityFileBytesV1(
+  map: ScenarioMapV1,
+): ScenarioMapCityFileBytesV1 {
+  return writeScenarioMapCityFileBytesV1(map);
+}
+
+/**
+ * Build both canonical map payload forms from one source map deterministically.
+ * Mirrors `s_fileio.c` map decode/encode byte order for both directions while
+ * exposing package-level round-trip helpers for Stage 0 contract workflows.
+ */
+export function transcodeScenarioMapRoundTripV1(map: ScenarioMapV1): {
+  tileWords: ScenarioMapTileWordsV1;
+  cityFileBytes: ScenarioMapCityFileBytesV1;
+} {
+  const tileWords = transcodeScenarioMapTileWordsV1(map);
+  return {
+    tileWords,
+    cityFileBytes: transcodeScenarioMapCityFileBytesV1(tileWords),
+  };
+}
+
+/**
  * Canonically write an entire Stage 0 bundle to `map.kind = "city-file-bytes"`.
  * Not a direct C function: this wraps `s_fileio.c` map-byte parity semantics in a
  * JSON contract writer that guarantees one persisted map form.
@@ -96,7 +140,7 @@ export function writeScenarioMapCityFileBytesV1(map: ScenarioMapV1): ScenarioMap
 export function writeScenarioBundleV1CityFileBytes(bundle: ScenarioBundleV1): ScenarioBundleV1 {
   return {
     ...bundle,
-    map: writeScenarioMapCityFileBytesV1(bundle.map),
+    map: transcodeScenarioMapCityFileBytesV1(bundle.map),
   };
 }
 

@@ -9,6 +9,9 @@ import {
 import {
   readScenarioMapTileWordsV1,
   SCENARIO_BUNDLE_V1_CITY_FILE_MAP_OFFSET_BYTES,
+  transcodeScenarioMapCityFileBytesV1,
+  transcodeScenarioMapRoundTripV1,
+  transcodeScenarioMapTileWordsV1,
   writeScenarioBundleV1CityFileBytes,
   writeScenarioMapCityFileBytesV1,
 } from './scenario-map-v1.ts';
@@ -61,6 +64,46 @@ describe('scenario-map-v1', () => {
 
     expect(Array.from(decodedTileWords)).toEqual(tileWords);
     expect(recanonicalizedCityFileMap).toEqual(canonicalCityFileMap);
+  });
+
+  it('transcodes city-file-bytes maps to deterministic tile-words payloads', () => {
+    const tileWords = createDeterministicTileWords();
+    const cityFileMap = transcodeScenarioMapCityFileBytesV1({
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    });
+
+    const transcodedTileWordsMap = transcodeScenarioMapTileWordsV1(cityFileMap);
+    const secondTranscodedTileWordsMap = transcodeScenarioMapTileWordsV1(cityFileMap);
+
+    expect(transcodedTileWordsMap).toEqual({
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    });
+    expect(secondTranscodedTileWordsMap).toEqual(transcodedTileWordsMap);
+  });
+
+  it('exposes deterministic round-trip transcode payloads', () => {
+    const tileWords = createDeterministicTileWords();
+    const cityFileMap = writeScenarioMapCityFileBytesV1({
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    });
+    const roundTripPayloads = transcodeScenarioMapRoundTripV1(cityFileMap);
+
+    expect(roundTripPayloads.tileWords).toEqual({
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    });
+    expect(roundTripPayloads.cityFileBytes).toEqual(cityFileMap);
   });
 
   it('writes full bundles canonically to city-file-bytes maps', () => {
