@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 
 import {
+  SCENARIO_EDITOR_MVP_VIEWS,
   ScenarioEditorStateProvider,
   type ScenarioEditorWorkbenchView,
   useScenarioEditorDispatch,
@@ -31,30 +32,17 @@ function EditorTopNav() {
 
   return (
     <nav aria-label="Editor sections" className="editor-nav">
-      <EditorViewButton
-        activeView={activeView}
-        label="Metadata"
-        nextView="metadata"
-        onSelect={(view) => {
-          dispatch({ type: 'set-active-view', view });
-        }}
-      />
-      <EditorViewButton
-        activeView={activeView}
-        label="Map"
-        nextView="map"
-        onSelect={(view) => {
-          dispatch({ type: 'set-active-view', view });
-        }}
-      />
-      <EditorViewButton
-        activeView={activeView}
-        label="Export"
-        nextView="export"
-        onSelect={(view) => {
-          dispatch({ type: 'set-active-view', view });
-        }}
-      />
+      {SCENARIO_EDITOR_MVP_VIEWS.map((view) => (
+        <EditorViewButton
+          key={view}
+          activeView={activeView}
+          label={getScenarioEditorWorkbenchViewLabel(view)}
+          nextView={view}
+          onSelect={(nextView) => {
+            dispatch({ type: 'set-active-view', view: nextView });
+          }}
+        />
+      ))}
     </nav>
   );
 }
@@ -79,4 +67,14 @@ function EditorViewButton(options: {
       {label}
     </button>
   );
+}
+
+function getScenarioEditorWorkbenchViewLabel(view: ScenarioEditorWorkbenchView): string {
+  if (view === 'metadata') {
+    return 'Metadata';
+  }
+  if (view === 'map') {
+    return 'Map';
+  }
+  return 'Export';
 }

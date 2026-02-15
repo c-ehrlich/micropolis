@@ -113,7 +113,7 @@
 - [x] **3.3** Implement manual map editing + map preview for fixed `120x100`.
 - [x] **3.4** Implement strict export to bundle JSON (fail on validation/lint errors).
 - [x] **3.5** Implement bundle import/open flow for iterative edits.
-- [ ] **3.6** Keep script/objective authoring UI out of MVP (deferred to later stage).
+- [x] **3.6** Keep script/objective authoring UI out of MVP (deferred to later stage).
 - [ ] **3.7** Keep AI import out of MVP (deferred to later stage).
 
 ### Good Tests

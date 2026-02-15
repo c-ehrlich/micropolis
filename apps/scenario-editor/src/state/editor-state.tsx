@@ -20,7 +20,14 @@ import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from '.
  * Editor workbench sections for Stage 3 MVP navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export type ScenarioEditorWorkbenchView = 'metadata' | 'map' | 'export';
+export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'export'] as const;
+
+/**
+ * Editor workbench sections for Stage 3 MVP navigation state.
+ * Stage-parity note: script/objective authoring views are intentionally deferred to Stage 4.
+ * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
+ */
+export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
 
 /**
  * Authoring draft state used by the scenario editor shell.

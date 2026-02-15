@@ -5,6 +5,7 @@ import {
   createScenarioEditorInitialState,
   getScenarioEditorMetadataValidationIssues,
   parseScenarioEditorTagsInput,
+  SCENARIO_EDITOR_MVP_VIEWS,
   scenarioEditorReducer,
 } from './editor-state.tsx';
 
@@ -40,6 +41,12 @@ describe('scenario editor state foundation', () => {
     expect(next.activeView).toBe('map');
     expect(next.bundle).toBe(initial.bundle);
     expect(next.isDirty).toBe(false);
+  });
+
+  test('limits MVP workbench views to metadata/map/export and defers script authoring', () => {
+    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'map', 'export']);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('scripts')).toBe(false);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('objectives')).toBe(false);
   });
 
   test('updates metadata fields through reducer patch actions', () => {
