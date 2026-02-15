@@ -2493,10 +2493,13 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
-  it('rejects scenario load when scenario id resolution fails before bytes are loaded', async () => {
+  it('clamps invalid scenario ids like C before loading scenario bytes', async () => {
     const scenarioResourceLoader = vi.fn(async (_fileName: string) => new Uint8Array([1, 2, 3]));
     const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
     const captured = connectAndCapture(host);
+    // `LoadScenario(short s)` clamps invalid ids to `1` in
+    // `ref/micropolis/src/sim/s_fileio.c` before resolving the scenario file.
+    const fallbackScenario = getScenarioDefinition(1);
 
     captured.send({
       kind: 'hello',
@@ -2532,7 +2535,8 @@ describe('SimCoreEnvelopeHost', () => {
       commandId: 'cmd-scenario-id-reject',
       reason: 'invalid-scenario-file',
     });
-    expect(scenarioResourceLoader).not.toHaveBeenCalled();
+    expect(scenarioResourceLoader).toHaveBeenCalledTimes(1);
+    expect(scenarioResourceLoader).toHaveBeenCalledWith(fallbackScenario.fileName);
   });
 
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
