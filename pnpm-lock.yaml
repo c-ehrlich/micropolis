@@ -64,6 +64,46 @@ importers:
 
   apps/editor: {}
 
+  apps/scenario-editor:
+    dependencies:
+      '@city/classicyui':
+        specifier: workspace:*
+        version: link:../../packages/classicyui
+      '@city/scenario-core':
+        specifier: workspace:*
+        version: link:../../packages/scenario-core
+      '@tanstack/react-router':
+        specifier: 1.157.16
+        version: 1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: 19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: 19.2.4
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@tanstack/router-cli':
+        specifier: 1.157.15
+        version: 1.157.15
+      '@tanstack/router-plugin':
+        specifier: 1.157.15
+        version: 1.157.15(@tanstack/react-router@1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+      '@types/node':
+        specifier: 25.0.10
+        version: 25.0.10
+      '@types/react':
+        specifier: 19.2.10
+        version: 19.2.10
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.10)
+      '@vitejs/plugin-react':
+        specifier: 5.1.2
+        version: 5.1.2(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+      vite:
+        specifier: 7.3.1
+        version: 7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
+
   apps/web:
     dependencies:
       '@city/classicyui':

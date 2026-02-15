@@ -1,0 +1,30 @@
+{
+  "name": "@city/scenario-editor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "pnpm -w eslint apps/scenario-editor/src apps/scenario-editor/vite.config.ts apps/scenario-editor/vitest.config.ts",
+    "generate-routes": "tsr generate",
+    "typecheck": "pnpm run generate-routes && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root apps/scenario-editor"
+  },
+  "dependencies": {
+    "@city/classicyui": "workspace:*",
+    "@city/scenario-core": "workspace:*",
+    "@tanstack/react-router": "1.157.16",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tanstack/router-cli": "1.157.15",
+    "@tanstack/router-plugin": "1.157.15",
+    "@types/node": "25.0.10",
+    "@types/react": "19.2.10",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.2",
+    "vite": "7.3.1"
+  }
+}
