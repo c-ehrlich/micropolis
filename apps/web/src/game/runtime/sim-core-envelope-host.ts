@@ -2,6 +2,10 @@ import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import {
+  getScenarioDefinition,
+  SCENARIO_TABLE,
+} from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
+import {
   lookupDoMessageText,
   lookupMicropolisNoticeMessage,
 } from '../../../../../packages/sim-assets/src/message-table.ts';
@@ -69,10 +73,6 @@ import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts'
 import { doPowerScan, pushPowerStack } from '../../../../../packages/sim-core/src/systems/power.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
-import {
-  getScenarioDefinition,
-  SCENARIO_TABLE,
-} from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import { NEW_CITY_TERRAIN_OPTIONS } from './new-city.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';

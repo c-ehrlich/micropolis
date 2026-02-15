@@ -1,3 +1,7 @@
+import {
+  getScenarioDefinition,
+  type ScenarioDefinition,
+} from '../../scenario-core/src/classic-scenarios.ts';
 import { World } from '../../sim-core/src/core/constants.ts';
 import {
   applyLoadNormalization,
@@ -5,12 +9,7 @@ import {
   decodeCityFileForMap,
   readCityMeta,
 } from '../../sim-core/src/io/cty.ts';
-import {
-  getScenarioDefinition,
-  type ScenarioDefinition,
-  scenarioDisasterWaitForId,
-  scenarioScoreWaitForId,
-} from './scenarios.ts';
+import { scenarioDisasterWaitForId, scenarioScoreWaitForId } from './scenarios.ts';
 
 /**
  * Map-size selector for `.cty`/`snro.*` decoding.

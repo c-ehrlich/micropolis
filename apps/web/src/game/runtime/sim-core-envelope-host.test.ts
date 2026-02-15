@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
+import { getScenarioDefinition } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
   cityDimensionsForMap,
   decodeCityFileForMap,
@@ -16,7 +17,6 @@ import {
   sendMes,
   sendMesAt,
 } from '../../../../../packages/sim-core/src/systems/messages.ts';
-import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { projectRealtimeOverlaySprites } from '../../presentation/map/map-canvas.overlay.ts';
 import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {

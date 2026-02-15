@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { scenarioFileNameForId } from '../../scenario-core/src/classic-scenarios.ts';
 import type { SimContext } from '../../sim-core/src/core/sim-context.ts';
 import type { SimState } from '../../sim-core/src/core/sim-state.ts';
 import {
@@ -19,7 +20,6 @@ import {
   saveFileLikeC,
   type SaveFileLikeCResult,
 } from './save.ts';
-import { scenarioFileNameForId } from './scenarios.ts';
 
 /**
  * Read a binary city/scenario resource from disk.

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test, vi } from 'vitest';
 
+import { getScenarioDefinition } from '../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
   CITY_HISTORY_LENGTH,
   cityDimensionsForMap,
@@ -19,7 +20,6 @@ import {
 } from '../../../../packages/sim-core/src/index.ts';
 import { loadFileLikeC, loadScenarioLikeC } from '../../../../packages/sim-io/src/load.ts';
 import { saveFileLikeC } from '../../../../packages/sim-io/src/save.ts';
-import { getScenarioDefinition } from '../../../../packages/sim-io/src/scenarios.ts';
 import type { HostMode } from './core-host';
 import { DeterministicCommandAuthority } from './deterministic-command-authority';
 import { createCoreHost } from './host-factory';

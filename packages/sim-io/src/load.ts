@@ -1,3 +1,7 @@
+import {
+  getScenarioDefinition,
+  type ScenarioDefinition,
+} from '../../scenario-core/src/classic-scenarios.ts';
 import { World } from '../../sim-core/src/core/constants.ts';
 import type { SimContext } from '../../sim-core/src/core/sim-context.ts';
 import type { SimState } from '../../sim-core/src/core/sim-state.ts';
@@ -7,7 +11,6 @@ import { markFundsDirty } from '../../sim-core/src/systems/date-time.ts';
 import { setFunds } from '../../sim-core/src/systems/funds.ts';
 import { doSimInit, initWillStuff } from '../../sim-core/src/systems/init.ts';
 import { CLASSIC_REPLAY_MAP_SIZE, type ReplayMapSize } from './replay.ts';
-import { getScenarioDefinition, type ScenarioDefinition } from './scenarios.ts';
 
 /**
  * Result payload for C-style `loadFile` orchestration.
