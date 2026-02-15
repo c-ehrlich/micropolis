@@ -44,6 +44,9 @@ export const SCENARIO_EDITOR_SCRIPT_ACTION_KINDS = [
   'send-message',
   'lose-game',
 ] as const satisfies readonly ScenarioEditorScriptAction['kind'][];
+const SCENARIO_EDITOR_SCRIPT_ACTION_KIND_SET = new Set<ScenarioEditorScriptAction['kind']>(
+  SCENARIO_EDITOR_SCRIPT_ACTION_KINDS,
+);
 
 /**
  * One authored script event row for Stage 4.2.
@@ -63,6 +66,57 @@ export interface ScenarioEditorScriptEvent {
 export interface ScenarioEditorScriptDraft {
   readonly enabled: boolean;
   readonly events: readonly ScenarioEditorScriptEvent[];
+}
+
+/**
+ * Authoring-time semantic issue for Stage 4 script event drafts.
+ * Trigger/action domains mirror `ScenarioDisaster` and `DoScenarioScore` side effects in
+ * `ref/micropolis/src/sim/s_disast.c` and `ref/micropolis/src/sim/s_msg.c`; shape/payload
+ * diagnostics are editor-only checks before Stage 4.5 export integration.
+ */
+export interface ScenarioEditorScriptValidationIssue {
+  readonly message: string;
+  readonly path: string;
+}
+
+/**
+ * Validates Stage 4 script draft semantics in authoring state.
+ * Parity note: trigger and action-kind checks preserve C parity domains from
+ * `ScenarioDisaster`/`DoScenarioScore`, while union-shape and payload checks are
+ * editor-time guards with no direct C authoring UI equivalent.
+ */
+export function getScenarioEditorScriptValidationIssues(
+  draft: ScenarioEditorScriptDraft,
+): readonly ScenarioEditorScriptValidationIssue[] {
+  if (!draft.enabled) {
+    return [];
+  }
+
+  const issues: ScenarioEditorScriptValidationIssue[] = [];
+  const events = draft.events as unknown;
+  if (!Array.isArray(events)) {
+    issues.push({
+      path: 'script.events',
+      message: 'script events must be an array',
+    });
+    return issues;
+  }
+  if (events.length === 0) {
+    issues.push({
+      path: 'script.events',
+      message: 'script must include at least one event',
+    });
+    return issues;
+  }
+
+  for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+    const event = events[eventIndex];
+    issues.push(
+      ...collectScenarioScriptEventValidationIssues(event, `script.events.${eventIndex}`),
+    );
+  }
+
+  return issues;
 }
 
 /**
@@ -342,3 +396,155 @@ const normalizePositiveInteger = (value: number, fallback: number): number => {
   const normalized = normalizeInteger(value, fallback);
   return normalized <= 0 ? 1 : normalized;
 };
+
+const collectScenarioScriptEventValidationIssues = (
+  event: unknown,
+  path: string,
+): ScenarioEditorScriptValidationIssue[] => {
+  const issues: ScenarioEditorScriptValidationIssue[] = [];
+  if (!isRecord(event)) {
+    issues.push({
+      path,
+      message: 'script event must be an object',
+    });
+    return issues;
+  }
+
+  issues.push(...collectScenarioScriptTriggerValidationIssues(event.trigger, `${path}.trigger`));
+
+  const actions = event.actions;
+  if (!Array.isArray(actions)) {
+    issues.push({
+      path: `${path}.actions`,
+      message: 'script event actions must be an array',
+    });
+    return issues;
+  }
+  if (actions.length === 0) {
+    issues.push({
+      path: `${path}.actions`,
+      message: 'script event must include at least one action',
+    });
+    return issues;
+  }
+
+  for (let actionIndex = 0; actionIndex < actions.length; actionIndex += 1) {
+    const action = actions[actionIndex];
+    issues.push(
+      ...collectScenarioScriptActionValidationIssues(action, `${path}.actions.${actionIndex}`),
+    );
+  }
+
+  return issues;
+};
+
+const collectScenarioScriptTriggerValidationIssues = (
+  trigger: unknown,
+  path: string,
+): ScenarioEditorScriptValidationIssue[] => {
+  const issues: ScenarioEditorScriptValidationIssue[] = [];
+  if (!isRecord(trigger)) {
+    issues.push({
+      path,
+      message: 'script trigger must be an object',
+    });
+    return issues;
+  }
+
+  const hasAtTick = Object.prototype.hasOwnProperty.call(trigger, 'atTick');
+  const hasEveryTicks = Object.prototype.hasOwnProperty.call(trigger, 'everyTicks');
+  if (hasAtTick && hasEveryTicks) {
+    issues.push({
+      path,
+      message: 'script trigger must use exactly one of atTick or everyTicks',
+    });
+    return issues;
+  }
+  if (!hasAtTick && !hasEveryTicks) {
+    issues.push({
+      path,
+      message: 'script trigger kind is unknown; expected atTick or everyTicks',
+    });
+    return issues;
+  }
+
+  if (hasAtTick) {
+    const atTick = trigger.atTick;
+    if (typeof atTick !== 'number' || !Number.isInteger(atTick) || atTick < 0) {
+      issues.push({
+        path: `${path}.atTick`,
+        message: 'atTick must be a non-negative integer',
+      });
+    }
+    return issues;
+  }
+
+  const everyTicks = trigger.everyTicks;
+  if (typeof everyTicks !== 'number' || !Number.isInteger(everyTicks) || everyTicks <= 0) {
+    issues.push({
+      path: `${path}.everyTicks`,
+      message: 'everyTicks must be a positive integer',
+    });
+  }
+  return issues;
+};
+
+const collectScenarioScriptActionValidationIssues = (
+  action: unknown,
+  path: string,
+): ScenarioEditorScriptValidationIssue[] => {
+  const issues: ScenarioEditorScriptValidationIssue[] = [];
+  if (!isRecord(action)) {
+    issues.push({
+      path,
+      message: 'script action must be an object',
+    });
+    return issues;
+  }
+
+  const kind = action.kind;
+  if (!isScenarioEditorScriptActionKind(kind)) {
+    issues.push({
+      path: `${path}.kind`,
+      message: `action kind is unknown; expected one of: ${SCENARIO_EDITOR_SCRIPT_ACTION_KINDS.join(', ')}`,
+    });
+    return issues;
+  }
+
+  const hasMessageId = Object.prototype.hasOwnProperty.call(action, 'messageId');
+  if (kind === 'send-message') {
+    if (!hasMessageId) {
+      issues.push({
+        path: `${path}.messageId`,
+        message: 'send-message actions require integer messageId payloads',
+      });
+      return issues;
+    }
+
+    const messageId = action.messageId;
+    if (typeof messageId !== 'number' || !Number.isInteger(messageId)) {
+      issues.push({
+        path: `${path}.messageId`,
+        message: 'send-message.messageId must be an integer',
+      });
+    }
+    return issues;
+  }
+
+  if (hasMessageId) {
+    issues.push({
+      path: `${path}.messageId`,
+      message: 'messageId payload is only valid for send-message actions',
+    });
+  }
+  return issues;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isScenarioEditorScriptActionKind = (
+  value: unknown,
+): value is ScenarioEditorScriptAction['kind'] =>
+  typeof value === 'string' &&
+  SCENARIO_EDITOR_SCRIPT_ACTION_KIND_SET.has(value as ScenarioEditorScriptAction['kind']);

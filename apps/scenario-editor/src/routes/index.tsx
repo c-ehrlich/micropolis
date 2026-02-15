@@ -34,6 +34,7 @@ import {
 import {
   appendScenarioObjectiveChildPredicate,
   coerceScenarioObjectivePredicateKind,
+  getScenarioEditorObjectiveValidationIssues,
   removeScenarioObjectiveChildPredicate,
   replaceScenarioObjectiveChildPredicate,
   replaceScenarioObjectiveNotChildPredicate,
@@ -47,6 +48,7 @@ import {
   appendScenarioEditorScriptEvent,
   coerceScenarioEditorScriptActionKind,
   coerceScenarioEditorScriptTriggerKind,
+  getScenarioEditorScriptValidationIssues,
   getScenarioEditorScriptTriggerKind,
   removeScenarioEditorScriptAction,
   removeScenarioEditorScriptEvent,
@@ -436,6 +438,10 @@ function ScenarioMapEditorCard() {
 function ScenarioObjectiveEditorCard() {
   const { objective, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
+  const validationIssues = useMemo(
+    () => getScenarioEditorObjectiveValidationIssues(objective),
+    [objective],
+  );
   const objectiveJson = useMemo(
     () => JSON.stringify(objective.enabled ? objective.predicate : null, null, 2),
     [objective.enabled, objective.predicate],
@@ -483,7 +489,30 @@ function ScenarioObjectiveEditorCard() {
         <dd>{objective.enabled ? 'yes' : 'no'}</dd>
         <dt>Root Predicate</dt>
         <dd>{objective.enabled ? objective.predicate.kind : 'none'}</dd>
+        <dt>Validation</dt>
+        <dd>
+          {!objective.enabled
+            ? 'disabled'
+            : validationIssues.length === 0
+              ? 'valid'
+              : `invalid (${validationIssues.length} issue${
+                  validationIssues.length === 1 ? '' : 's'
+                })`}
+        </dd>
       </dl>
+
+      {objective.enabled && validationIssues.length > 0 ? (
+        <section aria-label="Objective semantic issues" className="editor-export-issues">
+          <h2>Objective Semantic Issues</h2>
+          <ul>
+            {validationIssues.map((issue, index) => (
+              <li key={`${issue.path}:${issue.message}:${index}`}>
+                <code>{issue.path}</code>: {issue.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="editor-export-preview" aria-label="Objective predicate preview">
         <h2>Objective Predicate JSON</h2>
@@ -645,6 +674,7 @@ function ScenarioObjectivePredicateEditor(options: {
 function ScenarioScriptEditorCard() {
   const { script, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
+  const validationIssues = useMemo(() => getScenarioEditorScriptValidationIssues(script), [script]);
   const scriptJson = useMemo(
     () => JSON.stringify(script.enabled ? script.events : [], null, 2),
     [script.enabled, script.events],
@@ -715,7 +745,30 @@ function ScenarioScriptEditorCard() {
         <dd>{script.enabled ? 'yes' : 'no'}</dd>
         <dt>Event Rows</dt>
         <dd>{script.events.length}</dd>
+        <dt>Validation</dt>
+        <dd>
+          {!script.enabled
+            ? 'disabled'
+            : validationIssues.length === 0
+              ? 'valid'
+              : `invalid (${validationIssues.length} issue${
+                  validationIssues.length === 1 ? '' : 's'
+                })`}
+        </dd>
       </dl>
+
+      {script.enabled && validationIssues.length > 0 ? (
+        <section aria-label="Script semantic issues" className="editor-export-issues">
+          <h2>Script Semantic Issues</h2>
+          <ul>
+            {validationIssues.map((issue, index) => (
+              <li key={`${issue.path}:${issue.message}:${index}`}>
+                <code>{issue.path}</code>: {issue.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="editor-export-preview" aria-label="Script event preview">
         <h2>Script Event JSON</h2>

@@ -5,6 +5,7 @@ import {
   coerceScenarioObjectivePredicateKind,
   createScenarioEditorDefaultObjectivePredicate,
   createScenarioEditorInitialObjectiveDraft,
+  getScenarioEditorObjectiveValidationIssues,
   removeScenarioObjectiveChildPredicate,
   replaceScenarioObjectiveChildPredicate,
   replaceScenarioObjectiveNotChildPredicate,
@@ -160,5 +161,80 @@ describe('scenario editor objective predicate drafting', () => {
       kind: 'not',
       predicate: { kind: 'metric', metric: 'city-class', op: 'gte', value: 4 },
     });
+  });
+
+  test('validates enabled objective drafts and accepts C-parity metric leaves', () => {
+    const issues = getScenarioEditorObjectiveValidationIssues({
+      enabled: true,
+      predicate: createScenarioEditorDefaultObjectivePredicate(),
+    });
+
+    expect(issues).toEqual([]);
+  });
+
+  test('reports semantic validation issues for malformed predicate trees', () => {
+    const issues = getScenarioEditorObjectiveValidationIssues({
+      enabled: true,
+      predicate: {
+        kind: 'all',
+        predicates: [
+          {
+            kind: 'metric',
+            metric: 'unknown-metric',
+            op: 'gt',
+            value: 500,
+          },
+          {
+            kind: 'metric',
+            metric: 'city-score',
+            op: 'unknown-op',
+            value: 500,
+          },
+          {
+            kind: 'metric',
+            metric: 'city-score',
+            op: 'gt',
+            value: Number.NaN,
+          },
+          {
+            kind: 'any',
+            predicates: [],
+          },
+        ],
+      } as unknown as ReturnType<typeof createScenarioEditorDefaultObjectivePredicate>,
+    });
+
+    expect(issues).toEqual([
+      {
+        path: 'objective.predicate.predicates.0.metric',
+        message: 'metric must be one of: city-class, traffic-average, city-score, crime-average',
+      },
+      {
+        path: 'objective.predicate.predicates.1.op',
+        message: 'comparison op must be one of: gt, gte, lt, lte, eq, neq',
+      },
+      {
+        path: 'objective.predicate.predicates.2.value',
+        message: 'metric predicate value must be a finite integer',
+      },
+      {
+        path: 'objective.predicate.predicates.3.predicates',
+        message: 'any predicate must include at least one child predicate',
+      },
+    ]);
+  });
+
+  test('skips semantic validation while objective authoring is disabled', () => {
+    const issues = getScenarioEditorObjectiveValidationIssues({
+      enabled: false,
+      predicate: {
+        kind: 'metric',
+        metric: 'unknown-metric',
+        op: 'unknown-op',
+        value: Number.NaN,
+      } as unknown as ReturnType<typeof createScenarioEditorDefaultObjectivePredicate>,
+    });
+
+    expect(issues).toEqual([]);
   });
 });

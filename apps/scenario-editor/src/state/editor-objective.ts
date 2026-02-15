@@ -45,6 +45,15 @@ export const SCENARIO_EDITOR_OBJECTIVE_COMPARISONS = [
   'eq',
   'neq',
 ] as const satisfies readonly ScenarioObjectiveComparison[];
+const SCENARIO_EDITOR_OBJECTIVE_PREDICATE_KIND_SET = new Set<ScenarioObjectivePredicate['kind']>(
+  SCENARIO_EDITOR_OBJECTIVE_PREDICATE_KINDS,
+);
+const SCENARIO_EDITOR_OBJECTIVE_METRIC_KEY_SET = new Set<ScenarioObjectiveMetricKey>(
+  SCENARIO_EDITOR_OBJECTIVE_METRIC_KEYS,
+);
+const SCENARIO_EDITOR_OBJECTIVE_COMPARISON_SET = new Set<ScenarioObjectiveComparison>(
+  SCENARIO_EDITOR_OBJECTIVE_COMPARISONS,
+);
 
 /**
  * Stage 4 editor draft model for optional objective authoring.
@@ -55,6 +64,36 @@ export const SCENARIO_EDITOR_OBJECTIVE_COMPARISONS = [
 export interface ScenarioEditorObjectiveDraft {
   readonly enabled: boolean;
   readonly predicate: ScenarioObjectivePredicate;
+}
+
+/**
+ * Authoring-time semantic issue for Stage 4 objective predicate drafts.
+ * Metric/op domains mirror `DoScenarioScore` comparisons in
+ * `ref/micropolis/src/sim/s_msg.c`; additional structural diagnostics
+ * (`all`/`any` emptiness, malformed nodes) are editor-only guardrails.
+ */
+export interface ScenarioEditorObjectiveValidationIssue {
+  readonly message: string;
+  readonly path: string;
+}
+
+/**
+ * Validates Stage 4 objective draft semantics before export integration.
+ * Parity note: metric/op checks preserve the `DoScenarioScore` field/comparison
+ * space from `ref/micropolis/src/sim/s_msg.c`, while composite-node shape checks
+ * are modern authoring-time validation with no direct C UI equivalent.
+ */
+export function getScenarioEditorObjectiveValidationIssues(
+  draft: ScenarioEditorObjectiveDraft,
+): readonly ScenarioEditorObjectiveValidationIssue[] {
+  if (!draft.enabled) {
+    return [];
+  }
+
+  return collectScenarioObjectivePredicateValidationIssues(
+    draft.predicate as unknown,
+    'objective.predicate',
+  );
 }
 
 /**
@@ -221,3 +260,116 @@ export function replaceScenarioObjectiveNotChildPredicate(
     predicate: child,
   };
 }
+
+const collectScenarioObjectivePredicateValidationIssues = (
+  predicate: unknown,
+  path: string,
+): ScenarioEditorObjectiveValidationIssue[] => {
+  const issues: ScenarioEditorObjectiveValidationIssue[] = [];
+  if (!isRecord(predicate)) {
+    issues.push({
+      path,
+      message: 'predicate node must be an object',
+    });
+    return issues;
+  }
+
+  const kind = predicate.kind;
+  if (!isScenarioObjectivePredicateKind(kind)) {
+    issues.push({
+      path: `${path}.kind`,
+      message:
+        'predicate kind must be one of: metric, all, any, not (unknown kind found at authoring time)',
+    });
+    return issues;
+  }
+
+  if (kind === 'metric') {
+    const metric = predicate.metric;
+    if (!isScenarioObjectiveMetricKey(metric)) {
+      issues.push({
+        path: `${path}.metric`,
+        message: 'metric must be one of: city-class, traffic-average, city-score, crime-average',
+      });
+    }
+
+    const op = predicate.op;
+    if (!isScenarioObjectiveComparison(op)) {
+      issues.push({
+        path: `${path}.op`,
+        message: 'comparison op must be one of: gt, gte, lt, lte, eq, neq',
+      });
+    }
+
+    const value = predicate.value;
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
+      issues.push({
+        path: `${path}.value`,
+        message: 'metric predicate value must be a finite integer',
+      });
+    }
+
+    return issues;
+  }
+
+  if (kind === 'all' || kind === 'any') {
+    const predicates = predicate.predicates;
+    if (!Array.isArray(predicates)) {
+      issues.push({
+        path: `${path}.predicates`,
+        message: `${kind} predicate requires a predicates array`,
+      });
+      return issues;
+    }
+
+    if (predicates.length === 0) {
+      issues.push({
+        path: `${path}.predicates`,
+        message: `${kind} predicate must include at least one child predicate`,
+      });
+      return issues;
+    }
+
+    for (let index = 0; index < predicates.length; index += 1) {
+      const childPredicate = predicates[index];
+      issues.push(
+        ...collectScenarioObjectivePredicateValidationIssues(
+          childPredicate,
+          `${path}.predicates.${index}`,
+        ),
+      );
+    }
+    return issues;
+  }
+
+  const childPredicate = predicate.predicate;
+  if (childPredicate === undefined) {
+    issues.push({
+      path: `${path}.predicate`,
+      message: 'not predicate requires one child predicate',
+    });
+    return issues;
+  }
+
+  issues.push(
+    ...collectScenarioObjectivePredicateValidationIssues(childPredicate, `${path}.predicate`),
+  );
+  return issues;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isScenarioObjectivePredicateKind = (
+  value: unknown,
+): value is ScenarioObjectivePredicate['kind'] =>
+  typeof value === 'string' &&
+  SCENARIO_EDITOR_OBJECTIVE_PREDICATE_KIND_SET.has(value as ScenarioObjectivePredicate['kind']);
+
+const isScenarioObjectiveMetricKey = (value: unknown): value is ScenarioObjectiveMetricKey =>
+  typeof value === 'string' &&
+  SCENARIO_EDITOR_OBJECTIVE_METRIC_KEY_SET.has(value as ScenarioObjectiveMetricKey);
+
+const isScenarioObjectiveComparison = (value: unknown): value is ScenarioObjectiveComparison =>
+  typeof value === 'string' &&
+  SCENARIO_EDITOR_OBJECTIVE_COMPARISON_SET.has(value as ScenarioObjectiveComparison);

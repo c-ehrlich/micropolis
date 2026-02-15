@@ -7,6 +7,7 @@ import {
   coerceScenarioEditorScriptTriggerKind,
   createScenarioEditorDefaultScriptEvent,
   createScenarioEditorInitialScriptDraft,
+  getScenarioEditorScriptValidationIssues,
   getScenarioEditorScriptTriggerKind,
   removeScenarioEditorScriptAction,
   removeScenarioEditorScriptEvent,
@@ -126,5 +127,79 @@ describe('scenario editor script drafting', () => {
 
     const everyTicks = replaceScenarioEditorEveryTicksTrigger(event, 0);
     expect(everyTicks.trigger).toEqual({ everyTicks: 1 });
+  });
+
+  test('validates enabled script drafts for known trigger/action semantics', () => {
+    const issues = getScenarioEditorScriptValidationIssues({
+      enabled: true,
+      events: [createScenarioEditorDefaultScriptEvent()],
+    });
+
+    expect(issues).toEqual([]);
+  });
+
+  test('reports semantic issues for malformed trigger/action payloads', () => {
+    const issues = getScenarioEditorScriptValidationIssues({
+      enabled: true,
+      events: [
+        {
+          trigger: { atTick: 1, everyTicks: 24 } as unknown as { readonly atTick: number },
+          actions: [{ kind: 'lose-game', messageId: -200 } as unknown as { readonly kind: string }],
+        },
+        {
+          trigger: { everyTicks: 0 } as unknown as { readonly everyTicks: number },
+          actions: [],
+        },
+        {
+          trigger: { atTick: 2 },
+          actions: [{ kind: 'send-message' } as unknown as { readonly kind: string }],
+        },
+        {
+          trigger: {} as unknown as { readonly atTick: number },
+          actions: [{ kind: 'unknown-action' } as unknown as { readonly kind: string }],
+        },
+      ],
+    });
+
+    expect(issues).toEqual([
+      {
+        path: 'script.events.0.trigger',
+        message: 'script trigger must use exactly one of atTick or everyTicks',
+      },
+      {
+        path: 'script.events.0.actions.0.messageId',
+        message: 'messageId payload is only valid for send-message actions',
+      },
+      {
+        path: 'script.events.1.trigger.everyTicks',
+        message: 'everyTicks must be a positive integer',
+      },
+      {
+        path: 'script.events.1.actions',
+        message: 'script event must include at least one action',
+      },
+      {
+        path: 'script.events.2.actions.0.messageId',
+        message: 'send-message actions require integer messageId payloads',
+      },
+      {
+        path: 'script.events.3.trigger',
+        message: 'script trigger kind is unknown; expected atTick or everyTicks',
+      },
+      {
+        path: 'script.events.3.actions.0.kind',
+        message:
+          'action kind is unknown; expected one of: make-earthquake, drop-fire-bombs, make-monster, make-meltdown, make-flood, send-message, lose-game',
+      },
+    ]);
+  });
+
+  test('skips semantic validation while script authoring is disabled', () => {
+    const issues = getScenarioEditorScriptValidationIssues({
+      enabled: false,
+      events: [],
+    });
+
+    expect(issues).toEqual([]);
   });
 });
