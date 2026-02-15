@@ -43,8 +43,9 @@ describe('scenario editor state foundation', () => {
     expect(next.isDirty).toBe(false);
   });
 
-  test('exposes Stage 4 objective view and still defers script/ai authoring', () => {
-    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'map', 'objective', 'export']);
+  test('exposes Stage 4 objective and script views while still deferring ai authoring', () => {
+    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'map', 'objective', 'script', 'export']);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('script')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('scripts')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('objective')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai')).toBe(false);
@@ -80,6 +81,36 @@ describe('scenario editor state foundation', () => {
       op: 'lt',
       value: 80,
     });
+  });
+
+  test('updates script draft state through reducer actions', () => {
+    const initial = createScenarioEditorInitialState();
+    const enabled = scenarioEditorReducer(initial, {
+      type: 'set-script-enabled',
+      enabled: true,
+    });
+
+    expect(enabled.script.enabled).toBe(true);
+    expect(enabled.isDirty).toBe(true);
+
+    const replaced = scenarioEditorReducer(enabled, {
+      type: 'replace-script-events',
+      events: [
+        {
+          // Magic number source: Rio scenario disaster cadence evaluates
+          // `wait % 24 == 0` in `ScenarioDisaster` (`ref/micropolis/src/sim/s_disast.c`).
+          trigger: { everyTicks: 24 },
+          actions: [{ kind: 'make-flood' }],
+        },
+      ],
+    });
+
+    expect(replaced.script.events).toEqual([
+      {
+        trigger: { everyTicks: 24 },
+        actions: [{ kind: 'make-flood' }],
+      },
+    ]);
   });
 
   test('updates metadata fields through reducer patch actions', () => {

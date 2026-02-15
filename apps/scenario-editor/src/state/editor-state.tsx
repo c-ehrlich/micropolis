@@ -20,17 +20,28 @@ import {
   type ScenarioEditorObjectiveDraft,
   type ScenarioEditorObjectivePredicate,
 } from './editor-objective.ts';
+import {
+  createScenarioEditorInitialScriptDraft,
+  type ScenarioEditorScriptDraft,
+  type ScenarioEditorScriptEvent,
+} from './editor-script.ts';
 
 /**
- * Editor workbench sections for Stage 4 objective authoring navigation state.
+ * Editor workbench sections for Stage 4 objective/script authoring navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'objective', 'export'] as const;
+export const SCENARIO_EDITOR_MVP_VIEWS = [
+  'metadata',
+  'map',
+  'objective',
+  'script',
+  'export',
+] as const;
 
 /**
- * Editor workbench sections for Stage 4 objective authoring navigation state.
- * Stage-parity note: event scripting authoring remains deferred while objective predicates are
- * now exposed for Stage 4.1; AI/image import tooling remains deferred to Stage 5.
+ * Editor workbench sections for Stage 4 objective/script authoring navigation state.
+ * Stage-parity note: predicate and event/action authoring are exposed in Stage 4.1/4.2, while
+ * behavior-profile authoring remains deferred to Stage 4.3 and AI/image import remains Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
@@ -44,6 +55,7 @@ export interface ScenarioEditorState {
   readonly activeView: ScenarioEditorWorkbenchView;
   readonly bundle: ScenarioBundleV1;
   readonly objective: ScenarioEditorObjectiveDraft;
+  readonly script: ScenarioEditorScriptDraft;
   readonly isDirty: boolean;
 }
 
@@ -91,7 +103,9 @@ export type ScenarioEditorAction =
   | { type: 'fill-map'; tileWord: number }
   | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
   | { type: 'replace-objective-predicate'; predicate: ScenarioEditorObjectivePredicate }
+  | { type: 'replace-script-events'; events: readonly ScenarioEditorScriptEvent[] }
   | { type: 'set-objective-enabled'; enabled: boolean }
+  | { type: 'set-script-enabled'; enabled: boolean }
   | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
@@ -137,6 +151,7 @@ export function createScenarioEditorInitialState(): ScenarioEditorState {
     activeView: 'metadata',
     bundle: createScenarioEditorInitialBundle(),
     objective: createScenarioEditorInitialObjectiveDraft(),
+    script: createScenarioEditorInitialScriptDraft(),
     isDirty: false,
   };
 }
@@ -204,6 +219,30 @@ export function scenarioEditorReducer(
         },
         isDirty: true,
       };
+    case 'replace-script-events':
+      if (state.script.events === action.events) {
+        return state;
+      }
+      return {
+        ...state,
+        script: {
+          ...state.script,
+          events: action.events,
+        },
+        isDirty: true,
+      };
+    case 'set-script-enabled':
+      if (state.script.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        script: {
+          ...state.script,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
     case 'update-metadata':
       return {
         ...state,
@@ -215,6 +254,7 @@ export function scenarioEditorReducer(
         ...state,
         bundle: action.bundle,
         objective: createScenarioEditorInitialObjectiveDraft(),
+        script: createScenarioEditorInitialScriptDraft(),
         isDirty: false,
       };
     case 'set-active-view':

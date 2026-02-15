@@ -38,6 +38,24 @@ import {
   type ScenarioEditorObjectivePredicate,
 } from '../state/editor-objective.ts';
 import {
+  appendScenarioEditorScriptAction,
+  appendScenarioEditorScriptEvent,
+  coerceScenarioEditorScriptActionKind,
+  coerceScenarioEditorScriptTriggerKind,
+  getScenarioEditorScriptTriggerKind,
+  removeScenarioEditorScriptAction,
+  removeScenarioEditorScriptEvent,
+  replaceScenarioEditorAtTickTrigger,
+  replaceScenarioEditorEveryTicksTrigger,
+  replaceScenarioEditorScriptAction,
+  replaceScenarioEditorScriptEvent,
+  replaceScenarioEditorSendMessageId,
+  SCENARIO_EDITOR_SCRIPT_ACTION_KINDS,
+  SCENARIO_EDITOR_SCRIPT_TRIGGER_KINDS,
+  type ScenarioEditorScriptAction,
+  type ScenarioEditorScriptEvent,
+} from '../state/editor-script.ts';
+import {
   getScenarioEditorMetadataValidationIssues,
   parseScenarioEditorTagsInput,
   useScenarioEditorDispatch,
@@ -68,10 +86,11 @@ export const Route = createFileRoute('/')({
 });
 
 /**
- * Stage 4 workbench route with metadata/map editing plus objective predicate authoring.
+ * Stage 4 workbench route with metadata/map editing plus objective and script authoring.
  * Parity note: objective metric leaves map to `DoScenarioScore` checks in
  * `ref/micropolis/src/sim/s_msg.c`, while logical composition forms are declarative
- * runtime extensions from `packages/scenario-runtime`.
+ * runtime extensions from `packages/scenario-runtime`; script events map to
+ * `ScenarioDisaster` trigger/action domains in `ref/micropolis/src/sim/s_disast.c`.
  */
 function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
@@ -84,6 +103,9 @@ function ScenarioEditorHomeRoute() {
   }
   if (activeView === 'objective') {
     return <ScenarioObjectiveEditorCard />;
+  }
+  if (activeView === 'script') {
+    return <ScenarioScriptEditorCard />;
   }
 
   return <ScenarioExportCard />;
@@ -606,6 +628,257 @@ function ScenarioObjectivePredicateEditor(options: {
 }
 
 /**
+ * Event/action authoring card for Stage 4.2 declarative script editing.
+ * Parity note: trigger patterns (`atTick`, `everyTicks`) mirror `ScenarioDisaster`
+ * timing checks in `ref/micropolis/src/sim/s_disast.c`, while this React form is
+ * editor-only UI over `scenario-runtime` action unions.
+ */
+function ScenarioScriptEditorCard() {
+  const { script, isDirty } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const scriptJson = useMemo(
+    () => JSON.stringify(script.enabled ? script.events : [], null, 2),
+    [script.enabled, script.events],
+  );
+
+  const replaceEvents = (events: readonly ScenarioEditorScriptEvent[]) => {
+    dispatch({ type: 'replace-script-events', events });
+  };
+
+  return (
+    <section className="editor-card editor-script-card" aria-label="Scenario script editor">
+      <h1>Scenario Scripts</h1>
+      <p>
+        Author declarative event scripts with one-shot (`atTick`) and interval (`everyTicks`)
+        triggers plus runtime action unions for disasters/messages.
+      </p>
+
+      <label className="editor-field editor-script-toggle">
+        <span>Scripts Enabled</span>
+        <input
+          checked={script.enabled}
+          onChange={(event) => {
+            dispatch({ type: 'set-script-enabled', enabled: event.currentTarget.checked });
+          }}
+          type="checkbox"
+        />
+        <small className="editor-help">
+          This Stage 4.2 draft editor captures event/action authoring only; export integration lands
+          in Stage 4.5.
+        </small>
+      </label>
+
+      {script.enabled ? (
+        <div className="editor-script-events">
+          {script.events.map((event, eventIndex) => (
+            <ScenarioScriptEventEditor
+              event={event}
+              index={eventIndex}
+              key={eventIndex}
+              onChange={(nextEvent) => {
+                replaceEvents(
+                  replaceScenarioEditorScriptEvent(script.events, eventIndex, nextEvent),
+                );
+              }}
+              onRemove={() => {
+                replaceEvents(removeScenarioEditorScriptEvent(script.events, eventIndex));
+              }}
+            />
+          ))}
+          <button
+            className="editor-script-add"
+            onClick={() => {
+              replaceEvents(appendScenarioEditorScriptEvent(script.events));
+            }}
+            type="button"
+          >
+            Add Script Event
+          </button>
+        </div>
+      ) : (
+        <p className="editor-help">Scripted event actions are disabled for this draft.</p>
+      )}
+
+      <dl className="editor-grid">
+        <dt>Dirty State</dt>
+        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+        <dt>Scripts Enabled</dt>
+        <dd>{script.enabled ? 'yes' : 'no'}</dd>
+        <dt>Event Rows</dt>
+        <dd>{script.events.length}</dd>
+      </dl>
+
+      <section className="editor-export-preview" aria-label="Script event preview">
+        <h2>Script Event JSON</h2>
+        <textarea readOnly rows={12} value={scriptJson} />
+      </section>
+    </section>
+  );
+}
+
+/**
+ * One event row editor for Stage 4.2 script authoring.
+ * Not from Micropolis C: this is React form wiring around declarative runtime event drafts.
+ */
+function ScenarioScriptEventEditor(options: {
+  event: ScenarioEditorScriptEvent;
+  index: number;
+  onChange: (event: ScenarioEditorScriptEvent) => void;
+  onRemove: () => void;
+}) {
+  const { event, index, onChange, onRemove } = options;
+  const triggerKind = getScenarioEditorScriptTriggerKind(event.trigger);
+
+  return (
+    <fieldset className="editor-script-event">
+      <legend>{`Event ${index + 1}`}</legend>
+      <div className="editor-script-event-grid">
+        <label className="editor-field">
+          <span>Trigger</span>
+          <select
+            onChange={(changeEvent) => {
+              onChange(
+                coerceScenarioEditorScriptTriggerKind(
+                  event,
+                  changeEvent.currentTarget
+                    .value as (typeof SCENARIO_EDITOR_SCRIPT_TRIGGER_KINDS)[number],
+                ),
+              );
+            }}
+            value={triggerKind}
+          >
+            {SCENARIO_EDITOR_SCRIPT_TRIGGER_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {getScenarioScriptTriggerKindLabel(kind)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {triggerKind === 'atTick' ? (
+          <label className="editor-field">
+            <span>atTick</span>
+            <input
+              min={0}
+              onChange={(changeEvent) => {
+                onChange(
+                  replaceScenarioEditorAtTickTrigger(
+                    event,
+                    parseIntegerInput(
+                      changeEvent.currentTarget.value,
+                      'atTick' in event.trigger ? event.trigger.atTick : 0,
+                    ),
+                  ),
+                );
+              }}
+              type="number"
+              value={'atTick' in event.trigger ? event.trigger.atTick : 0}
+            />
+          </label>
+        ) : (
+          <label className="editor-field">
+            <span>everyTicks</span>
+            <input
+              min={1}
+              onChange={(changeEvent) => {
+                onChange(
+                  replaceScenarioEditorEveryTicksTrigger(
+                    event,
+                    parseIntegerInput(
+                      changeEvent.currentTarget.value,
+                      'everyTicks' in event.trigger ? event.trigger.everyTicks : 1,
+                    ),
+                  ),
+                );
+              }}
+              type="number"
+              value={'everyTicks' in event.trigger ? event.trigger.everyTicks : 1}
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="editor-script-actions">
+        <h3>Actions</h3>
+        {event.actions.map((action, actionIndex) => (
+          <div className="editor-script-action-row" key={`${index}:${actionIndex}`}>
+            <label className="editor-field">
+              <span>Action</span>
+              <select
+                onChange={(changeEvent) => {
+                  onChange(
+                    replaceScenarioEditorScriptAction(
+                      event,
+                      actionIndex,
+                      coerceScenarioEditorScriptActionKind(
+                        action,
+                        changeEvent.currentTarget.value as ScenarioEditorScriptAction['kind'],
+                      ),
+                    ),
+                  );
+                }}
+                value={action.kind}
+              >
+                {SCENARIO_EDITOR_SCRIPT_ACTION_KINDS.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {getScenarioScriptActionKindLabel(kind)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {action.kind === 'send-message' ? (
+              <label className="editor-field">
+                <span>messageId</span>
+                <input
+                  onChange={(changeEvent) => {
+                    onChange(
+                      replaceScenarioEditorScriptAction(
+                        event,
+                        actionIndex,
+                        replaceScenarioEditorSendMessageId(
+                          action,
+                          parseIntegerInput(changeEvent.currentTarget.value, action.messageId),
+                        ),
+                      ),
+                    );
+                  }}
+                  type="number"
+                  value={action.messageId}
+                />
+              </label>
+            ) : null}
+
+            <button
+              className="editor-script-remove"
+              onClick={() => {
+                onChange(removeScenarioEditorScriptAction(event, actionIndex));
+              }}
+              type="button"
+            >
+              Remove Action
+            </button>
+          </div>
+        ))}
+        <button
+          className="editor-script-add"
+          onClick={() => {
+            onChange(appendScenarioEditorScriptAction(event));
+          }}
+          type="button"
+        >
+          Add Action
+        </button>
+      </div>
+
+      <button className="editor-script-remove" onClick={onRemove} type="button">
+        Remove Event
+      </button>
+    </fieldset>
+  );
+}
+
+/**
  * Strict JSON export + open/import card for Stage 3.4/3.5.
  * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
  * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
@@ -873,6 +1146,47 @@ function getScenarioObjectiveComparisonLabel(
     return '=';
   }
   return '!=';
+}
+
+/**
+ * Render label text for one script trigger selector value.
+ * Mirrors `ScenarioDisaster` trigger styles in `ref/micropolis/src/sim/s_disast.c`.
+ */
+function getScenarioScriptTriggerKindLabel(
+  kind: (typeof SCENARIO_EDITOR_SCRIPT_TRIGGER_KINDS)[number],
+): string {
+  if (kind === 'atTick') {
+    return 'At Tick';
+  }
+  return 'Every Ticks';
+}
+
+/**
+ * Render label text for one script action kind.
+ * Mirrors action side-effect categories represented by `ScenarioRuntimeAction`.
+ */
+function getScenarioScriptActionKindLabel(
+  kind: (typeof SCENARIO_EDITOR_SCRIPT_ACTION_KINDS)[number],
+): string {
+  if (kind === 'make-earthquake') {
+    return 'Make Earthquake';
+  }
+  if (kind === 'drop-fire-bombs') {
+    return 'Drop Fire Bombs';
+  }
+  if (kind === 'make-monster') {
+    return 'Make Monster';
+  }
+  if (kind === 'make-meltdown') {
+    return 'Make Meltdown';
+  }
+  if (kind === 'make-flood') {
+    return 'Make Flood';
+  }
+  if (kind === 'send-message') {
+    return 'Send Message';
+  }
+  return 'Lose Game';
 }
 
 /**
