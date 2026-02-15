@@ -3,6 +3,7 @@ import {
   SCENARIO_BUNDLE_V1_MAP_WIDTH,
   SCENARIO_BUNDLE_V1_TILE_COUNT,
   type ScenarioBundleV1,
+  scenarioBundleV1Schema,
 } from '@city/scenario-core';
 import {
   createContext,
@@ -31,12 +32,47 @@ export interface ScenarioEditorState {
 }
 
 /**
+ * Editable metadata fields for the Stage 3 editor MVP.
+ * Mirrors scenario start metadata (`startYear`, `startFunds`) from `LoadScenario`
+ * rows in `ref/micropolis/src/sim/s_fileio.c`; key/name/description/tags are modern
+ * JSON-bundle authoring fields with no 1:1 C struct equivalent.
+ */
+export type ScenarioEditorMetadataFields = Pick<
+  ScenarioBundleV1,
+  'key' | 'name' | 'description' | 'tags' | 'start'
+>;
+
+/**
+ * Partial metadata update payload for reducer actions.
+ * Not from Micropolis C: this is an editor-only patch model for immutable React state updates.
+ */
+export type ScenarioEditorMetadataPatch = Partial<
+  Omit<ScenarioEditorMetadataFields, 'start'> & {
+    start: Partial<ScenarioEditorMetadataFields['start']>;
+  }
+>;
+
+/**
+ * Metadata validation messages surfaced by the Stage 3 metadata form.
+ * Uses the same contract constraints as `scenarioBundleV1Schema` from `@city/scenario-core`.
+ */
+export interface ScenarioEditorMetadataValidationIssues {
+  readonly description?: string;
+  readonly key?: string;
+  readonly name?: string;
+  readonly startFunds?: string;
+  readonly startYear?: string;
+  readonly tags?: string;
+}
+
+/**
  * Action set for the scenario editor reducer.
  * Not from Micropolis C: deterministic React reducer actions for editor UI state transitions.
  */
 export type ScenarioEditorAction =
   | { type: 'mark-clean' }
   | { type: 'mark-dirty' }
+  | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
 
@@ -104,6 +140,12 @@ export function scenarioEditorReducer(
         ...state,
         isDirty: true,
       };
+    case 'update-metadata':
+      return {
+        ...state,
+        bundle: applyMetadataPatch(state.bundle, action.metadata),
+        isDirty: true,
+      };
     case 'replace-bundle':
       return {
         ...state,
@@ -165,4 +207,92 @@ export function useScenarioEditorDispatch(): Dispatch<ScenarioEditorAction> {
   }
 
   return dispatch;
+}
+
+/**
+ * Parse a free-form tags string into canonical scenario tags.
+ * Not from Micropolis C: Stage 3 editor convenience helper for converting user input
+ * into `ScenarioBundleV1.tags` array values.
+ */
+export function parseScenarioEditorTagsInput(tagsText: string): string[] {
+  return tagsText
+    .split(/[\n,]/)
+    .map((rawTag) => rawTag.trim())
+    .filter((tag) => tag.length > 0);
+}
+
+/**
+ * Validate metadata fields using canonical scenario bundle schema rules.
+ * Reuses Stage 0 contract checks from `scenarioBundleV1Schema`, including key namespace
+ * rules that replace legacy numeric scenario id routing from `LoadScenario`.
+ */
+export function getScenarioEditorMetadataValidationIssues(
+  bundle: ScenarioBundleV1,
+): ScenarioEditorMetadataValidationIssues {
+  const result = scenarioBundleV1Schema.safeParse(bundle);
+  if (result.success) {
+    return {};
+  }
+
+  const issues: {
+    description?: string;
+    key?: string;
+    name?: string;
+    startFunds?: string;
+    startYear?: string;
+    tags?: string;
+  } = {};
+
+  for (const issue of result.error.issues) {
+    const pathHead = issue.path[0];
+    const pathTail = issue.path[1];
+    if (pathHead === 'description' && issues.description === undefined) {
+      issues.description = issue.message;
+      continue;
+    }
+    if (pathHead === 'key' && issues.key === undefined) {
+      issues.key = issue.message;
+      continue;
+    }
+    if (pathHead === 'name' && issues.name === undefined) {
+      issues.name = issue.message;
+      continue;
+    }
+    if (pathHead === 'tags' && issues.tags === undefined) {
+      issues.tags = issue.message;
+      continue;
+    }
+    if (pathHead === 'start' && pathTail === 'startYear' && issues.startYear === undefined) {
+      issues.startYear = issue.message;
+      continue;
+    }
+    if (pathHead === 'start' && pathTail === 'startFunds' && issues.startFunds === undefined) {
+      issues.startFunds = issue.message;
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * Apply a metadata patch while preserving the existing scenario map payload.
+ * Not a Micropolis C port: immutable bundle patching for React reducer updates.
+ */
+function applyMetadataPatch(
+  bundle: ScenarioBundleV1,
+  metadata: ScenarioEditorMetadataPatch,
+): ScenarioBundleV1 {
+  const nextStart =
+    metadata.start === undefined
+      ? bundle.start
+      : {
+          ...bundle.start,
+          ...metadata.start,
+        };
+
+  return {
+    ...bundle,
+    ...metadata,
+    start: nextStart,
+  };
 }

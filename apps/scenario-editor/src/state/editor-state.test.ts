@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest';
 import {
   createScenarioEditorInitialBundle,
   createScenarioEditorInitialState,
+  getScenarioEditorMetadataValidationIssues,
+  parseScenarioEditorTagsInput,
   scenarioEditorReducer,
 } from './editor-state.tsx';
 
@@ -24,6 +26,11 @@ describe('scenario editor state foundation', () => {
     expect(bundle.map.height).toBe(100);
     expect(bundle.map.tileWords).toHaveLength(12000);
     expect(bundle.map.tileWords.every((word) => word === 0)).toBe(true);
+
+    // Magic numbers source: Dullsville scenario defaults in `LoadScenario` from
+    // `ref/micropolis/src/sim/s_fileio.c` set `CityTime` from year 1900 and funds 5000.
+    expect(bundle.start.startYear).toBe(1900);
+    expect(bundle.start.startFunds).toBe(5000);
   });
 
   test('transitions active view through reducer actions', () => {
@@ -33,5 +40,58 @@ describe('scenario editor state foundation', () => {
     expect(next.activeView).toBe('map');
     expect(next.bundle).toBe(initial.bundle);
     expect(next.isDirty).toBe(false);
+  });
+
+  test('updates metadata fields through reducer patch actions', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'update-metadata',
+      metadata: {
+        key: 'user/custom-metadata',
+        name: 'Custom Metadata',
+        description: 'Editable metadata scenario',
+        tags: ['editor', 'mvp'],
+        start: {
+          startYear: 1957,
+          startFunds: 20000,
+        },
+      },
+    });
+
+    expect(next.isDirty).toBe(true);
+    expect(next.bundle.key).toBe('user/custom-metadata');
+    expect(next.bundle.name).toBe('Custom Metadata');
+    expect(next.bundle.description).toBe('Editable metadata scenario');
+    expect(next.bundle.tags).toEqual(['editor', 'mvp']);
+    expect(next.bundle.start).toEqual({
+      startYear: 1957,
+      startFunds: 20000,
+    });
+    expect(next.bundle.map).toBe(initial.bundle.map);
+  });
+
+  test('reports validation issues for invalid metadata fields', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const invalidBundle = {
+      ...bundle,
+      key: 'custom-without-namespace',
+      name: '',
+      start: {
+        ...bundle.start,
+        startFunds: -1,
+      },
+    };
+
+    const issues = getScenarioEditorMetadataValidationIssues(invalidBundle);
+
+    expect(issues.key).toContain('builtin/* or user/* namespace');
+    expect(issues.name).toBeDefined();
+    expect(issues.startFunds).toBeDefined();
+  });
+
+  test('parses comma or newline tag input into canonical tag arrays', () => {
+    const tags = parseScenarioEditorTagsInput('classic, tutorial\nharbor redevelopment');
+
+    expect(tags).toEqual(['classic', 'tutorial', 'harbor redevelopment']);
   });
 });
