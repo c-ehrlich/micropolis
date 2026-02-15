@@ -139,6 +139,7 @@
 - [ ] **4.5** Integrate edited scripts/objectives into export pipeline.
 
 Stage 4.3 repair note: behavior profile assignment now uses closed-key selection UI with explicit invalid-key diagnostics tied to the runtime profile registry.
+Stage 4.4 repair note: semantic validators now reject predicate/script kind-field mismatches (invalid type combos) in addition to unknown metrics/operators and empty composite nodes.
 
 ### Good Tests
 - UI-driven serialization tests from form model -> valid script/objective JSON.

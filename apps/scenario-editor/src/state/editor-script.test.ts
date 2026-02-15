@@ -196,6 +196,41 @@ describe('scenario editor script drafting', () => {
     ]);
   });
 
+  test('reports invalid trigger/action payload fields for known kinds', () => {
+    const issues = getScenarioEditorScriptValidationIssues({
+      enabled: true,
+      events: [
+        {
+          trigger: { atTick: 3, offset: 1 },
+          actions: [{ kind: 'make-flood', intensity: 2 }],
+        },
+        {
+          trigger: { everyTicks: 24, phase: 6 },
+          actions: [{ kind: 'send-message', messageId: -200, category: 'system' }],
+        },
+      ] as unknown as ReturnType<typeof createScenarioEditorInitialScriptDraft>['events'],
+    });
+
+    expect(issues).toEqual([
+      {
+        path: 'script.events.0.trigger.offset',
+        message: 'trigger field "offset" is not valid for atTick triggers',
+      },
+      {
+        path: 'script.events.0.actions.0.intensity',
+        message: 'payload field "intensity" is not valid for make-flood actions',
+      },
+      {
+        path: 'script.events.1.trigger.phase',
+        message: 'trigger field "phase" is not valid for everyTicks triggers',
+      },
+      {
+        path: 'script.events.1.actions.0.category',
+        message: 'payload field "category" is not valid for send-message actions',
+      },
+    ]);
+  });
+
   test('skips semantic validation while script authoring is disabled', () => {
     const issues = getScenarioEditorScriptValidationIssues({
       enabled: false,

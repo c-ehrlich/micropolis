@@ -285,6 +285,19 @@ const collectScenarioObjectivePredicateValidationIssues = (
   }
 
   if (kind === 'metric') {
+    if (Object.prototype.hasOwnProperty.call(predicate, 'predicates')) {
+      issues.push({
+        path: `${path}.predicates`,
+        message: 'predicates array is only valid for all/any predicates',
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(predicate, 'predicate')) {
+      issues.push({
+        path: `${path}.predicate`,
+        message: 'predicate child is only valid for not predicates',
+      });
+    }
+
     const metric = predicate.metric;
     if (!isScenarioObjectiveMetricKey(metric)) {
       issues.push({
@@ -313,6 +326,31 @@ const collectScenarioObjectivePredicateValidationIssues = (
   }
 
   if (kind === 'all' || kind === 'any') {
+    if (Object.prototype.hasOwnProperty.call(predicate, 'metric')) {
+      issues.push({
+        path: `${path}.metric`,
+        message: 'metric field is only valid for metric predicates',
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(predicate, 'op')) {
+      issues.push({
+        path: `${path}.op`,
+        message: 'comparison op is only valid for metric predicates',
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(predicate, 'value')) {
+      issues.push({
+        path: `${path}.value`,
+        message: 'value field is only valid for metric predicates',
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(predicate, 'predicate')) {
+      issues.push({
+        path: `${path}.predicate`,
+        message: 'predicate child is only valid for not predicates',
+      });
+    }
+
     const predicates = predicate.predicates;
     if (!Array.isArray(predicates)) {
       issues.push({
@@ -340,6 +378,31 @@ const collectScenarioObjectivePredicateValidationIssues = (
       );
     }
     return issues;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(predicate, 'metric')) {
+    issues.push({
+      path: `${path}.metric`,
+      message: 'metric field is only valid for metric predicates',
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(predicate, 'op')) {
+    issues.push({
+      path: `${path}.op`,
+      message: 'comparison op is only valid for metric predicates',
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(predicate, 'value')) {
+    issues.push({
+      path: `${path}.value`,
+      message: 'value field is only valid for metric predicates',
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(predicate, 'predicates')) {
+    issues.push({
+      path: `${path}.predicates`,
+      message: 'predicates array is only valid for all/any predicates',
+    });
   }
 
   const childPredicate = predicate.predicate;

@@ -224,6 +224,44 @@ describe('scenario editor objective predicate drafting', () => {
     ]);
   });
 
+  test('reports invalid kind/field combinations in predicate nodes', () => {
+    const issues = getScenarioEditorObjectiveValidationIssues({
+      enabled: true,
+      predicate: {
+        kind: 'not',
+        metric: 'city-score',
+        op: 'gt',
+        value: 500,
+        predicates: [],
+        predicate: {
+          kind: 'metric',
+          metric: 'city-score',
+          op: 'gt',
+          value: 500,
+        },
+      } as unknown as ReturnType<typeof createScenarioEditorDefaultObjectivePredicate>,
+    });
+
+    expect(issues).toEqual([
+      {
+        path: 'objective.predicate.metric',
+        message: 'metric field is only valid for metric predicates',
+      },
+      {
+        path: 'objective.predicate.op',
+        message: 'comparison op is only valid for metric predicates',
+      },
+      {
+        path: 'objective.predicate.value',
+        message: 'value field is only valid for metric predicates',
+      },
+      {
+        path: 'objective.predicate.predicates',
+        message: 'predicates array is only valid for all/any predicates',
+      },
+    ]);
+  });
+
   test('skips semantic validation while objective authoring is disabled', () => {
     const issues = getScenarioEditorObjectiveValidationIssues({
       enabled: false,

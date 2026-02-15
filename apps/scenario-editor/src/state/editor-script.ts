@@ -469,6 +469,17 @@ const collectScenarioScriptTriggerValidationIssues = (
   }
 
   if (hasAtTick) {
+    const triggerKeys = Object.keys(trigger);
+    for (const triggerKey of triggerKeys) {
+      if (triggerKey === 'atTick') {
+        continue;
+      }
+      issues.push({
+        path: `${path}.${triggerKey}`,
+        message: `trigger field "${triggerKey}" is not valid for atTick triggers`,
+      });
+    }
+
     const atTick = trigger.atTick;
     if (typeof atTick !== 'number' || !Number.isInteger(atTick) || atTick < 0) {
       issues.push({
@@ -477,6 +488,17 @@ const collectScenarioScriptTriggerValidationIssues = (
       });
     }
     return issues;
+  }
+
+  const triggerKeys = Object.keys(trigger);
+  for (const triggerKey of triggerKeys) {
+    if (triggerKey === 'everyTicks') {
+      continue;
+    }
+    issues.push({
+      path: `${path}.${triggerKey}`,
+      message: `trigger field "${triggerKey}" is not valid for everyTicks triggers`,
+    });
   }
 
   const everyTicks = trigger.everyTicks;
@@ -512,7 +534,18 @@ const collectScenarioScriptActionValidationIssues = (
   }
 
   const hasMessageId = Object.prototype.hasOwnProperty.call(action, 'messageId');
+  const actionKeys = Object.keys(action);
   if (kind === 'send-message') {
+    for (const actionKey of actionKeys) {
+      if (actionKey === 'kind' || actionKey === 'messageId') {
+        continue;
+      }
+      issues.push({
+        path: `${path}.${actionKey}`,
+        message: `payload field "${actionKey}" is not valid for send-message actions`,
+      });
+    }
+
     if (!hasMessageId) {
       issues.push({
         path: `${path}.messageId`,
@@ -531,10 +564,20 @@ const collectScenarioScriptActionValidationIssues = (
     return issues;
   }
 
-  if (hasMessageId) {
+  for (const actionKey of actionKeys) {
+    if (actionKey === 'kind') {
+      continue;
+    }
+    if (actionKey === 'messageId') {
+      issues.push({
+        path: `${path}.messageId`,
+        message: 'messageId payload is only valid for send-message actions',
+      });
+      continue;
+    }
     issues.push({
-      path: `${path}.messageId`,
-      message: 'messageId payload is only valid for send-message actions',
+      path: `${path}.${actionKey}`,
+      message: `payload field "${actionKey}" is not valid for ${kind} actions`,
     });
   }
   return issues;
