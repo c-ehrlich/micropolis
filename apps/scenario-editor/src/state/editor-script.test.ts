@@ -7,8 +7,8 @@ import {
   coerceScenarioEditorScriptTriggerKind,
   createScenarioEditorDefaultScriptEvent,
   createScenarioEditorInitialScriptDraft,
-  getScenarioEditorScriptValidationIssues,
   getScenarioEditorScriptTriggerKind,
+  getScenarioEditorScriptValidationIssues,
   removeScenarioEditorScriptAction,
   removeScenarioEditorScriptEvent,
   replaceScenarioEditorAtTickTrigger,
@@ -139,26 +139,28 @@ describe('scenario editor script drafting', () => {
   });
 
   test('reports semantic issues for malformed trigger/action payloads', () => {
+    const malformedEvents = [
+      {
+        trigger: { atTick: 1, everyTicks: 24 },
+        actions: [{ kind: 'lose-game', messageId: -200 }],
+      },
+      {
+        trigger: { everyTicks: 0 },
+        actions: [],
+      },
+      {
+        trigger: { atTick: 2 },
+        actions: [{ kind: 'send-message' }],
+      },
+      {
+        trigger: {},
+        actions: [{ kind: 'unknown-action' }],
+      },
+    ] as unknown as ReturnType<typeof createScenarioEditorInitialScriptDraft>['events'];
+
     const issues = getScenarioEditorScriptValidationIssues({
       enabled: true,
-      events: [
-        {
-          trigger: { atTick: 1, everyTicks: 24 } as unknown as { readonly atTick: number },
-          actions: [{ kind: 'lose-game', messageId: -200 } as unknown as { readonly kind: string }],
-        },
-        {
-          trigger: { everyTicks: 0 } as unknown as { readonly everyTicks: number },
-          actions: [],
-        },
-        {
-          trigger: { atTick: 2 },
-          actions: [{ kind: 'send-message' } as unknown as { readonly kind: string }],
-        },
-        {
-          trigger: {} as unknown as { readonly atTick: number },
-          actions: [{ kind: 'unknown-action' } as unknown as { readonly kind: string }],
-        },
-      ],
+      events: malformedEvents,
     });
 
     expect(issues).toEqual([
