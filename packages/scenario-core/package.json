@@ -1,0 +1,19 @@
+{
+  "name": "@city/scenario-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "pnpm -w eslint packages/scenario-core/src packages/scenario-core/vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm -w vitest run --root packages/scenario-core"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.10"
+  }
+}

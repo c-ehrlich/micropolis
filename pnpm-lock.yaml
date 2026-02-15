@@ -139,6 +139,16 @@ importers:
 
   packages/micropolis-c-harness: {}
 
+  packages/scenario-core:
+    dependencies:
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: 25.0.10
+        version: 25.0.10
+
   packages/shared: {}
 
   packages/sim-assets: {}

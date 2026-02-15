@@ -4,31 +4,13 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
- * Plan automation metadata for the sound parity rollout.
+ * Plan automation metadata for the scenario editor rollout.
  *
  * This orchestrator is intentionally different from Micropolis C runtime code:
  * it automates Codex task execution over markdown migration plans rather than
  * implementing simulation behavior directly.
  */
-const PLAN_PATH = 'SOUND_PARITY_PLAN.md';
-
-/**
- * Plan stream definitions for the single sound parity plan document.
- *
- * Not from Micropolis C sources; this maps one plan-level checklist stream
- * to an isolated automation worktree/branch.
- */
-const DEFAULT_PACKAGES = [
-  {
-    id: 'sound-parity',
-    stageNumber: null,
-    stageLabel: 'Sound Parity Plan',
-    packagePath: 'repo',
-    planPath: PLAN_PATH,
-    branch: null,
-    worktreePath: '.',
-  },
-];
+const PLAN_PATH = 'SCENARIO_EDITOR_PLAN.md';
 
 /**
  * Default quality gates for each completed automation task.
@@ -37,6 +19,79 @@ const DEFAULT_PACKAGES = [
  * to ensure workspace integrity before commit/push/PR updates.
  */
 const DEFAULT_CHECKS = ['pnpm typecheck', 'pnpm lint', 'pnpm format'];
+
+/**
+ * Discovers Stage headings from a markdown plan.
+ *
+ * Not from Micropolis C; this builds automation streams from `## Stage N ...`
+ * sections instead of hardcoded stream metadata.
+ */
+function discoverPlanStages(markdown) {
+  const stageByNumber = new Map();
+  const lines = markdown.split('\n');
+
+  for (const line of lines) {
+    const headingMatch = /^(#{2,6})\s+Stage\s+([0-9]+)\b(?:\s*[-:]\s*(.+))?\s*$/i.exec(line);
+    if (!headingMatch) {
+      continue;
+    }
+
+    const number = Number(headingMatch[2]);
+    if (!Number.isInteger(number)) {
+      continue;
+    }
+
+    const suffix = (headingMatch[3] ?? '').trim();
+    const label = suffix.length > 0 ? `Stage ${number} - ${suffix}` : `Stage ${number}`;
+    stageByNumber.set(number, label);
+  }
+
+  return [...stageByNumber.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([number, label]) => ({
+      number,
+      label,
+    }));
+}
+
+/**
+ * Builds default stream package definitions from the selected plan markdown.
+ *
+ * Not from Micropolis C; this lets the orchestrator adapt when stage plans are
+ * restructured without editing stream constants in this file.
+ */
+function buildDefaultPackages(repoRoot) {
+  const planAbsolutePath = path.join(repoRoot, PLAN_PATH);
+  if (!existsSync(planAbsolutePath)) {
+    throw new Error(`Plan file not found: ${PLAN_PATH}`);
+  }
+
+  const markdown = readFileSync(planAbsolutePath, 'utf8');
+  const discoveredStages = discoverPlanStages(markdown);
+  if (discoveredStages.length === 0) {
+    return [
+      {
+        id: 'scenario-plan',
+        stageNumber: null,
+        stageLabel: 'Scenario Editor Plan',
+        packagePath: 'repo',
+        planPath: PLAN_PATH,
+        branch: null,
+        worktreePath: '.',
+      },
+    ];
+  }
+
+  return discoveredStages.map((stage) => ({
+    id: `scenario-stage-${stage.number}`,
+    stageNumber: stage.number,
+    stageLabel: stage.label,
+    packagePath: 'repo',
+    planPath: PLAN_PATH,
+    branch: null,
+    worktreePath: '.',
+  }));
+}
 
 /**
  * Returns today's date string for plan execution logs.
@@ -303,6 +358,16 @@ function extractTaskId(text) {
 }
 
 /**
+ * Returns true when a checklist line is a stage-level status toggle.
+ *
+ * Not from Micropolis C; this prevents stage-level completion checkboxes from
+ * being treated as executable task items by the orchestrator.
+ */
+function isStageStatusTask(text) {
+  return /^stage status\s*:/i.test(text.trim());
+}
+
+/**
  * Parses one plan markdown document for either one scoped stage/phase or the full checklist.
  *
  * Not from Micropolis C sources; this interprets checklist docs under
@@ -373,6 +438,9 @@ function parseStagePlan(markdown, stageNumber = null) {
 
       const mark = checkMatch[1];
       const text = checkMatch[2].trim();
+      if (isStageStatusTask(text)) {
+        continue;
+      }
       totalTaskCount += 1;
 
       if (mark.toLowerCase() === 'x') {
@@ -1495,7 +1563,7 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
       break;
     }
 
-    /** @type {{ pkg: (typeof DEFAULT_PACKAGES)[number]; status: ReturnType<typeof getPackagePlanStatus>; worktreeRoot: string }[]} */
+    /** @type {{ pkg: ReturnType<typeof buildDefaultPackages>[number]; status: ReturnType<typeof getPackagePlanStatus>; worktreeRoot: string }[]} */
     const packageStatuses = [];
 
     for (const pkg of packages) {
@@ -1606,7 +1674,8 @@ async function runOrchestrator(mainRepoRoot, packages, args) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const mainRepoRoot = process.cwd();
-  const packages = selectPackages(DEFAULT_PACKAGES, args.streamIds);
+  const defaultPackages = buildDefaultPackages(mainRepoRoot);
+  const packages = selectPackages(defaultPackages, args.streamIds);
 
   if (args.command === 'queue') {
     printQueue(mainRepoRoot, packages);
