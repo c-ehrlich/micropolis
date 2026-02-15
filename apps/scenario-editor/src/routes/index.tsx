@@ -1,6 +1,7 @@
 import { SCENARIO_BUNDLE_V1_MAP_HEIGHT, SCENARIO_BUNDLE_V1_MAP_WIDTH } from '@city/scenario-core';
 import { createFileRoute } from '@tanstack/react-router';
 import {
+  type ChangeEvent,
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
@@ -14,6 +15,10 @@ import {
   getScenarioEditorExportFileName,
   type ScenarioEditorStrictExportResult,
 } from '../state/editor-export.ts';
+import {
+  parseScenarioEditorBundleImportJson,
+  type ScenarioEditorBundleImportIssue,
+} from '../state/editor-import.ts';
 import {
   getScenarioEditorMapIndex,
   getScenarioEditorMapTileWords,
@@ -35,6 +40,17 @@ const EDITOR_TILE_PRESETS = [
   { label: 'RIVER', source: 'RIVER=2', tileWord: 2 },
   { label: 'REDGE', source: 'REDGE=3', tileWord: 3 },
 ] as const;
+
+type ScenarioEditorOpenResult =
+  | {
+      readonly fileName: string;
+      readonly ok: true;
+    }
+  | {
+      readonly fileName: string;
+      readonly issues: readonly ScenarioEditorBundleImportIssue[];
+      readonly ok: false;
+    };
 
 export const Route = createFileRoute('/')({
   component: ScenarioEditorHomeRoute,
@@ -367,13 +383,16 @@ function ScenarioMapEditorCard() {
 }
 
 /**
- * Strict JSON export card for Stage 3.4.
+ * Strict JSON export + open/import card for Stage 3.4/3.5.
  * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
- * persistence in `ref/micropolis/src/sim/s_fileio.c`; lint UX/status is editor-only.
+ * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
+ * file-picker UX are editor-only browser workflow glue.
  */
 function ScenarioExportCard() {
   const { bundle, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
+  const openFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [lastOpenResult, setLastOpenResult] = useState<ScenarioEditorOpenResult | null>(null);
   const [lastResult, setLastResult] = useState<ScenarioEditorStrictExportResult | null>(null);
   const exportFileName = getScenarioEditorExportFileName(bundle.key);
 
@@ -389,26 +408,101 @@ function ScenarioExportCard() {
     dispatch({ type: 'mark-clean' });
   };
 
+  const handleOpenBundle = () => {
+    if (
+      isDirty &&
+      !window.confirm('Open a bundle and discard unsaved editor changes in this draft?')
+    ) {
+      return;
+    }
+
+    openFileInputRef.current?.click();
+  };
+
+  const handleOpenBundleInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const selectedFile = input.files?.[0];
+    input.value = '';
+    if (selectedFile === undefined) {
+      return;
+    }
+
+    let fileText: string;
+    try {
+      fileText = await selectedFile.text();
+    } catch {
+      setLastOpenResult({
+        ok: false,
+        fileName: selectedFile.name,
+        issues: [
+          {
+            source: 'io',
+            path: '$',
+            message: 'failed to read the selected bundle file',
+          },
+        ],
+      });
+      return;
+    }
+
+    const importResult = parseScenarioEditorBundleImportJson(fileText);
+    if (!importResult.ok) {
+      setLastOpenResult({
+        ok: false,
+        fileName: selectedFile.name,
+        issues: importResult.issues,
+      });
+      return;
+    }
+
+    dispatch({ type: 'replace-bundle', bundle: importResult.bundle });
+    dispatch({ type: 'set-active-view', view: 'metadata' });
+    setLastOpenResult({
+      ok: true,
+      fileName: selectedFile.name,
+    });
+    setLastResult(null);
+  };
+
   const issues = lastResult?.ok === false ? lastResult.issues : [];
+  const openIssues = lastOpenResult?.ok === false ? lastOpenResult.issues : [];
 
   return (
     <section className="editor-card" aria-label="Scenario strict export panel">
       <h1>Export Scenario Bundle</h1>
       <p>
-        Run strict schema/lint checks and export a canonical `ScenarioBundleV1` JSON file with map
-        payload compiled to `city-file-bytes`.
+        Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
+        export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes`.
       </p>
 
       <div className="editor-export-actions">
+        <input
+          accept="application/json,.json"
+          className="editor-open-input"
+          onChange={handleOpenBundleInputChange}
+          ref={openFileInputRef}
+          type="file"
+        />
+        <button className="editor-open-button" onClick={handleOpenBundle} type="button">
+          Open Bundle JSON
+        </button>
         <button className="editor-export-button" onClick={handleExport} type="button">
           Export Bundle JSON
         </button>
-        <small className="editor-help">File name: {exportFileName}</small>
+        <small className="editor-help">Export file name: {exportFileName}</small>
       </div>
 
       <dl className="editor-grid">
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+        <dt>Last Open Attempt</dt>
+        <dd>
+          {lastOpenResult === null
+            ? 'not attempted'
+            : lastOpenResult.ok
+              ? `success (${lastOpenResult.fileName})`
+              : `blocked (${openIssues.length} issue${openIssues.length === 1 ? '' : 's'})`}
+        </dd>
         <dt>Last Export Attempt</dt>
         <dd>
           {lastResult === null
@@ -424,6 +518,19 @@ function ScenarioExportCard() {
           <h2>Export Blocked</h2>
           <ul>
             {lastResult.issues.map((issue, index) => (
+              <li key={`${issue.source}:${issue.path}:${issue.message}:${index}`}>
+                <strong>{issue.source}</strong> at <code>{issue.path}</code>: {issue.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {lastOpenResult?.ok === false ? (
+        <section aria-label="Bundle open issues" className="editor-open-issues">
+          <h2>Open Blocked</h2>
+          <ul>
+            {openIssues.map((issue, index) => (
               <li key={`${issue.source}:${issue.path}:${issue.message}:${index}`}>
                 <strong>{issue.source}</strong> at <code>{issue.path}</code>: {issue.message}
               </li>
