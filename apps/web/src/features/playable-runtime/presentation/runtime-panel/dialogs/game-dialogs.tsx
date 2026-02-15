@@ -13,6 +13,7 @@ interface RuntimeGameDialogsProps {
   gameDialog: RuntimeUiController['gameDialog'];
   isLoadingCityFile: boolean;
   loadInputRef: RefObject<HTMLInputElement | null>;
+  scenarioLoadInputRef: RefObject<HTMLInputElement | null>;
   newCityTerrainSeed: RuntimeUiController['newCityTerrainSeed'];
   pendingLoadFile: RuntimeUiController['pendingLoadFile'];
   saveFileNameDraft: RuntimeUiController['saveFileNameDraft'];
@@ -25,7 +26,8 @@ interface RuntimeGameDialogsProps {
  * New/save/load/scenario modal set for city lifecycle commands.
  * Mirrors menu-driven city lifecycle flows from `ref/micropolis/res/micropolis.tcl`
  * and related runtime command handlers.
- * Difference: uses typed bridge commands and browser file input for `.cty` loading.
+ * Difference: uses typed bridge commands and browser file inputs for `.cty`
+ * city loading plus external scenario JSON selection.
  */
 export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
   const {
@@ -34,6 +36,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
     gameDialog,
     isLoadingCityFile,
     loadInputRef,
+    scenarioLoadInputRef,
     newCityTerrainSeed,
     pendingLoadFile,
     saveFileNameDraft,
@@ -53,6 +56,18 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
           dialogActions.setPendingLoadFile(file);
         }}
         ref={loadInputRef}
+        className="hidden"
+        type="file"
+      />
+      <input
+        accept=".json,application/json"
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const file = input.files?.[0] ?? null;
+          input.value = '';
+          dialogActions.loadScenarioBundleFile(file);
+        }}
+        ref={scenarioLoadInputRef}
         className="hidden"
         type="file"
       />

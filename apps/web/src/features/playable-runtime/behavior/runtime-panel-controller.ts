@@ -38,6 +38,7 @@ import {
   type RuntimeTilesetName,
 } from '../../../presentation/map/tile-sprite-atlas.ts';
 import { formatRuntimePhaseStatus, nextCommandId } from './runtime-panel-behavior.ts';
+import type { ExternalScenarioBundleFile } from './scenario-bundle-file.ts';
 
 export type TopMenubarSection = 'micropolis' | 'windows' | 'disasters' | 'settings';
 export type GameDialogKind = 'new' | 'save' | 'load' | 'scenario';
@@ -328,6 +329,8 @@ export function useRuntimeUiState() {
   const [dismissedNoticeSignature, setDismissedNoticeSignature] = useState<string | null>(null);
   const [saveFileNameDraft, setSaveFileNameDraft] = useState('newcity.cty');
   const [pendingLoadFile, setPendingLoadFile] = useState<File | null>(null);
+  const [loadedExternalScenarioBundle, setLoadedExternalScenarioBundle] =
+    useState<ExternalScenarioBundleFile | null>(null);
   const [isLoadingCityFile, setIsLoadingCityFile] = useState(false);
   const [selectedRuntimeTileset, setSelectedRuntimeTileset] =
     useState<RuntimeTilesetName>('classic');
@@ -354,6 +357,7 @@ export function useRuntimeUiState() {
     graphRange,
     hasStartedPlayableSession,
     isBrandDialogOpen,
+    loadedExternalScenarioBundle,
     isLoadingCityFile,
     isSpeedMenuOpen,
     lastSaveStatus,
@@ -377,6 +381,7 @@ export function useRuntimeUiState() {
     setIsLoadingCityFile,
     setIsSpeedMenuOpen,
     setLastSaveStatus,
+    setLoadedExternalScenarioBundle,
     setNewCityTerrainSeed,
     setOpenMenubarSection,
     setPendingLoadFile,

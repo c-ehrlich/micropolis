@@ -14,7 +14,7 @@ interface MicropolisMenuProps {
 }
 
 /**
- * Micropolis menu with about/new/save/load/scenario entries.
+ * Micropolis menu with about/new/save/load/scenario actions.
  * Mirrors top-level city lifecycle menu actions in `ref/micropolis/res/whead.tcl`.
  */
 export function MicropolisMenu(props: MicropolisMenuProps) {
@@ -74,6 +74,15 @@ export function MicropolisMenu(props: MicropolisMenuProps) {
         type="button"
       >
         Load...
+      </ClassicyMenuItemButton>
+      <ClassicyMenuItemButton
+        disabled={controlsDisabled}
+        onClick={() => {
+          menuActions.openScenarioFilePicker();
+        }}
+        type="button"
+      >
+        Load Scenario...
       </ClassicyMenuItemButton>
       <ClassicyMenuItemButton
         disabled={controlsDisabled}

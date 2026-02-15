@@ -37,6 +37,7 @@ interface RuntimePanelViewProps {
   floating: RuntimeFloatingWindowsController;
   layoutInsets: RuntimeLayoutInsets;
   loadInputRef: RefObject<HTMLInputElement | null>;
+  scenarioLoadInputRef: RefObject<HTMLInputElement | null>;
   menubarRef: RefObject<HTMLElement | null>;
   runtimeTheme: CSSProperties;
   session: RuntimeSessionController;
@@ -61,6 +62,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
     floating,
     layoutInsets,
     loadInputRef,
+    scenarioLoadInputRef,
     menubarRef,
     runtimeTheme,
     session,
@@ -87,6 +89,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
   const dialogActions: RuntimeDialogActions = {
     closeGameDialog: actions.closeGameDialog,
     loadPendingCityFile: actions.loadPendingCityFile,
+    loadScenarioBundleFile: actions.loadScenarioBundleFile,
     regenerateNewCityTerrainSeed: actions.regenerateNewCityTerrainSeed,
     saveCityFromDraft: actions.saveCityFromDraft,
     selectScenarioKey: actions.selectScenarioKey,
@@ -107,6 +110,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
     openBrandDialog: actions.openBrandDialog,
     openFloatingWindow: actions.openFloatingWindow,
     openGameDialog: actions.openGameDialog,
+    openScenarioFilePicker: actions.openScenarioFilePicker,
     reconnectRuntime: actions.reconnectRuntime,
     requestResyncSnapshot: actions.requestResyncSnapshot,
     setPendingLoadFile: actions.setPendingLoadFile,
@@ -220,6 +224,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
         selectedScenarioKey={ui.selectedScenarioKey}
         gameDialog={ui.gameDialog}
         loadInputRef={loadInputRef}
+        scenarioLoadInputRef={scenarioLoadInputRef}
         controlsDisabled={session.controlsDisabled}
         saveFileNameDraft={ui.saveFileNameDraft}
         sessionControlsDisabled={sessionControlsDisabled}

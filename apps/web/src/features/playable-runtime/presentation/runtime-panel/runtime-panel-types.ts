@@ -35,9 +35,11 @@ export interface RuntimePanelActions {
   dismissNotice: (signature: string | null) => void;
   focusFloatingWindow: (windowId: RuntimeFloatingWindowId) => void;
   loadPendingCityFile: () => Promise<void>;
+  loadScenarioBundleFile: (file: File | null) => void;
   openBrandDialog: () => void;
   openFloatingWindow: RuntimeOpenFloatingWindow;
   openGameDialog: (kind: GameDialogKind) => void;
+  openScenarioFilePicker: () => void;
   placeTool: (tool: RuntimeUiController['activeTool'], x: number, y: number) => void;
   playPauseSimulation: () => void;
   regenerateNewCityTerrainSeed: () => void;
@@ -87,6 +89,7 @@ export type RuntimeDialogActions = Pick<
   RuntimePanelActions,
   | 'closeGameDialog'
   | 'loadPendingCityFile'
+  | 'loadScenarioBundleFile'
   | 'regenerateNewCityTerrainSeed'
   | 'saveCityFromDraft'
   | 'selectScenarioKey'
@@ -106,6 +109,7 @@ export type RuntimeMenuActions = Pick<
   | 'openBrandDialog'
   | 'openFloatingWindow'
   | 'openGameDialog'
+  | 'openScenarioFilePicker'
   | 'reconnectRuntime'
   | 'requestResyncSnapshot'
   | 'setPendingLoadFile'
