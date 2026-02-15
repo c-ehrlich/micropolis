@@ -1,7 +1,14 @@
 import {
+  cityTimeForScenarioYear,
   getScenarioDefinition,
   type ScenarioDefinition,
 } from '../../scenario-core/src/classic-scenarios.ts';
+import type { ScenarioBundleV1 } from '../../scenario-core/src/scenario-bundle-v1.ts';
+import {
+  readScenarioMapTileWordsV1,
+  SCENARIO_BUNDLE_V1_CITY_FILE_BYTE_LENGTH,
+  SCENARIO_BUNDLE_V1_CITY_FILE_MAP_OFFSET_BYTES,
+} from '../../scenario-core/src/scenario-map-v1.ts';
 import { World } from '../../sim-core/src/core/constants.ts';
 import type { SimContext } from '../../sim-core/src/core/sim-context.ts';
 import type { SimState } from '../../sim-core/src/core/sim-state.ts';
@@ -35,6 +42,17 @@ export interface LoadCityLikeCResult extends LoadFileLikeCResult {
  */
 export interface LoadScenarioLikeCResult extends LoadFileLikeCResult {
   scenario: ScenarioDefinition;
+}
+
+/**
+ * Result payload for Stage 2 user-scenario startup orchestration.
+ * Mirrors `LoadScenario` start-state ownership in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: unlike classic C `LoadScenario(short s)`, this carries `user/*`
+ * key/name metadata from `ScenarioBundleV1` instead of a numeric scenario table row.
+ */
+export interface LoadScenarioBundleLikeCResult extends LoadFileLikeCResult {
+  scenarioKey: string;
+  scenarioName: string;
 }
 
 /**
@@ -219,6 +237,66 @@ export function loadScenarioLikeC(
   doSimInit(context, state);
 
   return { city, scenario };
+}
+
+/**
+ * Compile one Stage 0 scenario bundle map into classic city-file bytes.
+ * Mirrors map-byte layout from `saveFile`/`loadFile` in
+ * `ref/micropolis/src/sim/s_fileio.c` for `WORLD_X * WORLD_Y` map words.
+ * Parity difference: history/misc regions are intentionally zeroed for
+ * deterministic bundle map payloads.
+ */
+function compileScenarioBundleMapToCityFileBytes(bundle: ScenarioBundleV1): Uint8Array {
+  const tileWords = readScenarioMapTileWordsV1(bundle.map);
+  const cityFileBytes = new Uint8Array(SCENARIO_BUNDLE_V1_CITY_FILE_BYTE_LENGTH);
+  const cityFileView = new DataView(cityFileBytes.buffer, cityFileBytes.byteOffset);
+
+  for (let index = 0; index < tileWords.length; index += 1) {
+    const byteOffset = SCENARIO_BUNDLE_V1_CITY_FILE_MAP_OFFSET_BYTES + index * 2;
+    cityFileView.setUint16(byteOffset, tileWords[index] ?? 0, false);
+  }
+
+  return cityFileBytes;
+}
+
+/**
+ * Run C-style scenario startup orchestration from a Stage 0 bundle payload.
+ * Mirrors `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c` for load/init
+ * sequencing (`setSpeed(3)`, `CityTax=7`, funding reset, `DoSimInit`).
+ * Parity difference: `ScenarioID` is forced to `0` (no legacy numeric id) and
+ * `CityTime`/funds come from bundle start parameters.
+ */
+export function loadScenarioBundleLikeC(
+  state: SimState,
+  context: SimContext,
+  bundle: ScenarioBundleV1,
+  mapSize: ReplayMapSize = CLASSIC_REPLAY_MAP_SIZE,
+): LoadScenarioBundleLikeCResult {
+  const city = decodeCityFileForMap(compileScenarioBundleMapToCityFileBytes(bundle), mapSize);
+  applyDecodedCityToRuntime(state, context, city);
+
+  state.ScenarioID = 0;
+  state.CityTime = cityTimeForScenarioYear(bundle.start.startYear);
+  setFunds(state, bundle.start.startFunds);
+
+  // C `LoadScenario` applies `setSpeed(3)`.
+  applyLoadedSpeedLikeC(state, 3);
+  state.CityTax = 7;
+  state.Spdcycle = 0;
+
+  initWillStuff(context, state);
+  initFundingLevelOnState(state);
+  markFundsDirty(state);
+
+  state.InitSimLoad = 1;
+  state.DoInitialEval = 0;
+  doSimInit(context, state);
+
+  return {
+    city,
+    scenarioKey: bundle.key,
+    scenarioName: bundle.name,
+  };
 }
 
 /**

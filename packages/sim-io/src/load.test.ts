@@ -5,6 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+  SCENARIO_BUNDLE_V1_MAP_WIDTH,
+  SCENARIO_BUNDLE_V1_TILE_COUNT,
+  SCENARIO_BUNDLE_V1_VERSION,
+  type ScenarioBundleV1,
+} from '../../scenario-core/src/scenario-bundle-v1.ts';
+import {
   applyLoadNormalization,
   createClassicMapStore,
   createSimContext,
@@ -18,6 +25,7 @@ import {
   deriveCityNameFromPath,
   loadCityLikeC,
   loadFileLikeC,
+  loadScenarioBundleLikeC,
   loadScenarioLikeC,
 } from './load.ts';
 
@@ -40,6 +48,35 @@ const CLASSIC_MAP = { width: World.WORLD_X, height: World.WORLD_Y };
  */
 function readFixture(filePath: string): Uint8Array {
   return new Uint8Array(readFileSync(filePath));
+}
+
+/**
+ * Build one deterministic user-scenario bundle fixture for load-orchestration tests.
+ * Mirrors Stage 0 `ScenarioBundleV1` map/start contracts; map words use classic
+ * x-major ordering from `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function createUserScenarioBundleFixture(): ScenarioBundleV1 {
+  const tileWords = Array.from({ length: SCENARIO_BUNDLE_V1_TILE_COUNT }, () => 0);
+  tileWords[0] = 7;
+  tileWords[SCENARIO_BUNDLE_V1_MAP_HEIGHT] = 13;
+
+  return {
+    version: SCENARIO_BUNDLE_V1_VERSION,
+    key: 'user/test-harbor',
+    name: 'Test Harbor',
+    description: 'Fixture scenario bundle for sim-io load orchestration tests.',
+    tags: ['test'],
+    start: {
+      startYear: 1930,
+      startFunds: 12345,
+    },
+    map: {
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    },
+  };
 }
 
 describe('load orchestration', () => {
@@ -149,6 +186,32 @@ describe('load orchestration', () => {
     expect(loaded.scenario.id).toBe(1);
     expect(state.ScenarioID).toBe(1);
     expect(state.TotalFunds).toBe(5000);
+  });
+
+  it('loads Stage 0 user bundles through LoadScenario-equivalent init sequencing', () => {
+    const bundle = createUserScenarioBundleFixture();
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+
+    const loaded = loadScenarioBundleLikeC(state, context, bundle);
+
+    expect(loaded.scenarioKey).toBe(bundle.key);
+    expect(loaded.scenarioName).toBe(bundle.name);
+    // Magic numbers source: `CityTime = ((year - 1900) * 48) + 2`,
+    // `setSpeed(3)`, and `CityTax = 7` in `ref/micropolis/src/sim/s_fileio.c` `LoadScenario`.
+    expect(state.CityTime).toBe(1442);
+    expect(state.TotalFunds).toBe(bundle.start.startFunds);
+    expect(state.SimSpeed).toBe(3);
+    expect(state.SimMetaSpeed).toBe(3);
+    expect(state.CityTax).toBe(7);
+    // No legacy builtin scenario id is associated with `user/*` bundles.
+    expect(state.ScenarioID).toBe(0);
+    expect(state.policePercent).toBe(1);
+    expect(state.firePercent).toBe(1);
+    expect(state.roadPercent).toBe(1);
+    expect(loaded.city.map[0]).toBe(7);
+    expect(loaded.city.map[SCENARIO_BUNDLE_V1_MAP_HEIGHT]).toBe(13);
   });
 
   it('rejects unsupported orchestration map sizes', () => {

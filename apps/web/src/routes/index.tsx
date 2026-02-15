@@ -23,6 +23,7 @@ import { createRandomNewCityTerrainSeed } from '../game/runtime/new-city.ts';
 import {
   type CityExportPayload,
   PLAYABLE_SCENARIO_CHOICES,
+  setPlayableRuntimeUserScenarioBundle,
 } from '../game/runtime/playable-runtime-host.ts';
 import type { PlayableToolName } from '../game/runtime/protocol.ts';
 
@@ -482,13 +483,23 @@ function RuntimePanel() {
             file.name,
             scenarioJsonText,
           );
+          if (!setPlayableRuntimeUserScenarioBundle(host, loadedScenarioBundle.bundle)) {
+            throw new Error('runtime host does not support external scenario bundles');
+          }
           setLoadedExternalScenarioBundle(loadedScenarioBundle);
           setSelectedScenarioKey(loadedScenarioBundle.bundle.key);
           setGameDialog('scenario');
           setCityIoError('');
           setLastSaveStatus(`Loaded scenario bundle ${loadedScenarioBundle.bundle.key}.`);
         } catch (error) {
+          setPlayableRuntimeUserScenarioBundle(host, null);
           setLoadedExternalScenarioBundle(null);
+          if (
+            selectedScenarioKey.startsWith('user/') &&
+            PLAYABLE_SCENARIO_CHOICES[0]?.scenarioKey !== undefined
+          ) {
+            setSelectedScenarioKey(PLAYABLE_SCENARIO_CHOICES[0].scenarioKey);
+          }
           setLastSaveStatus('');
           if (error instanceof Error) {
             setCityIoError(error.message);

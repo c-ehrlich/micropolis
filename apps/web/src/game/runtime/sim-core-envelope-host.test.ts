@@ -5,6 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import { getScenarioDefinition } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
+  SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+  SCENARIO_BUNDLE_V1_MAP_WIDTH,
+  SCENARIO_BUNDLE_V1_TILE_COUNT,
+  SCENARIO_BUNDLE_V1_VERSION,
+  type ScenarioBundleV1,
+} from '../../../../../packages/scenario-core/src/scenario-bundle-v1.ts';
+import {
   cityDimensionsForMap,
   decodeCityFileForMap,
   setLegacySimScenarioRuntimeById,
@@ -67,6 +74,34 @@ const EXPECTED_DID_TOOL_SOUND_SPEC_BY_PLAYABLE_TOOL = {
   nuclear: 'E -speed 75',
   airport: 'A -speed 50',
 } as const satisfies Record<(typeof PLAYABLE_TOOL_SPECS)[number]['tool'], string>;
+
+/**
+ * Builds one deterministic `user/*` scenario bundle for host-load tests.
+ * Mirrors Stage 0 bundle map/start contracts; map words follow classic x-major order
+ * consumed by `LoadScenario` map IO in `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function createUserScenarioBundleFixture(key = 'user/harbor-night'): ScenarioBundleV1 {
+  const tileWords = Array.from({ length: SCENARIO_BUNDLE_V1_TILE_COUNT }, () => 0);
+  tileWords[0] = 17;
+  tileWords[SCENARIO_BUNDLE_V1_MAP_HEIGHT] = 33;
+  return {
+    version: SCENARIO_BUNDLE_V1_VERSION,
+    key,
+    name: 'Harbor Night',
+    description: 'Runtime host user-scenario fixture.',
+    tags: ['test'],
+    start: {
+      startYear: 1930,
+      startFunds: 12345,
+    },
+    map: {
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords,
+    },
+  };
+}
 
 /**
  * Captures host envelopes from one connected runtime host instance.
@@ -2535,6 +2570,65 @@ describe('SimCoreEnvelopeHost', () => {
       reason: 'invalid-scenario-file',
     });
     expect(scenarioResourceLoader).not.toHaveBeenCalled();
+  });
+
+  it('loads registered user scenario bundles through the same load-scenario command entry', async () => {
+    const scenarioResourceLoader = vi.fn(async (_fileName: string) => new Uint8Array([1, 2, 3]));
+    const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: {
+          ScenarioID: number;
+          CityTime: number;
+          TotalFunds: number;
+        };
+      };
+      cityName: string;
+      cityFileName: string;
+    };
+    host.setUserScenarioBundle(createUserScenarioBundleFixture());
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-user-scenario',
+      clientId: 'client-user-scenario',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-user-scenario',
+      clientId: 'client-user-scenario',
+      commandId: 'cmd-load-user-scenario',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioKey: 'user/harbor-night',
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(scenarioResourceLoader).not.toHaveBeenCalled();
+    expect(
+      captured.envelopes.some(
+        (envelope) => envelope.kind === 'ack' && envelope.commandId === 'cmd-load-user-scenario',
+      ),
+    ).toBe(true);
+    expect(
+      captured.envelopes.some(
+        (envelope) => envelope.kind === 'reject' && envelope.commandId === 'cmd-load-user-scenario',
+      ),
+    ).toBe(false);
+    // Magic numbers source: `CityTime = ((year - 1900) * 48) + 2` in
+    // `ref/micropolis/src/sim/s_fileio.c` `LoadScenario`; fixture year is 1930.
+    expect(hostInternals.authorityState.simState.CityTime).toBe(1442);
+    expect(hostInternals.authorityState.simState.TotalFunds).toBe(12345);
+    // `user/*` scenarios do not map to legacy numeric ScenarioID values.
+    expect(hostInternals.authorityState.simState.ScenarioID).toBe(0);
+    expect(hostInternals.cityName).toBe('Harbor Night');
+    expect(hostInternals.cityFileName).toBe('harbor-night.cty');
   });
 
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
