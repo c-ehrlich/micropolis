@@ -97,7 +97,7 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
       getPlayableBridgeCommandType({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 1,
+        scenarioKey: 'builtin/dullsville',
       }),
     ).toBe('scenario_start');
   });
@@ -192,21 +192,20 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
     expect(isPlayableBridgeCommandType('unknown_command_type' as never)).toBe(false);
   });
 
-  it('accepts only integral scenario ids at the command gate', () => {
-    // `LoadScenario(short s)` consumes integer ids in `s_fileio.c`; C then clamps
-    // out-of-range integers with `if ((s < 1) || (s > 8)) s = 1;`.
+  it('accepts only namespaced scenario keys at the command gate', () => {
+    // Stage 0 key namespace contract requires `builtin/*` or `user/*`.
     expect(
       isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 9,
+        scenarioKey: 'builtin/dullsville',
       }),
     ).toBe(true);
     expect(
       isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 1.5,
+        scenarioKey: 'legacy/2',
       }),
     ).toBe(false);
   });
@@ -295,7 +294,7 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
       isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 1,
+        scenarioKey: 'builtin/dullsville',
         gameLevel: 2,
       }),
     ).toBe(true);
@@ -303,7 +302,7 @@ describe('runtime protocol Bridge V1 convergence helpers', () => {
       isPlayableScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 1,
+        scenarioKey: 'builtin/dullsville',
         gameLevel: -1,
       }),
     ).toBe(false);

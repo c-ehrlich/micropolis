@@ -87,7 +87,7 @@
 - `packages/sim-io/src/scenarios.ts`
 
 ### Requirements (Task Checklist)
-- [ ] **2.1** Move scenario selection and runtime protocol to `scenarioKey`-based flows.
+- [x] **2.1** Move scenario selection and runtime protocol to `scenarioKey`-based flows.
 - [ ] **2.2** Add `Load Scenario...` file picker in Micropolis menu for external scenario JSON.
 - [ ] **2.3** Add pre-start review dialog after loading scenario (metadata summary + difficulty selection + explicit start).
 - [ ] **2.4** Ensure built-in scenario catalog and user-loaded scenarios use same runtime entry path.

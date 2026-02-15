@@ -18,6 +18,7 @@ import {
   sendMes,
   sendMesAt,
 } from '../../../../../packages/sim-core/src/systems/messages.ts';
+import { scenarioKeyForId } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { projectRealtimeOverlaySprites } from '../../presentation/map/map-canvas.overlay.ts';
 import { PLAYABLE_DISASTER_CHOICES } from './playable-disaster-choices.ts';
 import {
@@ -1349,7 +1350,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
         gameLevel: 1,
       },
     });
@@ -2190,7 +2191,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
     await Promise.resolve();
@@ -2340,7 +2341,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
 
@@ -2426,7 +2427,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 2,
+        scenarioKey: scenarioKeyForId(2),
       },
     });
     await Promise.resolve();
@@ -2471,7 +2472,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: 2,
+        scenarioKey: scenarioKeyForId(2),
       },
     });
     await Promise.resolve();
@@ -2494,13 +2495,10 @@ describe('SimCoreEnvelopeHost', () => {
     });
   });
 
-  it('clamps invalid scenario ids like C before loading scenario bytes', async () => {
+  it('rejects unknown scenario keys before loading scenario bytes', async () => {
     const scenarioResourceLoader = vi.fn(async (_fileName: string) => new Uint8Array([1, 2, 3]));
     const host = new SimCoreEnvelopeHost({ scenarioResourceLoader });
     const captured = connectAndCapture(host);
-    // `LoadScenario(short s)` clamps invalid ids to `1` in
-    // `ref/micropolis/src/sim/s_fileio.c` before resolving the scenario file.
-    const fallbackScenario = getScenarioDefinition(1);
 
     captured.send({
       kind: 'hello',
@@ -2517,7 +2515,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: Number.NaN,
+        scenarioKey: 'builtin/unknown',
       },
     });
     await Promise.resolve();
@@ -2536,8 +2534,7 @@ describe('SimCoreEnvelopeHost', () => {
       commandId: 'cmd-scenario-id-reject',
       reason: 'invalid-scenario-file',
     });
-    expect(scenarioResourceLoader).toHaveBeenCalledTimes(1);
-    expect(scenarioResourceLoader).toHaveBeenCalledWith(fallbackScenario.fileName);
+    expect(scenarioResourceLoader).not.toHaveBeenCalled();
   });
 
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {
@@ -5057,7 +5054,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
     captured.send({
@@ -5180,7 +5177,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
     captured.send({
@@ -5357,7 +5354,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
     captured.send({
@@ -5430,7 +5427,7 @@ describe('SimCoreEnvelopeHost', () => {
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: scenario.id,
+        scenarioKey: scenarioKeyForId(scenario.id),
       },
     });
     captured.send({

@@ -8,7 +8,7 @@ interface ScenarioDialogProps {
   dialogActions: RuntimeDialogActions;
   controlsDisabled: boolean;
   selectedGameLevel: RuntimeUiController['selectedGameLevel'];
-  selectedScenarioId: RuntimeUiController['selectedScenarioId'];
+  selectedScenarioKey: RuntimeUiController['selectedScenarioKey'];
 }
 
 /**
@@ -16,7 +16,7 @@ interface ScenarioDialogProps {
  * Mirrors scenario startup controls in `ref/micropolis/res/micropolis.tcl`.
  */
 export function ScenarioDialog(props: ScenarioDialogProps) {
-  const { dialogActions, controlsDisabled, selectedGameLevel, selectedScenarioId } = props;
+  const { dialogActions, controlsDisabled, selectedGameLevel, selectedScenarioKey } = props;
 
   return (
     <section className="grid gap-2.5">
@@ -28,12 +28,12 @@ export function ScenarioDialog(props: ScenarioDialogProps) {
           className="px-2 py-1"
           disabled={controlsDisabled}
           onChange={(event) => {
-            dialogActions.selectScenario(Number.parseInt(event.target.value, 10));
+            dialogActions.selectScenarioKey(event.target.value);
           }}
-          value={selectedScenarioId}
+          value={selectedScenarioKey}
         >
           {PLAYABLE_SCENARIO_CHOICES.map((scenario) => (
-            <option key={scenario.id} value={scenario.id}>
+            <option key={scenario.scenarioKey} value={scenario.scenarioKey}>
               {scenario.id}. {scenario.name} ({scenario.startYear})
             </option>
           ))}

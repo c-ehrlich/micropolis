@@ -10,6 +10,7 @@ import {
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
+import { scenarioKeyForId } from '../../../../../packages/sim-io/src/scenarios.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
@@ -122,7 +123,7 @@ const PLAYABLE_CERT_DULLSVILLE_SCENARIO = getScenarioDefinition(1);
 // Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
 // `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
 const PLAYABLE_CERT_SCENARIO_START_CERTIFICATION = {
-  scenarioId: PLAYABLE_CERT_DULLSVILLE_SCENARIO.id,
+  scenarioKey: scenarioKeyForId(PLAYABLE_CERT_DULLSVILLE_SCENARIO.id),
   startYear: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startYear,
   startFunds: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startFunds,
 } as const;
@@ -732,7 +733,7 @@ async function certifyPlayableCertificationScenarioStartOnHost(runId: string): P
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+        scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
       },
     });
     const scenarioAck = await waitForHostEnvelope(
@@ -790,7 +791,7 @@ async function certifyPlayableCertificationScenarioStartOnRuntime(runId: string)
     runtime.sendCommand(commandId, {
       kind: 'scenario',
       action: 'load-scenario',
-      scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+      scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
     });
     const scenarioAck = await waitForRuntimeEvent(
       runtimeEvents,
@@ -1120,7 +1121,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+        scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
       },
     });
     const scenarioAck = await waitForHostEnvelope(

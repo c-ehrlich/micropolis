@@ -44,7 +44,7 @@ export interface RuntimePanelActions {
   reconnectRuntime: () => void;
   requestResyncSnapshot: () => void;
   saveCityFromDraft: () => void;
-  selectScenario: (scenarioId: number) => void;
+  selectScenarioKey: (scenarioKey: string) => void;
   selectTool: RuntimeUiController['setActiveTool'];
   setBudgetAuto: (enabled: boolean) => void;
   setBudgetFirePercent: (percent: number) => void;
@@ -89,7 +89,7 @@ export type RuntimeDialogActions = Pick<
   | 'loadPendingCityFile'
   | 'regenerateNewCityTerrainSeed'
   | 'saveCityFromDraft'
-  | 'selectScenario'
+  | 'selectScenarioKey'
   | 'setGameLevel'
   | 'setPendingLoadFile'
   | 'setSaveFileNameDraft'

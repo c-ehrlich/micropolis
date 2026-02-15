@@ -310,8 +310,8 @@ export function useRuntimeSession(options: UseRuntimeSessionOptions = {}) {
  */
 export function useRuntimeUiState() {
   const [activeTool, setActiveTool] = useState<PlayableToolName>('road');
-  const [selectedScenarioId, setSelectedScenarioId] = useState<number>(
-    PLAYABLE_SCENARIO_CHOICES[0]?.id ?? 1,
+  const [selectedScenarioKey, setSelectedScenarioKey] = useState<string>(
+    PLAYABLE_SCENARIO_CHOICES[0]?.scenarioKey ?? 'builtin/dullsville',
   );
   const [selectedGameLevel, setSelectedGameLevel] = useState<PlayableGameLevel>(0);
   const [newCityTerrainSeed, setNewCityTerrainSeed] = useState<number | null>(null);
@@ -365,7 +365,7 @@ export function useRuntimeUiState() {
     saveFileNameDraft,
     selectedGameLevel,
     selectedRuntimeTileset,
-    selectedScenarioId,
+    selectedScenarioKey,
     setActiveTool,
     setCityIoError,
     setDismissedNoticeSignature,
@@ -384,7 +384,7 @@ export function useRuntimeUiState() {
     setSaveFileNameDraft,
     setSelectedGameLevel,
     setSelectedRuntimeTileset,
-    setSelectedScenarioId,
+    setSelectedScenarioKey,
   };
 }
 

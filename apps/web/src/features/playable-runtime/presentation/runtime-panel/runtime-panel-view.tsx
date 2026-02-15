@@ -89,7 +89,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
     loadPendingCityFile: actions.loadPendingCityFile,
     regenerateNewCityTerrainSeed: actions.regenerateNewCityTerrainSeed,
     saveCityFromDraft: actions.saveCityFromDraft,
-    selectScenario: actions.selectScenario,
+    selectScenarioKey: actions.selectScenarioKey,
     setGameLevel: actions.setGameLevel,
     setPendingLoadFile: actions.setPendingLoadFile,
     setSaveFileNameDraft: actions.setSaveFileNameDraft,
@@ -217,7 +217,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
         newCityTerrainSeed={ui.newCityTerrainSeed}
         pendingLoadFile={ui.pendingLoadFile}
         selectedGameLevel={ui.selectedGameLevel}
-        selectedScenarioId={ui.selectedScenarioId}
+        selectedScenarioKey={ui.selectedScenarioKey}
         gameDialog={ui.gameDialog}
         loadInputRef={loadInputRef}
         controlsDisabled={session.controlsDisabled}

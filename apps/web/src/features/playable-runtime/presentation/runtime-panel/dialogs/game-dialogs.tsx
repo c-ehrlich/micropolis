@@ -17,7 +17,7 @@ interface RuntimeGameDialogsProps {
   pendingLoadFile: RuntimeUiController['pendingLoadFile'];
   saveFileNameDraft: RuntimeUiController['saveFileNameDraft'];
   selectedGameLevel: RuntimeUiController['selectedGameLevel'];
-  selectedScenarioId: RuntimeUiController['selectedScenarioId'];
+  selectedScenarioKey: RuntimeUiController['selectedScenarioKey'];
   sessionControlsDisabled: boolean;
 }
 
@@ -38,7 +38,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
     pendingLoadFile,
     saveFileNameDraft,
     selectedGameLevel,
-    selectedScenarioId,
+    selectedScenarioKey,
     sessionControlsDisabled,
   } = props;
 
@@ -100,7 +100,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
                 dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
                 selectedGameLevel={selectedGameLevel}
-                selectedScenarioId={selectedScenarioId}
+                selectedScenarioKey={selectedScenarioKey}
               />
             ) : null}
           </ClassicyDialogPanel>

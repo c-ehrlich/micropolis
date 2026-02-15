@@ -219,7 +219,7 @@ function RuntimePanel() {
     pendingLoadFile,
     saveFileNameDraft,
     selectedGameLevel,
-    selectedScenarioId,
+    selectedScenarioKey,
     setActiveTool,
     setCityIoError,
     setDismissedNoticeSignature,
@@ -238,7 +238,7 @@ function RuntimePanel() {
     setSaveFileNameDraft,
     setSelectedGameLevel,
     setSelectedRuntimeTileset,
-    setSelectedScenarioId,
+    setSelectedScenarioKey,
   } = ui;
 
   const onCityExport = useCallback(
@@ -512,8 +512,8 @@ function RuntimePanel() {
       });
       setGameDialog(null);
     },
-    selectScenario: (scenarioId) => {
-      setSelectedScenarioId(scenarioId);
+    selectScenarioKey: (scenarioKey) => {
+      setSelectedScenarioKey(scenarioKey);
     },
     selectTool: (tool) => {
       setActiveTool(tool);
@@ -602,14 +602,16 @@ function RuntimePanel() {
         return;
       }
       setHasStartedPlayableSession(true);
-      const scenario = PLAYABLE_SCENARIO_CHOICES.find((entry) => entry.id === selectedScenarioId);
+      const scenario = PLAYABLE_SCENARIO_CHOICES.find(
+        (entry) => entry.scenarioKey === selectedScenarioKey,
+      );
       if (scenario !== undefined) {
         setSaveFileName(`${scenario.fileName}.cty`);
       }
       sendScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: selectedScenarioId,
+        scenarioKey: selectedScenarioKey,
         gameLevel: selectedGameLevel,
       });
       setGameDialog(null);

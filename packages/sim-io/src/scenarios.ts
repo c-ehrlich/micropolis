@@ -1,4 +1,9 @@
-import { normalizeScenarioId, type ScenarioId } from '../../scenario-core/src/classic-scenarios.ts';
+import {
+  getScenarioDefinition,
+  normalizeScenarioId,
+  type ScenarioDefinition,
+  type ScenarioId,
+} from '../../scenario-core/src/classic-scenarios.ts';
 
 export {
   cityTimeForScenarioYear,
@@ -24,6 +29,78 @@ const SCORE_WAIT_TABLE = [
   5 * 48,
   10 * 48,
 ] as const;
+
+const BUILTIN_SCENARIO_KEYS_BY_ID = [
+  '',
+  'builtin/dullsville',
+  'builtin/san-francisco',
+  'builtin/hamburg',
+  'builtin/bern',
+  'builtin/tokyo',
+  'builtin/detroit',
+  'builtin/boston',
+  'builtin/rio-de-janeiro',
+] as const;
+
+/**
+ * Canonical builtin scenario key domain for classic scenario resources.
+ * Maps Stage 2 key identity (`builtin/*`) to legacy `LoadScenario(short s)` ids
+ * from `ref/micropolis/src/sim/s_fileio.c`.
+ */
+export type BuiltinScenarioKey = (typeof BUILTIN_SCENARIO_KEYS_BY_ID)[ScenarioId];
+
+const BUILTIN_SCENARIO_ID_BY_KEY: Readonly<Record<BuiltinScenarioKey, ScenarioId>> = Object.freeze(
+  BUILTIN_SCENARIO_KEYS_BY_ID.reduce(
+    (lookup, key, index) => {
+      if (index === 0 || key === '') {
+        return lookup;
+      }
+      return {
+        ...lookup,
+        [key]: index as ScenarioId,
+      };
+    },
+    {} as Record<BuiltinScenarioKey, ScenarioId>,
+  ),
+);
+
+/**
+ * Resolve a classic scenario id into its canonical `builtin/*` key.
+ * Mirrors `LoadScenario(short s)` id normalization in
+ * `ref/micropolis/src/sim/s_fileio.c`, then projects to Stage 2 key identity.
+ */
+export function scenarioKeyForId(value: number): BuiltinScenarioKey {
+  const id = normalizeScenarioId(value);
+  const key = BUILTIN_SCENARIO_KEYS_BY_ID[id];
+  if (key === undefined) {
+    throw new Error(`expected builtin scenario key for id ${id}`);
+  }
+  return key;
+}
+
+/**
+ * Resolve a canonical `builtin/*` key into its legacy classic scenario id.
+ * Mirrors `LoadScenario(short s)` id routing domain in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: unknown keys return `undefined` (no C fallback clamp) so callers
+ * can reject unsupported key-based requests explicitly.
+ */
+export function scenarioIdForKey(scenarioKey: string): ScenarioId | undefined {
+  return BUILTIN_SCENARIO_ID_BY_KEY[scenarioKey as BuiltinScenarioKey];
+}
+
+/**
+ * Resolve classic scenario metadata from a canonical `builtin/*` key.
+ * Mirrors `LoadScenario` metadata table lookup in
+ * `ref/micropolis/src/sim/s_fileio.c`, with Stage 2 key-to-id translation first.
+ */
+export function getScenarioDefinitionForKey(scenarioKey: string): ScenarioDefinition | undefined {
+  const scenarioId = scenarioIdForKey(scenarioKey);
+  if (scenarioId === undefined) {
+    return undefined;
+  }
+  return getScenarioDefinition(scenarioId);
+}
 
 /**
  * Resolve the scenario disaster countdown in ticks.

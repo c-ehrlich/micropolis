@@ -1,10 +1,7 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
-import {
-  getScenarioDefinition,
-  SCENARIO_TABLE,
-} from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
+import { SCENARIO_TABLE } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
   lookupDoMessageText,
   lookupMicropolisNoticeMessage,
@@ -74,6 +71,7 @@ import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts'
 import { doPowerScan, pushPowerStack } from '../../../../../packages/sim-core/src/systems/power.ts';
 import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
+import { getScenarioDefinitionForKey } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import { NEW_CITY_TERRAIN_OPTIONS } from './new-city.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
@@ -1363,9 +1361,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Applies scenario start using async scenario byte loading plus `loadScenarioLikeC`.
+   * Applies scenario start using key-based metadata lookup plus async bytes loading.
    * Mirrors `LoadScenario` resource read + decode + lifecycle sequence in
    * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: Stage 2 `scenarioKey` requests are translated to classic numeric
+   * ids before `loadScenarioLikeC`, preserving C runtime behavior.
    */
   private async applyScenarioCommandAsync(
     sessionId: number,
@@ -1375,10 +1375,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
     command: PlayableScenarioCommand,
     commandTick: number,
   ): Promise<void> {
-    let scenario: ReturnType<typeof getScenarioDefinition>;
-    try {
-      scenario = getScenarioDefinition(command.scenarioId);
-    } catch {
+    const scenario = getScenarioDefinitionForKey(command.scenarioKey);
+    if (scenario === undefined) {
       if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
         return;
       }
