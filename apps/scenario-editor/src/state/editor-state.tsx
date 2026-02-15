@@ -15,17 +15,22 @@ import {
 } from 'react';
 
 import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
+import {
+  createScenarioEditorInitialObjectiveDraft,
+  type ScenarioEditorObjectiveDraft,
+  type ScenarioEditorObjectivePredicate,
+} from './editor-objective.ts';
 
 /**
- * Editor workbench sections for Stage 3 MVP navigation state.
+ * Editor workbench sections for Stage 4 objective authoring navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'export'] as const;
+export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'objective', 'export'] as const;
 
 /**
- * Editor workbench sections for Stage 3 MVP navigation state.
- * Stage-parity note: script/objective authoring is intentionally deferred to Stage 4, and
- * AI/image import tooling is intentionally deferred to Stage 5.
+ * Editor workbench sections for Stage 4 objective authoring navigation state.
+ * Stage-parity note: event scripting authoring remains deferred while objective predicates are
+ * now exposed for Stage 4.1; AI/image import tooling remains deferred to Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
@@ -38,6 +43,7 @@ export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[num
 export interface ScenarioEditorState {
   readonly activeView: ScenarioEditorWorkbenchView;
   readonly bundle: ScenarioBundleV1;
+  readonly objective: ScenarioEditorObjectiveDraft;
   readonly isDirty: boolean;
 }
 
@@ -84,6 +90,8 @@ export type ScenarioEditorAction =
   | { type: 'mark-dirty' }
   | { type: 'fill-map'; tileWord: number }
   | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
+  | { type: 'replace-objective-predicate'; predicate: ScenarioEditorObjectivePredicate }
+  | { type: 'set-objective-enabled'; enabled: boolean }
   | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
@@ -128,6 +136,7 @@ export function createScenarioEditorInitialState(): ScenarioEditorState {
   return {
     activeView: 'metadata',
     bundle: createScenarioEditorInitialBundle(),
+    objective: createScenarioEditorInitialObjectiveDraft(),
     isDirty: false,
   };
 }
@@ -174,6 +183,27 @@ export function scenarioEditorReducer(
         isDirty: true,
       };
     }
+    case 'replace-objective-predicate':
+      return {
+        ...state,
+        objective: {
+          ...state.objective,
+          predicate: action.predicate,
+        },
+        isDirty: true,
+      };
+    case 'set-objective-enabled':
+      if (state.objective.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        objective: {
+          ...state.objective,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
     case 'update-metadata':
       return {
         ...state,
@@ -184,6 +214,7 @@ export function scenarioEditorReducer(
       return {
         ...state,
         bundle: action.bundle,
+        objective: createScenarioEditorInitialObjectiveDraft(),
         isDirty: false,
       };
     case 'set-active-view':

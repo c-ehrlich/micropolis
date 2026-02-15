@@ -27,6 +27,17 @@ import {
   type ScenarioEditorMapPoint,
 } from '../state/editor-map.ts';
 import {
+  appendScenarioObjectiveChildPredicate,
+  coerceScenarioObjectivePredicateKind,
+  removeScenarioObjectiveChildPredicate,
+  replaceScenarioObjectiveChildPredicate,
+  replaceScenarioObjectiveNotChildPredicate,
+  SCENARIO_EDITOR_OBJECTIVE_COMPARISONS,
+  SCENARIO_EDITOR_OBJECTIVE_METRIC_KEYS,
+  SCENARIO_EDITOR_OBJECTIVE_PREDICATE_KINDS,
+  type ScenarioEditorObjectivePredicate,
+} from '../state/editor-objective.ts';
+import {
   getScenarioEditorMetadataValidationIssues,
   parseScenarioEditorTagsInput,
   useScenarioEditorDispatch,
@@ -57,10 +68,10 @@ export const Route = createFileRoute('/')({
 });
 
 /**
- * Stage 3 workbench route with metadata editing and manual map editing MVP sections.
- * Parity note: metadata `startYear`/`startFunds` map to `LoadScenario` fields in
- * `ref/micropolis/src/sim/s_fileio.c`; map edits mirror `Map[x][y]` writes from
- * `SimCmdTile`/`SimCmdFill` in `ref/micropolis/src/sim/w_sim.c`.
+ * Stage 4 workbench route with metadata/map editing plus objective predicate authoring.
+ * Parity note: objective metric leaves map to `DoScenarioScore` checks in
+ * `ref/micropolis/src/sim/s_msg.c`, while logical composition forms are declarative
+ * runtime extensions from `packages/scenario-runtime`.
  */
 function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
@@ -70,6 +81,9 @@ function ScenarioEditorHomeRoute() {
   }
   if (activeView === 'map') {
     return <ScenarioMapEditorCard />;
+  }
+  if (activeView === 'objective') {
+    return <ScenarioObjectiveEditorCard />;
   }
 
   return <ScenarioExportCard />;
@@ -383,6 +397,215 @@ function ScenarioMapEditorCard() {
 }
 
 /**
+ * Objective authoring card for Stage 4.1 predicate DSL editing.
+ * Parity note: metric leaves mirror `DoScenarioScore` checks in
+ * `ref/micropolis/src/sim/s_msg.c`; logical nodes (`all`/`any`/`not`) are
+ * declarative extensions supported by `packages/scenario-runtime`.
+ */
+function ScenarioObjectiveEditorCard() {
+  const { objective, isDirty } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const objectiveJson = useMemo(
+    () => JSON.stringify(objective.enabled ? objective.predicate : null, null, 2),
+    [objective.enabled, objective.predicate],
+  );
+
+  return (
+    <section className="editor-card editor-objective-card" aria-label="Scenario objective editor">
+      <h1>Scenario Objective</h1>
+      <p>
+        Author objective predicates using the Stage 4 DSL. Metric comparisons track classic
+        `DoScenarioScore` fields, while `all`/`any`/`not` allow composed checks.
+      </p>
+
+      <label className="editor-field editor-objective-toggle">
+        <span>Objective Enabled</span>
+        <input
+          checked={objective.enabled}
+          onChange={(event) => {
+            dispatch({ type: 'set-objective-enabled', enabled: event.currentTarget.checked });
+          }}
+          type="checkbox"
+        />
+        <small className="editor-help">
+          This Stage 4.1 draft editor captures predicate authoring only; export integration lands in
+          Stage 4.5.
+        </small>
+      </label>
+
+      {objective.enabled ? (
+        <ScenarioObjectivePredicateEditor
+          depth={0}
+          onChange={(predicate) => {
+            dispatch({ type: 'replace-objective-predicate', predicate });
+          }}
+          predicate={objective.predicate}
+        />
+      ) : (
+        <p className="editor-help">Objective checks are disabled for this draft.</p>
+      )}
+
+      <dl className="editor-grid">
+        <dt>Dirty State</dt>
+        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+        <dt>Objective Enabled</dt>
+        <dd>{objective.enabled ? 'yes' : 'no'}</dd>
+        <dt>Root Predicate</dt>
+        <dd>{objective.enabled ? objective.predicate.kind : 'none'}</dd>
+      </dl>
+
+      <section className="editor-export-preview" aria-label="Objective predicate preview">
+        <h2>Objective Predicate JSON</h2>
+        <textarea readOnly rows={10} value={objectiveJson} />
+      </section>
+    </section>
+  );
+}
+
+/**
+ * Recursive node editor for one objective predicate subtree.
+ * Not from Micropolis C: this is React authoring UI over runtime predicate data.
+ */
+function ScenarioObjectivePredicateEditor(options: {
+  depth: number;
+  onChange: (predicate: ScenarioEditorObjectivePredicate) => void;
+  predicate: ScenarioEditorObjectivePredicate;
+}) {
+  const { depth, onChange, predicate } = options;
+  const nodeLabel = `Predicate depth ${depth}`;
+
+  return (
+    <fieldset className="editor-objective-node">
+      <legend>{nodeLabel}</legend>
+      <label className="editor-field">
+        <span>Kind</span>
+        <select
+          onChange={(event) => {
+            onChange(
+              coerceScenarioObjectivePredicateKind(
+                predicate,
+                event.currentTarget.value as ScenarioEditorObjectivePredicate['kind'],
+              ),
+            );
+          }}
+          value={predicate.kind}
+        >
+          {SCENARIO_EDITOR_OBJECTIVE_PREDICATE_KINDS.map((kind) => (
+            <option key={kind} value={kind}>
+              {getScenarioObjectivePredicateKindLabel(kind)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {predicate.kind === 'metric' ? (
+        <div className="editor-objective-metric-grid">
+          <label className="editor-field">
+            <span>Metric</span>
+            <select
+              onChange={(event) => {
+                onChange({
+                  ...predicate,
+                  metric: event.currentTarget
+                    .value as (typeof SCENARIO_EDITOR_OBJECTIVE_METRIC_KEYS)[number],
+                });
+              }}
+              value={predicate.metric}
+            >
+              {SCENARIO_EDITOR_OBJECTIVE_METRIC_KEYS.map((metric) => (
+                <option key={metric} value={metric}>
+                  {getScenarioObjectiveMetricLabel(metric)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="editor-field">
+            <span>Operator</span>
+            <select
+              onChange={(event) => {
+                onChange({
+                  ...predicate,
+                  op: event.currentTarget
+                    .value as (typeof SCENARIO_EDITOR_OBJECTIVE_COMPARISONS)[number],
+                });
+              }}
+              value={predicate.op}
+            >
+              {SCENARIO_EDITOR_OBJECTIVE_COMPARISONS.map((comparison) => (
+                <option key={comparison} value={comparison}>
+                  {getScenarioObjectiveComparisonLabel(comparison)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="editor-field">
+            <span>Value</span>
+            <input
+              onChange={(event) => {
+                onChange({
+                  ...predicate,
+                  value: parseIntegerInput(event.currentTarget.value, predicate.value),
+                });
+              }}
+              type="number"
+              value={predicate.value}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {predicate.kind === 'all' || predicate.kind === 'any' ? (
+        <div className="editor-objective-children">
+          {predicate.predicates.map((childPredicate, index) => (
+            <div className="editor-objective-child-row" key={index}>
+              <ScenarioObjectivePredicateEditor
+                depth={depth + 1}
+                onChange={(child) => {
+                  onChange(replaceScenarioObjectiveChildPredicate(predicate, index, child));
+                }}
+                predicate={childPredicate}
+              />
+              <button
+                className="editor-objective-remove"
+                onClick={() => {
+                  onChange(removeScenarioObjectiveChildPredicate(predicate, index));
+                }}
+                type="button"
+              >
+                Remove Child
+              </button>
+            </div>
+          ))}
+          <button
+            className="editor-objective-add"
+            onClick={() => {
+              onChange(appendScenarioObjectiveChildPredicate(predicate));
+            }}
+            type="button"
+          >
+            Add Child Predicate
+          </button>
+        </div>
+      ) : null}
+
+      {predicate.kind === 'not' ? (
+        <div className="editor-objective-children">
+          <ScenarioObjectivePredicateEditor
+            depth={depth + 1}
+            onChange={(child) => {
+              onChange(replaceScenarioObjectiveNotChildPredicate(predicate, child));
+            }}
+            predicate={predicate.predicate}
+          />
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
+/**
  * Strict JSON export + open/import card for Stage 3.4/3.5.
  * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
  * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
@@ -577,8 +800,8 @@ function triggerScenarioBundleJsonDownload(fileName: string, jsonText: string) {
 
 /**
  * Parse integer form input with deterministic fallback.
- * Parity note: integers mirror C-style whole-number scenario fields, while fallback behavior
- * is editor-specific UI handling.
+ * Parity note: integers mirror C-style whole-number scenario/objective fields, while fallback
+ * behavior is editor-specific UI handling.
  */
 function parseIntegerInput(rawValue: string, fallback: number): number {
   if (rawValue.trim().length === 0) {
@@ -586,6 +809,70 @@ function parseIntegerInput(rawValue: string, fallback: number): number {
   }
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+/**
+ * Render label text for one objective predicate kind.
+ * Not from Micropolis C: UI-only display names for runtime predicate kinds.
+ */
+function getScenarioObjectivePredicateKindLabel(
+  kind: ScenarioEditorObjectivePredicate['kind'],
+): string {
+  if (kind === 'metric') {
+    return 'Metric';
+  }
+  if (kind === 'all') {
+    return 'All';
+  }
+  if (kind === 'any') {
+    return 'Any';
+  }
+  return 'Not';
+}
+
+/**
+ * Render label text for one objective metric key.
+ * Mirrors metric domains from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+ */
+function getScenarioObjectiveMetricLabel(
+  metric: (typeof SCENARIO_EDITOR_OBJECTIVE_METRIC_KEYS)[number],
+): string {
+  if (metric === 'city-class') {
+    return 'City Class';
+  }
+  if (metric === 'traffic-average') {
+    return 'Traffic Average';
+  }
+  if (metric === 'city-score') {
+    return 'City Score';
+  }
+  return 'Crime Average';
+}
+
+/**
+ * Render label text for one objective comparison operator.
+ * Mirrors relational operator semantics used by `DoScenarioScore` in
+ * `ref/micropolis/src/sim/s_msg.c`.
+ */
+function getScenarioObjectiveComparisonLabel(
+  comparison: (typeof SCENARIO_EDITOR_OBJECTIVE_COMPARISONS)[number],
+): string {
+  if (comparison === 'gt') {
+    return '>';
+  }
+  if (comparison === 'gte') {
+    return '>=';
+  }
+  if (comparison === 'lt') {
+    return '<';
+  }
+  if (comparison === 'lte') {
+    return '<=';
+  }
+  if (comparison === 'eq') {
+    return '=';
+  }
+  return '!=';
 }
 
 /**

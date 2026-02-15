@@ -1,0 +1,164 @@
+import { describe, expect, test } from 'vitest';
+
+import {
+  appendScenarioObjectiveChildPredicate,
+  coerceScenarioObjectivePredicateKind,
+  createScenarioEditorDefaultObjectivePredicate,
+  createScenarioEditorInitialObjectiveDraft,
+  removeScenarioObjectiveChildPredicate,
+  replaceScenarioObjectiveChildPredicate,
+  replaceScenarioObjectiveNotChildPredicate,
+} from './editor-objective.ts';
+
+/**
+ * Stage 4.1 objective DSL authoring tests.
+ * Parity anchor:
+ * - Metric leaves map to `DoScenarioScore` comparisons in `ref/micropolis/src/sim/s_msg.c`.
+ * - Logical composition nodes are declarative runtime extensions layered on top of those checks.
+ */
+describe('scenario editor objective predicate drafting', () => {
+  test('creates a default C-parity metric predicate template', () => {
+    const predicate = createScenarioEditorDefaultObjectivePredicate();
+
+    // Magic number source: Tokyo/Boston/Rio objective threshold `CityScore > 500`
+    // in `DoScenarioScore` from `ref/micropolis/src/sim/s_msg.c`.
+    expect(predicate).toEqual({
+      kind: 'metric',
+      metric: 'city-score',
+      op: 'gt',
+      value: 500,
+    });
+  });
+
+  test('creates initial objective draft in disabled state', () => {
+    const objective = createScenarioEditorInitialObjectiveDraft();
+
+    expect(objective.enabled).toBe(false);
+    expect(objective.predicate.kind).toBe('metric');
+  });
+
+  test('coerces metric predicates to list and negation forms', () => {
+    const metricPredicate = {
+      kind: 'metric',
+      metric: 'city-class',
+      op: 'gte',
+      value: 4,
+    } as const;
+
+    const asAll = coerceScenarioObjectivePredicateKind(metricPredicate, 'all');
+    expect(asAll).toEqual({
+      kind: 'all',
+      predicates: [metricPredicate],
+    });
+
+    const asNot = coerceScenarioObjectivePredicateKind(metricPredicate, 'not');
+    expect(asNot).toEqual({
+      kind: 'not',
+      predicate: metricPredicate,
+    });
+  });
+
+  test('coerces list predicates to not using the first child', () => {
+    const predicate = {
+      kind: 'all',
+      predicates: [
+        {
+          kind: 'metric',
+          metric: 'city-score',
+          op: 'gt',
+          value: 500,
+        },
+        {
+          kind: 'metric',
+          metric: 'traffic-average',
+          op: 'lt',
+          value: 80,
+        },
+      ],
+    } as const;
+
+    const asNot = coerceScenarioObjectivePredicateKind(predicate, 'not');
+    expect(asNot).toEqual({
+      kind: 'not',
+      predicate: predicate.predicates[0],
+    });
+  });
+
+  test('appends, replaces, and removes list children immutably', () => {
+    const initial = {
+      kind: 'any',
+      predicates: [
+        {
+          kind: 'metric',
+          metric: 'city-score',
+          op: 'gt',
+          value: 500,
+        },
+      ],
+    } as const;
+
+    const appended = appendScenarioObjectiveChildPredicate(initial, {
+      kind: 'metric',
+      metric: 'crime-average',
+      op: 'lt',
+      value: 60,
+    });
+    expect(appended.kind).toBe('any');
+    if (appended.kind !== 'any') {
+      throw new Error('Expected any predicate');
+    }
+    expect(appended.predicates).toHaveLength(2);
+
+    const replaced = replaceScenarioObjectiveChildPredicate(appended, 1, {
+      kind: 'metric',
+      metric: 'traffic-average',
+      op: 'lt',
+      value: 80,
+    });
+    expect(replaced.kind).toBe('any');
+    if (replaced.kind !== 'any') {
+      throw new Error('Expected any predicate');
+    }
+    expect(replaced.predicates[1]).toEqual({
+      kind: 'metric',
+      metric: 'traffic-average',
+      op: 'lt',
+      value: 80,
+    });
+
+    const removed = removeScenarioObjectiveChildPredicate(replaced, 1);
+    expect(removed.kind).toBe('any');
+    if (removed.kind !== 'any') {
+      throw new Error('Expected any predicate');
+    }
+    expect(removed.predicates).toHaveLength(1);
+  });
+
+  test('does not remove the final child from list predicates', () => {
+    const initial = {
+      kind: 'all',
+      predicates: [{ kind: 'metric', metric: 'city-score', op: 'gt', value: 500 }],
+    } as const;
+
+    const removed = removeScenarioObjectiveChildPredicate(initial, 0);
+    expect(removed).toBe(initial);
+  });
+
+  test('replaces the child on not predicates', () => {
+    const initial = {
+      kind: 'not',
+      predicate: { kind: 'metric', metric: 'city-score', op: 'gt', value: 500 },
+    } as const;
+    const updated = replaceScenarioObjectiveNotChildPredicate(initial, {
+      kind: 'metric',
+      metric: 'city-class',
+      op: 'gte',
+      value: 4,
+    });
+
+    expect(updated).toEqual({
+      kind: 'not',
+      predicate: { kind: 'metric', metric: 'city-class', op: 'gte', value: 4 },
+    });
+  });
+});

@@ -14,6 +14,7 @@
   "dependencies": {
     "@city/classicyui": "workspace:*",
     "@city/scenario-core": "workspace:*",
+    "@city/scenario-runtime": "workspace:*",
     "@tanstack/react-router": "1.157.16",
     "react": "19.2.4",
     "react-dom": "19.2.4"

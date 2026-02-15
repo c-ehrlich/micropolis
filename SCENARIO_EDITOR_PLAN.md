@@ -132,7 +132,7 @@
 - `apps/scenario-editor/` (from Stage 3)
 
 ### Requirements (Task Checklist)
-- [ ] **4.1** Add objective editor for predicate DSL (`metric`, `all`, `any`, `not`).
+- [x] **4.1** Add objective editor for predicate DSL (`metric`, `all`, `any`, `not`).
 - [ ] **4.2** Add event/action editor for declarative scripts (`atTick`, `everyTicks`, actions union).
 - [ ] **4.3** Add behavior profile assignment UI with closed profile validation.
 - [ ] **4.4** Add authoring-time semantic validation (unknown metric, invalid op/type combos, empty `all/any`, etc.).

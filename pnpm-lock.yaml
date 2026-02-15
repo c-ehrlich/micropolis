@@ -72,6 +72,9 @@ importers:
       '@city/scenario-core':
         specifier: workspace:*
         version: link:../../packages/scenario-core
+      '@city/scenario-runtime':
+        specifier: workspace:*
+        version: link:../../packages/scenario-runtime
       '@tanstack/react-router':
         specifier: 1.157.16
         version: 1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
