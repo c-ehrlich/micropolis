@@ -11,6 +11,11 @@ import { mapScanSlice } from './map-scan.ts';
 import { popDenScan as runPopDenScan } from './pop-density.ts';
 import { setZPowerAt } from './power.ts';
 import { ptlScan as runPTLScan } from './ptl.ts';
+import {
+  setLegacySimScenarioRuntimeById,
+  setSimScenarioRuntimeInputs,
+  type SimScenarioRuntimeInputs,
+} from './scenario-runtime-bridge.ts';
 
 const { WORLD_X, WORLD_Y } = World;
 const { ZONEBIT } = TileFlag;
@@ -31,19 +36,6 @@ const WILL_STUFF_LAYERS: LayerId[] = [
   'fireStMap',
 ];
 
-const DISASTER_WAIT_TABLE = [0, 2, 10, 5, 20, 3, 5, 5, 2 * 48] as const;
-const SCORE_WAIT_TABLE = [
-  0,
-  30 * 48,
-  5 * 48,
-  5 * 48,
-  10 * 48,
-  5 * 48,
-  10 * 48,
-  5 * 48,
-  10 * 48,
-] as const;
-
 const noop = () => {};
 
 export interface InitWillStuffOptions {
@@ -61,6 +53,15 @@ export interface SimInitSystems {
   fireAnalysis?: () => void;
   evalInit?: () => void;
   setGameLevel?: (level: number) => void;
+  /**
+   * Optional declarative scenario-runtime inputs for loaded scenario setup.
+   *
+   * Mapping note:
+   * - Replaces direct `ScenarioID` lookup tables in `DoSimInit`/`SimLoadInit`
+   *   (`ref/micropolis/src/sim/s_sim.c`) when provided.
+   * - If omitted, sim-core falls back to legacy numeric-id mapping for parity.
+   */
+  scenarioRuntimeInputs?: SimScenarioRuntimeInputs;
 }
 
 function withStoreTick(store: MapStore, fn: () => void): void {
@@ -128,6 +129,7 @@ export function initWillStuff(
   state.ValveFlag = 1;
   state.DisasterEvent = 0;
   state.TaxFlag = 0;
+  setSimScenarioRuntimeInputs(state, undefined);
 
   withStoreTick(context.store, () => {
     for (const layer of WILL_STUFF_LAYERS) {
@@ -220,6 +222,7 @@ export function initSimMemory(
   state.EMarket = 6;
   state.DisasterEvent = 0;
   state.ScoreType = 0;
+  setSimScenarioRuntimeInputs(state, undefined);
 
   if (systems.doPowerScan) {
     // s_sim.c InitSimMemory: reset before DoPowerScan to clear powermem.
@@ -289,14 +292,12 @@ export function simLoadInit(
     state.ScenarioID = 0;
   }
 
-  if (state.ScenarioID) {
-    state.DisasterEvent = state.ScenarioID;
-    state.DisasterWait = DISASTER_WAIT_TABLE[state.ScenarioID] ?? 0;
-    state.ScoreType = state.ScenarioID;
-    state.ScoreWait = SCORE_WAIT_TABLE[state.ScenarioID] ?? 0;
+  if (systems.scenarioRuntimeInputs !== undefined) {
+    setSimScenarioRuntimeInputs(state, systems.scenarioRuntimeInputs);
+  } else if (state.ScenarioID) {
+    setLegacySimScenarioRuntimeById(state, state.ScenarioID);
   } else {
-    state.DisasterEvent = 0;
-    state.ScoreType = 0;
+    setSimScenarioRuntimeInputs(state, undefined);
   }
 
   state.RoadEffect = 32;

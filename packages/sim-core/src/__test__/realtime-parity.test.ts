@@ -546,12 +546,12 @@ describe('Ship sprite behavior', () => {
     expect(context.sprites.some((sprite) => sprite.type === SPRITE_TYPE.EXP)).toBe(true);
   });
 
-  it('uses the scenario 2 honk variant', () => {
+  it('uses the configured SF ship honk behavior input', () => {
     const hornSeed = findSeed((rng) => (rng.next16() & 3) === 1 && rng.rand(10) < 5);
     const sounds: Array<{ channel: string; id: string }> = [];
 
     const { context, store, rng } = createContext(hornSeed, {
-      scenarioId: 2,
+      shipHonkBehavior: 'legacy-sf-low-speed',
       onSound: (channel, id) => sounds.push({ channel, id }),
     });
     const map = store.getLayer('map') as Uint16Array;

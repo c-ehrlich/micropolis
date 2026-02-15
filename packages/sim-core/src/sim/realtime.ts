@@ -148,6 +148,17 @@ export interface RealtimeMessageCoupling {
   context: SimContext;
 }
 
+/**
+ * Closed behavior switch for classic ship horn variants.
+ *
+ * Mapping note:
+ * - Mirrors the `ScenarioID == 2` ship horn branch in `DoShipSprite` from
+ *   `ref/micropolis/src/sim/w_sprite.c`.
+ * - This decouples runtime behavior selection from numeric scenario ids by
+ *   carrying explicit behavior input in realtime context.
+ */
+export type RealtimeShipHonkBehavior = 'default' | 'legacy-sf-low-speed';
+
 export interface RealtimeContext extends RealtimeCallbacks {
   store: MapStore;
   rng: MicropolisRng;
@@ -155,6 +166,7 @@ export interface RealtimeContext extends RealtimeCallbacks {
   doAnimation: boolean;
   noDisasters: boolean;
   scenarioId: number;
+  shipHonkBehavior: RealtimeShipHonkBehavior;
   totalPop: number;
   polMaxX: number;
   polMaxY: number;
@@ -177,6 +189,7 @@ export interface RealtimeContextOptions extends RealtimeCallbacks {
   doAnimation?: boolean;
   noDisasters?: boolean;
   scenarioId?: number;
+  shipHonkBehavior?: RealtimeShipHonkBehavior;
   totalPop?: number;
   polMaxX?: number;
   polMaxY?: number;
@@ -188,13 +201,18 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
   if (!options.toolContext) {
     throw new Error('Realtime context requires a toolContext');
   }
+  const resolvedScenarioId = options.scenarioId ?? 0;
+  const resolvedShipHonkBehavior =
+    options.shipHonkBehavior ?? (resolvedScenarioId === 2 ? 'legacy-sf-low-speed' : 'default');
+
   return {
     store: options.store,
     rng: options.rng,
     simSpeed: options.simSpeed ?? 3,
     doAnimation: options.doAnimation ?? true,
     noDisasters: options.noDisasters ?? false,
-    scenarioId: options.scenarioId ?? 0,
+    scenarioId: resolvedScenarioId,
+    shipHonkBehavior: resolvedShipHonkBehavior,
     totalPop: options.totalPop ?? 0,
     polMaxX: options.polMaxX ?? Math.floor(WORLD_X / 2),
     polMaxY: options.polMaxY ?? Math.floor(WORLD_Y / 2),
@@ -1055,7 +1073,7 @@ function doShipSprite(
   }
   if (!sprite.sound_count) {
     if ((rand16(context) & 3) === 1) {
-      if (context.scenarioId === 2 && rand(context, 10) < 5) {
+      if (context.shipHonkBehavior === 'legacy-sf-low-speed' && rand(context, 10) < 5) {
         makeSound(context, 'city', 'HonkHonk-Low -speed 80');
       } else {
         makeSound(context, 'city', 'HonkHonk-Low');

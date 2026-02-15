@@ -1,5 +1,14 @@
+import {
+  resolveScenarioObjective,
+  type ScenarioObjectiveMetricValues,
+  tickScenarioObjectiveRuntimeState,
+} from '../../../scenario-runtime/src/index.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
+import {
+  getSimScenarioRuntimeState,
+  setSimScenarioRuntimeState,
+} from './scenario-runtime-bridge.ts';
 
 type LastDispatched =
   | { kind: 'none' }
@@ -397,6 +406,53 @@ export function doScenarioScore(state: SimState, context: SimContext, type: numb
   }
 }
 
+const scenarioObjectiveMetricsFromState = (state: SimState): ScenarioObjectiveMetricValues => {
+  return {
+    'city-class': state.CityClass,
+    'traffic-average': state.TrafficAverage,
+    'city-score': state.CityScore,
+    'crime-average': state.CrimeAverage,
+  };
+};
+
+const runDeclarativeScenarioObjectiveCountdown = (
+  state: SimState,
+  context: SimContext,
+): boolean => {
+  const runtimeState = getSimScenarioRuntimeState(state);
+  if (runtimeState === undefined) {
+    return false;
+  }
+
+  const objectiveState = runtimeState.objective;
+  if (objectiveState === undefined) {
+    return true;
+  }
+
+  const objectiveTick = tickScenarioObjectiveRuntimeState(objectiveState);
+  setSimScenarioRuntimeState(state, {
+    key: runtimeState.key,
+    events: runtimeState.events,
+    objective: objectiveTick.state,
+  });
+
+  if (!objectiveTick.shouldEvaluate) {
+    return true;
+  }
+
+  const resolution = resolveScenarioObjective(
+    objectiveTick.state.definition,
+    scenarioObjectiveMetricsFromState(state),
+  );
+  clearMes(state);
+  sendMes(state, context, resolution.messageId);
+  if (resolution.shouldLoseGame) {
+    context.hooks.doLoseGame();
+  }
+
+  return true;
+};
+
 /**
  * Population milestone messaging.
  * Mirrors `CheckGrowth` in `ref/micropolis/src/sim/s_msg.c`.
@@ -440,7 +496,12 @@ export function checkGrowth(state: SimState, context: SimContext): void {
  * Mirrors `SendMessages` in `ref/micropolis/src/sim/s_msg.c`.
  */
 export function sendMessages(state: SimState, context: SimContext): void {
-  if (state.ScenarioID && state.ScoreType && state.ScoreWait) {
+  if (
+    !runDeclarativeScenarioObjectiveCountdown(state, context) &&
+    state.ScenarioID &&
+    state.ScoreType &&
+    state.ScoreWait
+  ) {
     state.ScoreWait -= 1;
     if (state.ScoreWait === 0) {
       doScenarioScore(state, context, state.ScoreType);

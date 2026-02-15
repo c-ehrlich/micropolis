@@ -1,9 +1,18 @@
+import {
+  type ScenarioRuntimeAction,
+  tickScenarioEventRuntimeState,
+} from '../../../scenario-runtime/src/index.ts';
 import { assertDefined } from '../core/assert.ts';
 import { Tile, TileFlag, TileMask, World } from '../core/constants.ts';
 import type { SimContext } from '../core/sim-context.ts';
 import type { SimState } from '../core/sim-state.ts';
 import type { MapScanContext } from './map-scan.ts';
-import { sendMesAt } from './messages.ts';
+import { sendMes, sendMesAt } from './messages.ts';
+import {
+  getSimScenarioRuntimeState,
+  hasSimScenarioRuntimeState,
+  setSimScenarioRuntimeState,
+} from './scenario-runtime-bridge.ts';
 import { createZoneSystem, doMeltdown } from './zones.ts';
 
 const { WORLD_X, WORLD_Y, SmX, SmY } = World;
@@ -36,6 +45,35 @@ const rateIndex = (x: number, y: number) => x * SmY + y;
 const inBounds = (x: number, y: number) => x >= 0 && x < WORLD_X && y >= 0 && y < WORLD_Y;
 
 const DISASTER_CHANCE = [10 * 48, 5 * 48, 60] as const;
+
+const applyScenarioRuntimeEventAction = (
+  state: SimState,
+  context: SimContext,
+  action: ScenarioRuntimeAction,
+): void => {
+  switch (action.kind) {
+    case 'make-earthquake':
+      makeEarthquake(state, context);
+      return;
+    case 'drop-fire-bombs':
+      dropFireBombs(context);
+      return;
+    case 'make-monster':
+      makeMonster(context);
+      return;
+    case 'make-meltdown':
+      makeMeltdown(state, context);
+      return;
+    case 'make-flood':
+      makeFlood(state, context);
+      return;
+    case 'send-message':
+      sendMes(state, context, action.messageId);
+      return;
+    case 'lose-game':
+      context.hooks.doLoseGame();
+  }
+};
 
 export function createFireHandler(context: SimContext): (scan: MapScanContext) => void {
   const fireRate = context.store.getLayer('fireRate') as Int16Array;
@@ -209,7 +247,7 @@ export function doDisasters(state: SimState, context: SimContext): void {
     state.FloodCnt -= 1;
   }
 
-  if (state.DisasterEvent !== 0) {
+  if (hasSimScenarioRuntimeState(state) || state.DisasterEvent !== 0) {
     scenarioDisaster(state, context);
   }
 
@@ -253,11 +291,7 @@ export function doDisasters(state: SimState, context: SimContext): void {
   }
 }
 
-/**
- * Scenario-specific disaster scripting dispatcher.
- * Mirrors `ScenarioDisaster` in `ref/micropolis/src/sim/s_disast.c` (1:1 port).
- */
-export function scenarioDisaster(state: SimState, context: SimContext): void {
+function scenarioDisasterLegacy(state: SimState, context: SimContext): void {
   switch (state.DisasterEvent) {
     case 1:
       break;
@@ -296,6 +330,43 @@ export function scenarioDisaster(state: SimState, context: SimContext): void {
     state.DisasterWait -= 1;
   } else {
     state.DisasterEvent = 0;
+  }
+}
+
+/**
+ * Scenario-specific disaster scripting dispatcher.
+ * Mirrors `ScenarioDisaster` in `ref/micropolis/src/sim/s_disast.c` using
+ * declarative scenario-runtime event state when configured.
+ *
+ * Parity note:
+ * - Legacy C behavior is preserved when no declarative runtime state exists
+ *   by falling back to numeric `DisasterEvent`/`DisasterWait` handling.
+ */
+export function scenarioDisaster(state: SimState, context: SimContext): void {
+  const runtimeState = getSimScenarioRuntimeState(state);
+  if (runtimeState === undefined) {
+    scenarioDisasterLegacy(state, context);
+    return;
+  }
+
+  const nextEvents = [];
+  const emittedActions: ScenarioRuntimeAction[] = [];
+  for (const eventState of runtimeState.events) {
+    const tickResult = tickScenarioEventRuntimeState(eventState);
+    nextEvents.push(tickResult.state);
+    for (const action of tickResult.actions) {
+      emittedActions.push(action);
+    }
+  }
+
+  setSimScenarioRuntimeState(state, {
+    key: runtimeState.key,
+    events: nextEvents,
+    objective: runtimeState.objective,
+  });
+
+  for (const action of emittedActions) {
+    applyScenarioRuntimeEventAction(state, context, action);
   }
 }
 

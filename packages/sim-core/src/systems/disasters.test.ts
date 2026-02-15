@@ -23,6 +23,10 @@ import {
   scenarioDisaster,
 } from './disasters.ts';
 import { mapScanSlice } from './map-scan.ts';
+import {
+  getSimScenarioRuntimeState,
+  setSimScenarioRuntimeInputs,
+} from './scenario-runtime-bridge.ts';
 
 const { WORLD_Y, SmY } = World;
 
@@ -397,6 +401,54 @@ describe('Disaster events', () => {
 
     scenarioDisaster(state, context);
     expect(state.DisasterEvent).toBe(0);
+  });
+
+  it('runs declarative scenario event inputs without DisasterEvent id checks', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+
+    const state = createSimState();
+    state.NoDisasters = true;
+    state.DisasterEvent = 0;
+    let drops = 0;
+    const context = createSimContext({
+      store,
+      hooks: {
+        dropFireBombs: () => {
+          drops += 1;
+        },
+      },
+    });
+
+    setSimScenarioRuntimeInputs(state, {
+      runtimeDefinition: {
+        key: 'test/disaster-runtime',
+        events: [
+          {
+            key: 'test/drop-bombs',
+            initialCountdown: 1,
+            rules: [
+              {
+                when: { kind: 'countdown-equals', value: 1 },
+                action: { kind: 'drop-fire-bombs' },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    doDisasters(state, context);
+
+    const runtimeAfterFirstTick = getSimScenarioRuntimeState(state);
+    expect(drops).toBe(1);
+    expect(runtimeAfterFirstTick?.events[0]?.countdown).toBe(0);
+    expect(runtimeAfterFirstTick?.events[0]?.active).toBe(true);
+
+    doDisasters(state, context);
+
+    const runtimeAfterSecondTick = getSimScenarioRuntimeState(state);
+    expect(runtimeAfterSecondTick?.events[0]?.active).toBe(false);
   });
 
   it('starts a random fire from a burnable tile', () => {

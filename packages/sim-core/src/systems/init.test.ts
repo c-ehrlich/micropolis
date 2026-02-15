@@ -16,6 +16,7 @@ import {
   initWillStuff,
   simLoadInit,
 } from './init.ts';
+import { getSimScenarioRuntimeState } from './scenario-runtime-bridge.ts';
 
 const { WORLD_Y } = World;
 const { POWERMAPROW, PWRMAPSIZE } = PowerMap;
@@ -444,6 +445,63 @@ describe('simLoadInit', () => {
     expect(state.ScoreType).toBe(0);
     expect(state.DisasterWait).toBe(0);
     expect(state.ScoreWait).toBe(0);
+  });
+
+  it('accepts explicit declarative scenario-runtime inputs without ScenarioID coupling', () => {
+    const store = createClassicMapStore();
+    const context = createSimContext({ store });
+    const state = createSimState();
+
+    state.MiscHis = new Int16Array(CITY_MISC_LENGTH);
+    state.CityTime = 10;
+    state.ScenarioID = 0;
+
+    // Fixture countdowns are explicit runtime inputs for this test case, not
+    // C lookup-table values.
+    const disasterCountdown = 9;
+    const objectiveCountdown = 12;
+
+    store.beginTick();
+    simLoadInit(context, state, {
+      scenarioRuntimeInputs: {
+        runtimeDefinition: {
+          key: 'test/runtime-inputs',
+          events: [
+            {
+              key: 'test/event',
+              initialCountdown: disasterCountdown,
+              rules: [
+                {
+                  when: { kind: 'countdown-equals', value: 1 },
+                  action: { kind: 'make-earthquake' },
+                },
+              ],
+            },
+          ],
+          objective: {
+            key: 'test/objective',
+            initialCountdown: objectiveCountdown,
+            predicate: {
+              kind: 'metric',
+              metric: 'city-class',
+              op: 'gte',
+              value: 4,
+            },
+            successMessageId: -100,
+            failureMessageId: -200,
+            loseGameOnFailure: true,
+          },
+        },
+      },
+    });
+    store.commitTick();
+
+    const runtimeState = getSimScenarioRuntimeState(state);
+    expect(runtimeState?.key).toBe('test/runtime-inputs');
+    expect(runtimeState?.events[0]?.countdown).toBe(disasterCountdown);
+    expect(runtimeState?.objective?.countdown).toBe(objectiveCountdown);
+    expect(state.DisasterWait).toBe(disasterCountdown);
+    expect(state.ScoreWait).toBe(objectiveCountdown);
   });
 });
 

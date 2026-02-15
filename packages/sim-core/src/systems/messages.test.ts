@@ -16,6 +16,7 @@ import {
   sendMesAt,
   sendMessages,
 } from './messages.ts';
+import { setSimScenarioRuntimeInputs } from './scenario-runtime-bridge.ts';
 
 describe('SendMes', () => {
   it('gates positive messages until the port is consumed', () => {
@@ -420,6 +421,49 @@ describe('SendMessages', () => {
 
     expect(state.ResCap).toBe(0);
     expect(hooks.sendMes).not.toHaveBeenCalled();
+  });
+
+  it('evaluates declarative scenario objective countdown without ScenarioID checks', () => {
+    const hooks = {
+      sendMes: vi.fn(),
+      doLoseGame: vi.fn(),
+    };
+    const context = createSimContext({ hooks });
+    const state = createSimState();
+
+    state.StartingYear = 1900;
+    state.CityTime = 0;
+    state.ScenarioID = 0;
+    state.ScoreType = 0;
+    state.ScoreWait = 0;
+    state.CityScore = 600;
+
+    setSimScenarioRuntimeInputs(state, {
+      runtimeDefinition: {
+        key: 'test/messages-runtime',
+        events: [],
+        objective: {
+          key: 'test/messages-objective',
+          initialCountdown: 1,
+          predicate: {
+            kind: 'metric',
+            metric: 'city-score',
+            op: 'gt',
+            value: 500,
+          },
+          successMessageId: -100,
+          failureMessageId: -200,
+          loseGameOnFailure: true,
+        },
+      },
+    });
+
+    sendMessages(state, context);
+    updateDate(state, context);
+
+    expect(hooks.sendMes).toHaveBeenCalledWith(-100);
+    expect(hooks.doLoseGame).not.toHaveBeenCalled();
+    expect(state.ScoreWait).toBe(0);
   });
 });
 
