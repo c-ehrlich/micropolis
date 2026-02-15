@@ -3,13 +3,13 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, test, vi } from 'vitest';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
+import { getScenarioDefinition } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
   cityDimensionsForMap,
   Tile,
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
-import { getScenarioDefinition } from '../../../../../packages/sim-io/src/scenarios.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,

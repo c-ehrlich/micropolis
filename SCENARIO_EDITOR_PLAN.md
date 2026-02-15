@@ -31,7 +31,7 @@
 27. Script/objective authoring UI is explicitly deferred beyond first editor milestone.
 
 ## Stage 0 - Contracts, Schema, and Package Extraction
-- [ ] Stage status: complete
+- [x] Stage status: complete
 
 ### Reference Files
 - `packages/sim-io/src/scenarios.ts`
@@ -45,7 +45,7 @@
 - [x] **0.2** Implement `cityFileBytes`/`tileWords` read support and canonical write-to-`cityFileBytes` behavior.
 - [x] **0.3** Add validation for mutual exclusivity of map forms and key namespace conventions (`builtin/*`, `user/*`).
 - [x] **0.4** Add deterministic transcoders and package-level APIs for map round-trip conversion.
-- [ ] **0.5** Wire consumers to read scenario definitions via `scenario-core` instead of ad hoc types.
+- [x] **0.5** Wire consumers to read scenario definitions via `scenario-core` instead of ad hoc types.
 
 ### Good Tests
 - Round-trip golden tests: `tileWords -> cityFileBytes -> tileWords` and reverse.

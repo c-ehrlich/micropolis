@@ -1,12 +1,12 @@
 import {
   SCENARIO_TABLE,
   type ScenarioDefinition,
-} from '../../../../../packages/sim-io/src/scenarios.ts';
+} from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 
 /**
  * Scenario choice metadata shown in the playable route scenario selector.
  * Mirrors scenario rows from `LoadScenario` in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this is a 1:1 metadata projection over canonical sim-io scenario definitions.
+ * Parity note: this is a 1:1 metadata projection over canonical scenario-core definitions.
  */
 export interface PlayableScenarioChoice {
   id: number;
