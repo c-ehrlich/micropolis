@@ -85,6 +85,34 @@ describe('scenarioBundleV1Schema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects bundles that contain both map forms at once', () => {
+    const result = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'user/mixed-map-forms',
+      name: 'Mixed Map Forms',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 20000,
+      },
+      map: {
+        kind: 'tile-words',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        tileWords: Array.from({ length: SCENARIO_BUNDLE_V1_TILE_COUNT }, () => 0),
+        cityFileBytes: 'AA==',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some((issue) => issue.message.includes('exactly one map form')),
+      ).toBe(true);
+    }
+  });
+
   it('rejects `gameLevel` in start params for v1 bundles', () => {
     const result = scenarioBundleV1Schema.safeParse({
       version: 1,
@@ -106,5 +134,45 @@ describe('scenarioBundleV1Schema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('rejects keys without builtin/user namespace prefixes', () => {
+    const missingNamespace = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'dullsville',
+      name: 'Dullsville',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 1900,
+        startFunds: 5000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+    });
+    const unknownNamespace = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'mod/dullsville',
+      name: 'Dullsville',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 1900,
+        startFunds: 5000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+    });
+
+    expect(missingNamespace.success).toBe(false);
+    expect(unknownNamespace.success).toBe(false);
   });
 });

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+const SCENARIO_KEY_NAMESPACE_PREFIXES = ['builtin/', 'user/'] as const;
+const MAP_FORM_CONFLICT_ERROR = 'map must include exactly one map form: cityFileBytes or tileWords';
+
 /**
  * Canonical scenario bundle version for Stage 0 contracts.
  * Not a 1:1 Micropolis C field: this wraps modern JSON metadata around map
@@ -65,15 +68,30 @@ export const scenarioMapTileWordsV1Schema = z
   })
   .strict();
 
+const scenarioMapV1FormExclusivitySchema = z.unknown().superRefine((value, context) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return;
+  }
+
+  const hasCityFileBytes = Object.prototype.hasOwnProperty.call(value, 'cityFileBytes');
+  const hasTileWords = Object.prototype.hasOwnProperty.call(value, 'tileWords');
+
+  if (hasCityFileBytes && hasTileWords) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: MAP_FORM_CONFLICT_ERROR,
+    });
+  }
+});
+
 /**
  * Canonical v1 map discriminated union.
  * Not a direct C construct: this adds explicit map-form tagging while preserving
  * the same underlying map domain from `ref/micropolis/src/sim/s_fileio.c`.
  */
-export const scenarioMapV1Schema = z.discriminatedUnion('kind', [
-  scenarioMapCityFileBytesV1Schema,
-  scenarioMapTileWordsV1Schema,
-]);
+export const scenarioMapV1Schema = scenarioMapV1FormExclusivitySchema.pipe(
+  z.discriminatedUnion('kind', [scenarioMapCityFileBytesV1Schema, scenarioMapTileWordsV1Schema]),
+);
 
 /**
  * Start-state fields authored per scenario.
@@ -95,7 +113,17 @@ export const scenarioStartParametersV1Schema = z
 export const scenarioBundleV1Schema = z
   .object({
     version: z.literal(SCENARIO_BUNDLE_V1_VERSION),
-    key: z.string().min(1),
+    key: z
+      .string()
+      .refine(
+        (value) =>
+          SCENARIO_KEY_NAMESPACE_PREFIXES.some(
+            (prefix) => value.startsWith(prefix) && value.length > prefix.length,
+          ),
+        {
+          message: 'key must use builtin/* or user/* namespace',
+        },
+      ),
     name: z.string().min(1),
     description: z.string(),
     tags: z.array(z.string().min(1)),
