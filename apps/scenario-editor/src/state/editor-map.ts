@@ -5,8 +5,64 @@ import {
   type ScenarioMapTileWordsV1,
   transcodeScenarioMapTileWordsV1,
 } from '@city/scenario-core';
+import {
+  applyToolAction,
+  createClassicMapStore,
+  createToolContext,
+  MicropolisRng,
+  TileMask,
+} from '@city/sim-core';
 
 const SCENARIO_EDITOR_TILE_WORD_MASK = 0xffff;
+const SCENARIO_EDITOR_TOOL_FUNDS = 1_000_000_000;
+const SCENARIO_EDITOR_TOOL_RNG_SEED = 0x00c17e77;
+const SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS = {
+  simStep: 0,
+  order: 0,
+  tickId: 0,
+  seq: 0,
+} as const;
+
+/**
+ * Tool names exposed by the scenario map editor.
+ * Mirrors playable tool coverage routed through `do_tool` in
+ * `ref/micropolis/src/sim/w_tool.c`; parity note: this omits editor-only C states
+ * (`chalk`, `eraser`, `network`) that are not exposed by the current web toolbar.
+ */
+export const SCENARIO_EDITOR_MAP_TOOLS = [
+  'res',
+  'com',
+  'ind',
+  'fire',
+  'query',
+  'police',
+  'wire',
+  'bulldoze',
+  'rail',
+  'road',
+  'stadium',
+  'park',
+  'seaport',
+  'coal',
+  'nuclear',
+  'airport',
+] as const;
+
+/**
+ * Scenario map editor tool identifier.
+ * Mirrors `tool_state`-backed names from `ref/micropolis/src/sim/w_tool.c`
+ * exposed by the current playable runtime tool palette.
+ */
+export type ScenarioEditorMapTool = (typeof SCENARIO_EDITOR_MAP_TOOLS)[number];
+
+/**
+ * Base-tile write options for map painting.
+ * Mirrors Micropolis low-10-bit tile id semantics from `sim.h`; preserving flags
+ * keeps status bits (`PWRBIT`, `ZONEBIT`, etc.) while replacing only base tile id.
+ */
+export interface ScenarioEditorMapBaseTileWriteOptions {
+  readonly preserveFlags?: boolean;
+}
 
 /**
  * One tile coordinate in the fixed Stage 3 editor map.
@@ -144,6 +200,134 @@ export function fillScenarioEditorMapTileWord(
 }
 
 /**
+ * Normalize base tile id input to Micropolis low-10-bit tile id domain.
+ * Mirrors `LOMASK` masking in `ref/micropolis/src/sim/headers/sim.h`.
+ */
+export function normalizeScenarioEditorBaseTileId(baseTileId: number): number {
+  return Math.trunc(baseTileId) & TileMask.LOMASK;
+}
+
+/**
+ * Write one base tile id while optionally preserving status flags.
+ * Mirrors C tile word layout in `ref/micropolis/src/sim/headers/sim.h` where
+ * low bits are tile id and high bits are status flags (`ALLBITS` mask).
+ */
+export function writeScenarioEditorMapBaseTileId(
+  bundle: ScenarioBundleV1,
+  point: ScenarioEditorMapPoint,
+  baseTileId: number,
+  options: ScenarioEditorMapBaseTileWriteOptions = {},
+): ScenarioBundleV1 {
+  const index = getScenarioEditorMapIndex(point);
+  if (index === null) {
+    return bundle;
+  }
+
+  const tileWordsMap = asTileWordsMap(bundle);
+  const currentTileWord = tileWordsMap.tileWords[index];
+  if (currentTileWord === undefined) {
+    return bundle;
+  }
+
+  const nextTileWord = toScenarioEditorBaseTileWord(currentTileWord, baseTileId, options);
+  if (nextTileWord === currentTileWord && bundle.map.kind === 'tile-words') {
+    return bundle;
+  }
+
+  const nextTileWords = tileWordsMap.tileWords.slice();
+  nextTileWords[index] = nextTileWord;
+
+  return toScenarioEditorTileWordsBundle(bundle, nextTileWords);
+}
+
+/**
+ * Fill the entire map with one base tile id.
+ * Mirrors whole-map assignment semantics from `SimCmdFill` in
+ * `ref/micropolis/src/sim/w_sim.c`, applied only to low tile-id bits.
+ */
+export function fillScenarioEditorMapBaseTileId(
+  bundle: ScenarioBundleV1,
+  baseTileId: number,
+  options: ScenarioEditorMapBaseTileWriteOptions = {},
+): ScenarioBundleV1 {
+  const tileWordsMap = asTileWordsMap(bundle);
+  const nextTileWords = tileWordsMap.tileWords.map((tileWord) =>
+    toScenarioEditorBaseTileWord(tileWord, baseTileId, options),
+  );
+  const hasDifference = nextTileWords.some((tileWord, index) => {
+    const current = tileWordsMap.tileWords[index];
+    return current !== undefined && current !== tileWord;
+  });
+
+  if (!hasDifference && bundle.map.kind === 'tile-words') {
+    return bundle;
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, nextTileWords);
+}
+
+/**
+ * Apply one Micropolis tool at a map coordinate and persist resulting tile words.
+ * Mirrors `DoTool`/`do_tool` behavior from `ref/micropolis/src/sim/w_tool.c`
+ * via sim-core C-parity tool tables and placement rules.
+ */
+export function applyScenarioEditorMapToolAtPoint(
+  bundle: ScenarioBundleV1,
+  point: ScenarioEditorMapPoint,
+  tool: ScenarioEditorMapTool,
+): ScenarioBundleV1 {
+  const index = getScenarioEditorMapIndex(point);
+  if (index === null) {
+    return bundle;
+  }
+
+  const tileWordsMap = asTileWordsMap(bundle);
+  const store = createClassicMapStore();
+  const initialMapLayer = store.snapshot('map');
+  if (!(initialMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  initialMapLayer.set(tileWordsMap.tileWords);
+
+  store.beginTick();
+  const context = createToolContext({
+    store,
+    rng: new MicropolisRng(SCENARIO_EDITOR_TOOL_RNG_SEED),
+    funds: SCENARIO_EDITOR_TOOL_FUNDS,
+    autoBulldoze: true,
+    doAnimation: false,
+    players: 1,
+    overrideCost: true,
+    superUser: true,
+  });
+  applyToolAction(context, {
+    ...SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS,
+    tool,
+    x: point.x,
+    y: point.y,
+  });
+  const tickResult = store.commitTick();
+  if (tickResult.patches.length === 0) {
+    return bundle;
+  }
+
+  const nextMapLayer = store.snapshot('map');
+  if (!(nextMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
+ * Runtime guard for map tool ids selected from form controls.
+ * Mirrors closed tool dispatch set for `do_tool` in `w_tool.c`.
+ */
+export function isScenarioEditorMapTool(value: string): value is ScenarioEditorMapTool {
+  return SCENARIO_EDITOR_MAP_TOOL_SET.has(value as ScenarioEditorMapTool);
+}
+
+/**
  * Ensure editor map operations always work over tile-word payloads.
  * Reuses Stage 0 map transcoding parity from `ref/micropolis/src/sim/s_fileio.c`
  * (`_load_short` map-word decode order); parity difference: result is JSON-friendly data.
@@ -152,4 +336,45 @@ function asTileWordsMap(bundle: ScenarioBundleV1): ScenarioMapTileWordsV1 {
   return bundle.map.kind === 'tile-words'
     ? bundle.map
     : transcodeScenarioMapTileWordsV1(bundle.map);
+}
+
+const SCENARIO_EDITOR_MAP_TOOL_SET = new Set<ScenarioEditorMapTool>(SCENARIO_EDITOR_MAP_TOOLS);
+
+/**
+ * Convert one tile word to a next tile word with replaced low tile-id bits.
+ * Mirrors low/high tile-word split in `sim.h` (`LOMASK`/`ALLBITS`).
+ */
+function toScenarioEditorBaseTileWord(
+  tileWord: number,
+  baseTileId: number,
+  options: ScenarioEditorMapBaseTileWriteOptions,
+): number {
+  const preserveFlags = options.preserveFlags ?? true;
+  const normalizedBaseTileId = normalizeScenarioEditorBaseTileId(baseTileId);
+  const normalizedTileWord = normalizeScenarioEditorTileWord(tileWord);
+
+  if (!preserveFlags) {
+    return normalizedBaseTileId;
+  }
+
+  return (normalizedTileWord & TileMask.ALLBITS) | normalizedBaseTileId;
+}
+
+/**
+ * Persist one full tile-word map payload into canonical editor bundle form.
+ * Mirrors Stage 0 canonical map writing to `tile-words` JSON representation.
+ */
+function toScenarioEditorTileWordsBundle(
+  bundle: ScenarioBundleV1,
+  tileWords: readonly number[],
+): ScenarioBundleV1 {
+  return {
+    ...bundle,
+    map: {
+      kind: 'tile-words',
+      width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+      tileWords: [...tileWords],
+    },
+  };
 }

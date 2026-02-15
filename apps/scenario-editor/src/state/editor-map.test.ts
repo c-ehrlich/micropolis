@@ -1,11 +1,17 @@
 import { transcodeScenarioMapCityFileBytesV1 } from '@city/scenario-core';
+import { Tile, TileFlag, TileMask } from '@city/sim-core';
 import { describe, expect, test } from 'vitest';
 
 import {
+  applyScenarioEditorMapToolAtPoint,
+  fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
   getScenarioEditorMapIndex,
+  isScenarioEditorMapTool,
+  normalizeScenarioEditorBaseTileId,
   normalizeScenarioEditorTileWord,
   readScenarioEditorMapTileWord,
+  writeScenarioEditorMapBaseTileId,
   writeScenarioEditorMapTileWord,
 } from './editor-map.ts';
 import { createScenarioEditorInitialBundle } from './editor-state.tsx';
@@ -83,5 +89,85 @@ describe('scenario editor map helpers', () => {
     // from `ref/micropolis/src/sim/headers/sim.h` and `ref/micropolis/src/sim/s_alloc.c`.
     expect(nextBundle.map.tileWords).toHaveLength(12000);
     expect(nextBundle.map.tileWords.every((word) => word === 2)).toBe(true);
+  });
+
+  test('normalizes base tile ids to low 10 bits', () => {
+    // Magic number source: `LOMASK=1023` in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(normalizeScenarioEditorBaseTileId(1024)).toBe(0);
+    expect(normalizeScenarioEditorBaseTileId(1027)).toBe(3);
+  });
+
+  test('writes base tile id while preserving status flags by default', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withZoneBit = writeScenarioEditorMapTileWord(
+      bundle,
+      { x: 4, y: 7 },
+      Tile.DIRT | TileFlag.ZONEBIT,
+    );
+    const nextBundle = writeScenarioEditorMapBaseTileId(withZoneBit, { x: 4, y: 7 }, Tile.RIVER);
+
+    // Magic number source: tile word high bits hold status flags (`ZONEBIT`) and
+    // low bits hold tile id in `ref/micropolis/src/sim/headers/sim.h`.
+    expect(readScenarioEditorMapTileWord(nextBundle, { x: 4, y: 7 })).toBe(
+      Tile.RIVER | TileFlag.ZONEBIT,
+    );
+  });
+
+  test('writes base tile id without preserving flags when disabled', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withFlags = writeScenarioEditorMapTileWord(
+      bundle,
+      { x: 4, y: 7 },
+      Tile.DIRT | TileFlag.ZONEBIT | TileFlag.BULLBIT,
+    );
+    const nextBundle = writeScenarioEditorMapBaseTileId(withFlags, { x: 4, y: 7 }, Tile.REDGE, {
+      preserveFlags: false,
+    });
+
+    expect(readScenarioEditorMapTileWord(nextBundle, { x: 4, y: 7 })).toBe(Tile.REDGE);
+  });
+
+  test('fills base tile id while preserving existing flags', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withFlaggedTile = writeScenarioEditorMapTileWord(
+      bundle,
+      { x: 0, y: 0 },
+      Tile.DIRT | TileFlag.ZONEBIT,
+    );
+    const nextBundle = fillScenarioEditorMapBaseTileId(withFlaggedTile, Tile.RIVER);
+
+    expect(nextBundle.map.kind).toBe('tile-words');
+    if (nextBundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    expect(nextBundle.map.tileWords[0]).toBe(Tile.RIVER | TileFlag.ZONEBIT);
+    expect(nextBundle.map.tileWords[1]).toBe(Tile.RIVER);
+  });
+
+  test('applies road tool with Micropolis connectivity logic', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const nextBundle = applyScenarioEditorMapToolAtPoint(bundle, { x: 10, y: 20 }, 'road');
+    const tileWord = readScenarioEditorMapTileWord(nextBundle, { x: 10, y: 20 });
+
+    // Magic number source: `layRoad` writes `ROADS` id with status flags
+    // (`BULLBIT`/`BURNBIT`) in `ref/micropolis/src/sim/w_tool.c`.
+    expect((tileWord ?? 0) & TileMask.LOMASK).toBe(Tile.ROADS);
+  });
+
+  test('applies zone tools using centered footprints', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const nextBundle = applyScenarioEditorMapToolAtPoint(bundle, { x: 10, y: 20 }, 'res');
+
+    // Magic number source: residential center tile starts at `RESBASE=240` and center
+    // offset is +4 for 3x3 zones in `check3x3` (`ref/micropolis/src/sim/w_tool.c`).
+    expect(readScenarioEditorMapTileWord(nextBundle, { x: 10, y: 20 })).toBe(
+      Tile.RESBASE + 4 + TileFlag.BNCNBIT + TileFlag.ZONEBIT,
+    );
+  });
+
+  test('rejects unknown tool ids at runtime guard', () => {
+    expect(isScenarioEditorMapTool('road')).toBe(true);
+    expect(isScenarioEditorMapTool('network')).toBe(false);
   });
 });

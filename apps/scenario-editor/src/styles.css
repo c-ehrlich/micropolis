@@ -1,3 +1,7 @@
+@import 'tailwindcss';
+@source '../../../packages/classicyui/src';
+@source '../../web/src/presentation/map';
+
 :root {
   color: #1f2328;
   background: #f6f8fa;
@@ -150,6 +154,42 @@ body,
   justify-self: start;
 }
 
+.editor-map-fill-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.editor-map-tool-controls {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.editor-map-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.45rem;
+}
+
+.editor-map-tool-grid button {
+  border: 1px solid #8c959f;
+  background: #f6f8fa;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+}
+
+.editor-map-tool-grid button.is-active {
+  border-color: #0969da;
+  background: #ddf4ff;
+}
+
+.editor-map-flag-toggle input[type='checkbox'] {
+  justify-self: start;
+}
+
 .editor-export-actions {
   display: grid;
   gap: 0.5rem;
@@ -224,6 +264,16 @@ body,
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 1rem;
+}
+
+.editor-map-canvas-shell {
+  width: min(100%, 72rem);
+  height: min(75vh, 46rem);
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  background: #0b1020;
 }
 
 .editor-map-preview {

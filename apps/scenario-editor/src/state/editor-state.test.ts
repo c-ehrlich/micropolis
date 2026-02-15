@@ -1,3 +1,4 @@
+import { Tile, TileMask } from '@city/sim-core';
 import { describe, expect, test } from 'vitest';
 
 import {
@@ -246,6 +247,52 @@ describe('scenario editor state foundation', () => {
     });
 
     expect(next).toBe(initial);
+  });
+
+  test('applies map tool actions through reducer with dirty tracking', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'apply-map-tool',
+      tool: 'road',
+      x: 10,
+      y: 20,
+    });
+
+    expect(next.isDirty).toBe(true);
+    expect(next.bundle.map.kind).toBe('tile-words');
+    if (next.bundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    // Magic number source: `layRoad` writes `ROADS` id and status flags
+    // (`BULLBIT`/`BURNBIT`) in `ref/micropolis/src/sim/w_tool.c`.
+    expect((next.bundle.map.tileWords[10 * 100 + 20] ?? 0) & TileMask.LOMASK).toBe(Tile.ROADS);
+  });
+
+  test('paints base tile ids through reducer while preserving flags', () => {
+    const initial = createScenarioEditorInitialState();
+    const flagged = scenarioEditorReducer(initial, {
+      type: 'paint-map-tile',
+      x: 1,
+      y: 2,
+      tileWord: Tile.DIRT | 0x0400,
+    });
+    const next = scenarioEditorReducer(flagged, {
+      type: 'paint-map-base-tile',
+      x: 1,
+      y: 2,
+      baseTileId: Tile.RIVER,
+      preserveFlags: true,
+    });
+
+    expect(next.bundle.map.kind).toBe('tile-words');
+    if (next.bundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    // Magic number source: `ZONEBIT=0x0400` and low tile id bits from
+    // `ref/micropolis/src/sim/headers/sim.h`.
+    expect(next.bundle.map.tileWords[1 * 100 + 2]).toBe(Tile.RIVER | 0x0400);
   });
 
   test('reports validation issues for invalid metadata fields', () => {

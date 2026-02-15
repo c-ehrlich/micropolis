@@ -18,7 +18,14 @@ import {
   createScenarioEditorInitialBehaviorDraft,
   type ScenarioEditorBehaviorDraft,
 } from './editor-behavior.ts';
-import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
+import {
+  applyScenarioEditorMapToolAtPoint,
+  fillScenarioEditorMapBaseTileId,
+  fillScenarioEditorMapTileWord,
+  type ScenarioEditorMapTool,
+  writeScenarioEditorMapBaseTileId,
+  writeScenarioEditorMapTileWord,
+} from './editor-map.ts';
 import {
   createScenarioEditorInitialObjectiveDraft,
   createScenarioEditorObjectiveDraftFromBundle,
@@ -108,7 +115,25 @@ export interface ScenarioEditorMetadataValidationIssues {
 export type ScenarioEditorAction =
   | { type: 'mark-clean' }
   | { type: 'mark-dirty' }
+  | {
+      type: 'apply-map-tool';
+      x: number;
+      y: number;
+      tool: ScenarioEditorMapTool;
+    }
   | { type: 'fill-map'; tileWord: number }
+  | {
+      type: 'fill-map-base-tile';
+      baseTileId: number;
+      preserveFlags: boolean;
+    }
+  | {
+      type: 'paint-map-base-tile';
+      x: number;
+      y: number;
+      baseTileId: number;
+      preserveFlags: boolean;
+    }
   | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
   | { type: 'set-behavior-enabled'; enabled: boolean }
   | { type: 'set-behavior-profile-key'; profileKey: string }
@@ -187,8 +212,45 @@ export function scenarioEditorReducer(
         ...state,
         isDirty: true,
       };
+    case 'apply-map-tool': {
+      const nextBundle = applyScenarioEditorMapToolAtPoint(state.bundle, action, action.tool);
+      if (nextBundle === state.bundle) {
+        return state;
+      }
+      return {
+        ...state,
+        bundle: nextBundle,
+        isDirty: true,
+      };
+    }
     case 'fill-map': {
       const nextBundle = fillScenarioEditorMapTileWord(state.bundle, action.tileWord);
+      if (nextBundle === state.bundle) {
+        return state;
+      }
+      return {
+        ...state,
+        bundle: nextBundle,
+        isDirty: true,
+      };
+    }
+    case 'fill-map-base-tile': {
+      const nextBundle = fillScenarioEditorMapBaseTileId(state.bundle, action.baseTileId, {
+        preserveFlags: action.preserveFlags,
+      });
+      if (nextBundle === state.bundle) {
+        return state;
+      }
+      return {
+        ...state,
+        bundle: nextBundle,
+        isDirty: true,
+      };
+    }
+    case 'paint-map-base-tile': {
+      const nextBundle = writeScenarioEditorMapBaseTileId(state.bundle, action, action.baseTileId, {
+        preserveFlags: action.preserveFlags,
+      });
       if (nextBundle === state.bundle) {
         return state;
       }

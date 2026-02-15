@@ -1,15 +1,13 @@
-import { SCENARIO_BUNDLE_V1_MAP_HEIGHT, SCENARIO_BUNDLE_V1_MAP_WIDTH } from '@city/scenario-core';
+import { Tile } from '@city/sim-core';
 import { createFileRoute } from '@tanstack/react-router';
-import {
-  type ChangeEvent,
-  type FormEvent,
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from 'react';
 
+import {
+  getPlayableToolSpec,
+  PLAYABLE_TOOL_SPECS,
+  type PlayableToolName,
+} from '../../../web/src/game/runtime/protocol.ts';
+import { MapCanvas } from '../../../web/src/presentation/map/map-canvas.tsx';
 import {
   getScenarioEditorBehaviorValidationIssue,
   isScenarioEditorBehaviorProfileKey,
@@ -25,12 +23,12 @@ import {
   type ScenarioEditorBundleImportIssue,
 } from '../state/editor-import.ts';
 import {
-  getScenarioEditorMapIndex,
   getScenarioEditorMapTileWords,
+  isScenarioEditorMapTool,
+  normalizeScenarioEditorBaseTileId,
   normalizeScenarioEditorTileWord,
-  readScenarioEditorMapTileWord,
-  type ScenarioEditorMapPoint,
 } from '../state/editor-map.ts';
+import { createScenarioEditorRuntimeMapState } from '../state/editor-map-runtime.ts';
 import {
   appendScenarioObjectiveChildPredicate,
   coerceScenarioObjectivePredicateKind,
@@ -69,13 +67,15 @@ import {
   useScenarioEditorState,
 } from '../state/editor-state.tsx';
 
-const TILE_BASE_MASK = 1023;
-
-const EDITOR_TILE_PRESETS = [
-  { label: 'DIRT', source: 'DIRT=0', tileWord: 0 },
-  { label: 'RIVER', source: 'RIVER=2', tileWord: 2 },
-  { label: 'REDGE', source: 'REDGE=3', tileWord: 3 },
+const BASE_TILE_PRESETS = [
+  { label: 'DIRT', source: 'DIRT=0', tileId: Tile.DIRT },
+  { label: 'RIVER', source: 'RIVER=2', tileId: Tile.RIVER },
+  { label: 'REDGE', source: 'REDGE=3', tileId: Tile.REDGE },
+  { label: 'CHANNEL', source: 'CHANNEL=4', tileId: Tile.CHANNEL },
 ] as const;
+
+const SCENARIO_EDITOR_MAP_BRUSH_MODES = ['tool', 'base-tile', 'tile-word'] as const;
+type ScenarioEditorMapBrushMode = (typeof SCENARIO_EDITOR_MAP_BRUSH_MODES)[number];
 
 type ScenarioEditorOpenResult =
   | {
@@ -274,153 +274,251 @@ function ScenarioMetadataEditorCard() {
 }
 
 /**
- * Manual map-editing card for Stage 3.3 with fixed `120x100` preview and paint controls.
- * Mirrors direct tile assignment/fill behavior from `SimCmdTile`/`SimCmdFill` in
- * `ref/micropolis/src/sim/w_sim.c`; preview colors are editor-only visualization.
+ * Scenario map-editing card with Micropolis map-canvas rendering and C-parity tool placement.
+ * Reuses web `MapCanvas` sprite/camera input from `apps/web` and mirrors tile mutation paths from
+ * `DoTool`/`do_tool` plus `SimCmdTile`/`SimCmdFill` in `ref/micropolis/src/sim/w_tool.c` and
+ * `ref/micropolis/src/sim/w_sim.c`.
  */
 function ScenarioMapEditorCard() {
   const { bundle, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isPaintingRef = useRef(false);
-  const lastPaintedIndexRef = useRef<number | null>(null);
+  const [brushMode, setBrushMode] = useState<ScenarioEditorMapBrushMode>('tool');
+  const [activeTool, setActiveTool] = useState<PlayableToolName>('road');
+  const [activeBaseTileId, setActiveBaseTileId] = useState<number>(Tile.DIRT);
+  const [preserveBaseTileFlags, setPreserveBaseTileFlags] = useState(true);
   const [activeTileWord, setActiveTileWord] = useState<number>(0);
-  const [hoveredPoint, setHoveredPoint] = useState<ScenarioEditorMapPoint | null>(null);
   const tileWords = useMemo(() => getScenarioEditorMapTileWords(bundle), [bundle]);
-  const hoveredTileWord =
-    hoveredPoint === null ? null : readScenarioEditorMapTileWord(bundle, hoveredPoint);
+  const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
+  const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
+  const dragPlacementEnabled =
+    brushMode === 'base-tile' ||
+    brushMode === 'tile-word' ||
+    (brushMode === 'tool' && activeToolSpec.size === 1);
 
-  useEffect(() => {
-    drawScenarioEditorPreview(canvasRef.current, tileWords);
-  }, [tileWords]);
-
-  const handlePointerPaint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const point = getScenarioEditorPointerTile(event.currentTarget, event.clientX, event.clientY);
-    setHoveredPoint(point);
-    if (point === null) {
-      return;
-    }
-
-    const index = getScenarioEditorMapIndex(point);
-    if (index === null || lastPaintedIndexRef.current === index) {
-      return;
-    }
-
-    dispatch({
-      type: 'paint-map-tile',
-      x: point.x,
-      y: point.y,
-      tileWord: activeTileWord,
-    });
-    lastPaintedIndexRef.current = index;
-  };
+  const fillLabel =
+    brushMode === 'base-tile'
+      ? 'Fill Map With Base Tile'
+      : brushMode === 'tile-word'
+        ? 'Fill Map With Tile Word'
+        : 'Fill Disabled in Tool Mode';
+  const fillDisabled = brushMode === 'tool';
 
   return (
     <section className="editor-card editor-map-card" aria-label="Scenario map editor">
       <h1>Scenario Map</h1>
       <p>
-        Paint map words directly on the fixed `120x100` world (`WORLD_X=120`, `WORLD_Y=100`) used by
-        classic Micropolis scenario/city files.
+        Reuses the runtime map canvas (sprite art, zoom/pan, and tool footprints) while allowing
+        direct scenario authoring: full Micropolis tools plus base-tile painting (dirt/water/etc.).
       </p>
 
       <div className="editor-map-controls">
         <label className="editor-field">
-          <span>Active Tile Word</span>
-          <input
-            max={65535}
-            min={0}
+          <span>Brush Mode</span>
+          <select
             onChange={(event) => {
-              setActiveTileWord(normalizeScenarioEditorTileWord(Number(event.currentTarget.value)));
+              const selectedMode = event.currentTarget.value as ScenarioEditorMapBrushMode;
+              if (SCENARIO_EDITOR_MAP_BRUSH_MODES.includes(selectedMode)) {
+                setBrushMode(selectedMode);
+              }
             }}
-            type="number"
-            value={activeTileWord}
-          />
-          <small className="editor-help">Stored as unsigned 16-bit map words.</small>
+            value={brushMode}
+          >
+            <option value="tool">Micropolis Tool</option>
+            <option value="base-tile">Base Tile Brush</option>
+            <option value="tile-word">Raw Tile Word Brush</option>
+          </select>
         </label>
 
-        <div className="editor-map-preset-row">
-          {EDITOR_TILE_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              onClick={() => {
-                setActiveTileWord(preset.tileWord);
+        {brushMode === 'tool' ? (
+          <div className="editor-map-tool-controls">
+            <label className="editor-field">
+              <span>Active Tool</span>
+              <select
+                onChange={(event) => {
+                  const selectedTool = event.currentTarget.value;
+                  if (isScenarioEditorMapTool(selectedTool)) {
+                    setActiveTool(selectedTool);
+                  }
+                }}
+                value={activeTool}
+              >
+                {PLAYABLE_TOOL_SPECS.map((spec) => (
+                  <option key={spec.tool} value={spec.tool}>
+                    {spec.label}
+                  </option>
+                ))}
+              </select>
+              <small className="editor-help">
+                Tool footprint {activeToolSpec.size}x{activeToolSpec.size}, base cost $
+                {activeToolSpec.baseCost}.
+              </small>
+            </label>
+
+            <div className="editor-map-tool-grid" role="list" aria-label="Micropolis map tools">
+              {PLAYABLE_TOOL_SPECS.map((spec) => (
+                <button
+                  aria-pressed={activeTool === spec.tool}
+                  className={activeTool === spec.tool ? 'is-active' : undefined}
+                  key={spec.tool}
+                  onClick={() => {
+                    setActiveTool(spec.tool);
+                  }}
+                  role="listitem"
+                  type="button"
+                >
+                  {spec.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {brushMode === 'base-tile' ? (
+          <>
+            <label className="editor-field">
+              <span>Base Tile ID</span>
+              <input
+                max={1023}
+                min={0}
+                onChange={(event) => {
+                  setActiveBaseTileId(
+                    normalizeScenarioEditorBaseTileId(Number(event.currentTarget.value)),
+                  );
+                }}
+                type="number"
+                value={activeBaseTileId}
+              />
+              <small className="editor-help">Writes low tile-id bits (`LOMASK=1023`).</small>
+            </label>
+
+            <div className="editor-map-preset-row">
+              {BASE_TILE_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => {
+                    setActiveBaseTileId(preset.tileId);
+                  }}
+                  type="button"
+                >
+                  {preset.label} ({preset.source})
+                </button>
+              ))}
+            </div>
+
+            <label className="editor-field editor-map-flag-toggle">
+              <span>Preserve Existing Flags</span>
+              <input
+                checked={preserveBaseTileFlags}
+                onChange={(event) => {
+                  setPreserveBaseTileFlags(event.currentTarget.checked);
+                }}
+                type="checkbox"
+              />
+              <small className="editor-help">
+                Keep tile status bits (zone/power/bulldoze flags) while replacing base tile id.
+              </small>
+            </label>
+          </>
+        ) : null}
+
+        {brushMode === 'tile-word' ? (
+          <label className="editor-field">
+            <span>Active Tile Word</span>
+            <input
+              max={65535}
+              min={0}
+              onChange={(event) => {
+                setActiveTileWord(
+                  normalizeScenarioEditorTileWord(Number(event.currentTarget.value)),
+                );
               }}
-              type="button"
-            >
-              {preset.label} ({preset.source})
-            </button>
-          ))}
-        </div>
+              type="number"
+              value={activeTileWord}
+            />
+            <small className="editor-help">Stored as unsigned 16-bit map words.</small>
+          </label>
+        ) : null}
+
+        <label className="editor-field">
+          <span>Map Navigation</span>
+          <small className="editor-help">
+            Left click paints/places. Mouse wheel pans. `Ctrl`/`Cmd` + wheel zooms. Middle-button
+            drag also pans.
+          </small>
+        </label>
 
         <button
           className="editor-map-fill-button"
+          disabled={fillDisabled}
           onClick={() => {
-            dispatch({ type: 'fill-map', tileWord: activeTileWord });
+            if (brushMode === 'base-tile') {
+              dispatch({
+                type: 'fill-map-base-tile',
+                baseTileId: activeBaseTileId,
+                preserveFlags: preserveBaseTileFlags,
+              });
+              return;
+            }
+            if (brushMode === 'tile-word') {
+              dispatch({ type: 'fill-map', tileWord: activeTileWord });
+            }
           }}
           type="button"
         >
-          Fill Entire Map
+          {fillLabel}
         </button>
       </div>
 
-      <div className="editor-map-preview-shell">
-        <canvas
-          aria-label="Scenario map preview canvas"
-          className="editor-map-preview"
-          height={SCENARIO_BUNDLE_V1_MAP_HEIGHT}
-          onPointerCancel={(event) => {
-            isPaintingRef.current = false;
-            lastPaintedIndexRef.current = null;
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-          }}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            isPaintingRef.current = true;
-            lastPaintedIndexRef.current = null;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            handlePointerPaint(event);
-          }}
-          onPointerLeave={() => {
-            setHoveredPoint(null);
-            if (!isPaintingRef.current) {
-              lastPaintedIndexRef.current = null;
-            }
-          }}
-          onPointerMove={(event) => {
-            if (!isPaintingRef.current) {
-              setHoveredPoint(
-                getScenarioEditorPointerTile(event.currentTarget, event.clientX, event.clientY),
-              );
+      <div className="editor-map-canvas-shell">
+        <MapCanvas
+          dragPlacementEnabled={dragPlacementEnabled}
+          hoverTool={brushMode === 'tool' ? activeTool : undefined}
+          mapState={runtimeMapState}
+          onTileClick={(x, y) => {
+            if (brushMode === 'tool') {
+              dispatch({ type: 'apply-map-tool', tool: activeTool, x, y });
               return;
             }
-            handlePointerPaint(event);
-          }}
-          onPointerUp={(event) => {
-            isPaintingRef.current = false;
-            lastPaintedIndexRef.current = null;
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
+            if (brushMode === 'base-tile') {
+              dispatch({
+                type: 'paint-map-base-tile',
+                x,
+                y,
+                baseTileId: activeBaseTileId,
+                preserveFlags: preserveBaseTileFlags,
+              });
+              return;
             }
+            dispatch({
+              type: 'paint-map-tile',
+              x,
+              y,
+              tileWord: activeTileWord,
+            });
           }}
-          ref={canvasRef}
-          width={SCENARIO_BUNDLE_V1_MAP_WIDTH}
+          pendingTools={[]}
+          realtimeObjects={[]}
+          tileSize={16}
+          tilesetName="classic"
         />
       </div>
 
       <dl className="editor-grid">
         <dt>Map Size</dt>
         <dd>
-          {SCENARIO_BUNDLE_V1_MAP_WIDTH} x {SCENARIO_BUNDLE_V1_MAP_HEIGHT}
+          {runtimeMapState.width} x {runtimeMapState.height}
         </dd>
         <dt>Tile Count</dt>
         <dd>{tileWords.length}</dd>
-        <dt>Hover</dt>
+        <dt>Brush Mode</dt>
+        <dd>{brushMode}</dd>
+        <dt>Active Brush</dt>
         <dd>
-          {hoveredPoint === null || hoveredTileWord === null
-            ? 'outside map'
-            : `x=${hoveredPoint.x}, y=${hoveredPoint.y}, tileWord=${hoveredTileWord}`}
+          {brushMode === 'tool'
+            ? activeTool
+            : brushMode === 'base-tile'
+              ? `base-tile:${activeBaseTileId}`
+              : `tile-word:${activeTileWord}`}
         </dd>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
@@ -1368,96 +1466,4 @@ function getScenarioBehaviorProfileLabel(
     return 'Classic SF Ship Honk';
   }
   return profileKey;
-}
-
-/**
- * Convert canvas pointer coordinates to fixed map tile coordinates.
- * Mirrors Micropolis bounds guards (`0 <= x < WORLD_X`, `0 <= y < WORLD_Y`) from
- * `SimCmdTile` in `ref/micropolis/src/sim/w_sim.c`; parity difference: input space is
- * browser canvas pixels rather than Tcl command arguments.
- */
-function getScenarioEditorPointerTile(
-  canvas: HTMLCanvasElement,
-  clientX: number,
-  clientY: number,
-): ScenarioEditorMapPoint | null {
-  const rect = canvas.getBoundingClientRect();
-  if (
-    clientX < rect.left ||
-    clientX >= rect.right ||
-    clientY < rect.top ||
-    clientY >= rect.bottom ||
-    rect.width <= 0 ||
-    rect.height <= 0
-  ) {
-    return null;
-  }
-
-  const x = Math.floor(((clientX - rect.left) / rect.width) * SCENARIO_BUNDLE_V1_MAP_WIDTH);
-  const y = Math.floor(((clientY - rect.top) / rect.height) * SCENARIO_BUNDLE_V1_MAP_HEIGHT);
-  const point = { x, y };
-
-  return getScenarioEditorMapIndex(point) === null ? null : point;
-}
-
-/**
- * Render the current map words to the `120x100` preview canvas.
- * Mirrors classic map cardinality (`WORLD_X=120`, `WORLD_Y=100`) from
- * `ref/micropolis/src/sim/headers/sim.h`; parity difference: this is a simplified
- * editor visualization, not the original sprite/tile renderer from Micropolis UI code.
- */
-function drawScenarioEditorPreview(canvas: HTMLCanvasElement | null, tileWords: readonly number[]) {
-  if (canvas === null) {
-    return;
-  }
-
-  const context = canvas.getContext('2d');
-  if (context === null) {
-    return;
-  }
-
-  const imageData = context.createImageData(
-    SCENARIO_BUNDLE_V1_MAP_WIDTH,
-    SCENARIO_BUNDLE_V1_MAP_HEIGHT,
-  );
-  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
-    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
-      const mapIndex = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT + y;
-      const pixelIndex = (y * SCENARIO_BUNDLE_V1_MAP_WIDTH + x) * 4;
-      const tileWord = tileWords[mapIndex] ?? 0;
-      const [red, green, blue] = getScenarioEditorPreviewColor(tileWord);
-
-      imageData.data[pixelIndex] = red;
-      imageData.data[pixelIndex + 1] = green;
-      imageData.data[pixelIndex + 2] = blue;
-      imageData.data[pixelIndex + 3] = 255;
-    }
-  }
-
-  context.putImageData(imageData, 0, 0);
-}
-
-/**
- * Map one tile word to a preview RGB color.
- * Uses Micropolis low-10-bit tile base semantics (`LOMASK=1023`) from
- * `ref/micropolis/src/sim/headers/sim.h`; parity difference: color selection is
- * editor-specific and not a 1:1 port of classic tile art.
- */
-function getScenarioEditorPreviewColor(tileWord: number): readonly [number, number, number] {
-  const tileBase = tileWord & TILE_BASE_MASK;
-
-  if (tileBase === 0) {
-    return [187, 167, 132];
-  }
-  if (tileBase === 2) {
-    return [71, 132, 201];
-  }
-  if (tileBase === 3) {
-    return [103, 171, 227];
-  }
-
-  const red = (tileBase * 67 + 29) & 255;
-  const green = (tileBase * 37 + 97) & 255;
-  const blue = (tileBase * 19 + 173) & 255;
-  return [red, green, blue];
 }

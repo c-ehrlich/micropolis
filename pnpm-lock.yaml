@@ -69,12 +69,18 @@ importers:
       '@city/classicyui':
         specifier: workspace:*
         version: link:../../packages/classicyui
+      '@city/core-bridge':
+        specifier: workspace:*
+        version: link:../../packages/core-bridge
       '@city/scenario-core':
         specifier: workspace:*
         version: link:../../packages/scenario-core
       '@city/scenario-runtime':
         specifier: workspace:*
         version: link:../../packages/scenario-runtime
+      '@city/sim-core':
+        specifier: workspace:*
+        version: link:../../packages/sim-core
       '@tanstack/react-router':
         specifier: 1.157.16
         version: 1.157.16(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -85,6 +91,9 @@ importers:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
     devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
       '@tanstack/router-cli':
         specifier: 1.157.15
         version: 1.157.15
@@ -103,6 +112,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 5.1.2
         version: 5.1.2(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
       vite:
         specifier: 7.3.1
         version: 7.3.1(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
