@@ -64,6 +64,7 @@ describe('routes/index default gameplay path', () => {
     expect(markup).toContain('Micropolis');
     expect(markup).toContain('Settings');
     expect(markup).toContain('Play');
+    expect(markup).toContain('accept=".json,application/json"');
     expect(markup).toContain('Road: $10');
     expect(markup).toContain('Message Feed');
     expect(markup).toContain('Demand heads R 0, C 0, I 0');

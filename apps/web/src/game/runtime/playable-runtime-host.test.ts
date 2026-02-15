@@ -5,15 +5,24 @@ import { describe, expect, test, vi } from 'vitest';
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
 import { getScenarioDefinition } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
 import {
+  SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+  SCENARIO_BUNDLE_V1_MAP_WIDTH,
+  SCENARIO_BUNDLE_V1_TILE_COUNT,
+  SCENARIO_BUNDLE_V1_VERSION,
+  type ScenarioBundleV1,
+} from '../../../../../packages/scenario-core/src/scenario-bundle-v1.ts';
+import {
   cityDimensionsForMap,
   Tile,
   TileMask,
   World,
 } from '../../../../../packages/sim-core/src/index.ts';
+import { scenarioKeyForId } from '../../../../../packages/sim-io/src/scenarios.ts';
 import {
   createPlayableRuntimeHost,
   PLAYABLE_DISASTER_CHOICES,
   readCityExportPayload,
+  setPlayableRuntimeUserScenarioBundle,
   triggerPlayableRuntimeDisaster,
 } from './playable-runtime-host.ts';
 import type {
@@ -122,10 +131,27 @@ const PLAYABLE_CERT_DULLSVILLE_SCENARIO = getScenarioDefinition(1);
 // Magic numbers source: `LoadScenario` scenario-1 (`Dullsville`) constants in
 // `ref/micropolis/src/sim/s_fileio.c`: year `1900`, funds `5000`.
 const PLAYABLE_CERT_SCENARIO_START_CERTIFICATION = {
-  scenarioId: PLAYABLE_CERT_DULLSVILLE_SCENARIO.id,
+  scenarioKey: scenarioKeyForId(PLAYABLE_CERT_DULLSVILLE_SCENARIO.id),
   startYear: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startYear,
   startFunds: PLAYABLE_CERT_DULLSVILLE_SCENARIO.startFunds,
 } as const;
+const PLAYABLE_CERT_USER_SCENARIO_BUNDLE: ScenarioBundleV1 = {
+  version: SCENARIO_BUNDLE_V1_VERSION,
+  key: 'user/playable-cert',
+  name: 'Playable Certification Scenario',
+  description: 'Fixture bundle for runtime host capability adapter tests.',
+  tags: ['test'],
+  start: {
+    startYear: 1901,
+    startFunds: 5000,
+  },
+  map: {
+    kind: 'tile-words',
+    width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+    height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+    tileWords: Array.from({ length: SCENARIO_BUNDLE_V1_TILE_COUNT }, () => 0),
+  },
+};
 
 function readFundsFromLabel(label: string): number {
   const digits = label.replaceAll(/[^0-9]/g, '');
@@ -732,7 +758,7 @@ async function certifyPlayableCertificationScenarioStartOnHost(runId: string): P
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+        scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
       },
     });
     const scenarioAck = await waitForHostEnvelope(
@@ -790,7 +816,7 @@ async function certifyPlayableCertificationScenarioStartOnRuntime(runId: string)
     runtime.sendCommand(commandId, {
       kind: 'scenario',
       action: 'load-scenario',
-      scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+      scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
     });
     const scenarioAck = await waitForRuntimeEvent(
       runtimeEvents,
@@ -1120,7 +1146,7 @@ async function runPlayableRuntimeSmokeFlow(runId: string): Promise<PlayableRunti
       command: {
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioId,
+        scenarioKey: PLAYABLE_CERT_SCENARIO_START_CERTIFICATION.scenarioKey,
       },
     });
     const scenarioAck = await waitForHostEnvelope(
@@ -1495,6 +1521,41 @@ describe('createPlayableRuntimeHost', () => {
 
     expect(triggerPlayableRuntimeDisaster(hostWithDisasterCapability, 'earthquake')).toBe(true);
     expect(triggerManualRealtimeEvent).toHaveBeenCalledWith('earthquake');
+  });
+
+  test('returns false when external scenario catalog capability is absent on a host', () => {
+    const hostWithoutScenarioCatalogCapability = {
+      connect: () => ({
+        send: (_envelope: ClientEnvelope) => {},
+        disconnect: () => {},
+      }),
+    } as CoreHost;
+
+    expect(
+      setPlayableRuntimeUserScenarioBundle(
+        hostWithoutScenarioCatalogCapability,
+        PLAYABLE_CERT_USER_SCENARIO_BUNDLE,
+      ),
+    ).toBe(false);
+  });
+
+  test('registers external scenario bundles through structural host capability adapter', () => {
+    const setUserScenarioBundle = vi.fn();
+    const hostWithScenarioCatalogCapability = {
+      connect: () => ({
+        send: (_envelope: ClientEnvelope) => {},
+        disconnect: () => {},
+      }),
+      setUserScenarioBundle,
+    } as CoreHost;
+
+    expect(
+      setPlayableRuntimeUserScenarioBundle(
+        hostWithScenarioCatalogCapability,
+        PLAYABLE_CERT_USER_SCENARIO_BUNDLE,
+      ),
+    ).toBe(true);
+    expect(setUserScenarioBundle).toHaveBeenCalledWith(PLAYABLE_CERT_USER_SCENARIO_BUNDLE);
   });
 
   test('surfaces full Micropolis Disasters menu choices through the playable host adapter', () => {

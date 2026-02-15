@@ -2,6 +2,10 @@ import {
   SCENARIO_TABLE,
   type ScenarioDefinition,
 } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
+import {
+  type BuiltinScenarioKey,
+  scenarioKeyForId,
+} from '../../../../../packages/sim-io/src/scenarios.ts';
 
 /**
  * Scenario choice metadata shown in the playable route scenario selector.
@@ -9,6 +13,7 @@ import {
  * Parity note: this is a 1:1 metadata projection over canonical scenario-core definitions.
  */
 export interface PlayableScenarioChoice {
+  scenarioKey: BuiltinScenarioKey;
   id: number;
   name: string;
   fileName: string;
@@ -22,6 +27,7 @@ export interface PlayableScenarioChoice {
  */
 export const PLAYABLE_SCENARIO_CHOICES: readonly PlayableScenarioChoice[] = SCENARIO_TABLE.map(
   (scenario: ScenarioDefinition) => ({
+    scenarioKey: scenarioKeyForId(scenario.id),
     id: scenario.id,
     name: scenario.name,
     fileName: scenario.fileName,

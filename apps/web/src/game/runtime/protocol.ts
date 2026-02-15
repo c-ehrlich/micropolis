@@ -443,7 +443,7 @@ export type PlayableCityIoCommand = PlayableSaveCityCommand | PlayableLoadCityCo
 export interface PlayableLoadScenarioCommand {
   kind: 'scenario';
   action: 'load-scenario';
-  scenarioId: number;
+  scenarioKey: string;
   gameLevel?: PlayableGameLevel;
 }
 
@@ -1383,6 +1383,25 @@ function isPlayableTerrainSeed(value: unknown): value is number {
 }
 
 /**
+ * Returns true when one value is a namespaced scenario key (`builtin/*` or `user/*`).
+ * Mirrors Stage 0 scenario key namespace contracts that wrap classic
+ * `LoadScenario(short s)` identity from `ref/micropolis/src/sim/s_fileio.c`.
+ */
+function isPlayableScenarioKey(value: unknown): value is string {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const BUILTIN_SCENARIO_KEY_PREFIX = 'builtin/';
+  const USER_SCENARIO_KEY_PREFIX = 'user/';
+  return (
+    (value.startsWith(BUILTIN_SCENARIO_KEY_PREFIX) &&
+      value.length > BUILTIN_SCENARIO_KEY_PREFIX.length) ||
+    (value.startsWith(USER_SCENARIO_KEY_PREFIX) && value.length > USER_SCENARIO_KEY_PREFIX.length)
+  );
+}
+
+/**
  * Returns true when a client payload is a Playable Runtime city lifecycle command.
  * Mirrors city lifecycle command gatekeeping in `ref/micropolis/src/sim/w_sim.c`.
  */
@@ -1430,8 +1449,8 @@ export function isPlayableCityIoCommand(command: unknown): command is PlayableCi
 /**
  * Returns true when a client payload is a Playable Runtime scenario command.
  * Mirrors `LoadScenario` command gatekeeping in `ref/micropolis/src/sim/s_fileio.c`.
- * Parity note: this requires an integral id because `LoadScenario(short s)` consumes
- * integer scenario ids in C; fractional values are rejected before host routing.
+ * Parity note: this accepts namespaced `scenarioKey` values (`builtin/*`, `user/*`);
+ * host routing resolves keys into C `LoadScenario(short s)` metadata as needed.
  */
 export function isPlayableScenarioCommand(command: unknown): command is PlayableScenarioCommand {
   if (command === null || typeof command !== 'object') {
@@ -1442,9 +1461,7 @@ export function isPlayableScenarioCommand(command: unknown): command is Playable
   return (
     candidate.kind === 'scenario' &&
     candidate.action === 'load-scenario' &&
-    typeof candidate.scenarioId === 'number' &&
-    Number.isFinite(candidate.scenarioId) &&
-    Number.isInteger(candidate.scenarioId) &&
+    isPlayableScenarioKey(candidate.scenarioKey) &&
     (candidate.gameLevel === undefined || isPlayableGameLevel(candidate.gameLevel))
   );
 }

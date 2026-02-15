@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   cityTimeForScenarioYear,
   getScenarioDefinition,
+  getScenarioDefinitionForKey,
   normalizeScenarioId,
   SCENARIO_TABLE,
   scenarioDisasterWaitForId,
   scenarioFileNameForId,
+  scenarioIdForKey,
+  scenarioKeyForId,
   scenarioScoreWaitForId,
 } from './scenarios.ts';
 
@@ -72,6 +75,21 @@ describe('scenario table', () => {
     expect(getScenarioDefinition(9).name).toBe('Dullsville');
     expect(scenarioFileNameForId(8)).toBe('snro.888');
     expect(scenarioFileNameForId(0)).toBe('snro.111');
+  });
+
+  it('maps between classic scenario ids and canonical builtin scenario keys', () => {
+    // Magic-number source: `LoadScenario(short s)` cases `1..8` in
+    // `ref/micropolis/src/sim/s_fileio.c`, mapped to Stage 1/2 canonical keys.
+    expect(scenarioKeyForId(1)).toBe('builtin/dullsville');
+    expect(scenarioKeyForId(8)).toBe('builtin/rio-de-janeiro');
+    expect(scenarioKeyForId(99)).toBe('builtin/dullsville');
+
+    expect(scenarioIdForKey('builtin/dullsville')).toBe(1);
+    expect(scenarioIdForKey('builtin/rio-de-janeiro')).toBe(8);
+    expect(scenarioIdForKey('builtin/unknown')).toBeUndefined();
+
+    expect(getScenarioDefinitionForKey('builtin/san-francisco')?.name).toBe('San Francisco');
+    expect(getScenarioDefinitionForKey('builtin/unknown')).toBeUndefined();
   });
 
   it('matches scenario timer tables used by C-style sim init', () => {

@@ -1,3 +1,4 @@
+import type { ScenarioBundleV1 } from '../../../../../packages/scenario-core/src/scenario-bundle-v1.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
 import type { PlayableRuntimeHostOptions } from './playable-runtime-host-options.ts';
 import {
@@ -84,6 +85,17 @@ export interface PlayableRuntimeDisasterHostCapability {
 }
 
 /**
+ * Host capability adapter for runtime registration of one external `user/*` scenario bundle.
+ * Mirrors dynamic scenario-selection intent adjacent to `LoadScenario` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: classic C uses fixed built-in tables only; this extends host wiring
+ * so externally loaded JSON bundles can enter the same `load-scenario` command path.
+ */
+export interface PlayableRuntimeScenarioCatalogHostCapability {
+  setUserScenarioBundle(bundle: ScenarioBundleV1 | null): void;
+}
+
+/**
  * Resolves manual-disaster host capability from a runtime host instance.
  * Mirrors Disasters menu entry intent in `ref/micropolis/res/whead.tcl`.
  * Difference: this is a structural adapter check, not class-instance coupling.
@@ -97,6 +109,23 @@ export function asPlayableRuntimeDisasterHostCapability(
   }
 
   return candidate as PlayableRuntimeDisasterHostCapability;
+}
+
+/**
+ * Resolves external-scenario catalog host capability from a runtime host instance.
+ * Mirrors scenario catalog ownership around `LoadScenario` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: this is a structural adapter check for TypeScript host capability wiring.
+ */
+export function asPlayableRuntimeScenarioCatalogHostCapability(
+  host: CoreHost,
+): PlayableRuntimeScenarioCatalogHostCapability | null {
+  const candidate = host as Partial<PlayableRuntimeScenarioCatalogHostCapability>;
+  if (typeof candidate.setUserScenarioBundle !== 'function') {
+    return null;
+  }
+
+  return candidate as PlayableRuntimeScenarioCatalogHostCapability;
 }
 
 /**
@@ -115,6 +144,25 @@ export function triggerPlayableRuntimeDisaster(
   }
 
   return disasterHost.triggerManualRealtimeEvent(disasterId);
+}
+
+/**
+ * Registers or clears one runtime external-scenario bundle on capable hosts.
+ * Mirrors scenario-selection ownership surrounding `LoadScenario` in
+ * `ref/micropolis/src/sim/s_fileio.c`.
+ * Difference: returns `false` for hosts without external-catalog capability.
+ */
+export function setPlayableRuntimeUserScenarioBundle(
+  host: CoreHost,
+  bundle: ScenarioBundleV1 | null,
+): boolean {
+  const scenarioCatalogHost = asPlayableRuntimeScenarioCatalogHostCapability(host);
+  if (scenarioCatalogHost === null) {
+    return false;
+  }
+
+  scenarioCatalogHost.setUserScenarioBundle(bundle);
+  return true;
 }
 
 /**

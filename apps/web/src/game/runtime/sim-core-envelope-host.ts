@@ -1,10 +1,8 @@
 import type { readFile as nodeReadFile } from 'node:fs/promises';
 
 import { getCoreBridgeV1SnapshotTileIndex } from '../../../../../packages/core-bridge/src/types.ts';
-import {
-  getScenarioDefinition,
-  SCENARIO_TABLE,
-} from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
+import { SCENARIO_TABLE } from '../../../../../packages/scenario-core/src/classic-scenarios.ts';
+import type { ScenarioBundleV1 } from '../../../../../packages/scenario-core/src/scenario-bundle-v1.ts';
 import {
   lookupDoMessageText,
   lookupMicropolisNoticeMessage,
@@ -72,8 +70,13 @@ import {
 } from '../../../../../packages/sim-core/src/index.ts';
 import { setFunds } from '../../../../../packages/sim-core/src/systems/funds.ts';
 import { doPowerScan, pushPowerStack } from '../../../../../packages/sim-core/src/systems/power.ts';
-import { loadCityLikeC, loadScenarioLikeC } from '../../../../../packages/sim-io/src/load.ts';
+import {
+  loadCityLikeC,
+  loadScenarioBundleLikeC,
+  loadScenarioLikeC,
+} from '../../../../../packages/sim-io/src/load.ts';
 import { saveCityAsLikeC } from '../../../../../packages/sim-io/src/save.ts';
+import { getScenarioDefinitionForKey } from '../../../../../packages/sim-io/src/scenarios.ts';
 import { SimCoreRuntimeState } from '../sim-core-runtime-state.ts';
 import { NEW_CITY_TERRAIN_OPTIONS } from './new-city.ts';
 import type { PlayableDisasterChoiceId } from './playable-disaster-choices.ts';
@@ -188,6 +191,7 @@ const HARD_GAME_LEVEL = 2;
 const EASY_GAME_LEVEL_STARTING_FUNDS = 20_000;
 const MEDIUM_GAME_LEVEL_STARTING_FUNDS = 10_000;
 const HARD_GAME_LEVEL_STARTING_FUNDS = 5_000;
+const USER_SCENARIO_KEY_PREFIX = 'user/';
 // C runtime timer default from `sim_delay = 50` in `ref/micropolis/src/sim/sim.c`.
 const DEFAULT_PATCH_INTERVAL_MS = 50;
 const MICROPOLIS_FLAG_BLINK_PERIOD_MS = 1000;
@@ -253,6 +257,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
   private readonly sequencedReplayLog: ReplayLogEntry[] = [];
   private readonly snapshotReplayCheckpoints = new Map<number, SnapshotReplayCheckpoint>();
   private readonly scenarioResourceBytesCache = new Map<string, Promise<Uint8Array>>();
+  private readonly userScenarioBundlesByKey = new Map<string, ScenarioBundleV1>();
   private readonly sessionCommandQueues = new Map<number, SessionCommandQueueState>();
   private readonly simPhaseSystems: SimPhaseSystems;
   private readonly enableAmbientTicks: boolean;
@@ -349,6 +354,29 @@ export class SimCoreEnvelopeHost implements CoreHost {
         this.routeDisconnect(sessionId);
       },
     };
+  }
+
+  /**
+   * Sets the currently loaded external user scenario catalog entry.
+   * Mirrors route-level scenario selection ownership around `LoadScenario` in
+   * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: unlike C's fixed built-in table, this accepts one `user/*`
+   * bundle selected from runtime file input and keeps it addressable by key.
+   */
+  public setUserScenarioBundle(bundle: ScenarioBundleV1 | null): void {
+    this.userScenarioBundlesByKey.clear();
+    if (bundle === null) {
+      return;
+    }
+
+    if (
+      !bundle.key.startsWith(USER_SCENARIO_KEY_PREFIX) ||
+      bundle.key.length <= USER_SCENARIO_KEY_PREFIX.length
+    ) {
+      throw new Error('external scenario bundle key must use user/* namespace');
+    }
+
+    this.userScenarioBundlesByKey.set(bundle.key, bundle);
   }
 
   /**
@@ -1363,9 +1391,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
   }
 
   /**
-   * Applies scenario start using async scenario byte loading plus `loadScenarioLikeC`.
+   * Applies scenario start using key-based metadata lookup plus async bytes loading.
    * Mirrors `LoadScenario` resource read + decode + lifecycle sequence in
    * `ref/micropolis/src/sim/s_fileio.c`.
+   * Parity note: Stage 2 `scenarioKey` requests are translated to classic numeric
+   * ids before `loadScenarioLikeC`, preserving C runtime behavior.
    */
   private async applyScenarioCommandAsync(
     sessionId: number,
@@ -1375,10 +1405,58 @@ export class SimCoreEnvelopeHost implements CoreHost {
     command: PlayableScenarioCommand,
     commandTick: number,
   ): Promise<void> {
-    let scenario: ReturnType<typeof getScenarioDefinition>;
-    try {
-      scenario = getScenarioDefinition(command.scenarioId);
-    } catch {
+    const builtinScenario = getScenarioDefinitionForKey(command.scenarioKey);
+    if (builtinScenario !== undefined) {
+      let scenarioBytes: Uint8Array;
+      try {
+        scenarioBytes = await this.scenarioResourceLoader(builtinScenario.fileName);
+      } catch {
+        if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+          return;
+        }
+        this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
+        return;
+      }
+
+      let loadResult: ReturnType<typeof loadScenarioLikeC>;
+      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+        return;
+      }
+      try {
+        loadResult = loadScenarioLikeC(
+          this.authorityState.simState,
+          this.authorityState.simContext,
+          builtinScenario.id,
+          scenarioBytes,
+        );
+      } catch {
+        if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+          return;
+        }
+        this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
+        return;
+      }
+
+      if (command.gameLevel !== undefined) {
+        this.applyGameLevelFunds(command.gameLevel);
+      }
+
+      this.cityFileName = `${loadResult.scenario.fileName}.cty`;
+      this.cityName = loadResult.scenario.name;
+      this.syncHostStateAfterLoadLikeCommand();
+      // Tcl `DoScenario`/`UIStartScenario` call `UIShowPicture <scenario-id>`.
+      this.captureNoticeById(loadResult.scenario.id);
+
+      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
+        return;
+      }
+
+      this.emitScenarioSuccessSettlement(roomId, clientId, commandId, commandTick);
+      return;
+    }
+
+    const userScenarioBundle = this.userScenarioBundlesByKey.get(command.scenarioKey);
+    if (userScenarioBundle === undefined) {
       if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
         return;
       }
@@ -1386,27 +1464,15 @@ export class SimCoreEnvelopeHost implements CoreHost {
       return;
     }
 
-    let scenarioBytes: Uint8Array;
-    try {
-      scenarioBytes = await this.scenarioResourceLoader(scenario.fileName);
-    } catch {
-      if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
-        return;
-      }
-      this.emitReject(roomId, clientId, commandId, 'invalid-scenario-file', commandTick);
-      return;
-    }
-
-    let loadResult: ReturnType<typeof loadScenarioLikeC>;
+    let loadResult: ReturnType<typeof loadScenarioBundleLikeC>;
     if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
       return;
     }
     try {
-      loadResult = loadScenarioLikeC(
+      loadResult = loadScenarioBundleLikeC(
         this.authorityState.simState,
         this.authorityState.simContext,
-        scenario.id,
-        scenarioBytes,
+        userScenarioBundle,
       );
     } catch {
       if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
@@ -1420,11 +1486,11 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.applyGameLevelFunds(command.gameLevel);
     }
 
-    this.cityFileName = `${loadResult.scenario.fileName}.cty`;
-    this.cityName = loadResult.scenario.name;
+    this.cityFileName = cityFileNameForUserScenarioKey(loadResult.scenarioKey);
+    this.cityName = loadResult.scenarioName;
     this.syncHostStateAfterLoadLikeCommand();
-    // Tcl `DoScenario`/`UIStartScenario` call `UIShowPicture <scenario-id>`.
-    this.captureNoticeById(loadResult.scenario.id);
+    // Classic `LoadScenario` shows one built-in scenario picture by numeric id.
+    // `user/*` bundles do not map to legacy ids, so no notice picture is shown.
 
     if (!this.isReadySessionEnvelope(sessionId, roomId, clientId)) {
       return;
@@ -3543,6 +3609,24 @@ function sanitizeCityFileName(fileName: string): string {
     return DEFAULT_CITY_FILE_NAME;
   }
   return trimmed.toLowerCase().endsWith('.cty') ? trimmed : `${trimmed}.cty`;
+}
+
+/**
+ * Derives a deterministic save-file stem for one `user/*` scenario key.
+ * Mirrors `SaveCityAs` `.cty` naming ownership in `ref/micropolis/src/sim/s_fileio.c`.
+ * Parity note: classic C uses on-disk filenames; web runtime derives one safe
+ * filename from scenario keys because external bundles have no `snro.*` resource id.
+ */
+function cityFileNameForUserScenarioKey(scenarioKey: string): string {
+  const keyBody = scenarioKey.startsWith(USER_SCENARIO_KEY_PREFIX)
+    ? scenarioKey.slice(USER_SCENARIO_KEY_PREFIX.length)
+    : scenarioKey;
+  const sanitizedStem = keyBody
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+  const cityFileStem = sanitizedStem.length === 0 ? 'scenario' : sanitizedStem;
+  return `${cityFileStem}.cty`;
 }
 
 /**

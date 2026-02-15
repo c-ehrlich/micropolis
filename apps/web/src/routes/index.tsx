@@ -15,6 +15,7 @@ import {
   useRuntimeSession,
   useRuntimeUiState,
 } from '../features/playable-runtime/behavior/runtime-panel-controller.ts';
+import { parseExternalScenarioBundleFromFileText } from '../features/playable-runtime/behavior/scenario-bundle-file.ts';
 import { ALL_GRAPH_SERIES_MASK } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
 import { type RuntimePanelActions } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-types.ts';
 import { RuntimePanelView } from '../features/playable-runtime/presentation/runtime-panel/runtime-panel-view.tsx';
@@ -22,6 +23,7 @@ import { createRandomNewCityTerrainSeed } from '../game/runtime/new-city.ts';
 import {
   type CityExportPayload,
   PLAYABLE_SCENARIO_CHOICES,
+  setPlayableRuntimeUserScenarioBundle,
 } from '../game/runtime/playable-runtime-host.ts';
 import type { PlayableToolName } from '../game/runtime/protocol.ts';
 
@@ -219,7 +221,7 @@ function RuntimePanel() {
     pendingLoadFile,
     saveFileNameDraft,
     selectedGameLevel,
-    selectedScenarioId,
+    selectedScenarioKey,
     setActiveTool,
     setCityIoError,
     setDismissedNoticeSignature,
@@ -231,6 +233,7 @@ function RuntimePanel() {
     setIsLoadingCityFile,
     setIsSpeedMenuOpen,
     setLastSaveStatus,
+    setLoadedExternalScenarioBundle,
     setNewCityTerrainSeed,
     setOpenMenubarSection,
     setPendingLoadFile,
@@ -238,7 +241,7 @@ function RuntimePanel() {
     setSaveFileNameDraft,
     setSelectedGameLevel,
     setSelectedRuntimeTileset,
-    setSelectedScenarioId,
+    setSelectedScenarioKey,
   } = ui;
 
   const onCityExport = useCallback(
@@ -273,6 +276,7 @@ function RuntimePanel() {
   const sidebarRef = useRef<HTMLElement | null>(null);
   const speedControlRef = useRef<HTMLDivElement | null>(null);
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const scenarioLoadInputRef = useRef<HTMLInputElement | null>(null);
   const handledLoseNoticeServerSeq = useRef(0);
   const layoutInsets = useRuntimeLayoutInsets({ menubarRef, sidebarRef });
 
@@ -467,6 +471,44 @@ function RuntimePanel() {
         setIsLoadingCityFile(false);
       }
     },
+    loadScenarioBundleFile: (file) => {
+      if (file === null || controlsDisabled) {
+        return;
+      }
+
+      void (async () => {
+        try {
+          const scenarioJsonText = await file.text();
+          const loadedScenarioBundle = parseExternalScenarioBundleFromFileText(
+            file.name,
+            scenarioJsonText,
+          );
+          if (!setPlayableRuntimeUserScenarioBundle(host, loadedScenarioBundle.bundle)) {
+            throw new Error('runtime host does not support external scenario bundles');
+          }
+          setLoadedExternalScenarioBundle(loadedScenarioBundle);
+          setSelectedScenarioKey(loadedScenarioBundle.bundle.key);
+          setGameDialog('scenario');
+          setCityIoError('');
+          setLastSaveStatus(`Loaded scenario bundle ${loadedScenarioBundle.bundle.key}.`);
+        } catch (error) {
+          setPlayableRuntimeUserScenarioBundle(host, null);
+          setLoadedExternalScenarioBundle(null);
+          if (
+            selectedScenarioKey.startsWith('user/') &&
+            PLAYABLE_SCENARIO_CHOICES[0]?.scenarioKey !== undefined
+          ) {
+            setSelectedScenarioKey(PLAYABLE_SCENARIO_CHOICES[0].scenarioKey);
+          }
+          setLastSaveStatus('');
+          if (error instanceof Error) {
+            setCityIoError(error.message);
+          } else {
+            setCityIoError('Failed to read selected scenario JSON.');
+          }
+        }
+      })();
+    },
     openBrandDialog,
     openFloatingWindow,
     openGameDialog: (kind) => {
@@ -475,6 +517,10 @@ function RuntimePanel() {
         setNewCityTerrainSeed(createRandomNewCityTerrainSeed());
       }
       setGameDialog(kind);
+    },
+    openScenarioFilePicker: () => {
+      closeTopBarOverlays();
+      scenarioLoadInputRef.current?.click();
     },
     placeTool: (tool, x, y) => {
       if (sessionControlsDisabled) {
@@ -512,8 +558,8 @@ function RuntimePanel() {
       });
       setGameDialog(null);
     },
-    selectScenario: (scenarioId) => {
-      setSelectedScenarioId(scenarioId);
+    selectScenarioKey: (scenarioKey) => {
+      setSelectedScenarioKey(scenarioKey);
     },
     selectTool: (tool) => {
       setActiveTool(tool);
@@ -602,14 +648,16 @@ function RuntimePanel() {
         return;
       }
       setHasStartedPlayableSession(true);
-      const scenario = PLAYABLE_SCENARIO_CHOICES.find((entry) => entry.id === selectedScenarioId);
+      const scenario = PLAYABLE_SCENARIO_CHOICES.find(
+        (entry) => entry.scenarioKey === selectedScenarioKey,
+      );
       if (scenario !== undefined) {
         setSaveFileName(`${scenario.fileName}.cty`);
       }
       sendScenarioCommand({
         kind: 'scenario',
         action: 'load-scenario',
-        scenarioId: selectedScenarioId,
+        scenarioKey: selectedScenarioKey,
         gameLevel: selectedGameLevel,
       });
       setGameDialog(null);
@@ -651,6 +699,7 @@ function RuntimePanel() {
       floating={floating}
       layoutInsets={layoutInsets}
       loadInputRef={loadInputRef}
+      scenarioLoadInputRef={scenarioLoadInputRef}
       menubarRef={menubarRef}
       runtimeTheme={runtimeTheme as CSSProperties}
       session={session}

@@ -35,16 +35,18 @@ export interface RuntimePanelActions {
   dismissNotice: (signature: string | null) => void;
   focusFloatingWindow: (windowId: RuntimeFloatingWindowId) => void;
   loadPendingCityFile: () => Promise<void>;
+  loadScenarioBundleFile: (file: File | null) => void;
   openBrandDialog: () => void;
   openFloatingWindow: RuntimeOpenFloatingWindow;
   openGameDialog: (kind: GameDialogKind) => void;
+  openScenarioFilePicker: () => void;
   placeTool: (tool: RuntimeUiController['activeTool'], x: number, y: number) => void;
   playPauseSimulation: () => void;
   regenerateNewCityTerrainSeed: () => void;
   reconnectRuntime: () => void;
   requestResyncSnapshot: () => void;
   saveCityFromDraft: () => void;
-  selectScenario: (scenarioId: number) => void;
+  selectScenarioKey: (scenarioKey: string) => void;
   selectTool: RuntimeUiController['setActiveTool'];
   setBudgetAuto: (enabled: boolean) => void;
   setBudgetFirePercent: (percent: number) => void;
@@ -87,9 +89,10 @@ export type RuntimeDialogActions = Pick<
   RuntimePanelActions,
   | 'closeGameDialog'
   | 'loadPendingCityFile'
+  | 'loadScenarioBundleFile'
   | 'regenerateNewCityTerrainSeed'
   | 'saveCityFromDraft'
-  | 'selectScenario'
+  | 'selectScenarioKey'
   | 'setGameLevel'
   | 'setPendingLoadFile'
   | 'setSaveFileNameDraft'
@@ -106,6 +109,7 @@ export type RuntimeMenuActions = Pick<
   | 'openBrandDialog'
   | 'openFloatingWindow'
   | 'openGameDialog'
+  | 'openScenarioFilePicker'
   | 'reconnectRuntime'
   | 'requestResyncSnapshot'
   | 'setPendingLoadFile'
