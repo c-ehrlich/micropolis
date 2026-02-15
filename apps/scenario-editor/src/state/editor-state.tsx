@@ -24,7 +24,8 @@ export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'export'] as const;
 
 /**
  * Editor workbench sections for Stage 3 MVP navigation state.
- * Stage-parity note: script/objective authoring views are intentionally deferred to Stage 4.
+ * Stage-parity note: script/objective authoring is intentionally deferred to Stage 4, and
+ * AI/image import tooling is intentionally deferred to Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];

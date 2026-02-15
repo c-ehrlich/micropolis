@@ -43,10 +43,13 @@ describe('scenario editor state foundation', () => {
     expect(next.isDirty).toBe(false);
   });
 
-  test('limits MVP workbench views to metadata/map/export and defers script authoring', () => {
+  test('limits MVP workbench views to metadata/map/export and defers non-MVP authoring', () => {
     expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'map', 'export']);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('scripts')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('objectives')).toBe(false);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai')).toBe(false);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai-import')).toBe(false);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('image-import')).toBe(false);
   });
 
   test('updates metadata fields through reducer patch actions', () => {
