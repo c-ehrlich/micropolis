@@ -12,6 +12,7 @@ import {
 
 import {
   getScenarioEditorBehaviorValidationIssue,
+  isScenarioEditorBehaviorProfileKey,
   SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
 } from '../state/editor-behavior.ts';
 import {
@@ -896,6 +897,9 @@ function ScenarioBehaviorProfileEditorCard() {
   const { behavior, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const validationIssue = getScenarioEditorBehaviorValidationIssue(behavior);
+  const normalizedProfileKey = behavior.profileKey.trim();
+  const hasClosedProfileKey = isScenarioEditorBehaviorProfileKey(normalizedProfileKey);
+  const selectedProfileKey = hasClosedProfileKey ? normalizedProfileKey : behavior.profileKey;
   const behaviorJson = useMemo(
     () =>
       JSON.stringify(
@@ -935,24 +939,27 @@ function ScenarioBehaviorProfileEditorCard() {
       {behavior.enabled ? (
         <label className="editor-field">
           <span>Behavior Profile Key</span>
-          <input
-            list="scenario-editor-behavior-profile-keys"
+          <select
+            aria-invalid={validationIssue !== undefined}
             onChange={(event) => {
               dispatch({
                 type: 'set-behavior-profile-key',
                 profileKey: event.currentTarget.value,
               });
             }}
-            type="text"
-            value={behavior.profileKey}
-          />
-          <datalist id="scenario-editor-behavior-profile-keys">
+            value={selectedProfileKey}
+          >
+            {hasClosedProfileKey ? null : (
+              <option value={selectedProfileKey}>
+                {`Unrecognized key: ${behavior.profileKey || '(empty)'}`}
+              </option>
+            )}
             {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.map((profileKey) => (
               <option key={profileKey} value={profileKey}>
                 {getScenarioBehaviorProfileLabel(profileKey)}
               </option>
             ))}
-          </datalist>
+          </select>
           <small className="editor-help">
             Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
           </small>
@@ -1298,7 +1305,9 @@ function getScenarioScriptActionKindLabel(
  * Render label text for one closed behavior-profile key.
  * Mirrors runtime profile keyspace from `packages/scenario-runtime` registry.
  */
-function getScenarioBehaviorProfileLabel(profileKey: string): string {
+function getScenarioBehaviorProfileLabel(
+  profileKey: (typeof SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS)[number],
+): string {
   if (profileKey === 'classic/default') {
     return 'Classic Default';
   }

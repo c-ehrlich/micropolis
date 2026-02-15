@@ -1,6 +1,5 @@
 import {
   DEFAULT_SCENARIO_BEHAVIOR_PROFILE_KEY,
-  getScenarioBehaviorProfile,
   SCENARIO_BEHAVIOR_PROFILES,
   type ScenarioBehaviorProfileKey,
 } from '@city/scenario-runtime';
@@ -13,6 +12,9 @@ import {
  */
 export const SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS: readonly ScenarioBehaviorProfileKey[] =
   SCENARIO_BEHAVIOR_PROFILES.map((profile) => profile.key);
+const SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEY_SET = new Set<ScenarioBehaviorProfileKey>(
+  SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
+);
 
 /**
  * Stage 4.3 behavior-profile assignment draft state for the scenario editor.
@@ -22,6 +24,17 @@ export const SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS: readonly ScenarioBehaviorPro
 export interface ScenarioEditorBehaviorDraft {
   readonly enabled: boolean;
   readonly profileKey: string;
+}
+
+/**
+ * Type guard for closed Stage 4.3 behavior-profile keys.
+ * Mirrors the runtime closed registry from `packages/scenario-runtime/src/behavior-profiles.ts`,
+ * which ports `DoShipSprite` scenario-id branches in `ref/micropolis/src/sim/w_sprite.c`.
+ */
+export function isScenarioEditorBehaviorProfileKey(
+  profileKey: string,
+): profileKey is ScenarioBehaviorProfileKey {
+  return SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEY_SET.has(profileKey as ScenarioBehaviorProfileKey);
 }
 
 /**
@@ -48,10 +61,14 @@ export function getScenarioEditorBehaviorValidationIssue(
     return undefined;
   }
 
-  if (getScenarioBehaviorProfile(draft.profileKey) !== undefined) {
+  const normalizedProfileKey = draft.profileKey.trim();
+  if (isScenarioEditorBehaviorProfileKey(normalizedProfileKey)) {
     return undefined;
   }
 
   const closedKeys = SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ');
+  if (normalizedProfileKey.length === 0) {
+    return `behavior profile key is required and must match one of the closed registered keys: ${closedKeys}`;
+  }
   return `behavior profile key must match one of the closed registered keys: ${closedKeys}`;
 }

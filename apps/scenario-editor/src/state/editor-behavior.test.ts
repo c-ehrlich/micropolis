@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   createScenarioEditorInitialBehaviorDraft,
   getScenarioEditorBehaviorValidationIssue,
+  isScenarioEditorBehaviorProfileKey,
   SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
 } from './editor-behavior.ts';
 
@@ -45,6 +46,15 @@ describe('scenario editor behavior profile drafting', () => {
     expect(issue).toContain('classic/sf-ship-honk');
   });
 
+  test('accepts whitespace-padded closed keys by trimming before validation', () => {
+    expect(
+      getScenarioEditorBehaviorValidationIssue({
+        enabled: true,
+        profileKey: '  classic/default  ',
+      }),
+    ).toBeUndefined();
+  });
+
   test('skips validation while profile assignment is disabled', () => {
     expect(
       getScenarioEditorBehaviorValidationIssue({
@@ -52,5 +62,11 @@ describe('scenario editor behavior profile drafting', () => {
         profileKey: 'classic/not-registered',
       }),
     ).toBeUndefined();
+  });
+
+  test('exposes a closed-key type guard for behavior profile UI state', () => {
+    expect(isScenarioEditorBehaviorProfileKey('classic/default')).toBe(true);
+    expect(isScenarioEditorBehaviorProfileKey('classic/sf-ship-honk')).toBe(true);
+    expect(isScenarioEditorBehaviorProfileKey('classic/not-registered')).toBe(false);
   });
 });

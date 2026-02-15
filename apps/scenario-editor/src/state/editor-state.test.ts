@@ -137,6 +137,13 @@ describe('scenario editor state foundation', () => {
     });
     expect(assigned.behavior.profileKey).toBe('classic/sf-ship-honk');
     expect(assigned.isDirty).toBe(true);
+
+    const trimmed = scenarioEditorReducer(assigned, {
+      type: 'set-behavior-profile-key',
+      profileKey: '  classic/default  ',
+    });
+    expect(trimmed.behavior.profileKey).toBe('classic/default');
+    expect(trimmed.isDirty).toBe(true);
   });
 
   test('updates metadata fields through reducer patch actions', () => {

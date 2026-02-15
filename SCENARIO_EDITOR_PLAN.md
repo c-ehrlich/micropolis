@@ -138,6 +138,8 @@
 - [ ] **4.4** Add authoring-time semantic validation (unknown metric, invalid op/type combos, empty `all/any`, etc.).
 - [ ] **4.5** Integrate edited scripts/objectives into export pipeline.
 
+Stage 4.3 repair note: behavior profile assignment now uses closed-key selection UI with explicit invalid-key diagnostics tied to the runtime profile registry.
+
 ### Good Tests
 - UI-driven serialization tests from form model -> valid script/objective JSON.
 - Validation tests for malformed predicate trees and invalid action payloads.
