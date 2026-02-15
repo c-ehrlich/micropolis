@@ -82,5 +82,8 @@ function getScenarioEditorWorkbenchViewLabel(view: ScenarioEditorWorkbenchView):
   if (view === 'script') {
     return 'Scripts';
   }
+  if (view === 'behavior') {
+    return 'Behavior';
+  }
   return 'Export';
 }

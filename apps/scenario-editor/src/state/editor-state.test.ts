@@ -43,11 +43,19 @@ describe('scenario editor state foundation', () => {
     expect(next.isDirty).toBe(false);
   });
 
-  test('exposes Stage 4 objective and script views while still deferring ai authoring', () => {
-    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'map', 'objective', 'script', 'export']);
+  test('exposes Stage 4 objective/script/behavior views while still deferring ai authoring', () => {
+    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual([
+      'metadata',
+      'map',
+      'objective',
+      'script',
+      'behavior',
+      'export',
+    ]);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('script')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('scripts')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('objective')).toBe(true);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('behavior')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai-import')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('image-import')).toBe(false);
@@ -111,6 +119,24 @@ describe('scenario editor state foundation', () => {
         actions: [{ kind: 'make-flood' }],
       },
     ]);
+  });
+
+  test('updates behavior profile draft state through reducer actions', () => {
+    const initial = createScenarioEditorInitialState();
+    const enabled = scenarioEditorReducer(initial, {
+      type: 'set-behavior-enabled',
+      enabled: true,
+    });
+
+    expect(enabled.behavior.enabled).toBe(true);
+    expect(enabled.isDirty).toBe(true);
+
+    const assigned = scenarioEditorReducer(enabled, {
+      type: 'set-behavior-profile-key',
+      profileKey: 'classic/sf-ship-honk',
+    });
+    expect(assigned.behavior.profileKey).toBe('classic/sf-ship-honk');
+    expect(assigned.isDirty).toBe(true);
   });
 
   test('updates metadata fields through reducer patch actions', () => {

@@ -14,6 +14,10 @@ import {
   useReducer,
 } from 'react';
 
+import {
+  createScenarioEditorInitialBehaviorDraft,
+  type ScenarioEditorBehaviorDraft,
+} from './editor-behavior.ts';
 import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
 import {
   createScenarioEditorInitialObjectiveDraft,
@@ -27,7 +31,7 @@ import {
 } from './editor-script.ts';
 
 /**
- * Editor workbench sections for Stage 4 objective/script authoring navigation state.
+ * Editor workbench sections for Stage 4 objective/script/behavior authoring navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export const SCENARIO_EDITOR_MVP_VIEWS = [
@@ -35,13 +39,14 @@ export const SCENARIO_EDITOR_MVP_VIEWS = [
   'map',
   'objective',
   'script',
+  'behavior',
   'export',
 ] as const;
 
 /**
  * Editor workbench sections for Stage 4 objective/script authoring navigation state.
- * Stage-parity note: predicate and event/action authoring are exposed in Stage 4.1/4.2, while
- * behavior-profile authoring remains deferred to Stage 4.3 and AI/image import remains Stage 5.
+ * Stage-parity note: predicate/event authoring and behavior-profile assignment are exposed in
+ * Stage 4.1/4.2/4.3, while AI/image import remains deferred to Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
@@ -53,6 +58,7 @@ export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[num
  */
 export interface ScenarioEditorState {
   readonly activeView: ScenarioEditorWorkbenchView;
+  readonly behavior: ScenarioEditorBehaviorDraft;
   readonly bundle: ScenarioBundleV1;
   readonly objective: ScenarioEditorObjectiveDraft;
   readonly script: ScenarioEditorScriptDraft;
@@ -102,6 +108,8 @@ export type ScenarioEditorAction =
   | { type: 'mark-dirty' }
   | { type: 'fill-map'; tileWord: number }
   | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
+  | { type: 'set-behavior-enabled'; enabled: boolean }
+  | { type: 'set-behavior-profile-key'; profileKey: string }
   | { type: 'replace-objective-predicate'; predicate: ScenarioEditorObjectivePredicate }
   | { type: 'replace-script-events'; events: readonly ScenarioEditorScriptEvent[] }
   | { type: 'set-objective-enabled'; enabled: boolean }
@@ -149,6 +157,7 @@ export function createScenarioEditorInitialBundle(): ScenarioBundleV1 {
 export function createScenarioEditorInitialState(): ScenarioEditorState {
   return {
     activeView: 'metadata',
+    behavior: createScenarioEditorInitialBehaviorDraft(),
     bundle: createScenarioEditorInitialBundle(),
     objective: createScenarioEditorInitialObjectiveDraft(),
     script: createScenarioEditorInitialScriptDraft(),
@@ -195,6 +204,32 @@ export function scenarioEditorReducer(
       return {
         ...state,
         bundle: nextBundle,
+        isDirty: true,
+      };
+    }
+    case 'set-behavior-enabled':
+      if (state.behavior.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        behavior: {
+          ...state.behavior,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
+    case 'set-behavior-profile-key': {
+      const nextProfileKey = action.profileKey.trim();
+      if (state.behavior.profileKey === nextProfileKey) {
+        return state;
+      }
+      return {
+        ...state,
+        behavior: {
+          ...state.behavior,
+          profileKey: nextProfileKey,
+        },
         isDirty: true,
       };
     }
@@ -253,6 +288,7 @@ export function scenarioEditorReducer(
       return {
         ...state,
         bundle: action.bundle,
+        behavior: createScenarioEditorInitialBehaviorDraft(),
         objective: createScenarioEditorInitialObjectiveDraft(),
         script: createScenarioEditorInitialScriptDraft(),
         isDirty: false,

@@ -344,3 +344,11 @@ body,
   padding: 0.35rem 0.6rem;
   justify-self: start;
 }
+
+.editor-behavior-card {
+  max-width: 64rem;
+}
+
+.editor-behavior-toggle input[type='checkbox'] {
+  justify-self: start;
+}

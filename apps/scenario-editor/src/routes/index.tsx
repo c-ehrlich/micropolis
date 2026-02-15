@@ -11,6 +11,10 @@ import {
 } from 'react';
 
 import {
+  getScenarioEditorBehaviorValidationIssue,
+  SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
+} from '../state/editor-behavior.ts';
+import {
   buildScenarioEditorStrictExport,
   getScenarioEditorExportFileName,
   type ScenarioEditorStrictExportResult,
@@ -90,7 +94,8 @@ export const Route = createFileRoute('/')({
  * Parity note: objective metric leaves map to `DoScenarioScore` checks in
  * `ref/micropolis/src/sim/s_msg.c`, while logical composition forms are declarative
  * runtime extensions from `packages/scenario-runtime`; script events map to
- * `ScenarioDisaster` trigger/action domains in `ref/micropolis/src/sim/s_disast.c`.
+ * `ScenarioDisaster` trigger/action domains in `ref/micropolis/src/sim/s_disast.c`; behavior
+ * profile assignment maps closed `DoShipSprite` variants from `ref/micropolis/src/sim/w_sprite.c`.
  */
 function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
@@ -106,6 +111,9 @@ function ScenarioEditorHomeRoute() {
   }
   if (activeView === 'script') {
     return <ScenarioScriptEditorCard />;
+  }
+  if (activeView === 'behavior') {
+    return <ScenarioBehaviorProfileEditorCard />;
   }
 
   return <ScenarioExportCard />;
@@ -879,6 +887,96 @@ function ScenarioScriptEventEditor(options: {
 }
 
 /**
+ * Behavior-profile assignment card for Stage 4.3 closed-profile authoring.
+ * Parity note: profile keys map to closed `ScenarioID` behavior variants in `DoShipSprite`
+ * (`ref/micropolis/src/sim/w_sprite.c`), with declarative selection via
+ * `packages/scenario-runtime/src/behavior-profiles.ts`.
+ */
+function ScenarioBehaviorProfileEditorCard() {
+  const { behavior, isDirty } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const validationIssue = getScenarioEditorBehaviorValidationIssue(behavior);
+  const behaviorJson = useMemo(
+    () =>
+      JSON.stringify(behavior.enabled ? { behaviorProfileKey: behavior.profileKey } : null, null, 2),
+    [behavior.enabled, behavior.profileKey],
+  );
+
+  return (
+    <section className="editor-card editor-behavior-card" aria-label="Scenario behavior profile editor">
+      <h1>Scenario Behavior Profile</h1>
+      <p>
+        Assign one closed runtime behavior profile key. This preserves deterministic parity by
+        allowing only registered profile variants.
+      </p>
+
+      <label className="editor-field editor-behavior-toggle">
+        <span>Behavior Profile Assignment Enabled</span>
+        <input
+          checked={behavior.enabled}
+          onChange={(event) => {
+            dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
+          }}
+          type="checkbox"
+        />
+        <small className="editor-help">
+          This Stage 4.3 draft editor captures profile assignment only; export integration lands in
+          Stage 4.5.
+        </small>
+      </label>
+
+      {behavior.enabled ? (
+        <label className="editor-field">
+          <span>Behavior Profile Key</span>
+          <input
+            list="scenario-editor-behavior-profile-keys"
+            onChange={(event) => {
+              dispatch({
+                type: 'set-behavior-profile-key',
+                profileKey: event.currentTarget.value,
+              });
+            }}
+            type="text"
+            value={behavior.profileKey}
+          />
+          <datalist id="scenario-editor-behavior-profile-keys">
+            {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.map((profileKey) => (
+              <option key={profileKey} value={profileKey}>
+                {getScenarioBehaviorProfileLabel(profileKey)}
+              </option>
+            ))}
+          </datalist>
+          <small className="editor-help">
+            Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
+          </small>
+          {validationIssue !== undefined ? (
+            <small className="editor-error">{validationIssue}</small>
+          ) : null}
+        </label>
+      ) : (
+        <p className="editor-help">Behavior profile override is disabled for this draft.</p>
+      )}
+
+      <dl className="editor-grid">
+        <dt>Dirty State</dt>
+        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+        <dt>Assignment Enabled</dt>
+        <dd>{behavior.enabled ? 'yes' : 'no'}</dd>
+        <dt>Profile Key</dt>
+        <dd>{behavior.enabled ? behavior.profileKey : 'none'}</dd>
+        <dt>Validation</dt>
+        <dd>{validationIssue === undefined ? 'valid' : 'invalid'}</dd>
+      </dl>
+
+      <section className="editor-export-preview" aria-label="Behavior profile preview">
+        <h2>Behavior Assignment JSON</h2>
+        <textarea readOnly rows={6} value={behaviorJson} />
+      </section>
+    </section>
+  );
+}
+
+/**
  * Strict JSON export + open/import card for Stage 3.4/3.5.
  * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
  * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
@@ -1187,6 +1285,20 @@ function getScenarioScriptActionKindLabel(
     return 'Send Message';
   }
   return 'Lose Game';
+}
+
+/**
+ * Render label text for one closed behavior-profile key.
+ * Mirrors runtime profile keyspace from `packages/scenario-runtime` registry.
+ */
+function getScenarioBehaviorProfileLabel(profileKey: string): string {
+  if (profileKey === 'classic/default') {
+    return 'Classic Default';
+  }
+  if (profileKey === 'classic/sf-ship-honk') {
+    return 'Classic SF Ship Honk';
+  }
+  return profileKey;
 }
 
 /**
