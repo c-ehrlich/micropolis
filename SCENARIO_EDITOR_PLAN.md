@@ -132,11 +132,14 @@
 - `apps/scenario-editor/` (from Stage 3)
 
 ### Requirements (Task Checklist)
-- [ ] **4.1** Add objective editor for predicate DSL (`metric`, `all`, `any`, `not`).
-- [ ] **4.2** Add event/action editor for declarative scripts (`atTick`, `everyTicks`, actions union).
-- [ ] **4.3** Add behavior profile assignment UI with closed profile validation.
-- [ ] **4.4** Add authoring-time semantic validation (unknown metric, invalid op/type combos, empty `all/any`, etc.).
-- [ ] **4.5** Integrate edited scripts/objectives into export pipeline.
+- [x] **4.1** Add objective editor for predicate DSL (`metric`, `all`, `any`, `not`).
+- [x] **4.2** Add event/action editor for declarative scripts (`atTick`, `everyTicks`, actions union).
+- [x] **4.3** Add behavior profile assignment UI with closed profile validation.
+- [x] **4.4** Add authoring-time semantic validation (unknown metric, invalid op/type combos, empty `all/any`, etc.).
+- [x] **4.5** Integrate edited scripts/objectives into export pipeline.
+
+Stage 4.3 repair note: behavior profile assignment now uses closed-key selection UI with explicit invalid-key diagnostics tied to the runtime profile registry.
+Stage 4.4 repair note: semantic validators now reject predicate/script kind-field mismatches (invalid type combos) in addition to unknown metrics/operators and empty composite nodes.
 
 ### Good Tests
 - UI-driven serialization tests from form model -> valid script/objective JSON.

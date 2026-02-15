@@ -16,7 +16,7 @@ function RootRouteLayout() {
   return (
     <ScenarioEditorStateProvider>
       <div className="editor-shell">
-        <header className="editor-header">Scenario Editor MVP</header>
+        <header className="editor-header">Scenario Editor</header>
         <EditorTopNav />
         <main className="editor-main">
           <Outlet />
@@ -75,6 +75,15 @@ function getScenarioEditorWorkbenchViewLabel(view: ScenarioEditorWorkbenchView):
   }
   if (view === 'map') {
     return 'Map';
+  }
+  if (view === 'objective') {
+    return 'Objective';
+  }
+  if (view === 'script') {
+    return 'Scripts';
+  }
+  if (view === 'behavior') {
+    return 'Behavior';
   }
   return 'Export';
 }

@@ -14,18 +14,41 @@ import {
   useReducer,
 } from 'react';
 
+import {
+  createScenarioEditorInitialBehaviorDraft,
+  type ScenarioEditorBehaviorDraft,
+} from './editor-behavior.ts';
 import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
+import {
+  createScenarioEditorInitialObjectiveDraft,
+  createScenarioEditorObjectiveDraftFromBundle,
+  type ScenarioEditorObjectiveDraft,
+  type ScenarioEditorObjectivePredicate,
+} from './editor-objective.ts';
+import {
+  createScenarioEditorInitialScriptDraft,
+  createScenarioEditorScriptDraftFromBundle,
+  type ScenarioEditorScriptDraft,
+  type ScenarioEditorScriptEvent,
+} from './editor-script.ts';
 
 /**
- * Editor workbench sections for Stage 3 MVP navigation state.
+ * Editor workbench sections for Stage 4 objective/script/behavior authoring navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'map', 'export'] as const;
+export const SCENARIO_EDITOR_MVP_VIEWS = [
+  'metadata',
+  'map',
+  'objective',
+  'script',
+  'behavior',
+  'export',
+] as const;
 
 /**
- * Editor workbench sections for Stage 3 MVP navigation state.
- * Stage-parity note: script/objective authoring is intentionally deferred to Stage 4, and
- * AI/image import tooling is intentionally deferred to Stage 5.
+ * Editor workbench sections for Stage 4 objective/script authoring navigation state.
+ * Stage-parity note: predicate/event authoring and behavior-profile assignment are exposed in
+ * Stage 4.1/4.2/4.3, while AI/image import remains deferred to Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
 export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
@@ -37,7 +60,10 @@ export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[num
  */
 export interface ScenarioEditorState {
   readonly activeView: ScenarioEditorWorkbenchView;
+  readonly behavior: ScenarioEditorBehaviorDraft;
   readonly bundle: ScenarioBundleV1;
+  readonly objective: ScenarioEditorObjectiveDraft;
+  readonly script: ScenarioEditorScriptDraft;
   readonly isDirty: boolean;
 }
 
@@ -84,6 +110,12 @@ export type ScenarioEditorAction =
   | { type: 'mark-dirty' }
   | { type: 'fill-map'; tileWord: number }
   | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
+  | { type: 'set-behavior-enabled'; enabled: boolean }
+  | { type: 'set-behavior-profile-key'; profileKey: string }
+  | { type: 'replace-objective-predicate'; predicate: ScenarioEditorObjectivePredicate }
+  | { type: 'replace-script-events'; events: readonly ScenarioEditorScriptEvent[] }
+  | { type: 'set-objective-enabled'; enabled: boolean }
+  | { type: 'set-script-enabled'; enabled: boolean }
   | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
@@ -127,7 +159,10 @@ export function createScenarioEditorInitialBundle(): ScenarioBundleV1 {
 export function createScenarioEditorInitialState(): ScenarioEditorState {
   return {
     activeView: 'metadata',
+    behavior: createScenarioEditorInitialBehaviorDraft(),
     bundle: createScenarioEditorInitialBundle(),
+    objective: createScenarioEditorInitialObjectiveDraft(),
+    script: createScenarioEditorInitialScriptDraft(),
     isDirty: false,
   };
 }
@@ -174,6 +209,77 @@ export function scenarioEditorReducer(
         isDirty: true,
       };
     }
+    case 'set-behavior-enabled':
+      if (state.behavior.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        behavior: {
+          ...state.behavior,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
+    case 'set-behavior-profile-key': {
+      const nextProfileKey = action.profileKey.trim();
+      if (state.behavior.profileKey === nextProfileKey) {
+        return state;
+      }
+      return {
+        ...state,
+        behavior: {
+          ...state.behavior,
+          profileKey: nextProfileKey,
+        },
+        isDirty: true,
+      };
+    }
+    case 'replace-objective-predicate':
+      return {
+        ...state,
+        objective: {
+          ...state.objective,
+          predicate: action.predicate,
+        },
+        isDirty: true,
+      };
+    case 'set-objective-enabled':
+      if (state.objective.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        objective: {
+          ...state.objective,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
+    case 'replace-script-events':
+      if (state.script.events === action.events) {
+        return state;
+      }
+      return {
+        ...state,
+        script: {
+          ...state.script,
+          events: action.events,
+        },
+        isDirty: true,
+      };
+    case 'set-script-enabled':
+      if (state.script.enabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        script: {
+          ...state.script,
+          enabled: action.enabled,
+        },
+        isDirty: true,
+      };
     case 'update-metadata':
       return {
         ...state,
@@ -184,6 +290,9 @@ export function scenarioEditorReducer(
       return {
         ...state,
         bundle: action.bundle,
+        behavior: createScenarioEditorInitialBehaviorDraft(),
+        objective: createScenarioEditorObjectiveDraftFromBundle(action.bundle),
+        script: createScenarioEditorScriptDraftFromBundle(action.bundle),
         isDirty: false,
       };
     case 'set-active-view':

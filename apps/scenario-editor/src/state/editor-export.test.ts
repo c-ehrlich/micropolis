@@ -70,6 +70,93 @@ describe('scenario editor strict export', () => {
       message: 'duplicate tag "harbor" (already used at tags.0)',
     });
   });
+
+  test('integrates authored objective/script drafts into strict export output', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const result = buildScenarioEditorStrictExport(bundle, {
+      objective: {
+        enabled: true,
+        predicate: {
+          kind: 'metric',
+          metric: 'traffic-average',
+          op: 'lt',
+          // Magic number source: Bern objective threshold `TrafficAverage < 80`
+          // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+          value: 80,
+        },
+      },
+      script: {
+        enabled: true,
+        events: [
+          {
+            // Magic number source: Rio flood cadence checks `wait % 24 == 0`
+            // in `ScenarioDisaster` (`ref/micropolis/src/sim/s_disast.c`).
+            trigger: { everyTicks: 24 },
+            actions: [
+              { kind: 'make-flood' },
+              {
+                kind: 'send-message',
+                // Magic number source: scenario failure message id `-200`
+                // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+                messageId: -200,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error('Expected strict export to succeed with authored drafts');
+    }
+
+    expect(result.canonicalBundle.objective).toEqual({
+      kind: 'metric',
+      metric: 'traffic-average',
+      op: 'lt',
+      value: 80,
+    });
+    expect(result.canonicalBundle.script).toEqual([
+      {
+        trigger: { everyTicks: 24 },
+        actions: [{ kind: 'make-flood' }, { kind: 'send-message', messageId: -200 }],
+      },
+    ]);
+  });
+
+  test('fails export when authored objective/script drafts violate semantic rules', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const result = buildScenarioEditorStrictExport(bundle, {
+      objective: {
+        enabled: true,
+        predicate: {
+          kind: 'all',
+          predicates: [],
+        },
+      },
+      script: {
+        enabled: true,
+        events: [],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error('Expected strict export to fail on semantic issues');
+    }
+
+    expect(result.issues).toContainEqual({
+      source: 'lint',
+      path: 'objective.predicate.predicates',
+      message: 'all predicate must include at least one child predicate',
+    });
+    expect(result.issues).toContainEqual({
+      source: 'lint',
+      path: 'script.events',
+      message: 'script must include at least one event',
+    });
+  });
 });
 
 describe('scenario editor export file naming', () => {

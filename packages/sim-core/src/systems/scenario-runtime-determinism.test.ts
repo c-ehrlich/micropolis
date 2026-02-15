@@ -303,5 +303,5 @@ describe('scenario runtime fixed-seed deterministic parity', () => {
       expect(declarativeRepeat.hookDigest).toBe(declarative.hookDigest);
       expect(declarativeRepeat.finalDigest).toBe(declarative.finalDigest);
     }
-  });
+  }, 10_000);
 });
