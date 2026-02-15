@@ -157,7 +157,7 @@ Stage 4.4 repair note: semantic validators now reject predicate/script kind-fiel
 
 ### Requirements (Task Checklist)
 - [x] **5.1** Define ephemeral `featureMap` contract for vision extraction outputs.
-- [ ] **5.2** Build deterministic compiler passes from `featureMap` -> compiled map.
+- [x] **5.2** Build deterministic compiler passes from `featureMap` -> compiled map.
 - [ ] **5.3** Integrate Vercel AI SDK + OpenRouter provider adapter behind clear interfaces.
 - [ ] **5.4** Add AI import review UX with confidence and correction tooling.
 - [ ] **5.5** Enforce that saved bundles contain only compiled map output (no import artifacts).

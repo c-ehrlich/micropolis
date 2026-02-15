@@ -2,6 +2,7 @@ import {
   SCENARIO_BUNDLE_V1_MAP_HEIGHT,
   SCENARIO_BUNDLE_V1_MAP_WIDTH,
   SCENARIO_BUNDLE_V1_TILE_COUNT,
+  type ScenarioMapTileWordsV1,
 } from '@city/scenario-core';
 
 /**
@@ -121,6 +122,83 @@ export type ScenarioEditorFeatureMapParseResult =
       readonly ok: false;
     };
 
+const SCENARIO_EDITOR_TILE_WORD_DIRT = 0;
+const SCENARIO_EDITOR_TILE_WORD_RIVER = 2;
+const SCENARIO_EDITOR_TILE_WORD_CHANNEL = 4;
+const SCENARIO_EDITOR_TILE_WORD_WOODS2 = 40;
+const SCENARIO_EDITOR_TILE_WORD_ROADS = 66;
+const SCENARIO_EDITOR_TILE_WORD_LHPOWER = 210;
+const SCENARIO_EDITOR_TILE_WORD_LHRAIL = 226;
+const SCENARIO_EDITOR_TILE_WORD_RESBASE = 240;
+const SCENARIO_EDITOR_TILE_WORD_COMBASE = 423;
+const SCENARIO_EDITOR_TILE_WORD_INDBASE = 612;
+const SCENARIO_EDITOR_TILE_WORD_PORTBASE = 693;
+const SCENARIO_EDITOR_TILE_WORD_AIRPORTBASE = 709;
+const SCENARIO_EDITOR_TILE_WORD_COALBASE = 745;
+const SCENARIO_EDITOR_TILE_WORD_FIRESTBASE = 761;
+const SCENARIO_EDITOR_TILE_WORD_POLICESTBASE = 770;
+const SCENARIO_EDITOR_TILE_WORD_STADIUMBASE = 779;
+const SCENARIO_EDITOR_TILE_WORD_NUCLEARBASE = 811;
+const SCENARIO_EDITOR_TILE_FLAG_CONDBIT = 0x4000;
+const SCENARIO_EDITOR_TILE_FLAG_BURNBIT = 0x2000;
+const SCENARIO_EDITOR_TILE_FLAG_BULLBIT = 0x1000;
+const SCENARIO_EDITOR_TILE_FLAG_ZONEBIT = 0x0400;
+const SCENARIO_EDITOR_TILE_FLAG_BNCNBIT =
+  SCENARIO_EDITOR_TILE_FLAG_BURNBIT | SCENARIO_EDITOR_TILE_FLAG_CONDBIT;
+
+const SCENARIO_EDITOR_FEATURE_MAP_PRIORITY_BY_KEY = new Map<
+  ScenarioEditorFeatureMapFeatureKey,
+  number
+>(SCENARIO_EDITOR_FEATURE_MAP_FEATURE_KEYS.map((feature, index) => [feature, index]));
+
+const SCENARIO_EDITOR_TERRAIN_FEATURE_KEYS = new Set<ScenarioEditorFeatureMapFeatureKey>([
+  'dirt',
+  'river',
+  'channel',
+  'tree',
+]);
+
+const SCENARIO_EDITOR_NETWORK_FEATURE_KEYS = new Set<ScenarioEditorFeatureMapFeatureKey>([
+  'road',
+  'rail',
+  'wire',
+]);
+
+const SCENARIO_EDITOR_ZONE_FEATURE_KEYS = new Set<ScenarioEditorFeatureMapFeatureKey>([
+  'residential-zone',
+  'commercial-zone',
+  'industrial-zone',
+  'seaport',
+  'airport',
+  'coal-power-plant',
+  'nuclear-power-plant',
+  'fire-station',
+  'police-station',
+  'stadium',
+]);
+
+/**
+ * Compile one validated Stage 5 `featureMap` into deterministic `tile-words`.
+ * Mirrors tile id/flag constants in `ref/micropolis/src/sim/headers/sim.h` and uses
+ * zone-center tile encoding from `check3x3`/`check4x4`/`check6x6` in
+ * `ref/micropolis/src/sim/w_tool.c`; parity difference: this compiles direct from
+ * vision-feature probabilities instead of invoking interactive tool placement.
+ */
+export function compileScenarioEditorFeatureMapToTileWordsMap(
+  featureMap: ScenarioEditorFeatureMap,
+): ScenarioMapTileWordsV1 {
+  const compiledTileWords = runScenarioEditorFeatureMapTerrainPass(featureMap);
+  runScenarioEditorFeatureMapNetworkPass(featureMap, compiledTileWords);
+  runScenarioEditorFeatureMapZonePass(featureMap, compiledTileWords);
+
+  return {
+    kind: 'tile-words',
+    width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+    height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+    tileWords: compiledTileWords,
+  };
+}
+
 /**
  * Runtime guard for supported feature keys.
  * Mapping note: keys represent tile families in `sim.h`; this guard is editor-only.
@@ -129,6 +207,220 @@ export function isScenarioEditorFeatureMapFeatureKey(
   value: string,
 ): value is ScenarioEditorFeatureMapFeatureKey {
   return (SCENARIO_EDITOR_FEATURE_MAP_FEATURE_KEYS as readonly string[]).includes(value);
+}
+
+/**
+ * Pass 1: apply terrain defaults (`dirt`/`river`/`channel`/`tree`) across all tiles.
+ * Mirrors Micropolis terrain tile ids from `sim.h`; parity difference: terrain picks are
+ * confidence-ranked from Stage 5 AI extraction instead of generated world terrain routines.
+ */
+function runScenarioEditorFeatureMapTerrainPass(featureMap: ScenarioEditorFeatureMap): number[] {
+  const compiledTileWords = new Array<number>(SCENARIO_BUNDLE_V1_TILE_COUNT).fill(
+    SCENARIO_EDITOR_TILE_WORD_DIRT,
+  );
+
+  for (let index = 0; index < SCENARIO_BUNDLE_V1_TILE_COUNT; index += 1) {
+    const feature = pickFeatureForPass(
+      featureMap.cells[index],
+      SCENARIO_EDITOR_TERRAIN_FEATURE_KEYS,
+    );
+    if (feature === null) {
+      continue;
+    }
+
+    compiledTileWords[index] = compileTerrainFeatureToTileWord(feature);
+  }
+
+  return compiledTileWords;
+}
+
+/**
+ * Pass 2: overlay deterministic network tiles (`road`/`rail`/`wire`) over terrain output.
+ * Mirrors baseline road/rail/wire tile words from `_LayRoad`/`_LayRail`/`_LayWire` in
+ * `ref/micropolis/src/sim/w_con.c` and `w_tool.c`; parity difference: this pass does not run
+ * connection auto-tiling (`fixZone`) and keeps deterministic single-tile defaults.
+ */
+function runScenarioEditorFeatureMapNetworkPass(
+  featureMap: ScenarioEditorFeatureMap,
+  compiledTileWords: number[],
+): void {
+  for (let index = 0; index < SCENARIO_BUNDLE_V1_TILE_COUNT; index += 1) {
+    const feature = pickFeatureForPass(
+      featureMap.cells[index],
+      SCENARIO_EDITOR_NETWORK_FEATURE_KEYS,
+    );
+    if (feature === null) {
+      continue;
+    }
+
+    compiledTileWords[index] = compileNetworkFeatureToTileWord(feature);
+  }
+}
+
+/**
+ * Pass 3: overlay zone/structure center tiles over prior pass output.
+ * Mirrors zone-center words written by `check3x3`/`check4x4`/`check6x6` in
+ * `ref/micropolis/src/sim/w_tool.c` (center offset + `BNCNBIT + ZONEBIT` semantics).
+ */
+function runScenarioEditorFeatureMapZonePass(
+  featureMap: ScenarioEditorFeatureMap,
+  compiledTileWords: number[],
+): void {
+  for (let index = 0; index < SCENARIO_BUNDLE_V1_TILE_COUNT; index += 1) {
+    const feature = pickFeatureForPass(featureMap.cells[index], SCENARIO_EDITOR_ZONE_FEATURE_KEYS);
+    if (feature === null) {
+      continue;
+    }
+
+    compiledTileWords[index] = compileZoneFeatureToTileWord(feature);
+  }
+}
+
+/**
+ * Pick one feature candidate for a compiler pass using confidence then stable key priority.
+ * Not from Micropolis C: deterministic tie-breaking for editor-side AI extraction output.
+ */
+function pickFeatureForPass(
+  cell: ScenarioEditorFeatureMapCell | undefined,
+  passFeatureKeys: ReadonlySet<ScenarioEditorFeatureMapFeatureKey>,
+): ScenarioEditorFeatureMapFeatureKey | null {
+  if (cell === undefined) {
+    return null;
+  }
+
+  let bestFeature: ScenarioEditorFeatureMapFeatureKey | null = null;
+  let bestConfidence = Number.NEGATIVE_INFINITY;
+  let bestPriority = Number.POSITIVE_INFINITY;
+
+  for (const featureScore of cell.features) {
+    if (!passFeatureKeys.has(featureScore.feature)) {
+      continue;
+    }
+
+    const featurePriority = getScenarioEditorFeaturePriority(featureScore.feature);
+    if (
+      featureScore.confidence > bestConfidence ||
+      (featureScore.confidence === bestConfidence && featurePriority < bestPriority)
+    ) {
+      bestFeature = featureScore.feature;
+      bestConfidence = featureScore.confidence;
+      bestPriority = featurePriority;
+    }
+  }
+
+  return bestFeature;
+}
+
+/**
+ * Resolve one deterministic sort-priority rank for a supported feature key.
+ * Not from Micropolis C: editor compiler tie-break metadata keyed by contract order.
+ */
+function getScenarioEditorFeaturePriority(feature: ScenarioEditorFeatureMapFeatureKey): number {
+  return SCENARIO_EDITOR_FEATURE_MAP_PRIORITY_BY_KEY.get(feature) ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Convert one terrain feature key to a compiled map tile word.
+ * Mirrors terrain tile constants in `ref/micropolis/src/sim/headers/sim.h`.
+ */
+function compileTerrainFeatureToTileWord(feature: ScenarioEditorFeatureMapFeatureKey): number {
+  switch (feature) {
+    case 'river':
+      return SCENARIO_EDITOR_TILE_WORD_RIVER;
+    case 'channel':
+      return SCENARIO_EDITOR_TILE_WORD_CHANNEL;
+    case 'tree':
+      return SCENARIO_EDITOR_TILE_WORD_WOODS2;
+    case 'dirt':
+    default:
+      return SCENARIO_EDITOR_TILE_WORD_DIRT;
+  }
+}
+
+/**
+ * Convert one network feature key to a compiled map tile word.
+ * Mirrors `_LayRoad`/`_LayRail`/`_LayWire` baseline placed words in
+ * `ref/micropolis/src/sim/w_con.c` and `w_tool.c`.
+ */
+function compileNetworkFeatureToTileWord(feature: ScenarioEditorFeatureMapFeatureKey): number {
+  switch (feature) {
+    case 'rail':
+      return (
+        SCENARIO_EDITOR_TILE_WORD_LHRAIL |
+        SCENARIO_EDITOR_TILE_FLAG_BULLBIT |
+        SCENARIO_EDITOR_TILE_FLAG_BURNBIT
+      );
+    case 'wire':
+      return (
+        SCENARIO_EDITOR_TILE_WORD_LHPOWER |
+        SCENARIO_EDITOR_TILE_FLAG_CONDBIT |
+        SCENARIO_EDITOR_TILE_FLAG_BULLBIT |
+        SCENARIO_EDITOR_TILE_FLAG_BURNBIT
+      );
+    case 'road':
+    default:
+      return (
+        SCENARIO_EDITOR_TILE_WORD_ROADS |
+        SCENARIO_EDITOR_TILE_FLAG_BULLBIT |
+        SCENARIO_EDITOR_TILE_FLAG_BURNBIT
+      );
+  }
+}
+
+/**
+ * Convert one zone/structure feature key to the deterministic center tile word.
+ * Mirrors zone center-writing offsets in `check3x3`/`check4x4`/`check6x6` from
+ * `ref/micropolis/src/sim/w_tool.c`.
+ */
+function compileZoneFeatureToTileWord(feature: ScenarioEditorFeatureMapFeatureKey): number {
+  switch (feature) {
+    case 'residential-zone':
+      return compile3x3CenterTileWord(SCENARIO_EDITOR_TILE_WORD_RESBASE);
+    case 'commercial-zone':
+      return compile3x3CenterTileWord(SCENARIO_EDITOR_TILE_WORD_COMBASE);
+    case 'industrial-zone':
+      return compile3x3CenterTileWord(SCENARIO_EDITOR_TILE_WORD_INDBASE);
+    case 'fire-station':
+      return compile3x3CenterTileWord(SCENARIO_EDITOR_TILE_WORD_FIRESTBASE);
+    case 'police-station':
+      return compile3x3CenterTileWord(SCENARIO_EDITOR_TILE_WORD_POLICESTBASE);
+    case 'seaport':
+      return compile4x4CenterTileWord(SCENARIO_EDITOR_TILE_WORD_PORTBASE);
+    case 'coal-power-plant':
+      return compile4x4CenterTileWord(SCENARIO_EDITOR_TILE_WORD_COALBASE);
+    case 'stadium':
+      return compile4x4CenterTileWord(SCENARIO_EDITOR_TILE_WORD_STADIUMBASE);
+    case 'nuclear-power-plant':
+      return compile4x4CenterTileWord(SCENARIO_EDITOR_TILE_WORD_NUCLEARBASE);
+    case 'airport':
+      return compile6x6CenterTileWord(SCENARIO_EDITOR_TILE_WORD_AIRPORTBASE);
+    default:
+      return SCENARIO_EDITOR_TILE_WORD_DIRT;
+  }
+}
+
+/**
+ * Build one 3x3-zone center tile word (`offset=4`) with zone flags.
+ * Mirrors `check3x3` center-cell write in `ref/micropolis/src/sim/w_tool.c`.
+ */
+function compile3x3CenterTileWord(baseTile: number): number {
+  return baseTile + 4 + SCENARIO_EDITOR_TILE_FLAG_BNCNBIT + SCENARIO_EDITOR_TILE_FLAG_ZONEBIT;
+}
+
+/**
+ * Build one 4x4-zone center tile word (`offset=5`) with zone flags.
+ * Mirrors `check4x4` center-cell write in `ref/micropolis/src/sim/w_tool.c`.
+ */
+function compile4x4CenterTileWord(baseTile: number): number {
+  return baseTile + 5 + SCENARIO_EDITOR_TILE_FLAG_BNCNBIT + SCENARIO_EDITOR_TILE_FLAG_ZONEBIT;
+}
+
+/**
+ * Build one 6x6-zone center tile word (`offset=7`) with zone flags.
+ * Mirrors `check6x6` center-cell write in `ref/micropolis/src/sim/w_tool.c`.
+ */
+function compile6x6CenterTileWord(baseTile: number): number {
+  return baseTile + 7 + SCENARIO_EDITOR_TILE_FLAG_BNCNBIT + SCENARIO_EDITOR_TILE_FLAG_ZONEBIT;
 }
 
 /**

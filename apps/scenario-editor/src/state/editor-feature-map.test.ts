@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  compileScenarioEditorFeatureMapToTileWordsMap,
   getScenarioEditorFeatureMapIndex,
   isScenarioEditorFeatureMapFeatureKey,
   parseScenarioEditorFeatureMap,
@@ -97,6 +98,66 @@ describe('scenario editor featureMap contract', () => {
     expect(isScenarioEditorFeatureMapFeatureKey('river')).toBe(true);
     expect(isScenarioEditorFeatureMapFeatureKey('unknown')).toBe(false);
   });
+
+  test('compiles deterministic tile-words map from one fixed featureMap fixture', () => {
+    const featureMap = parseOrThrowFeatureMap(createValidFeatureMapPayload());
+
+    const compiledA = compileScenarioEditorFeatureMapToTileWordsMap(featureMap);
+    const compiledB = compileScenarioEditorFeatureMapToTileWordsMap(featureMap);
+
+    expect(compiledA).toEqual(compiledB);
+    expect(compiledA.kind).toBe('tile-words');
+    expect(compiledA.width).toBe(120);
+    expect(compiledA.height).toBe(100);
+    // Magic number source: `WORLD_X * WORLD_Y = 12000` from
+    // `ref/micropolis/src/sim/headers/sim.h`.
+    expect(compiledA.tileWords).toHaveLength(12000);
+    expect(compiledA.tileWords[0]).toBe(0);
+  });
+
+  test('applies deterministic pass precedence: terrain -> network -> zone/structure', () => {
+    const payload = createValidFeatureMapPayload();
+    payload.cells[0] = {
+      features: [
+        { feature: 'river', confidence: 0.95 },
+        { feature: 'road', confidence: 0.9 },
+        { feature: 'residential-zone', confidence: 0.85 },
+      ],
+    };
+    payload.cells[1] = {
+      features: [
+        { feature: 'river', confidence: 0.9 },
+        { feature: 'road', confidence: 0.8 },
+      ],
+    };
+    payload.cells[2] = {
+      features: [
+        { feature: 'rail', confidence: 0.7 },
+        { feature: 'road', confidence: 0.7 },
+      ],
+    };
+    payload.cells[3] = {
+      features: [
+        { feature: 'seaport', confidence: 0.6 },
+        { feature: 'airport', confidence: 0.6 },
+      ],
+    };
+    const featureMap = parseOrThrowFeatureMap(payload);
+    const compiled = compileScenarioEditorFeatureMapToTileWordsMap(featureMap);
+
+    // Magic number source: `check3x3` center write in `ref/micropolis/src/sim/w_tool.c`
+    // is `base + 4 + BNCNBIT + ZONEBIT` for `RESBASE=240`.
+    expect(compiled.tileWords[0]).toBe(240 + 4 + 0x6000 + 0x0400);
+    // Magic number source: `_LayRoad` in `ref/micropolis/src/sim/w_con.c` writes
+    // `ROADS | BULLBIT | BURNBIT` on dirt (`ROADS=66` from `sim.h`).
+    expect(compiled.tileWords[1]).toBe(66 + 0x1000 + 0x2000);
+    // Magic number source: `_LayRoad`/`_LayRail` choose deterministic defaults in
+    // `w_con.c`; tie is broken by compiler feature priority (`road` before `rail`).
+    expect(compiled.tileWords[2]).toBe(66 + 0x1000 + 0x2000);
+    // Magic number source: `check4x4` center write in `ref/micropolis/src/sim/w_tool.c`
+    // is `base + 5 + BNCNBIT + ZONEBIT`; `PORTBASE=693` yields `PORT` center tile.
+    expect(compiled.tileWords[3]).toBe(693 + 5 + 0x6000 + 0x0400);
+  });
 });
 
 /**
@@ -138,4 +199,17 @@ function createValidFeatureMapPayload(): {
       ],
     })),
   };
+}
+
+/**
+ * Parse one fixture payload and fail fast if contract validation rejects it.
+ * Not from Micropolis C: test-only helper for Stage 5 editor contract fixtures.
+ */
+function parseOrThrowFeatureMap(payload: ReturnType<typeof createValidFeatureMapPayload>) {
+  const result = parseScenarioEditorFeatureMap(payload);
+  expect(result.ok).toBe(true);
+  if (!result.ok) {
+    throw new Error(`Expected featureMap fixture parse success: ${JSON.stringify(result.issues)}`);
+  }
+  return result.featureMap;
 }
