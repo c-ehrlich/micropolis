@@ -898,12 +898,19 @@ function ScenarioBehaviorProfileEditorCard() {
   const validationIssue = getScenarioEditorBehaviorValidationIssue(behavior);
   const behaviorJson = useMemo(
     () =>
-      JSON.stringify(behavior.enabled ? { behaviorProfileKey: behavior.profileKey } : null, null, 2),
+      JSON.stringify(
+        behavior.enabled ? { behaviorProfileKey: behavior.profileKey } : null,
+        null,
+        2,
+      ),
     [behavior.enabled, behavior.profileKey],
   );
 
   return (
-    <section className="editor-card editor-behavior-card" aria-label="Scenario behavior profile editor">
+    <section
+      className="editor-card editor-behavior-card"
+      aria-label="Scenario behavior profile editor"
+    >
       <h1>Scenario Behavior Profile</h1>
       <p>
         Assign one closed runtime behavior profile key. This preserves deterministic parity by
