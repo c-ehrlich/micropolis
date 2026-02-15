@@ -175,4 +175,115 @@ describe('scenarioBundleV1Schema', () => {
     expect(missingNamespace.success).toBe(false);
     expect(unknownNamespace.success).toBe(false);
   });
+
+  it('accepts authored objective/script payloads for Stage 4 export integration', () => {
+    const parsed = parseScenarioBundleV1({
+      version: 1,
+      key: 'user/stage4-authoring',
+      name: 'Stage 4 Authoring',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 12000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+      objective: {
+        kind: 'all',
+        predicates: [
+          {
+            kind: 'metric',
+            metric: 'traffic-average',
+            op: 'lt',
+            // Magic number source: Bern objective threshold `TrafficAverage < 80`
+            // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+            value: 80,
+          },
+          {
+            kind: 'not',
+            predicate: {
+              kind: 'metric',
+              metric: 'crime-average',
+              op: 'gt',
+              value: 150,
+            },
+          },
+        ],
+      },
+      script: [
+        {
+          trigger: { everyTicks: 24 },
+          actions: [
+            { kind: 'make-flood' },
+            {
+              kind: 'send-message',
+              // Magic number source: scenario failure message id `-200`
+              // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+              messageId: -200,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.objective?.kind).toBe('all');
+    expect(parsed.script?.[0]?.trigger).toEqual({ everyTicks: 24 });
+  });
+
+  it('rejects malformed objective/script payload shapes', () => {
+    const invalidObjective = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'user/invalid-objective',
+      name: 'Invalid Objective',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+      objective: {
+        kind: 'metric',
+        metric: 'unknown',
+        op: 'gt',
+        value: 1,
+      },
+    });
+    const invalidScript = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'user/invalid-script',
+      name: 'Invalid Script',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+      script: [
+        {
+          trigger: { atTick: 1 },
+          actions: [{ kind: 'send-message' }],
+        },
+      ],
+    });
+
+    expect(invalidObjective.success).toBe(false);
+    expect(invalidScript.success).toBe(false);
+  });
 });

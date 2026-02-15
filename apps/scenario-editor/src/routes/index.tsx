@@ -465,8 +465,8 @@ function ScenarioObjectiveEditorCard() {
           type="checkbox"
         />
         <small className="editor-help">
-          This Stage 4.1 draft editor captures predicate authoring only; export integration lands in
-          Stage 4.5.
+          Objective predicate drafts are included in strict export when objective authoring is
+          enabled.
         </small>
       </label>
 
@@ -702,8 +702,7 @@ function ScenarioScriptEditorCard() {
           type="checkbox"
         />
         <small className="editor-help">
-          This Stage 4.2 draft editor captures event/action authoring only; export integration lands
-          in Stage 4.5.
+          Script event/action drafts are included in strict export when script authoring is enabled.
         </small>
       </label>
 
@@ -1050,7 +1049,7 @@ function ScenarioBehaviorProfileEditorCard() {
  * file-picker UX are editor-only browser workflow glue.
  */
 function ScenarioExportCard() {
-  const { bundle, isDirty } = useScenarioEditorState();
+  const { bundle, isDirty, objective, script } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const [lastOpenResult, setLastOpenResult] = useState<ScenarioEditorOpenResult | null>(null);
@@ -1058,7 +1057,7 @@ function ScenarioExportCard() {
   const exportFileName = getScenarioEditorExportFileName(bundle.key);
 
   const handleExport = () => {
-    const result = buildScenarioEditorStrictExport(bundle);
+    const result = buildScenarioEditorStrictExport(bundle, { objective, script });
     setLastResult(result);
 
     if (!result.ok) {
@@ -1133,7 +1132,8 @@ function ScenarioExportCard() {
       <h1>Export Scenario Bundle</h1>
       <p>
         Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
-        export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes`.
+        export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes` plus
+        authored Stage 4 objective/script payloads when enabled.
       </p>
 
       <div className="editor-export-actions">

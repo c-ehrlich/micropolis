@@ -21,11 +21,13 @@ import {
 import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
 import {
   createScenarioEditorInitialObjectiveDraft,
+  createScenarioEditorObjectiveDraftFromBundle,
   type ScenarioEditorObjectiveDraft,
   type ScenarioEditorObjectivePredicate,
 } from './editor-objective.ts';
 import {
   createScenarioEditorInitialScriptDraft,
+  createScenarioEditorScriptDraftFromBundle,
   type ScenarioEditorScriptDraft,
   type ScenarioEditorScriptEvent,
 } from './editor-script.ts';
@@ -289,8 +291,8 @@ export function scenarioEditorReducer(
         ...state,
         bundle: action.bundle,
         behavior: createScenarioEditorInitialBehaviorDraft(),
-        objective: createScenarioEditorInitialObjectiveDraft(),
-        script: createScenarioEditorInitialScriptDraft(),
+        objective: createScenarioEditorObjectiveDraftFromBundle(action.bundle),
+        script: createScenarioEditorScriptDraftFromBundle(action.bundle),
         isDirty: false,
       };
     case 'set-active-view':

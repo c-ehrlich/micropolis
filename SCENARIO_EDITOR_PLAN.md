@@ -136,7 +136,7 @@
 - [x] **4.2** Add event/action editor for declarative scripts (`atTick`, `everyTicks`, actions union).
 - [x] **4.3** Add behavior profile assignment UI with closed profile validation.
 - [x] **4.4** Add authoring-time semantic validation (unknown metric, invalid op/type combos, empty `all/any`, etc.).
-- [ ] **4.5** Integrate edited scripts/objectives into export pipeline.
+- [x] **4.5** Integrate edited scripts/objectives into export pipeline.
 
 Stage 4.3 repair note: behavior profile assignment now uses closed-key selection UI with explicit invalid-key diagnostics tied to the runtime profile registry.
 Stage 4.4 repair note: semantic validators now reject predicate/script kind-field mismatches (invalid type combos) in addition to unknown metrics/operators and empty composite nodes.

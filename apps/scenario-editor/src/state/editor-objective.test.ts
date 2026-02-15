@@ -5,6 +5,7 @@ import {
   coerceScenarioObjectivePredicateKind,
   createScenarioEditorDefaultObjectivePredicate,
   createScenarioEditorInitialObjectiveDraft,
+  createScenarioEditorObjectiveDraftFromBundle,
   getScenarioEditorObjectiveValidationIssues,
   removeScenarioObjectiveChildPredicate,
   replaceScenarioObjectiveChildPredicate,
@@ -36,6 +37,27 @@ describe('scenario editor objective predicate drafting', () => {
 
     expect(objective.enabled).toBe(false);
     expect(objective.predicate.kind).toBe('metric');
+  });
+
+  test('hydrates enabled objective draft state from imported bundle payloads', () => {
+    const objective = createScenarioEditorObjectiveDraftFromBundle({
+      objective: {
+        kind: 'metric',
+        metric: 'traffic-average',
+        op: 'lt',
+        // Magic number source: Bern objective threshold `TrafficAverage < 80`
+        // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+        value: 80,
+      },
+    });
+
+    expect(objective.enabled).toBe(true);
+    expect(objective.predicate).toEqual({
+      kind: 'metric',
+      metric: 'traffic-average',
+      op: 'lt',
+      value: 80,
+    });
   });
 
   test('coerces metric predicates to list and negation forms', () => {

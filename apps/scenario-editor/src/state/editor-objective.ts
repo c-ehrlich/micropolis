@@ -1,3 +1,4 @@
+import type { ScenarioBundleV1 } from '@city/scenario-core';
 import type {
   ScenarioObjectiveComparison,
   ScenarioObjectiveMetricKey,
@@ -120,6 +121,25 @@ export function createScenarioEditorInitialObjectiveDraft(): ScenarioEditorObjec
   return {
     enabled: false,
     predicate: createScenarioEditorDefaultObjectivePredicate(),
+  };
+}
+
+/**
+ * Creates Stage 4 objective draft state from an imported bundle payload.
+ * Mapping note: imports persisted objective predicates that correspond to
+ * `DoScenarioScore` metric/comparison domains in `ref/micropolis/src/sim/s_msg.c`,
+ * while defaulting to disabled authoring when no objective payload is present.
+ */
+export function createScenarioEditorObjectiveDraftFromBundle(
+  bundle: Pick<ScenarioBundleV1, 'objective'>,
+): ScenarioEditorObjectiveDraft {
+  if (bundle.objective === undefined) {
+    return createScenarioEditorInitialObjectiveDraft();
+  }
+
+  return {
+    enabled: true,
+    predicate: bundle.objective,
   };
 }
 

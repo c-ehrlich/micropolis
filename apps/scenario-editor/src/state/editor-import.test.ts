@@ -15,7 +15,30 @@ import { createScenarioEditorInitialBundle } from './editor-state.tsx';
  */
 describe('scenario editor bundle import', () => {
   test('opens strict-export JSON and normalizes map payload for editing', () => {
-    const strictExport = buildScenarioEditorStrictExport(createScenarioEditorInitialBundle());
+    const strictExport = buildScenarioEditorStrictExport(createScenarioEditorInitialBundle(), {
+      objective: {
+        enabled: true,
+        predicate: {
+          kind: 'metric',
+          metric: 'city-score',
+          op: 'gt',
+          // Magic number source: Tokyo/Boston/Rio objective threshold `CityScore > 500`
+          // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+          value: 500,
+        },
+      },
+      script: {
+        enabled: true,
+        events: [
+          {
+            // Magic number source: Rio flood cadence checks `wait % 24 == 0`
+            // in `ScenarioDisaster` (`ref/micropolis/src/sim/s_disast.c`).
+            trigger: { everyTicks: 24 },
+            actions: [{ kind: 'make-flood' }],
+          },
+        ],
+      },
+    });
     expect(strictExport.ok).toBe(true);
     if (!strictExport.ok) {
       throw new Error('Expected strict export fixture to be valid');
@@ -37,6 +60,18 @@ describe('scenario editor bundle import', () => {
     expect(openResult.bundle.map.width).toBe(120);
     expect(openResult.bundle.map.height).toBe(100);
     expect(openResult.bundle.map.tileWords).toHaveLength(12000);
+    expect(openResult.bundle.objective).toEqual({
+      kind: 'metric',
+      metric: 'city-score',
+      op: 'gt',
+      value: 500,
+    });
+    expect(openResult.bundle.script).toEqual([
+      {
+        trigger: { everyTicks: 24 },
+        actions: [{ kind: 'make-flood' }],
+      },
+    ]);
   });
 
   test('reports a JSON issue for malformed document text', () => {

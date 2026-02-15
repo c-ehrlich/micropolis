@@ -146,6 +146,48 @@ describe('scenario editor state foundation', () => {
     expect(trimmed.isDirty).toBe(true);
   });
 
+  test('hydrates objective/script drafts from imported bundle payloads on replace-bundle', () => {
+    const initial = createScenarioEditorInitialState();
+    const replaced = scenarioEditorReducer(initial, {
+      type: 'replace-bundle',
+      bundle: {
+        ...createScenarioEditorInitialBundle(),
+        objective: {
+          kind: 'metric',
+          metric: 'traffic-average',
+          op: 'lt',
+          // Magic number source: Bern objective threshold `TrafficAverage < 80`
+          // from `DoScenarioScore` in `ref/micropolis/src/sim/s_msg.c`.
+          value: 80,
+        },
+        script: [
+          {
+            // Magic number source: Rio flood cadence checks `wait % 24 == 0`
+            // in `ScenarioDisaster` (`ref/micropolis/src/sim/s_disast.c`).
+            trigger: { everyTicks: 24 },
+            actions: [{ kind: 'make-flood' }],
+          },
+        ],
+      },
+    });
+
+    expect(replaced.isDirty).toBe(false);
+    expect(replaced.objective.enabled).toBe(true);
+    expect(replaced.objective.predicate).toEqual({
+      kind: 'metric',
+      metric: 'traffic-average',
+      op: 'lt',
+      value: 80,
+    });
+    expect(replaced.script.enabled).toBe(true);
+    expect(replaced.script.events).toEqual([
+      {
+        trigger: { everyTicks: 24 },
+        actions: [{ kind: 'make-flood' }],
+      },
+    ]);
+  });
+
   test('updates metadata fields through reducer patch actions', () => {
     const initial = createScenarioEditorInitialState();
     const next = scenarioEditorReducer(initial, {

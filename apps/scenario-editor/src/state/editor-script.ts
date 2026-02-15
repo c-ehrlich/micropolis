@@ -1,3 +1,4 @@
+import type { ScenarioBundleV1 } from '@city/scenario-core';
 import type { ScenarioRuntimeAction } from '@city/scenario-runtime';
 
 /**
@@ -151,6 +152,29 @@ export function createScenarioEditorInitialScriptDraft(): ScenarioEditorScriptDr
   return {
     enabled: false,
     events: [createScenarioEditorDefaultScriptEvent()],
+  };
+}
+
+/**
+ * Creates Stage 4 script draft state from an imported bundle payload.
+ * Mapping note: imports persisted script trigger/action rows that map to
+ * `ScenarioDisaster`/`DoScenarioScore` side-effect domains in
+ * `ref/micropolis/src/sim/s_disast.c` and `ref/micropolis/src/sim/s_msg.c`,
+ * while defaulting to disabled authoring when no script payload is present.
+ */
+export function createScenarioEditorScriptDraftFromBundle(
+  bundle: Pick<ScenarioBundleV1, 'script'>,
+): ScenarioEditorScriptDraft {
+  if (bundle.script === undefined) {
+    return createScenarioEditorInitialScriptDraft();
+  }
+
+  return {
+    enabled: true,
+    events: bundle.script.map((event) => ({
+      trigger: { ...event.trigger },
+      actions: event.actions.map((action) => ({ ...action })),
+    })),
   };
 }
 

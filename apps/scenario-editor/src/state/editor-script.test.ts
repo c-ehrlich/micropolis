@@ -7,6 +7,7 @@ import {
   coerceScenarioEditorScriptTriggerKind,
   createScenarioEditorDefaultScriptEvent,
   createScenarioEditorInitialScriptDraft,
+  createScenarioEditorScriptDraftFromBundle,
   getScenarioEditorScriptTriggerKind,
   getScenarioEditorScriptValidationIssues,
   removeScenarioEditorScriptAction,
@@ -41,6 +42,27 @@ describe('scenario editor script drafting', () => {
     expect(script.enabled).toBe(false);
     expect(script.events).toHaveLength(1);
     expect(getScenarioEditorScriptTriggerKind(script.events[0]!.trigger)).toBe('atTick');
+  });
+
+  test('hydrates enabled script draft state from imported bundle payloads', () => {
+    const script = createScenarioEditorScriptDraftFromBundle({
+      script: [
+        {
+          // Magic number source: Rio flood cadence checks `wait % 24 == 0`
+          // in `ScenarioDisaster` (`ref/micropolis/src/sim/s_disast.c`).
+          trigger: { everyTicks: 24 },
+          actions: [{ kind: 'make-flood' }],
+        },
+      ],
+    });
+
+    expect(script.enabled).toBe(true);
+    expect(script.events).toEqual([
+      {
+        trigger: { everyTicks: 24 },
+        actions: [{ kind: 'make-flood' }],
+      },
+    ]);
   });
 
   test('coerces trigger kinds and preserves/clamps countdown values', () => {
