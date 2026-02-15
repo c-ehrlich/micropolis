@@ -483,6 +483,8 @@ function RuntimePanel() {
             scenarioJsonText,
           );
           setLoadedExternalScenarioBundle(loadedScenarioBundle);
+          setSelectedScenarioKey(loadedScenarioBundle.bundle.key);
+          setGameDialog('scenario');
           setCityIoError('');
           setLastSaveStatus(`Loaded scenario bundle ${loadedScenarioBundle.bundle.key}.`);
         } catch (error) {

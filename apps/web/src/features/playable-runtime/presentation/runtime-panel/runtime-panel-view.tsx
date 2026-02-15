@@ -218,6 +218,7 @@ export function RuntimePanelView(props: RuntimePanelViewProps) {
       <RuntimeGameDialogs
         dialogActions={dialogActions}
         isLoadingCityFile={ui.isLoadingCityFile}
+        loadedExternalScenarioBundle={ui.loadedExternalScenarioBundle}
         newCityTerrainSeed={ui.newCityTerrainSeed}
         pendingLoadFile={ui.pendingLoadFile}
         selectedGameLevel={ui.selectedGameLevel}

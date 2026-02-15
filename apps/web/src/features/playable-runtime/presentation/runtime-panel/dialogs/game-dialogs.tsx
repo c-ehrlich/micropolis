@@ -13,6 +13,7 @@ interface RuntimeGameDialogsProps {
   gameDialog: RuntimeUiController['gameDialog'];
   isLoadingCityFile: boolean;
   loadInputRef: RefObject<HTMLInputElement | null>;
+  loadedExternalScenarioBundle: RuntimeUiController['loadedExternalScenarioBundle'];
   scenarioLoadInputRef: RefObject<HTMLInputElement | null>;
   newCityTerrainSeed: RuntimeUiController['newCityTerrainSeed'];
   pendingLoadFile: RuntimeUiController['pendingLoadFile'];
@@ -36,6 +37,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
     gameDialog,
     isLoadingCityFile,
     loadInputRef,
+    loadedExternalScenarioBundle,
     scenarioLoadInputRef,
     newCityTerrainSeed,
     pendingLoadFile,
@@ -114,6 +116,7 @@ export function RuntimeGameDialogs(props: RuntimeGameDialogsProps) {
               <ScenarioDialog
                 dialogActions={dialogActions}
                 controlsDisabled={controlsDisabled}
+                loadedExternalScenarioBundle={loadedExternalScenarioBundle}
                 selectedGameLevel={selectedGameLevel}
                 selectedScenarioKey={selectedScenarioKey}
               />
