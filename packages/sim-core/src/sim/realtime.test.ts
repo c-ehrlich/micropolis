@@ -151,6 +151,25 @@ describe('Realtime systems', () => {
     store.commitTick();
   });
 
+  it('does not infer SF ship-honk behavior from numeric scenario id defaults', () => {
+    const store = createClassicMapStore();
+    store.beginTick();
+    const rng = new MicropolisRng(1);
+    const toolContext = createToolContext({ store, rng, funds: 0 });
+    const context = createRealtimeContext({
+      store,
+      rng,
+      toolContext,
+      scenarioId: 2,
+    });
+
+    // C used `ScenarioID == 2` directly in `DoShipSprite` (`w_sprite.c`), but
+    // Stage 1.4 routes this through closed behavior profiles instead.
+    expect(context.shipHonkBehavior).toBe('default');
+
+    store.commitTick();
+  });
+
   it('moves objects deterministically with fixed RNG', () => {
     const first = runTornado(12345, 12);
     const second = runTornado(12345, 12);

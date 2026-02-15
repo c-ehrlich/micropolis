@@ -36,6 +36,7 @@ import {
   generatePlane as generateRealtimePlane,
   generateShip as generateRealtimeShip,
   generateTrain as generateRealtimeTrain,
+  getSimScenarioBehaviorProfile,
   getSprite as getRealtimeSprite,
   makeEarthquake,
   makeExplosion as makeRealtimeExplosion,
@@ -306,6 +307,8 @@ export class SimCoreEnvelopeHost implements CoreHost {
       doAnimation: this.authorityState.simState.doAnimation,
       noDisasters: this.authorityState.simState.NoDisasters,
       scenarioId: this.authorityState.simState.ScenarioID,
+      shipHonkBehavior: getSimScenarioBehaviorProfile(this.authorityState.simState).realtime
+        .shipHonkBehavior,
       totalPop: this.authorityState.simState.TotalPop,
       polMaxX: this.authorityState.simState.PolMaxX,
       polMaxY: this.authorityState.simState.PolMaxY,
@@ -2117,6 +2120,9 @@ export class SimCoreEnvelopeHost implements CoreHost {
     this.realtimeContext.doAnimation = this.authorityState.simState.doAnimation;
     this.realtimeContext.noDisasters = this.authorityState.simState.NoDisasters;
     this.realtimeContext.scenarioId = this.authorityState.simState.ScenarioID;
+    this.realtimeContext.shipHonkBehavior = getSimScenarioBehaviorProfile(
+      this.authorityState.simState,
+    ).realtime.shipHonkBehavior;
     this.realtimeContext.totalPop = this.authorityState.simState.TotalPop;
     this.realtimeContext.polMaxX = this.authorityState.simState.PolMaxX;
     this.realtimeContext.polMaxY = this.authorityState.simState.PolMaxY;

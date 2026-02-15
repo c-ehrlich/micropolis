@@ -202,8 +202,7 @@ export function createRealtimeContext(options: RealtimeContextOptions): Realtime
     throw new Error('Realtime context requires a toolContext');
   }
   const resolvedScenarioId = options.scenarioId ?? 0;
-  const resolvedShipHonkBehavior =
-    options.shipHonkBehavior ?? (resolvedScenarioId === 2 ? 'legacy-sf-low-speed' : 'default');
+  const resolvedShipHonkBehavior = options.shipHonkBehavior ?? 'default';
 
   return {
     store: options.store,

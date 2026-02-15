@@ -7,6 +7,7 @@ import { getScenarioDefinition } from '../../../../../packages/scenario-core/src
 import {
   cityDimensionsForMap,
   decodeCityFileForMap,
+  setLegacySimScenarioRuntimeById,
   Tile,
   TileFlag,
   TileMask,
@@ -4380,6 +4381,34 @@ describe('SimCoreEnvelopeHost', () => {
       ]);
     },
   );
+
+  it('syncs ship-honk behavior from scenario runtime profiles (SF variant included)', () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      authorityState: {
+        simState: Parameters<typeof sendMes>[0];
+      };
+      realtimeContext: {
+        shipHonkBehavior: 'default' | 'legacy-sf-low-speed';
+      };
+      syncRealtimeContextFromSimState(): void;
+    };
+
+    hostInternals.authorityState.simState.ScenarioID = 2;
+    hostInternals.syncRealtimeContextFromSimState();
+    expect(hostInternals.realtimeContext.shipHonkBehavior).toBe('default');
+
+    /**
+     * Magic number source:
+     * - Scenario id `2` is San Francisco in `LoadScenario(short s)` from
+     *   `ref/micropolis/src/sim/s_fileio.c`.
+     * - `DoShipSprite` special-cases `ScenarioID == 2` in
+     *   `ref/micropolis/src/sim/w_sprite.c`.
+     */
+    setLegacySimScenarioRuntimeById(hostInternals.authorityState.simState, 2);
+    hostInternals.syncRealtimeContextFromSimState();
+    expect(hostInternals.realtimeContext.shipHonkBehavior).toBe('legacy-sf-low-speed');
+  });
 
   it('emits realtime callback sound specs on the next sequenced settlement envelope', () => {
     const host = new SimCoreEnvelopeHost();

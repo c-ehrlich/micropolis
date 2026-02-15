@@ -1,6 +1,12 @@
 import {
   createScenarioRuntimeState,
   getClassicBuiltinScenarioRuntimeDefinitionByLegacyId,
+  getClassicScenarioBehaviorProfileByLegacyId,
+  getClassicScenarioBehaviorProfileByScenarioKey,
+  getDefaultScenarioBehaviorProfile,
+  getScenarioBehaviorProfile,
+  type ScenarioBehaviorProfile,
+  type ScenarioBehaviorProfileKey,
   type ScenarioRuntimeDefinition,
   type ScenarioRuntimeState,
 } from '../../../scenario-runtime/src/index.ts';
@@ -8,6 +14,7 @@ import type { SimState } from '../core/sim-state.ts';
 
 interface SimScenarioRuntimeEntry {
   readonly legacyScenarioId: number;
+  readonly behaviorProfile: ScenarioBehaviorProfile;
   readonly runtimeDefinition: ScenarioRuntimeDefinition;
   readonly runtimeState: ScenarioRuntimeState;
 }
@@ -28,6 +35,16 @@ const SCENARIO_RUNTIME_BY_STATE = new WeakMap<SimState, SimScenarioRuntimeEntry>
 export interface SimScenarioRuntimeInputs {
   readonly runtimeDefinition: ScenarioRuntimeDefinition;
   readonly legacyScenarioId?: number;
+  /**
+   * Optional closed behavior profile key for runtime-only behavior variants.
+   *
+   * Mapping note:
+   * - Micropolis C used direct global `ScenarioID` checks for behavior variants
+   *   (for example ship honk behavior in `ref/micropolis/src/sim/w_sprite.c`).
+   * - This optional key is an intentional declarative override for the
+   *   decoupled runtime profile registry.
+   */
+  readonly behaviorProfileKey?: ScenarioBehaviorProfileKey;
 }
 
 const normalizeLegacyScenarioId = (value: number): number => {
@@ -83,6 +100,23 @@ export function getSimScenarioRuntimeState(state: SimState): ScenarioRuntimeStat
 }
 
 /**
+ * Reads active scenario behavior profile for this simulation state.
+ *
+ * Mapping note:
+ * - Replaces direct global `ScenarioID` behavior branching from C sprite logic
+ *   (notably `DoShipSprite` in `ref/micropolis/src/sim/w_sprite.c`) with a
+ *   closed profile lookup.
+ * - Returns the default profile when no declarative scenario runtime is active.
+ */
+export function getSimScenarioBehaviorProfile(state: SimState): ScenarioBehaviorProfile {
+  const current = SCENARIO_RUNTIME_BY_STATE.get(state);
+  if (current === undefined) {
+    return getDefaultScenarioBehaviorProfile();
+  }
+  return current.behaviorProfile;
+}
+
+/**
  * Writes updated declarative runtime state and refreshes compatibility mirrors.
  *
  * Mapping note:
@@ -100,6 +134,7 @@ export function setSimScenarioRuntimeState(
 
   SCENARIO_RUNTIME_BY_STATE.set(state, {
     legacyScenarioId: current.legacyScenarioId,
+    behaviorProfile: current.behaviorProfile,
     runtimeDefinition: current.runtimeDefinition,
     runtimeState,
   });
@@ -127,8 +162,14 @@ export function setSimScenarioRuntimeInputs(
     return;
   }
 
+  const legacyScenarioId = normalizeLegacyScenarioId(inputs.legacyScenarioId ?? 0);
   SCENARIO_RUNTIME_BY_STATE.set(state, {
-    legacyScenarioId: normalizeLegacyScenarioId(inputs.legacyScenarioId ?? 0),
+    legacyScenarioId,
+    behaviorProfile: resolveScenarioBehaviorProfile({
+      runtimeDefinition: inputs.runtimeDefinition,
+      legacyScenarioId,
+      behaviorProfileKey: inputs.behaviorProfileKey,
+    }),
     runtimeDefinition: inputs.runtimeDefinition,
     runtimeState: createScenarioRuntimeState(inputs.runtimeDefinition),
   });
@@ -185,3 +226,34 @@ export function syncLegacyScenarioRuntimeMirrors(state: SimState): void {
   state.ScoreType = objectiveState === undefined ? 0 : current.legacyScenarioId;
   state.ScoreWait = objectiveState?.countdown ?? 0;
 }
+
+interface ResolveScenarioBehaviorProfileInputs {
+  readonly runtimeDefinition: ScenarioRuntimeDefinition;
+  readonly legacyScenarioId: number;
+  readonly behaviorProfileKey: ScenarioBehaviorProfileKey | undefined;
+}
+
+const resolveScenarioBehaviorProfile = (
+  inputs: ResolveScenarioBehaviorProfileInputs,
+): ScenarioBehaviorProfile => {
+  if (inputs.behaviorProfileKey !== undefined) {
+    const fromExplicitKey = getScenarioBehaviorProfile(inputs.behaviorProfileKey);
+    if (fromExplicitKey !== undefined) {
+      return fromExplicitKey;
+    }
+  }
+
+  const fromLegacyId = getClassicScenarioBehaviorProfileByLegacyId(inputs.legacyScenarioId);
+  if (fromLegacyId !== undefined) {
+    return fromLegacyId;
+  }
+
+  const fromScenarioKey = getClassicScenarioBehaviorProfileByScenarioKey(
+    inputs.runtimeDefinition.key,
+  );
+  if (fromScenarioKey !== undefined) {
+    return fromScenarioKey;
+  }
+
+  return getDefaultScenarioBehaviorProfile();
+};
