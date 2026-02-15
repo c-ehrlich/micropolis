@@ -70,6 +70,38 @@ describe('scenario editor state foundation', () => {
     expect(next.bundle.map).toBe(initial.bundle.map);
   });
 
+  test('applies map paint actions through reducer with dirty tracking', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'paint-map-tile',
+      x: 1,
+      y: 2,
+      tileWord: 44,
+    });
+
+    expect(next.isDirty).toBe(true);
+    expect(next.bundle.map.kind).toBe('tile-words');
+    if (next.bundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    // Magic number source: x-major index uses `index = x * WORLD_Y + y`
+    // from `Map[i] = auxPtr + i * WORLD_Y` in `ref/micropolis/src/sim/s_alloc.c`.
+    expect(next.bundle.map.tileWords[102]).toBe(44);
+  });
+
+  test('ignores out-of-bounds map paint actions', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'paint-map-tile',
+      x: 120,
+      y: 99,
+      tileWord: 11,
+    });
+
+    expect(next).toBe(initial);
+  });
+
   test('reports validation issues for invalid metadata fields', () => {
     const bundle = createScenarioEditorInitialBundle();
     const invalidBundle = {

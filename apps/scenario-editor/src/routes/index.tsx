@@ -1,6 +1,21 @@
+import { SCENARIO_BUNDLE_V1_MAP_HEIGHT, SCENARIO_BUNDLE_V1_MAP_WIDTH } from '@city/scenario-core';
 import { createFileRoute } from '@tanstack/react-router';
-import type { FormEvent } from 'react';
+import {
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
+import {
+  getScenarioEditorMapIndex,
+  getScenarioEditorMapTileWords,
+  normalizeScenarioEditorTileWord,
+  readScenarioEditorMapTileWord,
+  type ScenarioEditorMapPoint,
+} from '../state/editor-map.ts';
 import {
   getScenarioEditorMetadataValidationIssues,
   parseScenarioEditorTagsInput,
@@ -8,14 +23,23 @@ import {
   useScenarioEditorState,
 } from '../state/editor-state.tsx';
 
+const TILE_BASE_MASK = 1023;
+
+const EDITOR_TILE_PRESETS = [
+  { label: 'DIRT', source: 'DIRT=0', tileWord: 0 },
+  { label: 'RIVER', source: 'RIVER=2', tileWord: 2 },
+  { label: 'REDGE', source: 'REDGE=3', tileWord: 3 },
+] as const;
+
 export const Route = createFileRoute('/')({
   component: ScenarioEditorHomeRoute,
 });
 
 /**
- * Stage 3 workbench route with metadata editing as the first shippable feature.
- * Parity note: metadata UI is editor-only, while `startYear`/`startFunds` map to
- * `LoadScenario` fields in `ref/micropolis/src/sim/s_fileio.c`.
+ * Stage 3 workbench route with metadata editing and manual map editing MVP sections.
+ * Parity note: metadata `startYear`/`startFunds` map to `LoadScenario` fields in
+ * `ref/micropolis/src/sim/s_fileio.c`; map edits mirror `Map[x][y]` writes from
+ * `SimCmdTile`/`SimCmdFill` in `ref/micropolis/src/sim/w_sim.c`.
  */
 function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
@@ -23,8 +47,11 @@ function ScenarioEditorHomeRoute() {
   if (activeView === 'metadata') {
     return <ScenarioMetadataEditorCard />;
   }
+  if (activeView === 'map') {
+    return <ScenarioMapEditorCard />;
+  }
 
-  return <ScenarioMvpPlaceholderCard />;
+  return <ScenarioExportPendingCard />;
 }
 
 /**
@@ -179,14 +206,170 @@ function ScenarioMetadataEditorCard() {
 }
 
 /**
- * Placeholder card for Stage 3 sections not implemented by task 3.2.
+ * Manual map-editing card for Stage 3.3 with fixed `120x100` preview and paint controls.
+ * Mirrors direct tile assignment/fill behavior from `SimCmdTile`/`SimCmdFill` in
+ * `ref/micropolis/src/sim/w_sim.c`; preview colors are editor-only visualization.
+ */
+function ScenarioMapEditorCard() {
+  const { bundle, isDirty } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isPaintingRef = useRef(false);
+  const lastPaintedIndexRef = useRef<number | null>(null);
+  const [activeTileWord, setActiveTileWord] = useState<number>(0);
+  const [hoveredPoint, setHoveredPoint] = useState<ScenarioEditorMapPoint | null>(null);
+  const tileWords = useMemo(() => getScenarioEditorMapTileWords(bundle), [bundle]);
+  const hoveredTileWord =
+    hoveredPoint === null ? null : readScenarioEditorMapTileWord(bundle, hoveredPoint);
+
+  useEffect(() => {
+    drawScenarioEditorPreview(canvasRef.current, tileWords);
+  }, [tileWords]);
+
+  const handlePointerPaint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const point = getScenarioEditorPointerTile(event.currentTarget, event.clientX, event.clientY);
+    setHoveredPoint(point);
+    if (point === null) {
+      return;
+    }
+
+    const index = getScenarioEditorMapIndex(point);
+    if (index === null || lastPaintedIndexRef.current === index) {
+      return;
+    }
+
+    dispatch({
+      type: 'paint-map-tile',
+      x: point.x,
+      y: point.y,
+      tileWord: activeTileWord,
+    });
+    lastPaintedIndexRef.current = index;
+  };
+
+  return (
+    <section className="editor-card editor-map-card" aria-label="Scenario map editor">
+      <h1>Scenario Map</h1>
+      <p>
+        Paint map words directly on the fixed `120x100` world (`WORLD_X=120`, `WORLD_Y=100`) used by
+        classic Micropolis scenario/city files.
+      </p>
+
+      <div className="editor-map-controls">
+        <label className="editor-field">
+          <span>Active Tile Word</span>
+          <input
+            max={65535}
+            min={0}
+            onChange={(event) => {
+              setActiveTileWord(normalizeScenarioEditorTileWord(Number(event.currentTarget.value)));
+            }}
+            type="number"
+            value={activeTileWord}
+          />
+          <small className="editor-help">Stored as unsigned 16-bit map words.</small>
+        </label>
+
+        <div className="editor-map-preset-row">
+          {EDITOR_TILE_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              onClick={() => {
+                setActiveTileWord(preset.tileWord);
+              }}
+              type="button"
+            >
+              {preset.label} ({preset.source})
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="editor-map-fill-button"
+          onClick={() => {
+            dispatch({ type: 'fill-map', tileWord: activeTileWord });
+          }}
+          type="button"
+        >
+          Fill Entire Map
+        </button>
+      </div>
+
+      <div className="editor-map-preview-shell">
+        <canvas
+          aria-label="Scenario map preview canvas"
+          className="editor-map-preview"
+          height={SCENARIO_BUNDLE_V1_MAP_HEIGHT}
+          onPointerCancel={(event) => {
+            isPaintingRef.current = false;
+            lastPaintedIndexRef.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            isPaintingRef.current = true;
+            lastPaintedIndexRef.current = null;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            handlePointerPaint(event);
+          }}
+          onPointerLeave={() => {
+            setHoveredPoint(null);
+            if (!isPaintingRef.current) {
+              lastPaintedIndexRef.current = null;
+            }
+          }}
+          onPointerMove={(event) => {
+            if (!isPaintingRef.current) {
+              setHoveredPoint(
+                getScenarioEditorPointerTile(event.currentTarget, event.clientX, event.clientY),
+              );
+              return;
+            }
+            handlePointerPaint(event);
+          }}
+          onPointerUp={(event) => {
+            isPaintingRef.current = false;
+            lastPaintedIndexRef.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          ref={canvasRef}
+          width={SCENARIO_BUNDLE_V1_MAP_WIDTH}
+        />
+      </div>
+
+      <dl className="editor-grid">
+        <dt>Map Size</dt>
+        <dd>
+          {SCENARIO_BUNDLE_V1_MAP_WIDTH} x {SCENARIO_BUNDLE_V1_MAP_HEIGHT}
+        </dd>
+        <dt>Tile Count</dt>
+        <dd>{tileWords.length}</dd>
+        <dt>Hover</dt>
+        <dd>
+          {hoveredPoint === null || hoveredTileWord === null
+            ? 'outside map'
+            : `x=${hoveredPoint.x}, y=${hoveredPoint.y}, tileWord=${hoveredTileWord}`}
+        </dd>
+        <dt>Dirty State</dt>
+        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+      </dl>
+    </section>
+  );
+}
+
+/**
+ * Placeholder card for Stage 3 sections not implemented by task 3.3.
  * Not from Micropolis C: this communicates staged delivery in the editor shell.
  */
-function ScenarioMvpPlaceholderCard() {
+function ScenarioExportPendingCard() {
   return (
     <section className="editor-card" aria-label="Pending editor sections">
       <h1>Section Pending</h1>
-      <p>Metadata editing is implemented. Map and export panels are staged in later tasks.</p>
+      <p>Export and import panels are staged in later Stage 3 tasks.</p>
     </section>
   );
 }
@@ -210,4 +393,96 @@ function parseIntegerInput(rawValue: string, fallback: number): number {
   }
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+/**
+ * Convert canvas pointer coordinates to fixed map tile coordinates.
+ * Mirrors Micropolis bounds guards (`0 <= x < WORLD_X`, `0 <= y < WORLD_Y`) from
+ * `SimCmdTile` in `ref/micropolis/src/sim/w_sim.c`; parity difference: input space is
+ * browser canvas pixels rather than Tcl command arguments.
+ */
+function getScenarioEditorPointerTile(
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number,
+): ScenarioEditorMapPoint | null {
+  const rect = canvas.getBoundingClientRect();
+  if (
+    clientX < rect.left ||
+    clientX >= rect.right ||
+    clientY < rect.top ||
+    clientY >= rect.bottom ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return null;
+  }
+
+  const x = Math.floor(((clientX - rect.left) / rect.width) * SCENARIO_BUNDLE_V1_MAP_WIDTH);
+  const y = Math.floor(((clientY - rect.top) / rect.height) * SCENARIO_BUNDLE_V1_MAP_HEIGHT);
+  const point = { x, y };
+
+  return getScenarioEditorMapIndex(point) === null ? null : point;
+}
+
+/**
+ * Render the current map words to the `120x100` preview canvas.
+ * Mirrors classic map cardinality (`WORLD_X=120`, `WORLD_Y=100`) from
+ * `ref/micropolis/src/sim/headers/sim.h`; parity difference: this is a simplified
+ * editor visualization, not the original sprite/tile renderer from Micropolis UI code.
+ */
+function drawScenarioEditorPreview(canvas: HTMLCanvasElement | null, tileWords: readonly number[]) {
+  if (canvas === null) {
+    return;
+  }
+
+  const context = canvas.getContext('2d');
+  if (context === null) {
+    return;
+  }
+
+  const imageData = context.createImageData(
+    SCENARIO_BUNDLE_V1_MAP_WIDTH,
+    SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+  );
+  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
+    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
+      const mapIndex = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT + y;
+      const pixelIndex = (y * SCENARIO_BUNDLE_V1_MAP_WIDTH + x) * 4;
+      const tileWord = tileWords[mapIndex] ?? 0;
+      const [red, green, blue] = getScenarioEditorPreviewColor(tileWord);
+
+      imageData.data[pixelIndex] = red;
+      imageData.data[pixelIndex + 1] = green;
+      imageData.data[pixelIndex + 2] = blue;
+      imageData.data[pixelIndex + 3] = 255;
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+/**
+ * Map one tile word to a preview RGB color.
+ * Uses Micropolis low-10-bit tile base semantics (`LOMASK=1023`) from
+ * `ref/micropolis/src/sim/headers/sim.h`; parity difference: color selection is
+ * editor-specific and not a 1:1 port of classic tile art.
+ */
+function getScenarioEditorPreviewColor(tileWord: number): readonly [number, number, number] {
+  const tileBase = tileWord & TILE_BASE_MASK;
+
+  if (tileBase === 0) {
+    return [187, 167, 132];
+  }
+  if (tileBase === 2) {
+    return [71, 132, 201];
+  }
+  if (tileBase === 3) {
+    return [103, 171, 227];
+  }
+
+  const red = (tileBase * 67 + 29) & 255;
+  const green = (tileBase * 37 + 97) & 255;
+  const blue = (tileBase * 19 + 173) & 255;
+  return [red, green, blue];
 }

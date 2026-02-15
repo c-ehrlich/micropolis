@@ -14,6 +14,8 @@ import {
   useReducer,
 } from 'react';
 
+import { fillScenarioEditorMapTileWord, writeScenarioEditorMapTileWord } from './editor-map.ts';
+
 /**
  * Editor workbench sections for Stage 3 MVP navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
@@ -72,6 +74,8 @@ export interface ScenarioEditorMetadataValidationIssues {
 export type ScenarioEditorAction =
   | { type: 'mark-clean' }
   | { type: 'mark-dirty' }
+  | { type: 'fill-map'; tileWord: number }
+  | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
   | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
@@ -140,6 +144,28 @@ export function scenarioEditorReducer(
         ...state,
         isDirty: true,
       };
+    case 'fill-map': {
+      const nextBundle = fillScenarioEditorMapTileWord(state.bundle, action.tileWord);
+      if (nextBundle === state.bundle) {
+        return state;
+      }
+      return {
+        ...state,
+        bundle: nextBundle,
+        isDirty: true,
+      };
+    }
+    case 'paint-map-tile': {
+      const nextBundle = writeScenarioEditorMapTileWord(state.bundle, action, action.tileWord);
+      if (nextBundle === state.bundle) {
+        return state;
+      }
+      return {
+        ...state,
+        bundle: nextBundle,
+        isDirty: true,
+      };
+    }
     case 'update-metadata':
       return {
         ...state,

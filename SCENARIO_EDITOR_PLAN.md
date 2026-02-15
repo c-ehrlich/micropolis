@@ -110,7 +110,7 @@
 ### Requirements (Task Checklist)
 - [x] **3.1** Scaffold `apps/scenario-editor` with route/layout/state foundations.
 - [x] **3.2** Implement scenario metadata editing (`key`, name, description, tags, start params).
-- [ ] **3.3** Implement manual map editing + map preview for fixed `120x100`.
+- [x] **3.3** Implement manual map editing + map preview for fixed `120x100`.
 - [ ] **3.4** Implement strict export to bundle JSON (fail on validation/lint errors).
 - [ ] **3.5** Implement bundle import/open flow for iterative edits.
 - [ ] **3.6** Keep script/objective authoring UI out of MVP (deferred to later stage).
