@@ -10,6 +10,11 @@ import {
 } from 'react';
 
 import {
+  buildScenarioEditorStrictExport,
+  getScenarioEditorExportFileName,
+  type ScenarioEditorStrictExportResult,
+} from '../state/editor-export.ts';
+import {
   getScenarioEditorMapIndex,
   getScenarioEditorMapTileWords,
   normalizeScenarioEditorTileWord,
@@ -51,7 +56,7 @@ function ScenarioEditorHomeRoute() {
     return <ScenarioMapEditorCard />;
   }
 
-  return <ScenarioExportPendingCard />;
+  return <ScenarioExportCard />;
 }
 
 /**
@@ -362,14 +367,77 @@ function ScenarioMapEditorCard() {
 }
 
 /**
- * Placeholder card for Stage 3 sections not implemented by task 3.3.
- * Not from Micropolis C: this communicates staged delivery in the editor shell.
+ * Strict JSON export card for Stage 3.4.
+ * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
+ * persistence in `ref/micropolis/src/sim/s_fileio.c`; lint UX/status is editor-only.
  */
-function ScenarioExportPendingCard() {
+function ScenarioExportCard() {
+  const { bundle, isDirty } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const [lastResult, setLastResult] = useState<ScenarioEditorStrictExportResult | null>(null);
+  const exportFileName = getScenarioEditorExportFileName(bundle.key);
+
+  const handleExport = () => {
+    const result = buildScenarioEditorStrictExport(bundle);
+    setLastResult(result);
+
+    if (!result.ok) {
+      return;
+    }
+
+    triggerScenarioBundleJsonDownload(exportFileName, result.jsonText);
+    dispatch({ type: 'mark-clean' });
+  };
+
+  const issues = lastResult?.ok === false ? lastResult.issues : [];
+
   return (
-    <section className="editor-card" aria-label="Pending editor sections">
-      <h1>Section Pending</h1>
-      <p>Export and import panels are staged in later Stage 3 tasks.</p>
+    <section className="editor-card" aria-label="Scenario strict export panel">
+      <h1>Export Scenario Bundle</h1>
+      <p>
+        Run strict schema/lint checks and export a canonical `ScenarioBundleV1` JSON file with map
+        payload compiled to `city-file-bytes`.
+      </p>
+
+      <div className="editor-export-actions">
+        <button className="editor-export-button" onClick={handleExport} type="button">
+          Export Bundle JSON
+        </button>
+        <small className="editor-help">File name: {exportFileName}</small>
+      </div>
+
+      <dl className="editor-grid">
+        <dt>Dirty State</dt>
+        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
+        <dt>Last Export Attempt</dt>
+        <dd>
+          {lastResult === null
+            ? 'not attempted'
+            : lastResult.ok
+              ? 'success'
+              : `blocked (${issues.length} issue${issues.length === 1 ? '' : 's'})`}
+        </dd>
+      </dl>
+
+      {lastResult?.ok === false ? (
+        <section aria-label="Strict export issues" className="editor-export-issues">
+          <h2>Export Blocked</h2>
+          <ul>
+            {lastResult.issues.map((issue, index) => (
+              <li key={`${issue.source}:${issue.path}:${issue.message}:${index}`}>
+                <strong>{issue.source}</strong> at <code>{issue.path}</code>: {issue.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {lastResult?.ok ? (
+        <section aria-label="Export json preview" className="editor-export-preview">
+          <h2>Last Export JSON</h2>
+          <textarea readOnly rows={12} value={lastResult.jsonText} />
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -380,6 +448,24 @@ function ScenarioExportPendingCard() {
  */
 function preventFormSubmit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
+}
+
+/**
+ * Trigger one browser download for a strict-export scenario bundle JSON file.
+ * Not from Micropolis C: classic scenario/city files were written by `saveFile` in
+ * `ref/micropolis/src/sim/s_fileio.c`; this is browser download plumbing.
+ */
+function triggerScenarioBundleJsonDownload(fileName: string, jsonText: string) {
+  const blob = new Blob([jsonText], { type: 'application/json' });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  anchor.click();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 0);
 }
 
 /**
