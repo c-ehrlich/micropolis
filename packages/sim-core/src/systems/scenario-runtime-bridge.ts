@@ -1,24 +1,10 @@
 import {
   createScenarioRuntimeState,
-  type ScenarioEventDefinition,
-  type ScenarioObjectiveDefinition,
+  getClassicBuiltinScenarioRuntimeDefinitionByLegacyId,
   type ScenarioRuntimeDefinition,
   type ScenarioRuntimeState,
 } from '../../../scenario-runtime/src/index.ts';
 import type { SimState } from '../core/sim-state.ts';
-
-const LEGACY_DISASTER_WAIT_BY_ID = [0, 2, 10, 5, 20, 3, 5, 5, 2 * 48] as const;
-const LEGACY_SCORE_WAIT_BY_ID = [
-  0,
-  30 * 48,
-  5 * 48,
-  5 * 48,
-  10 * 48,
-  5 * 48,
-  10 * 48,
-  5 * 48,
-  10 * 48,
-] as const;
 
 interface SimScenarioRuntimeEntry {
   readonly legacyScenarioId: number;
@@ -54,153 +40,14 @@ const normalizeLegacyScenarioId = (value: number): number => {
   return value;
 };
 
-const legacyScenarioObjectiveDefinition = (
-  scenarioId: number,
-  initialCountdown: number,
-): ScenarioObjectiveDefinition => {
-  switch (scenarioId) {
-    case 1:
-    case 2:
-    case 3:
-      return {
-        key: `legacy/scenario-${scenarioId}-objective`,
-        initialCountdown,
-        predicate: {
-          kind: 'metric',
-          metric: 'city-class',
-          op: 'gte',
-          value: 4,
-        },
-        successMessageId: -100,
-        failureMessageId: -200,
-        loseGameOnFailure: true,
-      };
-    case 4:
-      return {
-        key: 'legacy/scenario-4-objective',
-        initialCountdown,
-        predicate: {
-          kind: 'metric',
-          metric: 'traffic-average',
-          op: 'lt',
-          value: 80,
-        },
-        successMessageId: -100,
-        failureMessageId: -200,
-        loseGameOnFailure: true,
-      };
-    case 6:
-      return {
-        key: 'legacy/scenario-6-objective',
-        initialCountdown,
-        predicate: {
-          kind: 'metric',
-          metric: 'crime-average',
-          op: 'lt',
-          value: 60,
-        },
-        successMessageId: -100,
-        failureMessageId: -200,
-        loseGameOnFailure: true,
-      };
-    case 5:
-    case 7:
-    case 8:
-      return {
-        key: `legacy/scenario-${scenarioId}-objective`,
-        initialCountdown,
-        predicate: {
-          kind: 'metric',
-          metric: 'city-score',
-          op: 'gt',
-          value: 500,
-        },
-        successMessageId: -100,
-        failureMessageId: -200,
-        loseGameOnFailure: true,
-      };
-    default:
-      throw new Error(`unsupported legacy scenario objective: ${scenarioId}`);
-  }
-};
-
-const legacyScenarioEventDefinition = (
-  scenarioId: number,
-  initialCountdown: number,
-): ScenarioEventDefinition => {
-  switch (scenarioId) {
-    case 2:
-      return {
-        key: 'legacy/scenario-2-disaster',
-        initialCountdown,
-        rules: [
-          {
-            when: { kind: 'countdown-equals', value: 1 },
-            action: { kind: 'make-earthquake' },
-          },
-        ],
-      };
-    case 3:
-      return {
-        key: 'legacy/scenario-3-disaster',
-        initialCountdown,
-        rules: [{ when: { kind: 'always' }, action: { kind: 'drop-fire-bombs' } }],
-      };
-    case 5:
-      return {
-        key: 'legacy/scenario-5-disaster',
-        initialCountdown,
-        rules: [
-          {
-            when: { kind: 'countdown-equals', value: 1 },
-            action: { kind: 'make-monster' },
-          },
-        ],
-      };
-    case 7:
-      return {
-        key: 'legacy/scenario-7-disaster',
-        initialCountdown,
-        rules: [
-          {
-            when: { kind: 'countdown-equals', value: 1 },
-            action: { kind: 'make-meltdown' },
-          },
-        ],
-      };
-    case 8:
-      return {
-        key: 'legacy/scenario-8-disaster',
-        initialCountdown,
-        rules: [
-          {
-            when: { kind: 'countdown-every', interval: 24 },
-            action: { kind: 'make-flood' },
-          },
-        ],
-      };
-    case 1:
-    case 4:
-    case 6:
-      return {
-        key: `legacy/scenario-${scenarioId}-disaster`,
-        initialCountdown,
-        rules: [],
-      };
-    default:
-      throw new Error(`unsupported legacy scenario event: ${scenarioId}`);
-  }
-};
-
 /**
  * Builds a declarative runtime definition for one classic numeric scenario id.
  *
  * Mapping note:
- * - Mirrors classic countdown setup from `DisTab`/`ScoreWaitTab` in
- *   `ref/micropolis/src/sim/s_sim.c` and condition logic in
- *   `ref/micropolis/src/sim/s_disast.c` + `ref/micropolis/src/sim/s_msg.c`.
- * - This is a transition adapter for id-decoupled runtime wiring; Stage 1.3
- *   will replace this legacy-id builder with canonical `builtin/*` definitions.
+ * - Legacy ids mirror `LoadScenario(short s)` in `ref/micropolis/src/sim/s_fileio.c`.
+ * - Runtime behavior is read from canonical `builtin/*` declarative definitions
+ *   in `@city/scenario-runtime`, which port countdown/event/objective parity from
+ *   `s_sim.c`, `s_disast.c`, and `s_msg.c`.
  */
 export function createLegacyScenarioRuntimeDefinition(
   scenarioId: number,
@@ -210,17 +57,7 @@ export function createLegacyScenarioRuntimeDefinition(
     return undefined;
   }
 
-  const initialDisasterCountdown = LEGACY_DISASTER_WAIT_BY_ID[normalizedScenarioId];
-  const initialScoreCountdown = LEGACY_SCORE_WAIT_BY_ID[normalizedScenarioId];
-  if (initialDisasterCountdown === undefined || initialScoreCountdown === undefined) {
-    return undefined;
-  }
-
-  return {
-    key: `legacy/scenario-${normalizedScenarioId}`,
-    events: [legacyScenarioEventDefinition(normalizedScenarioId, initialDisasterCountdown)],
-    objective: legacyScenarioObjectiveDefinition(normalizedScenarioId, initialScoreCountdown),
-  };
+  return getClassicBuiltinScenarioRuntimeDefinitionByLegacyId(normalizedScenarioId);
 }
 
 /**

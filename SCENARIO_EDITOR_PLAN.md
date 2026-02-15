@@ -67,7 +67,7 @@
 ### Requirements (Task Checklist)
 - [x] **1.1** Create `packages/scenario-runtime` with declarative event/objective runtime state.
 - [x] **1.2** Replace hardcoded `ScenarioID` conditionals in sim runtime paths with scenario-runtime inputs.
-- [ ] **1.3** Port classic built-in scenarios to declarative data (`builtin/*`) with parity behavior.
+- [x] **1.3** Port classic built-in scenarios to declarative data (`builtin/*`) with parity behavior.
 - [ ] **1.4** Implement closed behavior profile registry and map legacy behavior (including SF ship-honk variant).
 - [ ] **1.5** Keep deterministic behavior parity with fixed-seed runs.
 

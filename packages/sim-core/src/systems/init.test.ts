@@ -420,6 +420,9 @@ describe('simLoadInit', () => {
     );
 
     expect(actualHash).toBe(expectedHash);
+    // ScenarioID 4 is Bern in `LoadScenario` (`ref/micropolis/src/sim/s_fileio.c`).
+    // Stage 1.3 parity: legacy id runtime wiring now resolves canonical `builtin/*` keys.
+    expect(getSimScenarioRuntimeState(state)?.key).toBe('builtin/bern');
   });
 
   it('clamps ScenarioID and calls setGameLevel with the normalized value', () => {
