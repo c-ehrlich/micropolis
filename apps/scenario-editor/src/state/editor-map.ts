@@ -747,6 +747,51 @@ export function applyScenarioEditorMapSpecialZoneAtPoint(
 }
 
 /**
+ * Recompute power connectivity and zone/utility power flags over the authored map.
+ * Mirrors `DoPowerScan` + `SetZPower`/`DoNilPower` flows in
+ * `ref/micropolis/src/sim/s_power.c` and `ref/micropolis/src/sim/s_sim.c`.
+ * Parity note: editor pass is power-only and intentionally omits growth/disaster logic.
+ */
+export function deriveScenarioEditorMapPower(bundle: ScenarioBundleV1): ScenarioBundleV1 {
+  const tileWordsMap = asTileWordsMap(bundle);
+  const store = createClassicMapStore();
+  const initialMapLayer = store.snapshot('map');
+  if (!(initialMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  initialMapLayer.set(tileWordsMap.tileWords);
+
+  store.beginTick();
+  const map = store.getLayer('map');
+  if (!(map instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  map.set(tileWordsMap.tileWords);
+
+  const state = createSimState();
+  const context = createSimContext({
+    store,
+    rng: new MicropolisRng(SCENARIO_EDITOR_DERIVE_SIM_RNG_SEED),
+  });
+  seedScenarioEditorPowerScanState(state, map);
+  doPowerScan(state, context, {
+    lastTileId: Tile.DIRT,
+  });
+  applyScenarioEditorDerivedPowerFlags(context);
+
+  const tickResult = store.commitTick();
+  if (tickResult.patches.length === 0) {
+    return bundle;
+  }
+
+  const nextMapLayer = store.snapshot('map');
+  if (!(nextMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
  * Run a constrained simulation-derive pass over the authored map.
  * Mirrors selected update paths from `ref/micropolis/src/sim/s_sim.c`:
  * - power propagation (`DoPowerScan` / `SetZPower`)
@@ -802,7 +847,10 @@ export function deriveScenarioEditorMapSimulation(
   for (let tick = 0; tick < ticks; tick += 1) {
     runScenarioEditorDerivedTrafficStep(state, context);
     seedScenarioEditorPowerScanState(state, map);
-    doPowerScan(state, context);
+    doPowerScan(state, context, {
+      lastTileId: Tile.DIRT,
+    });
+    applyScenarioEditorDerivedPowerFlags(context);
     state.NewPower = 1;
 
     mapScanSlice(
@@ -844,6 +892,37 @@ function normalizeScenarioEditorDeriveSimulationTickCount(ticks: number | undefi
     return SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_DEFAULT;
   }
   return clamp(Math.trunc(ticks), 1, SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_MAX);
+}
+
+/**
+ * Apply power-bit flags over the full authored map from current power-layer state.
+ * Mirrors `SetZPower` usage from `DoNilPower` and map-scan conductive updates in
+ * `ref/micropolis/src/sim/s_sim.c`/`s_power.c`, with editor-specific full-map scope.
+ */
+function applyScenarioEditorDerivedPowerFlags(context: ReturnType<typeof createSimContext>): void {
+  const map = context.store.getLayer('map');
+  if (!(map instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  const power = context.store.getLayer('power');
+  if (!(power instanceof Uint16Array)) {
+    throw new Error('expected uint16 power layer');
+  }
+
+  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
+    const xOffset = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT;
+    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
+      const index = xOffset + y;
+      const tile = map[index];
+      if (tile === undefined || tile === 0) {
+        continue;
+      }
+      if ((tile & (TileFlag.CONDBIT | TileFlag.ZONEBIT)) === 0) {
+        continue;
+      }
+      setZPowerAt(context.store, power, x, y, index, tile);
+    }
+  }
 }
 
 /**

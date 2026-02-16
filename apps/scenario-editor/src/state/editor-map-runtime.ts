@@ -12,19 +12,41 @@ const EMPTY_DIRTY_TILE_INDEXES = new Uint32Array(0);
 const EMPTY_DIRTY_RECTS = Object.freeze([] as const);
 
 /**
+ * Runtime-map projection options for scenario editor rendering.
+ * Not from Micropolis C: editor-only draw-state toggles layered on top of
+ * canonical map tiles for `MapCanvas` behavior parity.
+ */
+export interface ScenarioEditorRuntimeMapStateOptions {
+  readonly blinkUnpoweredZoneCenter?: boolean;
+}
+
+/**
  * Builds one runtime-map projection from scenario bundle map words.
  * Mirrors Micropolis x-major map storage (`Map[x][y]`) from
  * `ref/micropolis/src/sim/s_alloc.c`; parity difference: output tiles are row-major
  * for `MapCanvas` rendering, matching runtime conversion in `apps/web`.
  */
 export function createScenarioEditorRuntimeMapState(bundle: ScenarioBundleV1): RuntimeMapState {
+  return createScenarioEditorRuntimeMapStateWithOptions(bundle);
+}
+
+/**
+ * Builds one runtime-map projection from scenario bundle map words.
+ * Mirrors Micropolis x-major map storage (`Map[x][y]`) from
+ * `ref/micropolis/src/sim/s_alloc.c`; parity difference: output tiles are row-major
+ * for `MapCanvas` rendering, matching runtime conversion in `apps/web`.
+ */
+export function createScenarioEditorRuntimeMapStateWithOptions(
+  bundle: ScenarioBundleV1,
+  options: ScenarioEditorRuntimeMapStateOptions = {},
+): RuntimeMapState {
   const tileWords = getScenarioEditorMapTileWords(bundle);
   return {
     hasSnapshot: true,
     width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
     height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
     tiles: toScenarioEditorRuntimeRowMajorTiles(tileWords),
-    blinkUnpoweredZoneCenter: false,
+    blinkUnpoweredZoneCenter: options.blinkUnpoweredZoneCenter ?? false,
     dirtyTileIndexes: EMPTY_DIRTY_TILE_INDEXES,
     dirtyRects: EMPTY_DIRTY_RECTS,
     drawMode: 'snapshot',

@@ -22,6 +22,7 @@ import {
   applyScenarioEditorMapSpecialZoneAtPoint,
   applyScenarioEditorMapToolAtPoint,
   applyScenarioEditorMapZoneLevelAtPoint,
+  deriveScenarioEditorMapPower,
   deriveScenarioEditorMapSimulation,
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
@@ -415,7 +416,8 @@ function applyScenarioEditorMapMutation(
     return state;
   }
 
-  const nextBundle = recomputeScenarioEditorMapTerrain(mutatedBundle, terrainRecompute);
+  const terrainBundle = recomputeScenarioEditorMapTerrain(mutatedBundle, terrainRecompute);
+  const nextBundle = deriveScenarioEditorMapPower(terrainBundle);
   return {
     ...state,
     bundle: nextBundle,

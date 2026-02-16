@@ -42,7 +42,7 @@ import {
   type ScenarioEditorMapSpecialZoneKind,
   type ScenarioEditorMapZoneKind,
 } from '../state/editor-map.ts';
-import { createScenarioEditorRuntimeMapState } from '../state/editor-map-runtime.ts';
+import { createScenarioEditorRuntimeMapStateWithOptions } from '../state/editor-map-runtime.ts';
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import { EditorCard, EditorStatsGrid } from './-editor-ui.tsx';
 
@@ -588,7 +588,14 @@ export function ScenarioMapFinalWorkbench() {
   const activeZoneOptionKey = brushSelection.zoneOptionKey;
   const activeTool = brushSelection.tool;
   const activeSmartBaseBrushId = brushSelection.baseBrushId;
-  const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
+  const runtimeMapState = useMemo(
+    () =>
+      createScenarioEditorRuntimeMapStateWithOptions(bundle, {
+        // Editor-only UX: show unpowered indicator continuously (no blink).
+        blinkUnpoweredZoneCenter: true,
+      }),
+    [bundle],
+  );
   const zoneAtlasCanonicalIdentityKey = useMemo(
     () => resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic'),
     [],
@@ -1399,7 +1406,14 @@ export function ScenarioMapEditorCard() {
     [activeBaseTileId],
   );
   const tileWords = useMemo(() => getScenarioEditorMapTileWords(bundle), [bundle]);
-  const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
+  const runtimeMapState = useMemo(
+    () =>
+      createScenarioEditorRuntimeMapStateWithOptions(bundle, {
+        // Editor-only UX: show unpowered indicator continuously (no blink).
+        blinkUnpoweredZoneCenter: true,
+      }),
+    [bundle],
+  );
   const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
   const activeZoneMaxLevel = useMemo(
     () => getScenarioEditorMapZoneMaxLevel(activeZoneKind),
