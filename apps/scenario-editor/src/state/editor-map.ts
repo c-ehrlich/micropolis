@@ -16,6 +16,7 @@ import {
   indPlop,
   MicropolisRng,
   resPlop,
+  smoothRiver,
   smoothTrees,
   smoothWater,
   Tile,
@@ -26,12 +27,14 @@ const SCENARIO_EDITOR_TILE_WORD_MASK = 0xffff;
 const SCENARIO_EDITOR_TOOL_FUNDS = 1_000_000_000;
 const SCENARIO_EDITOR_TOOL_RNG_SEED = 0x00c17e77;
 const SCENARIO_EDITOR_ZONE_PLACEMENT_RNG_SEED = 0x00c1de55;
+const SCENARIO_EDITOR_TERRAIN_SMOOTH_RNG_SEED = 0x001ce5ee;
 const SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS = {
   simStep: 0,
   order: 0,
   tickId: 0,
   seq: 0,
 } as const;
+const SCENARIO_EDITOR_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 4;
 
 /**
  * Tool names exposed by the scenario map editor.
@@ -79,10 +82,10 @@ export const SCENARIO_EDITOR_MAP_ZONE_KINDS = ['res', 'com', 'ind'] as const;
 export type ScenarioEditorMapZoneKind = (typeof SCENARIO_EDITOR_MAP_ZONE_KINDS)[number];
 
 /**
- * Density/wealth controls for direct zone-level placement.
+ * Density/value controls for direct zone-level placement.
  * Mirrors `ResPlop` / `ComPlop` / `IndPlop` formulas in
  * `ref/micropolis/src/sim/s_zone.c` where `den` is zone level and `value`
- * is land-value class (0..3 from `GetCRVal`).
+ * follows zone-family constraints (`GetCRVal` 0..3 for R/C, `Rand16() & 1` for I).
  */
 export interface ScenarioEditorMapZoneLevelOptions {
   readonly level: number;
@@ -119,6 +122,27 @@ export interface ScenarioEditorMapBaseTileWriteOptions {
 export interface ScenarioEditorMapPoint {
   readonly x: number;
   readonly y: number;
+}
+
+/**
+ * Terrain post-processing mode for scenario map edits.
+ * Mirrors Micropolis terrain smoothing routines from `ref/micropolis/src/sim/s_gen.c`:
+ * - `global`: run smoothing over the whole map.
+ * - `local`: run smoothing globally, but persist only a bounded neighborhood around one edit.
+ * - `off`: skip terrain smoothing entirely for exact tile authoring.
+ */
+export type ScenarioEditorMapTerrainRecomputeMode = 'global' | 'local' | 'off';
+
+/**
+ * Terrain post-processing options for one editor map mutation.
+ * Mirrors `SmoothTrees`/`SmoothWater`/`SmoothRiver` usage in Micropolis terrain tooling
+ * (`ref/micropolis/src/sim/terrain/terra.c`) while allowing local-only persistence in the
+ * web editor to reduce unrelated map churn.
+ */
+export interface ScenarioEditorMapTerrainRecomputeOptions {
+  readonly mode?: ScenarioEditorMapTerrainRecomputeMode;
+  readonly center?: ScenarioEditorMapPoint;
+  readonly radius?: number;
 }
 
 /**
@@ -285,11 +309,28 @@ export function findScenarioEditorMapNamedBaseTileById(
 }
 
 /**
- * Normalize zone-value class to C `GetCRVal` domain (0..3).
- * Mirrors `GetCRVal` return range in `ref/micropolis/src/sim/s_zone.c`.
+ * Resolve max value class for one zone family.
+ * Mirrors `DoIndustrial` in `ref/micropolis/src/sim/s_zone.c` which calls
+ * `DoIndIn`/`DoIndOut` with `Rand16() & 1` (industrial value domain 0..1), while
+ * residential/commercial use `GetCRVal` (0..3).
  */
-export function normalizeScenarioEditorMapZoneValue(value: number): number {
-  return clamp(Math.trunc(value), 0, 3);
+export function getScenarioEditorMapZoneMaxValue(zone: ScenarioEditorMapZoneKind): number {
+  if (zone === 'ind') {
+    return 1;
+  }
+  return 3;
+}
+
+/**
+ * Normalize zone-value class to the valid C domain for one zone family.
+ * Mirrors `GetCRVal` bounds in `ref/micropolis/src/sim/s_zone.c` for R/C and
+ * `Rand16() & 1` industrial value selection in `DoIndustrial`.
+ */
+export function normalizeScenarioEditorMapZoneValue(
+  zone: ScenarioEditorMapZoneKind,
+  value: number,
+): number {
+  return clamp(Math.trunc(value), 0, getScenarioEditorMapZoneMaxValue(zone));
 }
 
 /**
@@ -378,20 +419,30 @@ export function fillScenarioEditorMapBaseTileId(
 /**
  * Recompute terrain-edge tiles after editor map mutation.
  * Mirrors terrain post-processing routines from `ref/micropolis/src/sim/s_gen.c`
- * by applying `SmoothTrees` then `SmoothWater` to the whole map.
- * Parity note: this editor helper is deterministic and does not run map generation.
+ * and terraforming tooling from `ref/micropolis/src/sim/terrain/terra.c` by applying
+ * `SmoothTrees` (twice), `SmoothWater`, and `SmoothRiver`.
+ * Parity note: local mode keeps smoothing deterministic but persists only a bounded window.
  */
-export function recomputeScenarioEditorMapTerrain(bundle: ScenarioBundleV1): ScenarioBundleV1 {
-  const tileWordsMap = asTileWordsMap(bundle);
-  const map = Uint16Array.from(tileWordsMap.tileWords);
+export function recomputeScenarioEditorMapTerrain(
+  bundle: ScenarioBundleV1,
+  options: ScenarioEditorMapTerrainRecomputeOptions = {},
+): ScenarioBundleV1 {
+  const mode = options.mode ?? 'global';
+  if (mode === 'off') {
+    return bundle;
+  }
 
-  smoothTrees(map);
-  smoothTrees(map);
-  smoothWater(map);
+  const tileWordsMap = asTileWordsMap(bundle);
+  const smoothedMap = Uint16Array.from(tileWordsMap.tileWords);
+  applyScenarioEditorTerrainSmoothing(smoothedMap);
+
+  if (mode === 'local') {
+    return applyScenarioEditorLocalTerrainRecompute(bundle, tileWordsMap, smoothedMap, options);
+  }
 
   let changed = false;
-  for (let index = 0; index < map.length; index += 1) {
-    if (map[index] !== tileWordsMap.tileWords[index]) {
+  for (let index = 0; index < smoothedMap.length; index += 1) {
+    if (smoothedMap[index] !== tileWordsMap.tileWords[index]) {
       changed = true;
       break;
     }
@@ -401,7 +452,102 @@ export function recomputeScenarioEditorMapTerrain(bundle: ScenarioBundleV1): Sce
     return bundle;
   }
 
-  return toScenarioEditorTileWordsBundle(bundle, Array.from(map));
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(smoothedMap));
+}
+
+/**
+ * Apply the classic terrain smoothing stack on a mutable map buffer.
+ * Mirrors "smooth both" terraforming flow in `ref/micropolis/src/sim/terrain/terra.c`:
+ * `SmoothWater`/`SmoothRiver` for water and `SmoothTrees` twice for forests.
+ */
+function applyScenarioEditorTerrainSmoothing(map: Uint16Array): void {
+  const rng = new MicropolisRng(SCENARIO_EDITOR_TERRAIN_SMOOTH_RNG_SEED);
+  smoothTrees(map);
+  smoothTrees(map);
+  smoothWater(map);
+  smoothRiver(map, rng);
+}
+
+/**
+ * Persist only a local window from a globally smoothed map.
+ * Parity difference from C: smoothing still runs with the full map context, but only a bounded
+ * area around one edit is written back to reduce unrelated editor churn.
+ */
+function applyScenarioEditorLocalTerrainRecompute(
+  bundle: ScenarioBundleV1,
+  tileWordsMap: ScenarioMapTileWordsV1,
+  smoothedMap: Uint16Array,
+  options: ScenarioEditorMapTerrainRecomputeOptions,
+): ScenarioBundleV1 {
+  const bounds = resolveScenarioEditorLocalRecomputeBounds(options.center, options.radius);
+  if (bounds === null) {
+    if (bundle.map.kind === 'tile-words') {
+      return bundle;
+    }
+    return toScenarioEditorTileWordsBundle(bundle, tileWordsMap.tileWords);
+  }
+
+  const nextTileWords = tileWordsMap.tileWords.slice();
+  let changed = false;
+  for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+    const xOffset = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT;
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      const index = xOffset + y;
+      const nextTileWord = smoothedMap[index];
+      const currentTileWord = nextTileWords[index];
+      if (
+        nextTileWord === undefined ||
+        currentTileWord === undefined ||
+        nextTileWord === currentTileWord
+      ) {
+        continue;
+      }
+      nextTileWords[index] = nextTileWord;
+      changed = true;
+    }
+  }
+
+  if (!changed && bundle.map.kind === 'tile-words') {
+    return bundle;
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, nextTileWords);
+}
+
+/**
+ * Resolve and clamp the local terrain recompute window.
+ * Not from Micropolis C: editor-only neighborhood persistence control over otherwise
+ * full-map smoothing passes.
+ */
+function resolveScenarioEditorLocalRecomputeBounds(
+  center: ScenarioEditorMapPoint | undefined,
+  radius: number | undefined,
+): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  if (center === undefined) {
+    return null;
+  }
+  if (getScenarioEditorMapIndex(center) === null) {
+    return null;
+  }
+
+  const normalizedRadius = normalizeScenarioEditorLocalRecomputeRadius(radius);
+  return {
+    minX: Math.max(0, center.x - normalizedRadius),
+    maxX: Math.min(SCENARIO_BUNDLE_V1_MAP_WIDTH - 1, center.x + normalizedRadius),
+    minY: Math.max(0, center.y - normalizedRadius),
+    maxY: Math.min(SCENARIO_BUNDLE_V1_MAP_HEIGHT - 1, center.y + normalizedRadius),
+  };
+}
+
+/**
+ * Clamp the local recompute radius to a practical editor-safe range.
+ * Not from Micropolis C: this bounds user-driven editor parameters for deterministic behavior.
+ */
+function normalizeScenarioEditorLocalRecomputeRadius(radius: number | undefined): number {
+  if (radius === undefined || !Number.isFinite(radius)) {
+    return SCENARIO_EDITOR_LOCAL_TERRAIN_RECOMPUTE_RADIUS;
+  }
+  return clamp(Math.trunc(radius), 1, 32);
 }
 
 /**
@@ -482,7 +628,7 @@ export function applyScenarioEditorMapZoneLevelAtPoint(
 
   const zone = options.zone;
   const level = normalizeScenarioEditorMapZoneLevel(zone, options.level);
-  const value = normalizeScenarioEditorMapZoneValue(options.value);
+  const value = normalizeScenarioEditorMapZoneValue(zone, options.value);
 
   store.beginTick();
   const state = createSimState();

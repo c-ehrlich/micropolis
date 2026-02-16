@@ -44,10 +44,11 @@ describe('scenario editor state foundation', () => {
     expect(next.isDirty).toBe(false);
   });
 
-  test('exposes Stage 4 objective/script/behavior views while still deferring ai authoring', () => {
+  test('exposes current editor views including the map final workbench', () => {
     expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual([
       'metadata',
       'map',
+      'map-final',
       'objective',
       'script',
       'behavior',
@@ -310,9 +311,12 @@ describe('scenario editor state foundation', () => {
       throw new Error('Expected tile-words map payload');
     }
 
-    // Magic number source: `SmoothWater()` pass 1 in `ref/micropolis/src/sim/s_gen.c`
-    // converts water adjacent to non-water into `REDGE`.
-    expect(next.bundle.map.tileWords[8 * 100 + 9]).toBe(Tile.REDGE);
+    const tileWord = next.bundle.map.tileWords[8 * 100 + 9] ?? 0;
+    // Magic number source: terrain tooling now applies `SmoothWater()` then
+    // `SmoothRiver()` as in `ref/micropolis/src/sim/terrain/terra.c`, so isolated
+    // water converges to shoreline variants `FIRSTRIVEDGE..LASTRIVEDGE`.
+    expect((tileWord & TileMask.LOMASK) >= Tile.FIRSTRIVEDGE).toBe(true);
+    expect((tileWord & TileMask.LOMASK) <= Tile.LASTRIVEDGE).toBe(true);
   });
 
   test('applies zone-level placement through reducer actions', () => {

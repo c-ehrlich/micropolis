@@ -1,6 +1,13 @@
 import { Tile } from '@city/sim-core';
 import { createFileRoute } from '@tanstack/react-router';
-import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from 'react';
+import {
+  type ChangeEvent,
+  type CSSProperties,
+  type FormEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   getPlayableToolSpec,
@@ -8,6 +15,11 @@ import {
   type PlayableToolName,
 } from '../../../web/src/game/runtime/protocol.ts';
 import { MapCanvas } from '../../../web/src/presentation/map/map-canvas.tsx';
+import {
+  getTileAtlasSourceByCanonicalIdentityKey,
+  lookupTileSpriteRectByTileId,
+  resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey,
+} from '../../../web/src/presentation/map/tile-sprite-atlas.ts';
 import {
   getScenarioEditorBehaviorValidationIssue,
   isScenarioEditorBehaviorProfileKey,
@@ -28,6 +40,7 @@ import {
   getScenarioEditorMapNamedBaseTiles,
   getScenarioEditorMapTileWords,
   getScenarioEditorMapZoneMaxLevel,
+  getScenarioEditorMapZoneMaxValue,
   isScenarioEditorMapTool,
   isScenarioEditorMapZoneKind,
   normalizeScenarioEditorBaseTileId,
@@ -83,6 +96,9 @@ const BASE_TILE_PRESETS = [
   { label: 'FOREST', source: 'WOODS=37', tileId: Tile.WOODS },
 ] as const;
 const BASE_TILE_NAME_OPTIONS = getScenarioEditorMapNamedBaseTiles();
+const TILE_WORD_NAME_OPTIONS = [...BASE_TILE_NAME_OPTIONS].sort(
+  (left, right) => left.tileId - right.tileId,
+);
 
 const SCENARIO_EDITOR_MAP_BRUSH_MODES = ['tool', 'zone-level', 'base-tile', 'tile-word'] as const;
 type ScenarioEditorMapBrushMode = (typeof SCENARIO_EDITOR_MAP_BRUSH_MODES)[number];
@@ -97,6 +113,154 @@ type ScenarioEditorOpenResult =
       readonly issues: readonly ScenarioEditorBundleImportIssue[];
       readonly ok: false;
     };
+
+const SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS: Readonly<Record<ScenarioEditorMapZoneKind, string>> = {
+  res: 'Residential',
+  com: 'Commercial',
+  ind: 'Industrial',
+};
+const SCENARIO_MAP_FINAL_ZONE_TOOL_BY_KIND: Readonly<
+  Record<ScenarioEditorMapZoneKind, PlayableToolName>
+> = {
+  res: 'res',
+  com: 'com',
+  ind: 'ind',
+};
+
+/**
+ * Resolve UI label text for per-zone value classes.
+ * Not from Micropolis C: editor-only wording that reflects `GetCRVal` (R/C) vs
+ * `Rand16() & 1` value handling in `DoIndustrial` (`ref/micropolis/src/sim/s_zone.c`).
+ */
+function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): string {
+  if (zone === 'ind') {
+    return 'Industrial Class';
+  }
+  return 'Land Value Class';
+}
+const SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 6;
+
+type ScenarioMapFinalBaseBrushMode = 'smart' | 'exact';
+type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base';
+type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
+
+interface ScenarioMapFinalSmartBaseBrush {
+  readonly id: ScenarioMapFinalSmartBaseBrushId;
+  readonly label: string;
+  readonly tileId: number;
+  readonly tooltip: string;
+}
+
+const SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES: readonly ScenarioMapFinalSmartBaseBrush[] = [
+  {
+    id: 'dirt',
+    label: 'Dirt',
+    tileId: Tile.DIRT,
+    tooltip: 'Dirt terrain brush',
+  },
+  {
+    id: 'water',
+    label: 'Water',
+    tileId: Tile.RIVER,
+    tooltip: 'Water brush (auto smoothing derives shore variants)',
+  },
+  {
+    id: 'channel',
+    label: 'Channel',
+    tileId: Tile.CHANNEL,
+    tooltip: 'Channel brush (kept during water smoothing)',
+  },
+  {
+    id: 'forest',
+    label: 'Forest',
+    tileId: Tile.WOODS,
+    tooltip: 'Forest brush (auto smoothing derives tree-edge variants)',
+  },
+] as const;
+const SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH: ScenarioMapFinalSmartBaseBrush = {
+  id: 'dirt',
+  label: 'Dirt',
+  tileId: Tile.DIRT,
+  tooltip: 'Dirt terrain brush',
+};
+
+type ScenarioMapFinalZoneOption =
+  | {
+      readonly key: 'fresh';
+      readonly kind: 'fresh';
+      readonly landValueClass: null;
+      readonly densityLevel: null;
+      readonly tileId: number;
+      readonly swatchTileIds: readonly number[];
+      readonly tooltip: string;
+    }
+  | {
+      readonly key: `level:${number}:value:${number}`;
+      readonly kind: 'developed';
+      readonly landValueClass: number;
+      readonly densityLevel: number;
+      readonly tileId: number;
+      readonly swatchTileIds: readonly number[];
+      readonly tooltip: string;
+    };
+type ScenarioMapFinalDevelopedZoneOption = Extract<
+  ScenarioMapFinalZoneOption,
+  { kind: 'developed' }
+>;
+
+/**
+ * Resolve undeveloped-zone center tile id for one R/C/I family.
+ * Mirrors zone clear-state constants from `ref/micropolis/src/sim/headers/sim.h`:
+ * residential `FREEZ`, commercial `COMCLR`, industrial `INDCLR`.
+ */
+function getMapFinalZoneFreshCenterTileId(zone: ScenarioEditorMapZoneKind): number {
+  if (zone === 'res') {
+    return Tile.FREEZ;
+  }
+  if (zone === 'com') {
+    return Tile.COMCLR;
+  }
+  return Tile.INDCLR;
+}
+
+/**
+ * Resolve developed-zone center tile id for one R/C/I density/value selection.
+ * Mirrors `ResPlop` / `ComPlop` / `IndPlop` center-tile formulas in
+ * `ref/micropolis/src/sim/s_zone.c` (`base + 4` with `den` as 0-based density).
+ */
+function getMapFinalZoneDevelopedCenterTileId(
+  zone: ScenarioEditorMapZoneKind,
+  densityLevel: number,
+  landValueClass: number,
+): number {
+  const den = densityLevel - 1;
+  if (zone === 'res') {
+    return (landValueClass * 4 + den) * 9 + Tile.RZB;
+  }
+  if (zone === 'com') {
+    return (landValueClass * 5 + den) * 9 + Tile.CZB;
+  }
+  return (landValueClass * 4 + den) * 9 + Tile.IZB;
+}
+
+/**
+ * Build the full 3x3 tile block for one zone variant from its center tile id.
+ * Mirrors `ZonePlop` writes in `ref/micropolis/src/sim/s_zone.c` where a zone's
+ * 3x3 block occupies `base..base+8` and the center is `base+4`.
+ */
+function getMapFinalZoneSwatchTileIds(centerTileId: number): readonly number[] {
+  return [
+    centerTileId - 4,
+    centerTileId - 3,
+    centerTileId - 2,
+    centerTileId - 1,
+    centerTileId,
+    centerTileId + 1,
+    centerTileId + 2,
+    centerTileId + 3,
+    centerTileId + 4,
+  ];
+}
 
 export const Route = createFileRoute('/')({
   component: ScenarioEditorHomeRoute,
@@ -118,6 +282,9 @@ function ScenarioEditorHomeRoute() {
   }
   if (activeView === 'map') {
     return <ScenarioMapEditorCard />;
+  }
+  if (activeView === 'map-final') {
+    return <ScenarioMapFinalWorkbench />;
   }
   if (activeView === 'objective') {
     return <ScenarioObjectiveEditorCard />;
@@ -284,6 +451,427 @@ function ScenarioMetadataEditorCard() {
 }
 
 /**
+ * Full-screen map workbench shell for the final map-authoring workflow.
+ * Reuses the runtime `MapCanvas` surface from `apps/web` while presenting an
+ * editor-specific sidebar layout (not a direct Micropolis C UI port).
+ */
+function ScenarioMapFinalWorkbench() {
+  const { bundle } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const [activeBrushFamily, setActiveBrushFamily] =
+    useState<ScenarioMapFinalActiveBrushFamily>('zones');
+  const [activeZoneKind, setActiveZoneKind] = useState<ScenarioEditorMapZoneKind>('res');
+  const [activeZoneOptionKey, setActiveZoneOptionKey] = useState<string>('fresh');
+  const [baseBrushMode, setBaseBrushMode] = useState<ScenarioMapFinalBaseBrushMode>('smart');
+  const [baseAutoSmoothEnabled, setBaseAutoSmoothEnabled] = useState(true);
+  const [activeSmartBaseBrushId, setActiveSmartBaseBrushId] =
+    useState<ScenarioMapFinalSmartBaseBrushId>('dirt');
+  const [activeExactBaseTileId, setActiveExactBaseTileId] = useState<number>(Tile.DIRT);
+  const [exactBasePreserveFlags, setExactBasePreserveFlags] = useState(false);
+  const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
+  const zoneAtlasCanonicalIdentityKey = useMemo(
+    () => resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic'),
+    [],
+  );
+  const zoneAtlasSource = useMemo(
+    () => getTileAtlasSourceByCanonicalIdentityKey(zoneAtlasCanonicalIdentityKey),
+    [zoneAtlasCanonicalIdentityKey],
+  );
+  const zoneValueClassLabel = useMemo(
+    () => getScenarioMapZoneValueClassLabel(activeZoneKind),
+    [activeZoneKind],
+  );
+  const zoneMaxValueClass = useMemo(
+    () => getScenarioEditorMapZoneMaxValue(activeZoneKind),
+    [activeZoneKind],
+  );
+  const activeSmartBaseBrush = useMemo(
+    () =>
+      SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.find((brush) => brush.id === activeSmartBaseBrushId) ??
+      SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH,
+    [activeSmartBaseBrushId],
+  );
+  const activeExactBaseTileName = useMemo(
+    () => findScenarioEditorMapNamedBaseTileById(activeExactBaseTileId)?.name ?? '',
+    [activeExactBaseTileId],
+  );
+
+  const zoneOptions = useMemo<readonly ScenarioMapFinalZoneOption[]>(() => {
+    const freshTileId = getMapFinalZoneFreshCenterTileId(activeZoneKind);
+    const entries: ScenarioMapFinalZoneOption[] = [
+      {
+        key: 'fresh',
+        kind: 'fresh',
+        densityLevel: null,
+        landValueClass: null,
+        tileId: freshTileId,
+        swatchTileIds: getMapFinalZoneSwatchTileIds(freshTileId),
+        tooltip: `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone (Density Level 0, ${zoneValueClassLabel} n/a)`,
+      },
+    ];
+
+    for (let value = 0; value <= zoneMaxValueClass; value += 1) {
+      for (let level = 1; level <= getScenarioEditorMapZoneMaxLevel(activeZoneKind); level += 1) {
+        const tileId = getMapFinalZoneDevelopedCenterTileId(activeZoneKind, level, value);
+        entries.push({
+          key: `level:${level}:value:${value}`,
+          kind: 'developed',
+          densityLevel: level,
+          landValueClass: value,
+          tileId,
+          swatchTileIds: getMapFinalZoneSwatchTileIds(tileId),
+          tooltip: `Density Level ${level}, ${zoneValueClassLabel} ${value}`,
+        });
+      }
+    }
+
+    return entries;
+  }, [activeZoneKind, zoneMaxValueClass, zoneValueClassLabel]);
+  const zoneLevelColumnCount = useMemo(
+    () => getScenarioEditorMapZoneMaxLevel(activeZoneKind),
+    [activeZoneKind],
+  );
+  const zoneOptionRows = useMemo<readonly (readonly ScenarioMapFinalZoneOption[])[]>(() => {
+    const rows: ScenarioMapFinalZoneOption[][] = [];
+    const freshOption = zoneOptions.find((option) => option.kind === 'fresh');
+    if (freshOption !== undefined) {
+      rows.push([freshOption]);
+    }
+    for (let value = 0; value <= zoneMaxValueClass; value += 1) {
+      const rowOptions = zoneOptions
+        .filter(
+          (option): option is ScenarioMapFinalDevelopedZoneOption =>
+            option.kind === 'developed' && option.landValueClass === value,
+        )
+        .sort((left, right) => left.densityLevel - right.densityLevel);
+      rows.push(rowOptions);
+    }
+    return rows;
+  }, [zoneMaxValueClass, zoneOptions]);
+  const activeZoneOption = useMemo(
+    () => zoneOptions.find((option) => option.key === activeZoneOptionKey) ?? zoneOptions[0]!,
+    [activeZoneOptionKey, zoneOptions],
+  );
+
+  return (
+    <section className="editor-map-final-workbench" aria-label="Scenario map final workbench">
+      <aside className="editor-map-final-sidebar">
+        <section
+          className={`editor-map-final-panel ${
+            activeBrushFamily === 'base' ? 'editor-map-final-panel--active-brush' : ''
+          }`}
+        >
+          <h2>Base</h2>
+          <div className="editor-map-final-brush-mode-toggle" role="tablist" aria-label="Base mode">
+            <button
+              aria-selected={baseBrushMode === 'smart'}
+              className={baseBrushMode === 'smart' ? 'is-active' : undefined}
+              onClick={() => {
+                setBaseBrushMode('smart');
+                setActiveBrushFamily('base');
+              }}
+              role="tab"
+              type="button"
+            >
+              Smart
+            </button>
+            <button
+              aria-selected={baseBrushMode === 'exact'}
+              className={baseBrushMode === 'exact' ? 'is-active' : undefined}
+              onClick={() => {
+                setBaseBrushMode('exact');
+                setActiveBrushFamily('base');
+              }}
+              role="tab"
+              type="button"
+            >
+              Exact
+            </button>
+          </div>
+
+          <label className="editor-map-final-auto-toggle">
+            <input
+              checked={baseAutoSmoothEnabled}
+              onChange={(event) => {
+                setBaseAutoSmoothEnabled(event.currentTarget.checked);
+              }}
+              type="checkbox"
+            />
+            <span>Auto smooth terrain after base edits</span>
+          </label>
+
+          {baseBrushMode === 'smart' ? (
+            <div
+              className="editor-map-final-base-option-grid"
+              role="list"
+              aria-label="Smart base brushes"
+            >
+              {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
+                <button
+                  aria-pressed={activeSmartBaseBrushId === brush.id}
+                  className={activeSmartBaseBrushId === brush.id ? 'is-active' : undefined}
+                  key={brush.id}
+                  onClick={() => {
+                    setActiveSmartBaseBrushId(brush.id);
+                    setActiveBrushFamily('base');
+                  }}
+                  role="listitem"
+                  title={brush.tooltip}
+                  type="button"
+                >
+                  {zoneAtlasSource === undefined ? (
+                    <span className="editor-map-final-zone-option-fallback">{brush.tileId}</span>
+                  ) : (
+                    <MapFinalSingleTileSprite
+                      atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                      atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                      tileId={brush.tileId}
+                    />
+                  )}
+                  <span>{brush.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <label className="editor-field">
+                <span>Exact Base Tile</span>
+                <select
+                  onChange={(event) => {
+                    const nextTileId = normalizeScenarioEditorBaseTileId(
+                      Number(event.currentTarget.value),
+                    );
+                    setActiveExactBaseTileId(nextTileId);
+                    setActiveBrushFamily('base');
+                  }}
+                  value={activeExactBaseTileId}
+                >
+                  {activeExactBaseTileName === '' ? (
+                    <option value={activeExactBaseTileId}>Custom ({activeExactBaseTileId})</option>
+                  ) : null}
+                  {TILE_WORD_NAME_OPTIONS.map((entry) => (
+                    <option key={entry.name} value={entry.tileId}>
+                      {entry.tileId} ({entry.name} / {entry.label})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="editor-map-final-auto-toggle">
+                <input
+                  checked={exactBasePreserveFlags}
+                  onChange={(event) => {
+                    setExactBasePreserveFlags(event.currentTarget.checked);
+                  }}
+                  type="checkbox"
+                />
+                <span>Preserve tile status flags</span>
+              </label>
+            </>
+          )}
+
+          <small className="editor-help">
+            {baseBrushMode === 'smart'
+              ? `Active smart brush: ${activeSmartBaseBrush.label}`
+              : `Active exact tile: ${activeExactBaseTileId} (${activeExactBaseTileName || 'custom'})`}
+          </small>
+        </section>
+
+        <section
+          className={`editor-map-final-panel ${
+            activeBrushFamily === 'zones' ? 'editor-map-final-panel--active-brush' : ''
+          }`}
+        >
+          <h2>Zones</h2>
+          <div
+            aria-label="Zone family selector"
+            className="editor-map-final-zone-tabs"
+            role="tablist"
+          >
+            {(['res', 'com', 'ind'] as const).map((zone) => (
+              <button
+                aria-selected={zone === activeZoneKind}
+                className={zone === activeZoneKind ? 'is-active' : undefined}
+                key={zone}
+                onClick={() => {
+                  setActiveZoneKind(zone);
+                  setActiveZoneOptionKey('fresh');
+                  setActiveBrushFamily('zones');
+                }}
+                role="tab"
+                type="button"
+              >
+                {zone.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="editor-map-final-zone-option-rows">
+            {zoneOptionRows.map((rowOptions, rowIndex) => (
+              <div
+                className="editor-map-final-zone-option-row"
+                key={`row:${rowIndex}`}
+                style={
+                  {
+                    gridTemplateColumns: `repeat(${zoneLevelColumnCount}, minmax(3.6rem, 1fr))`,
+                  } satisfies CSSProperties
+                }
+              >
+                {rowOptions.map((option) => (
+                  <button
+                    className={option.key === activeZoneOptionKey ? 'is-active' : undefined}
+                    key={option.key}
+                    onClick={() => {
+                      setActiveZoneOptionKey(option.key);
+                      setActiveBrushFamily('zones');
+                    }}
+                    aria-label={option.tooltip}
+                    title={option.tooltip}
+                    type="button"
+                  >
+                    {zoneAtlasSource === undefined ? (
+                      <span className="editor-map-final-zone-option-fallback">{option.tileId}</span>
+                    ) : (
+                      <MapFinalZoneTileSprite
+                        atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                        atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                        tileIds={option.swatchTileIds}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <small className="editor-help">
+            {activeZoneOption.kind === 'fresh'
+              ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
+              : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
+          </small>
+        </section>
+
+        <section className="editor-map-final-panel">
+          <h2>Tools</h2>
+          <div className="editor-map-final-placeholder">TODO: tool picker</div>
+        </section>
+      </aside>
+
+      <div className="editor-map-final-canvas-shell">
+        <MapCanvas
+          dragPlacementEnabled={activeBrushFamily === 'base'}
+          hoverTool={activeBrushFamily === 'zones' ? activeZoneKind : undefined}
+          mapState={runtimeMapState}
+          onTileClick={(x, y) => {
+            if (activeBrushFamily === 'base') {
+              const baseTileId =
+                baseBrushMode === 'smart' ? activeSmartBaseBrush.tileId : activeExactBaseTileId;
+              dispatch({
+                type: 'paint-map-base-tile',
+                x,
+                y,
+                baseTileId,
+                preserveFlags: baseBrushMode === 'exact' ? exactBasePreserveFlags : false,
+                terrainRecomputeMode: baseAutoSmoothEnabled ? 'local' : 'off',
+                terrainRecomputeRadius: SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS,
+              });
+              return;
+            }
+            if (activeZoneOption.kind === 'fresh') {
+              dispatch({
+                type: 'apply-map-tool',
+                tool: SCENARIO_MAP_FINAL_ZONE_TOOL_BY_KIND[activeZoneKind],
+                x,
+                y,
+              });
+              return;
+            }
+            dispatch({
+              type: 'apply-map-zone-level',
+              x,
+              y,
+              zone: activeZoneKind,
+              level: activeZoneOption.densityLevel,
+              value: activeZoneOption.landValueClass,
+            });
+          }}
+          pendingTools={[]}
+          realtimeObjects={[]}
+          tileSize={16}
+          tilesetName="classic"
+        />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Render one single-tile preview from the classic map tile atlas.
+ * Mirrors tile-id sprite lookup from `MemDrawBeegMapRect` in
+ * `ref/micropolis/src/sim/g_bigmap.c`; parity difference: sidebar swatch rendering.
+ */
+function MapFinalSingleTileSprite(options: {
+  readonly atlasCanonicalIdentityKey: ReturnType<
+    typeof resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey
+  >;
+  readonly atlasSpriteSheetUrl: string;
+  readonly tileId: number;
+}) {
+  const { atlasCanonicalIdentityKey, atlasSpriteSheetUrl, tileId } = options;
+  const sprite = lookupTileSpriteRectByTileId(tileId, {
+    atlasCanonicalIdentityKey,
+  });
+
+  return (
+    <span
+      className="editor-map-final-single-tile-sprite"
+      style={{
+        backgroundImage: `url("${atlasSpriteSheetUrl}")`,
+        backgroundPosition: `${-sprite.sourceX}px ${-sprite.sourceY}px`,
+        width: `${sprite.sourceWidth}px`,
+        height: `${sprite.sourceHeight}px`,
+      }}
+    />
+  );
+}
+
+/**
+ * Render one zone-option tile preview from the classic map tile atlas.
+ * Mirrors tile-id sprite lookup from `MemDrawBeegMapRect` in
+ * `ref/micropolis/src/sim/g_bigmap.c`; parity difference: CSS sprite swatch in sidebar UI.
+ */
+function MapFinalZoneTileSprite(options: {
+  readonly atlasCanonicalIdentityKey: ReturnType<
+    typeof resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey
+  >;
+  readonly atlasSpriteSheetUrl: string;
+  readonly tileIds: readonly number[];
+}) {
+  const { atlasCanonicalIdentityKey, atlasSpriteSheetUrl, tileIds } = options;
+
+  return (
+    <span className="editor-map-final-zone-option-sprite">
+      {tileIds.map((tileId, index) => {
+        const sprite = lookupTileSpriteRectByTileId(tileId, {
+          atlasCanonicalIdentityKey,
+        });
+        return (
+          <span
+            className="editor-map-final-zone-option-sprite-tile"
+            key={`${tileId}:${index}`}
+            style={{
+              backgroundImage: `url("${atlasSpriteSheetUrl}")`,
+              backgroundPosition: `${-sprite.sourceX}px ${-sprite.sourceY}px`,
+              width: `${sprite.sourceWidth}px`,
+              height: `${sprite.sourceHeight}px`,
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/**
  * Scenario map-editing card with Micropolis map-canvas rendering and C-parity tool placement.
  * Reuses web `MapCanvas` sprite/camera input from `apps/web` and mirrors tile mutation paths from
  * `DoTool`/`do_tool` plus `SimCmdTile`/`SimCmdFill` in `ref/micropolis/src/sim/w_tool.c` and
@@ -309,6 +897,14 @@ function ScenarioMapEditorCard() {
   const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
   const activeZoneMaxLevel = useMemo(
     () => getScenarioEditorMapZoneMaxLevel(activeZoneKind),
+    [activeZoneKind],
+  );
+  const activeZoneMaxValue = useMemo(
+    () => getScenarioEditorMapZoneMaxValue(activeZoneKind),
+    [activeZoneKind],
+  );
+  const activeZoneValueClassLabel = useMemo(
+    () => getScenarioMapZoneValueClassLabel(activeZoneKind),
     [activeZoneKind],
   );
   const dragPlacementEnabled =
@@ -413,6 +1009,9 @@ function ScenarioMapEditorCard() {
                     setActiveZoneLevel((currentLevel) =>
                       normalizeScenarioEditorMapZoneLevel(zone, currentLevel),
                     );
+                    setActiveZoneValue((currentValue) =>
+                      normalizeScenarioEditorMapZoneValue(zone, currentValue),
+                    );
                   }}
                   value={activeZoneKind}
                 >
@@ -441,13 +1040,16 @@ function ScenarioMapEditorCard() {
               </label>
 
               <label className="editor-field">
-                <span>Land Value Class</span>
+                <span>{activeZoneValueClassLabel}</span>
                 <input
-                  max={3}
+                  max={activeZoneMaxValue}
                   min={0}
                   onChange={(event) => {
                     setActiveZoneValue(
-                      normalizeScenarioEditorMapZoneValue(Number(event.currentTarget.value)),
+                      normalizeScenarioEditorMapZoneValue(
+                        activeZoneKind,
+                        Number(event.currentTarget.value),
+                      ),
                     );
                   }}
                   type="number"
@@ -456,8 +1058,7 @@ function ScenarioMapEditorCard() {
               </label>
             </div>
             <small className="editor-help">
-              Places direct zone variants using `ResPlop`/`ComPlop`/`IndPlop` formulas (1-based
-              level, value 0..3).
+              {`Places direct zone variants using ResPlop/ComPlop/IndPlop formulas (1-based level, value 0..${activeZoneMaxValue} for ${activeZoneKind.toUpperCase()}).`}
             </small>
           </div>
         ) : null}
@@ -541,18 +1142,23 @@ function ScenarioMapEditorCard() {
         {brushMode === 'tile-word' ? (
           <label className="editor-field">
             <span>Active Tile Word</span>
-            <input
-              max={65535}
-              min={0}
+            <select
               onChange={(event) => {
                 setActiveTileWord(
                   normalizeScenarioEditorTileWord(Number(event.currentTarget.value)),
                 );
               }}
-              type="number"
               value={activeTileWord}
-            />
-            <small className="editor-help">Stored as unsigned 16-bit map words.</small>
+            >
+              {TILE_WORD_NAME_OPTIONS.map((entry) => (
+                <option key={entry.name} value={entry.tileId}>
+                  {entry.tileId} ({entry.name} / {entry.label})
+                </option>
+              ))}
+            </select>
+            <small className="editor-help">
+              Stored as unsigned 16-bit map words; this picker uses named base tile words.
+            </small>
           </label>
         ) : null}
 

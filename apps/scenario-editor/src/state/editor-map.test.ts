@@ -12,6 +12,7 @@ import {
   getScenarioEditorMapIndex,
   getScenarioEditorMapNamedBaseTiles,
   getScenarioEditorMapZoneMaxLevel,
+  getScenarioEditorMapZoneMaxValue,
   isScenarioEditorMapTool,
   isScenarioEditorMapZoneKind,
   normalizeScenarioEditorBaseTileId,
@@ -195,11 +196,17 @@ describe('scenario editor map helpers', () => {
   });
 
   test('normalizes zone level/value controls to classic domains', () => {
-    // Magic number source: `GetCRVal` returns 0..3 and `ResPlop`/`ComPlop`/`IndPlop`
-    // use den ranges 0..3 / 0..4 in `ref/micropolis/src/sim/s_zone.c`.
-    expect(normalizeScenarioEditorMapZoneValue(5)).toBe(3);
+    // Magic number source: `GetCRVal` returns 0..3 for res/com in `s_zone.c`,
+    // while `DoIndustrial` uses `Rand16() & 1` (so ind value clamps to 0..1).
+    expect(normalizeScenarioEditorMapZoneValue('res', 5)).toBe(3);
+    expect(normalizeScenarioEditorMapZoneValue('com', 5)).toBe(3);
+    expect(normalizeScenarioEditorMapZoneValue('ind', 5)).toBe(1);
+    expect(getScenarioEditorMapZoneMaxValue('res')).toBe(3);
+    expect(getScenarioEditorMapZoneMaxValue('com')).toBe(3);
+    expect(getScenarioEditorMapZoneMaxValue('ind')).toBe(1);
     expect(getScenarioEditorMapZoneMaxLevel('res')).toBe(4);
     expect(getScenarioEditorMapZoneMaxLevel('com')).toBe(5);
+    expect(getScenarioEditorMapZoneMaxLevel('ind')).toBe(4);
     expect(normalizeScenarioEditorMapZoneLevel('ind', 0)).toBe(1);
     expect(normalizeScenarioEditorMapZoneLevel('com', 99)).toBe(5);
   });
@@ -225,14 +232,68 @@ describe('scenario editor map helpers', () => {
     expect((center & TileFlag.ZONEBIT) !== 0).toBe(true);
   });
 
+  test('clamps industrial zone value to the classic 0..1 domain before placement', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const nextBundle = applyScenarioEditorMapZoneLevelAtPoint(
+      bundle,
+      { x: 20, y: 30 },
+      {
+        zone: 'ind',
+        level: 4,
+        value: 3,
+      },
+    );
+    const center = readScenarioEditorMapTileWord(nextBundle, { x: 20, y: 30 }) ?? 0;
+
+    // Magic number source: `DoIndustrial` passes `Rand16() & 1` into `IndPlop` in
+    // `ref/micropolis/src/sim/s_zone.c`, so editor value input must clamp to 1 for ind.
+    const expectedCenterTileId = (1 * 4 + (4 - 1)) * 9 + Tile.IZB;
+    expect(center & TileMask.LOMASK).toBe(expectedCenterTileId);
+  });
+
   test('recomputes terrain edges with smooth trees/water passes', () => {
     const bundle = createScenarioEditorInitialBundle();
     const withWater = writeScenarioEditorMapTileWord(bundle, { x: 10, y: 10 }, Tile.RIVER);
     const recomputed = recomputeScenarioEditorMapTerrain(withWater);
+    const tileWord = readScenarioEditorMapTileWord(recomputed, { x: 10, y: 10 }) ?? 0;
 
-    // Magic number source: `SmoothWater()` pass 1 in `ref/micropolis/src/sim/s_gen.c`
-    // converts water adjacent to non-water into `REDGE` (tile id 3).
-    expect(readScenarioEditorMapTileWord(recomputed, { x: 10, y: 10 })).toBe(Tile.REDGE);
+    // Magic number source: terrain tooling applies `SmoothWater()` then `SmoothRiver()`
+    // in `ref/micropolis/src/sim/terrain/terra.c`, so isolated water becomes one of
+    // shoreline variants `FIRSTRIVEDGE..LASTRIVEDGE` (5..20) from `sim.h`.
+    expect((tileWord & TileMask.LOMASK) >= Tile.FIRSTRIVEDGE).toBe(true);
+    expect((tileWord & TileMask.LOMASK) <= Tile.LASTRIVEDGE).toBe(true);
+  });
+
+  test('supports disabling terrain recompute for exact tile painting', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withWater = writeScenarioEditorMapTileWord(bundle, { x: 10, y: 10 }, Tile.RIVER);
+    const recomputed = recomputeScenarioEditorMapTerrain(withWater, { mode: 'off' });
+
+    expect(readScenarioEditorMapTileWord(recomputed, { x: 10, y: 10 })).toBe(Tile.RIVER);
+  });
+
+  test('supports local terrain recompute around one edit point', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withNearWater = writeScenarioEditorMapTileWord(bundle, { x: 10, y: 10 }, Tile.RIVER);
+    const withFarWater = writeScenarioEditorMapTileWord(
+      withNearWater,
+      { x: 110, y: 90 },
+      Tile.RIVER,
+    );
+    const localRecomputed = recomputeScenarioEditorMapTerrain(withFarWater, {
+      mode: 'local',
+      center: { x: 10, y: 10 },
+      radius: 4,
+    });
+
+    // Magic number source: `SmoothWater` + `SmoothRiver` transforms nearby isolated water
+    // into shoreline variants in classic terrain tooling (`terra.c`, `s_gen.c`).
+    const nearTile = readScenarioEditorMapTileWord(localRecomputed, { x: 10, y: 10 }) ?? 0;
+    expect((nearTile & TileMask.LOMASK) >= Tile.FIRSTRIVEDGE).toBe(true);
+    expect((nearTile & TileMask.LOMASK) <= Tile.LASTRIVEDGE).toBe(true);
+
+    // Far tile remains unchanged because local mode only persists the bounded window.
+    expect(readScenarioEditorMapTileWord(localRecomputed, { x: 110, y: 90 })).toBe(Tile.RIVER);
   });
 
   test('rejects unknown tool ids at runtime guard', () => {

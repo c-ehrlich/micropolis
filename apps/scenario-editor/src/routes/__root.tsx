@@ -15,14 +15,29 @@ export const Route = createRootRoute({
 function RootRouteLayout() {
   return (
     <ScenarioEditorStateProvider>
-      <div className="editor-shell">
-        <header className="editor-header">Scenario Editor</header>
-        <EditorTopNav />
-        <main className="editor-main">
-          <Outlet />
-        </main>
-      </div>
+      <EditorShell />
     </ScenarioEditorStateProvider>
+  );
+}
+
+/**
+ * Root shell wrapper for editor navigation and content regions.
+ * Not from Micropolis C: this is React-only app chrome; parity difference is
+ * view-specific layout classes (for example `map-final`) rather than Tcl panes.
+ */
+function EditorShell() {
+  const { activeView } = useScenarioEditorState();
+  const mainClassName =
+    activeView === 'map-final' ? 'editor-main editor-main--map-final' : 'editor-main';
+
+  return (
+    <div className="editor-shell">
+      <header className="editor-header">Scenario Editor</header>
+      <EditorTopNav />
+      <main className={mainClassName}>
+        <Outlet />
+      </main>
+    </div>
   );
 }
 
@@ -75,6 +90,9 @@ function getScenarioEditorWorkbenchViewLabel(view: ScenarioEditorWorkbenchView):
   }
   if (view === 'map') {
     return 'Map';
+  }
+  if (view === 'map-final') {
+    return 'Map (final)';
   }
   if (view === 'objective') {
     return 'Objective';

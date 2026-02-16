@@ -24,6 +24,8 @@ import {
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
   recomputeScenarioEditorMapTerrain,
+  type ScenarioEditorMapTerrainRecomputeMode,
+  type ScenarioEditorMapTerrainRecomputeOptions,
   type ScenarioEditorMapTool,
   type ScenarioEditorMapZoneKind,
   writeScenarioEditorMapBaseTileId,
@@ -49,6 +51,7 @@ import {
 export const SCENARIO_EDITOR_MVP_VIEWS = [
   'metadata',
   'map',
+  'map-final',
   'objective',
   'script',
   'behavior',
@@ -144,8 +147,17 @@ export type ScenarioEditorAction =
       y: number;
       baseTileId: number;
       preserveFlags: boolean;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
+      terrainRecomputeRadius?: number;
     }
-  | { type: 'paint-map-tile'; x: number; y: number; tileWord: number }
+  | {
+      type: 'paint-map-tile';
+      x: number;
+      y: number;
+      tileWord: number;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
+      terrainRecomputeRadius?: number;
+    }
   | { type: 'set-behavior-enabled'; enabled: boolean }
   | { type: 'set-behavior-profile-key'; profileKey: string }
   | { type: 'replace-objective-predicate'; predicate: ScenarioEditorObjectivePredicate }
@@ -249,11 +261,19 @@ export function scenarioEditorReducer(
       const nextBundle = writeScenarioEditorMapBaseTileId(state.bundle, action, action.baseTileId, {
         preserveFlags: action.preserveFlags,
       });
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(
+        state,
+        nextBundle,
+        toScenarioEditorPointRecomputeOptions(action),
+      );
     }
     case 'paint-map-tile': {
       const nextBundle = writeScenarioEditorMapTileWord(state.bundle, action, action.tileWord);
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(
+        state,
+        nextBundle,
+        toScenarioEditorPointRecomputeOptions(action),
+      );
     }
     case 'set-behavior-enabled':
       if (state.behavior.enabled === action.enabled) {
@@ -353,22 +373,45 @@ export function scenarioEditorReducer(
 
 /**
  * Apply one map mutation and run terrain post-processing.
- * Recompute mirrors `SmoothTrees` + `SmoothWater` usage from
- * `ref/micropolis/src/sim/s_gen.c`, ensuring editor map edits converge immediately.
+ * Recompute mirrors terrain smoothing usage from `ref/micropolis/src/sim/s_gen.c`
+ * and `ref/micropolis/src/sim/terrain/terra.c`, with editor-specific mode controls
+ * (`global`/`local`/`off`) for precision workflows.
  */
 function applyScenarioEditorMapMutation(
   state: ScenarioEditorState,
   mutatedBundle: ScenarioBundleV1,
+  terrainRecompute: ScenarioEditorMapTerrainRecomputeOptions = {},
 ): ScenarioEditorState {
   if (mutatedBundle === state.bundle) {
     return state;
   }
 
-  const nextBundle = recomputeScenarioEditorMapTerrain(mutatedBundle);
+  const nextBundle = recomputeScenarioEditorMapTerrain(mutatedBundle, terrainRecompute);
   return {
     ...state,
     bundle: nextBundle,
     isDirty: true,
+  };
+}
+
+/**
+ * Convert one point-based paint action into terrain recompute options.
+ * Not from Micropolis C: editor-only control over whether smoothing is global/local/off.
+ */
+function toScenarioEditorPointRecomputeOptions(action: {
+  readonly x: number;
+  readonly y: number;
+  readonly terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
+  readonly terrainRecomputeRadius?: number;
+}): ScenarioEditorMapTerrainRecomputeOptions {
+  const mode = action.terrainRecomputeMode ?? 'global';
+  if (mode !== 'local') {
+    return { mode };
+  }
+  return {
+    mode,
+    center: { x: action.x, y: action.y },
+    radius: action.terrainRecomputeRadius,
   };
 }
 
