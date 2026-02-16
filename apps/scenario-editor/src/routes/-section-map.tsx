@@ -77,7 +77,6 @@ function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): str
   }
   return 'Land Value Class';
 }
-const SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 6;
 
 type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base' | 'tools';
 type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
@@ -693,16 +692,14 @@ export function ScenarioMapFinalWorkbench() {
                     height: bundle.map.height,
                   },
                 );
-                for (const [index, point] of forestPoints.entries()) {
-                  const isLastPoint = index === forestPoints.length - 1;
+                for (const point of forestPoints) {
                   dispatch({
                     type: 'paint-map-base-tile',
                     x: point.x,
                     y: point.y,
                     baseTileId: activeSmartBaseBrush.tileId,
                     preserveFlags: false,
-                    terrainRecomputeMode: isLastPoint ? 'local' : 'off',
-                    terrainRecomputeRadius: SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS,
+                    terrainRecomputeMode: 'global',
                   });
                 }
                 return;
@@ -714,8 +711,7 @@ export function ScenarioMapFinalWorkbench() {
                 y,
                 baseTileId: activeSmartBaseBrush.tileId,
                 preserveFlags: false,
-                terrainRecomputeMode: 'local',
-                terrainRecomputeRadius: SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS,
+                terrainRecomputeMode: 'global',
               });
               return;
             }
