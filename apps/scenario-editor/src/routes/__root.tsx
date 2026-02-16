@@ -27,12 +27,13 @@ function RootRouteLayout() {
  */
 function EditorShell() {
   const { activeView } = useScenarioEditorState();
-  const mainClassName =
-    activeView === 'map-final' ? 'editor-main editor-main--map-final' : 'editor-main';
+  const mainClassName = activeView === 'map-final' ? 'min-h-0 overflow-hidden p-0' : 'p-4';
 
   return (
-    <div className="editor-shell">
-      <header className="editor-header">Scenario Editor</header>
+    <div className="grid min-h-screen grid-rows-[auto_auto_1fr] bg-slate-100 font-['Segoe_UI','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[#1f2328] leading-[1.4]">
+      <header className="border-b border-slate-300 bg-white px-4 py-3 font-semibold">
+        Scenario Editor
+      </header>
       <EditorTopNav />
       <main className={mainClassName}>
         <Outlet />
@@ -46,7 +47,10 @@ function EditorTopNav() {
   const dispatch = useScenarioEditorDispatch();
 
   return (
-    <nav aria-label="Editor sections" className="editor-nav">
+    <nav
+      aria-label="Editor sections"
+      className="flex flex-wrap gap-2 border-b border-slate-300 bg-white px-4 py-2"
+    >
       {SCENARIO_EDITOR_MVP_VIEWS.map((view) => (
         <EditorViewButton
           key={view}
@@ -74,6 +78,7 @@ function EditorViewButton(options: {
   return (
     <button
       aria-current={isCurrent ? 'page' : undefined}
+      className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-3 py-1.5 aria-[current=page]:border-blue-600 aria-[current=page]:bg-sky-100"
       onClick={() => {
         onSelect(nextView);
       }}

@@ -65,8 +65,6 @@ importers:
 
   apps/docs: {}
 
-  apps/editor: {}
-
   apps/scenario-editor:
     dependencies:
       '@city/classicyui':

@@ -132,6 +132,88 @@ const SCENARIO_MAP_FINAL_ZONE_TOOL_BY_KIND: Readonly<
   ind: 'ind',
 };
 
+const EDITOR_CARD_CLASSNAME =
+  'max-w-[52rem] rounded-md border border-slate-300 bg-white p-4 [&>h1]:mb-3 [&>h1]:mt-0 [&>p]:mb-4 [&>p]:mt-0';
+const EDITOR_MAP_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
+const EDITOR_OBJECTIVE_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
+const EDITOR_SCRIPT_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[68rem]`;
+const EDITOR_BEHAVIOR_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
+const EDITOR_FORM_CLASSNAME = 'mb-4 grid gap-[0.9rem]';
+const EDITOR_FIELD_CLASSNAME =
+  'grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]';
+const EDITOR_FIELD_INLINE_CLASSNAME =
+  'grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3 [&_label]:grid [&_label]:gap-[0.3rem]';
+const EDITOR_HELP_TEXT_CLASSNAME = 'text-sm text-slate-600';
+const EDITOR_ERROR_TEXT_CLASSNAME = 'text-sm text-red-700';
+const EDITOR_STATS_GRID_CLASSNAME =
+  'm-0 grid grid-cols-[12rem_1fr] gap-x-4 gap-y-2 [&_dt]:text-slate-600';
+const EDITOR_ISSUES_PANEL_CLASSNAME =
+  'mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_ul]:m-0 [&_ul]:pl-5';
+const EDITOR_PREVIEW_PANEL_CLASSNAME =
+  'mt-4 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem] [&_textarea]:font-mono [&_textarea]:text-xs [&_textarea]:leading-[1.4]';
+const EDITOR_BUTTON_CLASSNAME =
+  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65';
+const EDITOR_BUTTON_ACTIVE_CLASSNAME = 'border-blue-600 bg-sky-100';
+const EDITOR_EXPORT_ACTIONS_CLASSNAME = 'mb-4 grid justify-items-start gap-2';
+const EDITOR_OPEN_BUTTON_CLASSNAME =
+  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-3 py-[0.45rem]';
+const EDITOR_EXPORT_BUTTON_CLASSNAME =
+  'cursor-pointer rounded border border-blue-600 bg-sky-100 px-3 py-[0.45rem] text-[#0c2d6b]';
+const SCENARIO_MAP_FINAL_WORKBENCH_CLASSNAME =
+  'grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] bg-gray-300 max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]';
+const SCENARIO_MAP_FINAL_SIDEBAR_CLASSNAME =
+  'grid content-start gap-4 overflow-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0';
+const SCENARIO_MAP_FINAL_PANEL_CLASSNAME =
+  'grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem]';
+const SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME = 'border-[#0969da] bg-[rgba(221,244,255,0.5)]';
+const SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME = 'm-0 text-[1.4rem] font-semibold';
+const SCENARIO_MAP_FINAL_BASE_OPTION_GRID_CLASSNAME = 'grid grid-cols-2 gap-[0.45rem]';
+const SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_CLASSNAME =
+  'grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit';
+const SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_ACTIVE_CLASSNAME =
+  'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]';
+const SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME = 'text-[0.8rem] font-semibold text-slate-600';
+const SCENARIO_MAP_FINAL_CHECKBOX_ROW_CLASSNAME = 'flex items-center gap-[0.45rem] text-slate-600';
+const SCENARIO_MAP_FINAL_ZONE_TABS_CLASSNAME =
+  'grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500';
+const SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_CLASSNAME =
+  'cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0';
+const SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_ACTIVE_CLASSNAME = 'bg-sky-200';
+const SCENARIO_MAP_FINAL_ZONE_OPTION_ROWS_CLASSNAME = 'grid gap-[0.45rem]';
+const SCENARIO_MAP_FINAL_ZONE_OPTION_ROW_CLASSNAME = 'grid gap-[0.45rem]';
+const SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_CLASSNAME =
+  'flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit';
+const SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_ACTIVE_CLASSNAME =
+  'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]';
+const SCENARIO_MAP_FINAL_PLACEHOLDER_CLASSNAME =
+  'flex min-h-[7.5rem] items-center justify-center rounded-[10px] border-2 border-dashed border-[#7d8590] bg-white/35 p-4 text-center text-slate-600';
+const SCENARIO_MAP_FINAL_CANVAS_SHELL_CLASSNAME = 'min-h-0 bg-[#0b1020]';
+const SCENARIO_MAP_CONTROLS_CLASSNAME = 'mb-4 grid gap-3';
+const SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME = 'grid gap-[0.6rem]';
+const SCENARIO_MAP_TOOL_GRID_CLASSNAME =
+  'grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-[0.45rem]';
+const SCENARIO_MAP_TOOL_BUTTON_CLASSNAME =
+  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.55rem] py-[0.35rem] text-left';
+const SCENARIO_MAP_PRESET_ROW_CLASSNAME = 'flex flex-wrap gap-2';
+const SCENARIO_MAP_FILL_BUTTON_CLASSNAME = `${EDITOR_BUTTON_CLASSNAME} justify-self-start`;
+const SCENARIO_MAP_CANVAS_SHELL_CLASSNAME =
+  'mb-4 h-[min(75vh,46rem)] w-[min(100%,72rem)] overflow-hidden rounded-md border border-slate-300 bg-[#0b1020]';
+const SCENARIO_OBJECTIVE_NODE_CLASSNAME =
+  'my-3 rounded-md border border-slate-300 p-3 [&>legend]:px-[0.4rem] [&>legend]:text-slate-600';
+const SCENARIO_OBJECTIVE_METRIC_GRID_CLASSNAME =
+  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3';
+const SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME = 'grid gap-3';
+const SCENARIO_OBJECTIVE_CHILD_ROW_CLASSNAME = 'grid gap-2';
+const SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME = `${EDITOR_BUTTON_CLASSNAME} justify-self-start`;
+const SCENARIO_SCRIPT_EVENTS_CLASSNAME = 'grid gap-[0.85rem]';
+const SCENARIO_SCRIPT_EVENT_CLASSNAME =
+  'm-0 rounded-md border border-slate-300 p-[0.8rem] [&>legend]:px-[0.4rem] [&>legend]:text-slate-600';
+const SCENARIO_SCRIPT_EVENT_GRID_CLASSNAME =
+  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3';
+const SCENARIO_SCRIPT_ACTIONS_CLASSNAME = 'mt-[0.8rem] grid gap-2 [&>h3]:m-0 [&>h3]:text-[0.95rem]';
+const SCENARIO_SCRIPT_ACTION_ROW_CLASSNAME =
+  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] items-end gap-x-3 gap-y-2';
+
 /**
  * Resolve UI label text for per-zone value classes.
  * Not from Micropolis C: editor-only wording that reflects `GetCRVal` (R/C) vs
@@ -387,14 +469,14 @@ function ScenarioMetadataEditorCard() {
     issues.startFunds !== undefined;
 
   return (
-    <section className="editor-card" aria-label="Scenario metadata editor">
+    <section className={EDITOR_CARD_CLASSNAME} aria-label="Scenario metadata editor">
       <h1>Scenario Metadata</h1>
       <p>
         Edit canonical bundle metadata fields for key identity, player-facing labels, and scenario
         start parameters.
       </p>
-      <form className="editor-form" onSubmit={preventFormSubmit}>
-        <label className="editor-field">
+      <form className={EDITOR_FORM_CLASSNAME} onSubmit={preventFormSubmit}>
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Scenario Key</span>
           <input
             aria-invalid={issues.key !== undefined}
@@ -404,11 +486,15 @@ function ScenarioMetadataEditorCard() {
             type="text"
             value={bundle.key}
           />
-          <small className="editor-help">Must use `builtin/*` or `user/*` namespace.</small>
-          {issues.key !== undefined ? <small className="editor-error">{issues.key}</small> : null}
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+            Must use `builtin/*` or `user/*` namespace.
+          </small>
+          {issues.key !== undefined ? (
+            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.key}</small>
+          ) : null}
         </label>
 
-        <label className="editor-field">
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Name</span>
           <input
             aria-invalid={issues.name !== undefined}
@@ -418,10 +504,12 @@ function ScenarioMetadataEditorCard() {
             type="text"
             value={bundle.name}
           />
-          {issues.name !== undefined ? <small className="editor-error">{issues.name}</small> : null}
+          {issues.name !== undefined ? (
+            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.name}</small>
+          ) : null}
         </label>
 
-        <label className="editor-field">
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Description</span>
           <textarea
             aria-invalid={issues.description !== undefined}
@@ -435,11 +523,11 @@ function ScenarioMetadataEditorCard() {
             value={bundle.description}
           />
           {issues.description !== undefined ? (
-            <small className="editor-error">{issues.description}</small>
+            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.description}</small>
           ) : null}
         </label>
 
-        <label className="editor-field">
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Tags</span>
           <textarea
             aria-invalid={issues.tags !== undefined}
@@ -453,11 +541,13 @@ function ScenarioMetadataEditorCard() {
             rows={3}
             value={bundle.tags.join(', ')}
           />
-          <small className="editor-help">Comma or newline separated.</small>
-          {issues.tags !== undefined ? <small className="editor-error">{issues.tags}</small> : null}
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>Comma or newline separated.</small>
+          {issues.tags !== undefined ? (
+            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.tags}</small>
+          ) : null}
         </label>
 
-        <div className="editor-field editor-field-inline">
+        <div className={`${EDITOR_FIELD_CLASSNAME} ${EDITOR_FIELD_INLINE_CLASSNAME}`}>
           <label>
             <span>Start Year</span>
             <input
@@ -479,7 +569,7 @@ function ScenarioMetadataEditorCard() {
               value={bundle.start.startYear}
             />
             {issues.startYear !== undefined ? (
-              <small className="editor-error">{issues.startYear}</small>
+              <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.startYear}</small>
             ) : null}
           </label>
 
@@ -505,13 +595,13 @@ function ScenarioMetadataEditorCard() {
               value={bundle.start.startFunds}
             />
             {issues.startFunds !== undefined ? (
-              <small className="editor-error">{issues.startFunds}</small>
+              <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.startFunds}</small>
             ) : null}
           </label>
         </div>
       </form>
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Validation</dt>
@@ -626,23 +716,30 @@ function ScenarioMapFinalWorkbench() {
   );
 
   return (
-    <section className="editor-map-final-workbench" aria-label="Scenario map final workbench">
-      <aside className="editor-map-final-sidebar">
+    <section
+      className={SCENARIO_MAP_FINAL_WORKBENCH_CLASSNAME}
+      aria-label="Scenario map final workbench"
+    >
+      <aside className={SCENARIO_MAP_FINAL_SIDEBAR_CLASSNAME}>
         <section
-          className={`editor-map-final-panel ${
-            activeBrushFamily === 'base' ? 'editor-map-final-panel--active-brush' : ''
+          className={`${SCENARIO_MAP_FINAL_PANEL_CLASSNAME} ${
+            activeBrushFamily === 'base' ? SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME : ''
           }`}
         >
-          <h2>Base</h2>
+          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Base</h2>
           <div
-            className="editor-map-final-base-option-grid"
+            className={SCENARIO_MAP_FINAL_BASE_OPTION_GRID_CLASSNAME}
             role="list"
             aria-label="Smart base brushes"
           >
             {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
               <button
                 aria-pressed={activeSmartBaseBrushId === brush.id}
-                className={activeSmartBaseBrushId === brush.id ? 'is-active' : undefined}
+                className={`${SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_CLASSNAME} ${
+                  activeSmartBaseBrushId === brush.id
+                    ? SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_ACTIVE_CLASSNAME
+                    : ''
+                }`}
                 key={brush.id}
                 onClick={() => {
                   setActiveSmartBaseBrushId(brush.id);
@@ -656,7 +753,9 @@ function ScenarioMapFinalWorkbench() {
                 type="button"
               >
                 {zoneAtlasSource === undefined ? (
-                  <span className="editor-map-final-zone-option-fallback">{brush.tileId}</span>
+                  <span className={SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME}>
+                    {brush.tileId}
+                  </span>
                 ) : (
                   <MapFinalSingleTileSprite
                     atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
@@ -669,8 +768,9 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <label className="editor-map-final-checkbox-row">
+          <label className={SCENARIO_MAP_FINAL_CHECKBOX_ROW_CLASSNAME}>
             <input
+              className="m-0"
               checked={showBaseClassOverlay}
               onChange={(event) => {
                 setShowBaseClassOverlay(event.currentTarget.checked);
@@ -680,26 +780,28 @@ function ScenarioMapFinalWorkbench() {
             <span>Show base tile classes</span>
           </label>
 
-          <small className="editor-help">
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
             Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
           </small>
         </section>
 
         <section
-          className={`editor-map-final-panel ${
-            activeBrushFamily === 'zones' ? 'editor-map-final-panel--active-brush' : ''
+          className={`${SCENARIO_MAP_FINAL_PANEL_CLASSNAME} ${
+            activeBrushFamily === 'zones' ? SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME : ''
           }`}
         >
-          <h2>Zones</h2>
+          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Zones</h2>
           <div
             aria-label="Zone family selector"
-            className="editor-map-final-zone-tabs"
+            className={SCENARIO_MAP_FINAL_ZONE_TABS_CLASSNAME}
             role="tablist"
           >
             {(['res', 'com', 'ind'] as const).map((zone) => (
               <button
                 aria-selected={zone === activeZoneKind}
-                className={zone === activeZoneKind ? 'is-active' : undefined}
+                className={`${SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_CLASSNAME} ${
+                  zone === activeZoneKind ? SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_ACTIVE_CLASSNAME : ''
+                }`}
                 key={zone}
                 onClick={() => {
                   setActiveZoneKind(zone);
@@ -714,10 +816,10 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <div className="editor-map-final-zone-option-rows">
+          <div className={SCENARIO_MAP_FINAL_ZONE_OPTION_ROWS_CLASSNAME}>
             {zoneOptionRows.map((rowOptions, rowIndex) => (
               <div
-                className="editor-map-final-zone-option-row"
+                className={SCENARIO_MAP_FINAL_ZONE_OPTION_ROW_CLASSNAME}
                 key={`row:${rowIndex}`}
                 style={
                   {
@@ -727,7 +829,11 @@ function ScenarioMapFinalWorkbench() {
               >
                 {rowOptions.map((option) => (
                   <button
-                    className={option.key === activeZoneOptionKey ? 'is-active' : undefined}
+                    className={`${SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_CLASSNAME} ${
+                      option.key === activeZoneOptionKey
+                        ? SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_ACTIVE_CLASSNAME
+                        : ''
+                    }`}
                     key={option.key}
                     onClick={() => {
                       setActiveZoneOptionKey(option.key);
@@ -738,7 +844,9 @@ function ScenarioMapFinalWorkbench() {
                     type="button"
                   >
                     {zoneAtlasSource === undefined ? (
-                      <span className="editor-map-final-zone-option-fallback">{option.tileId}</span>
+                      <span className={SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME}>
+                        {option.tileId}
+                      </span>
                     ) : (
                       <MapFinalZoneTileSprite
                         atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
@@ -752,20 +860,20 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <small className="editor-help">
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
             {activeZoneOption.kind === 'fresh'
               ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
               : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
           </small>
         </section>
 
-        <section className="editor-map-final-panel">
-          <h2>Tools</h2>
-          <div className="editor-map-final-placeholder">TODO: tool picker</div>
+        <section className={SCENARIO_MAP_FINAL_PANEL_CLASSNAME}>
+          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Tools</h2>
+          <div className={SCENARIO_MAP_FINAL_PLACEHOLDER_CLASSNAME}>TODO: tool picker</div>
         </section>
       </aside>
 
-      <div className="editor-map-final-canvas-shell">
+      <div className={SCENARIO_MAP_FINAL_CANVAS_SHELL_CLASSNAME}>
         <MapCanvas
           dragPlacementEnabled={activeBrushFamily === 'base'}
           hoverPreview={activeBrushFamily === 'base' ? activeSmartBaseHoverPreview : undefined}
@@ -882,7 +990,7 @@ function MapFinalSingleTileSprite(options: {
 
   return (
     <span
-      className="editor-map-final-single-tile-sprite"
+      className="block [image-rendering:pixelated] [image-rendering:crisp-edges]"
       style={{
         backgroundImage: `url("${atlasSpriteSheetUrl}")`,
         backgroundPosition: `${-sprite.sourceX}px ${-sprite.sourceY}px`,
@@ -908,14 +1016,14 @@ function MapFinalZoneTileSprite(options: {
   const { atlasCanonicalIdentityKey, atlasSpriteSheetUrl, tileIds } = options;
 
   return (
-    <span className="editor-map-final-zone-option-sprite">
+    <span className="grid h-12 w-12 grid-cols-3 grid-rows-3 [image-rendering:pixelated] [image-rendering:crisp-edges]">
       {tileIds.map((tileId, index) => {
         const sprite = lookupTileSpriteRectByTileId(tileId, {
           atlasCanonicalIdentityKey,
         });
         return (
           <span
-            className="editor-map-final-zone-option-sprite-tile"
+            className="block bg-no-repeat [image-rendering:pixelated] [image-rendering:crisp-edges]"
             key={`${tileId}:${index}`}
             style={{
               backgroundImage: `url("${atlasSpriteSheetUrl}")`,
@@ -982,7 +1090,7 @@ function ScenarioMapEditorCard() {
   const fillDisabled = brushMode === 'tool' || brushMode === 'zone-level';
 
   return (
-    <section className="editor-card editor-map-card" aria-label="Scenario map editor">
+    <section className={EDITOR_MAP_CARD_CLASSNAME} aria-label="Scenario map editor">
       <h1>Scenario Map</h1>
       <p>
         Reuses the runtime map canvas (sprite art, zoom/pan, and tool footprints) while allowing
@@ -990,8 +1098,8 @@ function ScenarioMapEditorCard() {
         painting (dirt/water/forest/etc.). Terrain smoothing recomputes after each map edit.
       </p>
 
-      <div className="editor-map-controls">
-        <label className="editor-field">
+      <div className={SCENARIO_MAP_CONTROLS_CLASSNAME}>
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Brush Mode</span>
           <select
             onChange={(event) => {
@@ -1010,8 +1118,8 @@ function ScenarioMapEditorCard() {
         </label>
 
         {brushMode === 'tool' ? (
-          <div className="editor-map-tool-controls">
-            <label className="editor-field">
+          <div className={SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME}>
+            <label className={EDITOR_FIELD_CLASSNAME}>
               <span>Active Tool</span>
               <select
                 onChange={(event) => {
@@ -1028,17 +1136,23 @@ function ScenarioMapEditorCard() {
                   </option>
                 ))}
               </select>
-              <small className="editor-help">
+              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
                 Tool footprint {activeToolSpec.size}x{activeToolSpec.size}, base cost $
                 {activeToolSpec.baseCost}.
               </small>
             </label>
 
-            <div className="editor-map-tool-grid" role="list" aria-label="Micropolis map tools">
+            <div
+              className={SCENARIO_MAP_TOOL_GRID_CLASSNAME}
+              role="list"
+              aria-label="Micropolis map tools"
+            >
               {PLAYABLE_TOOL_SPECS.map((spec) => (
                 <button
                   aria-pressed={activeTool === spec.tool}
-                  className={activeTool === spec.tool ? 'is-active' : undefined}
+                  className={`${SCENARIO_MAP_TOOL_BUTTON_CLASSNAME} ${
+                    activeTool === spec.tool ? EDITOR_BUTTON_ACTIVE_CLASSNAME : ''
+                  }`}
                   key={spec.tool}
                   onClick={() => {
                     setActiveTool(spec.tool);
@@ -1054,9 +1168,9 @@ function ScenarioMapEditorCard() {
         ) : null}
 
         {brushMode === 'zone-level' ? (
-          <div className="editor-map-tool-controls">
-            <div className="editor-field-inline">
-              <label className="editor-field">
+          <div className={SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME}>
+            <div className={EDITOR_FIELD_INLINE_CLASSNAME}>
+              <label className={EDITOR_FIELD_CLASSNAME}>
                 <span>Zone Type</span>
                 <select
                   onChange={(event) => {
@@ -1080,7 +1194,7 @@ function ScenarioMapEditorCard() {
                 </select>
               </label>
 
-              <label className="editor-field">
+              <label className={EDITOR_FIELD_CLASSNAME}>
                 <span>Density Level</span>
                 <input
                   max={activeZoneMaxLevel}
@@ -1098,7 +1212,7 @@ function ScenarioMapEditorCard() {
                 />
               </label>
 
-              <label className="editor-field">
+              <label className={EDITOR_FIELD_CLASSNAME}>
                 <span>{activeZoneValueClassLabel}</span>
                 <input
                   max={activeZoneMaxValue}
@@ -1116,7 +1230,7 @@ function ScenarioMapEditorCard() {
                 />
               </label>
             </div>
-            <small className="editor-help">
+            <small className={EDITOR_HELP_TEXT_CLASSNAME}>
               {`Places direct zone variants using ResPlop/ComPlop/IndPlop formulas (1-based level, value 0..${activeZoneMaxValue} for ${activeZoneKind.toUpperCase()}).`}
             </small>
           </div>
@@ -1124,7 +1238,7 @@ function ScenarioMapEditorCard() {
 
         {brushMode === 'base-tile' ? (
           <>
-            <label className="editor-field">
+            <label className={EDITOR_FIELD_CLASSNAME}>
               <span>Named Base Tile</span>
               <select
                 onChange={(event) => {
@@ -1147,12 +1261,12 @@ function ScenarioMapEditorCard() {
                   </option>
                 ))}
               </select>
-              <small className="editor-help">
+              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
                 Full tile-name list from classic `sim.h` tile-id constants.
               </small>
             </label>
 
-            <label className="editor-field">
+            <label className={EDITOR_FIELD_CLASSNAME}>
               <span>Base Tile ID</span>
               <input
                 max={1023}
@@ -1165,12 +1279,15 @@ function ScenarioMapEditorCard() {
                 type="number"
                 value={activeBaseTileId}
               />
-              <small className="editor-help">Writes low tile-id bits (`LOMASK=1023`).</small>
+              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+                Writes low tile-id bits (`LOMASK=1023`).
+              </small>
             </label>
 
-            <div className="editor-map-preset-row">
+            <div className={SCENARIO_MAP_PRESET_ROW_CLASSNAME}>
               {BASE_TILE_PRESETS.map((preset) => (
                 <button
+                  className={EDITOR_BUTTON_CLASSNAME}
                   key={preset.label}
                   onClick={() => {
                     setActiveBaseTileId(preset.tileId);
@@ -1182,16 +1299,17 @@ function ScenarioMapEditorCard() {
               ))}
             </div>
 
-            <label className="editor-field editor-map-flag-toggle">
+            <label className={EDITOR_FIELD_CLASSNAME}>
               <span>Preserve Existing Flags</span>
               <input
+                className="justify-self-start"
                 checked={preserveBaseTileFlags}
                 onChange={(event) => {
                   setPreserveBaseTileFlags(event.currentTarget.checked);
                 }}
                 type="checkbox"
               />
-              <small className="editor-help">
+              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
                 Keep tile status bits (zone/power/bulldoze flags) while replacing base tile id.
               </small>
             </label>
@@ -1199,7 +1317,7 @@ function ScenarioMapEditorCard() {
         ) : null}
 
         {brushMode === 'tile-word' ? (
-          <label className="editor-field">
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>Active Tile Word</span>
             <select
               onChange={(event) => {
@@ -1215,22 +1333,22 @@ function ScenarioMapEditorCard() {
                 </option>
               ))}
             </select>
-            <small className="editor-help">
+            <small className={EDITOR_HELP_TEXT_CLASSNAME}>
               Stored as unsigned 16-bit map words; this picker uses named base tile words.
             </small>
           </label>
         ) : null}
 
-        <label className="editor-field">
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Map Navigation</span>
-          <small className="editor-help">
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
             Left click paints/places. Mouse wheel pans. `Ctrl`/`Cmd` + wheel zooms. Middle-button
             drag also pans.
           </small>
         </label>
 
         <button
-          className="editor-map-fill-button"
+          className={SCENARIO_MAP_FILL_BUTTON_CLASSNAME}
           disabled={fillDisabled}
           onClick={() => {
             if (brushMode === 'base-tile') {
@@ -1251,7 +1369,7 @@ function ScenarioMapEditorCard() {
         </button>
       </div>
 
-      <div className="editor-map-canvas-shell">
+      <div className={SCENARIO_MAP_CANVAS_SHELL_CLASSNAME}>
         <MapCanvas
           dragPlacementEnabled={dragPlacementEnabled}
           hoverPreview={
@@ -1305,7 +1423,7 @@ function ScenarioMapEditorCard() {
         />
       </div>
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Map Size</dt>
         <dd>
           {runtimeMapState.width} x {runtimeMapState.height}
@@ -1350,23 +1468,24 @@ function ScenarioObjectiveEditorCard() {
   );
 
   return (
-    <section className="editor-card editor-objective-card" aria-label="Scenario objective editor">
+    <section className={EDITOR_OBJECTIVE_CARD_CLASSNAME} aria-label="Scenario objective editor">
       <h1>Scenario Objective</h1>
       <p>
         Author objective predicates using the Stage 4 DSL. Metric comparisons track classic
         `DoScenarioScore` fields, while `all`/`any`/`not` allow composed checks.
       </p>
 
-      <label className="editor-field editor-objective-toggle">
+      <label className={EDITOR_FIELD_CLASSNAME}>
         <span>Objective Enabled</span>
         <input
+          className="justify-self-start"
           checked={objective.enabled}
           onChange={(event) => {
             dispatch({ type: 'set-objective-enabled', enabled: event.currentTarget.checked });
           }}
           type="checkbox"
         />
-        <small className="editor-help">
+        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
           Objective predicate drafts are included in strict export when objective authoring is
           enabled.
         </small>
@@ -1381,10 +1500,10 @@ function ScenarioObjectiveEditorCard() {
           predicate={objective.predicate}
         />
       ) : (
-        <p className="editor-help">Objective checks are disabled for this draft.</p>
+        <p className={EDITOR_HELP_TEXT_CLASSNAME}>Objective checks are disabled for this draft.</p>
       )}
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Objective Enabled</dt>
@@ -1404,7 +1523,7 @@ function ScenarioObjectiveEditorCard() {
       </dl>
 
       {objective.enabled && validationIssues.length > 0 ? (
-        <section aria-label="Objective semantic issues" className="editor-export-issues">
+        <section aria-label="Objective semantic issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
           <h2>Objective Semantic Issues</h2>
           <ul>
             {validationIssues.map((issue, index) => (
@@ -1416,7 +1535,7 @@ function ScenarioObjectiveEditorCard() {
         </section>
       ) : null}
 
-      <section className="editor-export-preview" aria-label="Objective predicate preview">
+      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Objective predicate preview">
         <h2>Objective Predicate JSON</h2>
         <textarea readOnly rows={10} value={objectiveJson} />
       </section>
@@ -1437,9 +1556,9 @@ function ScenarioObjectivePredicateEditor(options: {
   const nodeLabel = `Predicate depth ${depth}`;
 
   return (
-    <fieldset className="editor-objective-node">
+    <fieldset className={SCENARIO_OBJECTIVE_NODE_CLASSNAME}>
       <legend>{nodeLabel}</legend>
-      <label className="editor-field">
+      <label className={EDITOR_FIELD_CLASSNAME}>
         <span>Kind</span>
         <select
           onChange={(event) => {
@@ -1461,8 +1580,8 @@ function ScenarioObjectivePredicateEditor(options: {
       </label>
 
       {predicate.kind === 'metric' ? (
-        <div className="editor-objective-metric-grid">
-          <label className="editor-field">
+        <div className={SCENARIO_OBJECTIVE_METRIC_GRID_CLASSNAME}>
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>Metric</span>
             <select
               onChange={(event) => {
@@ -1482,7 +1601,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </select>
           </label>
 
-          <label className="editor-field">
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>Operator</span>
             <select
               onChange={(event) => {
@@ -1502,7 +1621,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </select>
           </label>
 
-          <label className="editor-field">
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>Value</span>
             <input
               onChange={(event) => {
@@ -1519,9 +1638,9 @@ function ScenarioObjectivePredicateEditor(options: {
       ) : null}
 
       {predicate.kind === 'all' || predicate.kind === 'any' ? (
-        <div className="editor-objective-children">
+        <div className={SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME}>
           {predicate.predicates.map((childPredicate, index) => (
-            <div className="editor-objective-child-row" key={index}>
+            <div className={SCENARIO_OBJECTIVE_CHILD_ROW_CLASSNAME} key={index}>
               <ScenarioObjectivePredicateEditor
                 depth={depth + 1}
                 onChange={(child) => {
@@ -1530,7 +1649,7 @@ function ScenarioObjectivePredicateEditor(options: {
                 predicate={childPredicate}
               />
               <button
-                className="editor-objective-remove"
+                className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
                 onClick={() => {
                   onChange(removeScenarioObjectiveChildPredicate(predicate, index));
                 }}
@@ -1541,7 +1660,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </div>
           ))}
           <button
-            className="editor-objective-add"
+            className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
             onClick={() => {
               onChange(appendScenarioObjectiveChildPredicate(predicate));
             }}
@@ -1553,7 +1672,7 @@ function ScenarioObjectivePredicateEditor(options: {
       ) : null}
 
       {predicate.kind === 'not' ? (
-        <div className="editor-objective-children">
+        <div className={SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME}>
           <ScenarioObjectivePredicateEditor
             depth={depth + 1}
             onChange={(child) => {
@@ -1587,29 +1706,30 @@ function ScenarioScriptEditorCard() {
   };
 
   return (
-    <section className="editor-card editor-script-card" aria-label="Scenario script editor">
+    <section className={EDITOR_SCRIPT_CARD_CLASSNAME} aria-label="Scenario script editor">
       <h1>Scenario Scripts</h1>
       <p>
         Author declarative event scripts with one-shot (`atTick`) and interval (`everyTicks`)
         triggers plus runtime action unions for disasters/messages.
       </p>
 
-      <label className="editor-field editor-script-toggle">
+      <label className={EDITOR_FIELD_CLASSNAME}>
         <span>Scripts Enabled</span>
         <input
+          className="justify-self-start"
           checked={script.enabled}
           onChange={(event) => {
             dispatch({ type: 'set-script-enabled', enabled: event.currentTarget.checked });
           }}
           type="checkbox"
         />
-        <small className="editor-help">
+        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
           Script event/action drafts are included in strict export when script authoring is enabled.
         </small>
       </label>
 
       {script.enabled ? (
-        <div className="editor-script-events">
+        <div className={SCENARIO_SCRIPT_EVENTS_CLASSNAME}>
           {script.events.map((event, eventIndex) => (
             <ScenarioScriptEventEditor
               event={event}
@@ -1626,7 +1746,7 @@ function ScenarioScriptEditorCard() {
             />
           ))}
           <button
-            className="editor-script-add"
+            className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
             onClick={() => {
               replaceEvents(appendScenarioEditorScriptEvent(script.events));
             }}
@@ -1636,10 +1756,12 @@ function ScenarioScriptEditorCard() {
           </button>
         </div>
       ) : (
-        <p className="editor-help">Scripted event actions are disabled for this draft.</p>
+        <p className={EDITOR_HELP_TEXT_CLASSNAME}>
+          Scripted event actions are disabled for this draft.
+        </p>
       )}
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Scripts Enabled</dt>
@@ -1659,7 +1781,7 @@ function ScenarioScriptEditorCard() {
       </dl>
 
       {script.enabled && validationIssues.length > 0 ? (
-        <section aria-label="Script semantic issues" className="editor-export-issues">
+        <section aria-label="Script semantic issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
           <h2>Script Semantic Issues</h2>
           <ul>
             {validationIssues.map((issue, index) => (
@@ -1671,7 +1793,7 @@ function ScenarioScriptEditorCard() {
         </section>
       ) : null}
 
-      <section className="editor-export-preview" aria-label="Script event preview">
+      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Script event preview">
         <h2>Script Event JSON</h2>
         <textarea readOnly rows={12} value={scriptJson} />
       </section>
@@ -1693,10 +1815,10 @@ function ScenarioScriptEventEditor(options: {
   const triggerKind = getScenarioEditorScriptTriggerKind(event.trigger);
 
   return (
-    <fieldset className="editor-script-event">
+    <fieldset className={SCENARIO_SCRIPT_EVENT_CLASSNAME}>
       <legend>{`Event ${index + 1}`}</legend>
-      <div className="editor-script-event-grid">
-        <label className="editor-field">
+      <div className={SCENARIO_SCRIPT_EVENT_GRID_CLASSNAME}>
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Trigger</span>
           <select
             onChange={(changeEvent) => {
@@ -1719,7 +1841,7 @@ function ScenarioScriptEventEditor(options: {
         </label>
 
         {triggerKind === 'atTick' ? (
-          <label className="editor-field">
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>atTick</span>
             <input
               min={0}
@@ -1739,7 +1861,7 @@ function ScenarioScriptEventEditor(options: {
             />
           </label>
         ) : (
-          <label className="editor-field">
+          <label className={EDITOR_FIELD_CLASSNAME}>
             <span>everyTicks</span>
             <input
               min={1}
@@ -1761,11 +1883,11 @@ function ScenarioScriptEventEditor(options: {
         )}
       </div>
 
-      <div className="editor-script-actions">
+      <div className={SCENARIO_SCRIPT_ACTIONS_CLASSNAME}>
         <h3>Actions</h3>
         {event.actions.map((action, actionIndex) => (
-          <div className="editor-script-action-row" key={`${index}:${actionIndex}`}>
-            <label className="editor-field">
+          <div className={SCENARIO_SCRIPT_ACTION_ROW_CLASSNAME} key={`${index}:${actionIndex}`}>
+            <label className={EDITOR_FIELD_CLASSNAME}>
               <span>Action</span>
               <select
                 onChange={(changeEvent) => {
@@ -1791,7 +1913,7 @@ function ScenarioScriptEventEditor(options: {
             </label>
 
             {action.kind === 'send-message' ? (
-              <label className="editor-field">
+              <label className={EDITOR_FIELD_CLASSNAME}>
                 <span>messageId</span>
                 <input
                   onChange={(changeEvent) => {
@@ -1813,7 +1935,7 @@ function ScenarioScriptEventEditor(options: {
             ) : null}
 
             <button
-              className="editor-script-remove"
+              className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
               onClick={() => {
                 onChange(removeScenarioEditorScriptAction(event, actionIndex));
               }}
@@ -1824,7 +1946,7 @@ function ScenarioScriptEventEditor(options: {
           </div>
         ))}
         <button
-          className="editor-script-add"
+          className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
           onClick={() => {
             onChange(appendScenarioEditorScriptAction(event));
           }}
@@ -1834,7 +1956,7 @@ function ScenarioScriptEventEditor(options: {
         </button>
       </div>
 
-      <button className="editor-script-remove" onClick={onRemove} type="button">
+      <button className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME} onClick={onRemove} type="button">
         Remove Event
       </button>
     </fieldset>
@@ -1866,7 +1988,7 @@ function ScenarioBehaviorProfileEditorCard() {
 
   return (
     <section
-      className="editor-card editor-behavior-card"
+      className={EDITOR_BEHAVIOR_CARD_CLASSNAME}
       aria-label="Scenario behavior profile editor"
     >
       <h1>Scenario Behavior Profile</h1>
@@ -1875,23 +1997,24 @@ function ScenarioBehaviorProfileEditorCard() {
         allowing only registered profile variants.
       </p>
 
-      <label className="editor-field editor-behavior-toggle">
+      <label className={EDITOR_FIELD_CLASSNAME}>
         <span>Behavior Profile Assignment Enabled</span>
         <input
+          className="justify-self-start"
           checked={behavior.enabled}
           onChange={(event) => {
             dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
           }}
           type="checkbox"
         />
-        <small className="editor-help">
+        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
           This Stage 4.3 draft editor captures profile assignment only; export integration lands in
           Stage 4.5.
         </small>
       </label>
 
       {behavior.enabled ? (
-        <label className="editor-field">
+        <label className={EDITOR_FIELD_CLASSNAME}>
           <span>Behavior Profile Key</span>
           <select
             aria-invalid={validationIssue !== undefined}
@@ -1914,18 +2037,20 @@ function ScenarioBehaviorProfileEditorCard() {
               </option>
             ))}
           </select>
-          <small className="editor-help">
+          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
             Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
           </small>
           {validationIssue !== undefined ? (
-            <small className="editor-error">{validationIssue}</small>
+            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{validationIssue}</small>
           ) : null}
         </label>
       ) : (
-        <p className="editor-help">Behavior profile override is disabled for this draft.</p>
+        <p className={EDITOR_HELP_TEXT_CLASSNAME}>
+          Behavior profile override is disabled for this draft.
+        </p>
       )}
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Assignment Enabled</dt>
@@ -1936,7 +2061,7 @@ function ScenarioBehaviorProfileEditorCard() {
         <dd>{validationIssue === undefined ? 'valid' : 'invalid'}</dd>
       </dl>
 
-      <section className="editor-export-preview" aria-label="Behavior profile preview">
+      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Behavior profile preview">
         <h2>Behavior Assignment JSON</h2>
         <textarea readOnly rows={6} value={behaviorJson} />
       </section>
@@ -2030,7 +2155,7 @@ function ScenarioExportCard() {
   const openIssues = lastOpenResult?.ok === false ? lastOpenResult.issues : [];
 
   return (
-    <section className="editor-card" aria-label="Scenario strict export panel">
+    <section className={EDITOR_CARD_CLASSNAME} aria-label="Scenario strict export panel">
       <h1>Export Scenario Bundle</h1>
       <p>
         Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
@@ -2038,24 +2163,24 @@ function ScenarioExportCard() {
         authored Stage 4 objective/script payloads when enabled.
       </p>
 
-      <div className="editor-export-actions">
+      <div className={EDITOR_EXPORT_ACTIONS_CLASSNAME}>
         <input
           accept="application/json,.json"
-          className="editor-open-input"
+          className="hidden"
           onChange={handleOpenBundleInputChange}
           ref={openFileInputRef}
           type="file"
         />
-        <button className="editor-open-button" onClick={handleOpenBundle} type="button">
+        <button className={EDITOR_OPEN_BUTTON_CLASSNAME} onClick={handleOpenBundle} type="button">
           Open Bundle JSON
         </button>
-        <button className="editor-export-button" onClick={handleExport} type="button">
+        <button className={EDITOR_EXPORT_BUTTON_CLASSNAME} onClick={handleExport} type="button">
           Export Bundle JSON
         </button>
-        <small className="editor-help">Export file name: {exportFileName}</small>
+        <small className={EDITOR_HELP_TEXT_CLASSNAME}>Export file name: {exportFileName}</small>
       </div>
 
-      <dl className="editor-grid">
+      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Last Open Attempt</dt>
@@ -2077,7 +2202,7 @@ function ScenarioExportCard() {
       </dl>
 
       {lastResult?.ok === false ? (
-        <section aria-label="Strict export issues" className="editor-export-issues">
+        <section aria-label="Strict export issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
           <h2>Export Blocked</h2>
           <ul>
             {lastResult.issues.map((issue, index) => (
@@ -2090,7 +2215,7 @@ function ScenarioExportCard() {
       ) : null}
 
       {lastOpenResult?.ok === false ? (
-        <section aria-label="Bundle open issues" className="editor-open-issues">
+        <section aria-label="Bundle open issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
           <h2>Open Blocked</h2>
           <ul>
             {openIssues.map((issue, index) => (
@@ -2103,7 +2228,7 @@ function ScenarioExportCard() {
       ) : null}
 
       {lastResult?.ok ? (
-        <section aria-label="Export json preview" className="editor-export-preview">
+        <section aria-label="Export json preview" className={EDITOR_PREVIEW_PANEL_CLASSNAME}>
           <h2>Last Export JSON</h2>
           <textarea readOnly rows={12} value={lastResult.jsonText} />
         </section>
