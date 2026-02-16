@@ -19,11 +19,14 @@ import {
   type ScenarioEditorBehaviorDraft,
 } from './editor-behavior.ts';
 import {
+  applyScenarioEditorMapSpecialZoneAtPoint,
   applyScenarioEditorMapToolAtPoint,
   applyScenarioEditorMapZoneLevelAtPoint,
+  deriveScenarioEditorMapSimulation,
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
   recomputeScenarioEditorMapTerrain,
+  type ScenarioEditorMapSpecialZoneKind,
   type ScenarioEditorMapTerrainRecomputeMode,
   type ScenarioEditorMapTerrainRecomputeOptions,
   type ScenarioEditorMapTool,
@@ -134,6 +137,16 @@ export type ScenarioEditorAction =
       zone: ScenarioEditorMapZoneKind;
       level: number;
       value: number;
+    }
+  | {
+      type: 'apply-map-special-zone';
+      x: number;
+      y: number;
+      zone: ScenarioEditorMapSpecialZoneKind;
+    }
+  | {
+      type: 'derive-map-simulation';
+      ticks: number;
     }
   | { type: 'fill-map'; tileWord: number }
   | {
@@ -246,6 +259,22 @@ export function scenarioEditorReducer(
         value: action.value,
       });
       return applyScenarioEditorMapMutation(state, nextBundle);
+    }
+    case 'apply-map-special-zone': {
+      const nextBundle = applyScenarioEditorMapSpecialZoneAtPoint(
+        state.bundle,
+        action,
+        action.zone,
+      );
+      return applyScenarioEditorMapMutation(state, nextBundle);
+    }
+    case 'derive-map-simulation': {
+      const nextBundle = deriveScenarioEditorMapSimulation(state.bundle, {
+        ticks: action.ticks,
+      });
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: 'off',
+      });
     }
     case 'fill-map': {
       const nextBundle = fillScenarioEditorMapTileWord(state.bundle, action.tileWord);

@@ -1,5 +1,11 @@
-import { Tile, TileMask } from '@city/sim-core';
-import { type CSSProperties, useMemo, useReducer, useState } from 'react';
+import {
+  ClassicyMenuItemButton,
+  ClassicyMenuPanel,
+  getAllThemes,
+  getThemeVars,
+} from '@city/classicyui';
+import { Tile, TileFlag, TileMask } from '@city/sim-core';
+import { type CSSProperties, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
 import { PLAYABLE_TOOL_ICON_URL_BY_BASENAME } from '../../../web/src/features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
@@ -32,6 +38,8 @@ import {
   normalizeScenarioEditorMapZoneLevel,
   normalizeScenarioEditorMapZoneValue,
   normalizeScenarioEditorTileWord,
+  readScenarioEditorMapTileWord,
+  type ScenarioEditorMapSpecialZoneKind,
   type ScenarioEditorMapZoneKind,
 } from '../state/editor-map.ts';
 import { createScenarioEditorRuntimeMapState } from '../state/editor-map-runtime.ts';
@@ -80,22 +88,141 @@ function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): str
 
 type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base' | 'tools';
 type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
+type ScenarioMapFinalToolId = PlayableToolName | 'house' | 'hospital' | 'church';
 const SCENARIO_MAP_FINAL_EXCLUDED_TOOL_SET = new Set<PlayableToolName>([
   'res',
   'com',
   'ind',
   'query',
 ]);
-const SCENARIO_MAP_FINAL_TOOL_SPECS = PLAYABLE_TOOL_SPECS.filter(
+const SCENARIO_MAP_FINAL_PLAYABLE_TOOL_SPECS = PLAYABLE_TOOL_SPECS.filter(
   (spec) => !SCENARIO_MAP_FINAL_EXCLUDED_TOOL_SET.has(spec.tool),
 );
+const SCENARIO_MAP_FINAL_PLAYABLE_TOOL_NAME_SET = new Set<PlayableToolName>(
+  SCENARIO_MAP_FINAL_PLAYABLE_TOOL_SPECS.map((spec) => spec.tool),
+);
+
+interface ScenarioMapFinalToolSpec {
+  readonly tool: ScenarioMapFinalToolId;
+  readonly label: string;
+  readonly size: number;
+  readonly offset: number;
+  readonly baseCost: number;
+  readonly pendingColor: string;
+  readonly previewTileId: number;
+  readonly toolState: number | null;
+}
+
+const SCENARIO_MAP_FINAL_TOOL_SPECS: readonly ScenarioMapFinalToolSpec[] = [
+  ...SCENARIO_MAP_FINAL_PLAYABLE_TOOL_SPECS.map((spec) => ({
+    tool: spec.tool,
+    label: spec.label,
+    size: spec.size,
+    offset: spec.offset,
+    baseCost: spec.baseCost,
+    pendingColor: spec.pendingColor,
+    previewTileId:
+      spec.tool === 'park'
+        ? Tile.WOODS2
+        : spec.tool === 'fire'
+          ? Tile.FIRESTATION
+          : spec.tool === 'police'
+            ? Tile.POLICESTATION
+            : spec.tool === 'road'
+              ? Tile.ROADS
+              : spec.tool === 'rail'
+                ? Tile.HRAIL
+                : spec.tool === 'wire'
+                  ? Tile.HPOWER
+                  : spec.tool === 'bulldoze'
+                    ? Tile.RUBBLE
+                    : spec.tool === 'stadium'
+                      ? Tile.STADIUM
+                      : spec.tool === 'seaport'
+                        ? Tile.PORT
+                        : spec.tool === 'coal'
+                          ? Tile.POWERPLANT
+                          : spec.tool === 'nuclear'
+                            ? Tile.NUCLEAR
+                            : Tile.AIRPORT,
+    toolState: spec.toolState,
+  })),
+  {
+    tool: 'house',
+    label: 'House',
+    size: 1,
+    offset: 0,
+    baseCost: 0,
+    pendingColor: '#86efac',
+    previewTileId: Tile.HOUSE,
+    toolState: null,
+  },
+  {
+    tool: 'hospital',
+    label: 'Hospital',
+    size: 3,
+    offset: 1,
+    baseCost: 0,
+    pendingColor: '#fde68a',
+    previewTileId: Tile.HOSPITAL,
+    toolState: null,
+  },
+  {
+    tool: 'church',
+    label: 'Church',
+    size: 3,
+    offset: 1,
+    baseCost: 0,
+    pendingColor: '#ddd6fe',
+    previewTileId: Tile.CHURCH,
+    toolState: null,
+  },
+] as const;
+const SCENARIO_MAP_FINAL_DERIVE_SIM_TICK_COUNT_DEFAULT = 16;
+const { ANIMBIT, BLBNCNBIT, BULLBIT, BURNBIT } = TileFlag;
+
+type ScenarioMapFinalParkBrushMode =
+  | 'auto'
+  | 'sprinkler'
+  | 'woods2'
+  | 'woods3'
+  | 'woods4'
+  | 'woods5';
+
+const SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES: readonly {
+  readonly id: ScenarioMapFinalParkBrushMode;
+  readonly label: string;
+  readonly tileId: number | null;
+}[] = [
+  { id: 'auto', label: 'Auto', tileId: null },
+  { id: 'sprinkler', label: 'Sprinkler', tileId: Tile.FOUNTAIN },
+  { id: 'woods2', label: 'Woods 2', tileId: Tile.WOODS2 },
+  { id: 'woods3', label: 'Woods 3', tileId: Tile.WOODS3 },
+  { id: 'woods4', label: 'Woods 4', tileId: Tile.WOODS4 },
+  { id: 'woods5', label: 'Woods 5', tileId: Tile.WOODS5 },
+] as const;
+
+const SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES: readonly {
+  readonly label: string;
+  readonly tileId: number | null;
+}[] = [
+  { label: 'Auto', tileId: null },
+  ...Array.from({ length: 12 }, (_, index) => ({
+    label: `Class ${Math.floor(index / 3)} / Variant ${index % 3}`,
+    tileId: Tile.HOUSE + index,
+  })),
+] as const;
+
+function isScenarioMapFinalPlayableToolId(tool: ScenarioMapFinalToolId): tool is PlayableToolName {
+  return SCENARIO_MAP_FINAL_PLAYABLE_TOOL_NAME_SET.has(tool as PlayableToolName);
+}
 
 interface ScenarioMapFinalBrushSelectionState {
   readonly activeKind: ScenarioMapFinalActiveBrushFamily;
   readonly baseBrushId: ScenarioMapFinalSmartBaseBrushId;
   readonly zoneKind: ScenarioEditorMapZoneKind;
   readonly zoneOptionKey: string;
-  readonly tool: PlayableToolName;
+  readonly tool: ScenarioMapFinalToolId;
 }
 
 type ScenarioMapFinalBrushSelectionAction =
@@ -113,7 +240,7 @@ type ScenarioMapFinalBrushSelectionAction =
     }
   | {
       readonly type: 'select-tool';
-      readonly tool: PlayableToolName;
+      readonly tool: ScenarioMapFinalToolId;
     };
 
 const SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE: ScenarioMapFinalBrushSelectionState = {
@@ -162,6 +289,62 @@ function reduceScenarioMapFinalBrushSelection(
     default:
       return state;
   }
+}
+
+/**
+ * Deterministically derive one Micropolis park variant for editor auto mode.
+ * Mirrors the 5-way variant domain from `putDownPark` in
+ * `ref/micropolis/src/sim/w_tool.c` (`WOODS2..WOODS5` + `FOUNTAIN`), with an
+ * editor-specific deterministic hash in place of mutable global `Rand(4)`.
+ */
+function resolveScenarioMapFinalAutoParkTileId(x: number, y: number): number {
+  const hash = ((Math.imul(x + 1, 73_856_093) ^ Math.imul(y + 1, 19_349_663)) >>> 0) % 5;
+  if (hash === 4) {
+    return Tile.FOUNTAIN;
+  }
+  return Tile.WOODS2 + hash;
+}
+
+/**
+ * Resolve one tile-word payload for park placement modes in map-final.
+ * Mirrors `putDownPark` flags in `ref/micropolis/src/sim/w_tool.c`:
+ * all variants set `BURNBIT|BULLBIT`, and fountain also sets `ANIMBIT`.
+ */
+function resolveScenarioMapFinalParkTileWord(
+  mode: ScenarioMapFinalParkBrushMode,
+  point: { x: number; y: number },
+): number {
+  const modeChoice = SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.find(
+    (choice) => choice.id === mode,
+  );
+  const tileId = modeChoice?.tileId ?? resolveScenarioMapFinalAutoParkTileId(point.x, point.y);
+  if (tileId === Tile.FOUNTAIN) {
+    return tileId | BURNBIT | BULLBIT | ANIMBIT;
+  }
+  return tileId | BURNBIT | BULLBIT;
+}
+
+/**
+ * Deterministically derive one house tile variant for editor auto mode.
+ * Mirrors the 12-way `BuildHouse` domain from `ref/micropolis/src/sim/s_zone.c`
+ * (`HOUSE + Rand(2) + value * 3`) while using deterministic hashing for stable authoring.
+ */
+function resolveScenarioMapFinalAutoHouseTileId(x: number, y: number): number {
+  const hash = ((Math.imul(x + 1, 1_103_515_245) ^ Math.imul(y + 1, 12_345)) >>> 0) % 12;
+  return Tile.HOUSE + hash;
+}
+
+/**
+ * Resolve one tile-word payload for map-final house placement.
+ * Mirrors `BuildHouse` flags in `ref/micropolis/src/sim/s_zone.c`
+ * (`BLBNCNBIT` over one `HOUSE..HOUSE+11` tile id).
+ */
+function resolveScenarioMapFinalHouseTileWord(
+  tileId: number | null,
+  point: { x: number; y: number },
+): number {
+  const resolvedTileId = tileId ?? resolveScenarioMapFinalAutoHouseTileId(point.x, point.y);
+  return resolvedTileId | BLBNCNBIT;
 }
 
 interface ScenarioMapFinalSmartBaseBrush {
@@ -215,6 +398,11 @@ const SCENARIO_EDITOR_BASE_TILE_HOVER_PREVIEW: MapCanvasHoverPreviewSpec = {
   pendingColor: '#6e7781',
 };
 const SCENARIO_MAP_FINAL_TREE_TILE_MAX_FOR_SMOOTHING = 39;
+const SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX = 8;
+const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX = 176;
+const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX = 210;
+const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX = 196;
+const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX = 360;
 
 type ScenarioMapFinalZoneOption =
   | {
@@ -317,6 +505,22 @@ function getScenarioMapFinalBaseHoverPreviewSpec(
 }
 
 /**
+ * Resolve special-zone target kind for custom map-final tools.
+ * Mirrors hospital/church special-zone families in `ref/micropolis/src/sim/s_zone.c`.
+ */
+function toScenarioMapFinalSpecialZoneKind(
+  tool: ScenarioMapFinalToolId,
+): ScenarioEditorMapSpecialZoneKind | null {
+  if (tool === 'hospital') {
+    return 'hospital';
+  }
+  if (tool === 'church') {
+    return 'church';
+  }
+  return null;
+}
+
+/**
  * Resolve base-class visualization styling for one map tile.
  * Not from Micropolis C: editor-only readability overlay that helps distinguish
  * authored terrain classes (channel/water/forest) while preserving original art.
@@ -362,6 +566,23 @@ export function ScenarioMapFinalWorkbench() {
     SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE,
   );
   const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(true);
+  const [parkBrushMode, setParkBrushMode] = useState<ScenarioMapFinalParkBrushMode>('auto');
+  const [houseBrushTileId, setHouseBrushTileId] = useState<number | null>(null);
+  const [deriveSimulationTicks, setDeriveSimulationTicks] = useState<number>(
+    SCENARIO_MAP_FINAL_DERIVE_SIM_TICK_COUNT_DEFAULT,
+  );
+  const [toolVariantContextMenu, setToolVariantContextMenu] = useState<{
+    readonly open: boolean;
+    readonly tool: 'park' | 'house' | null;
+    readonly x: number;
+    readonly y: number;
+  }>({
+    open: false,
+    tool: null,
+    x: 0,
+    y: 0,
+  });
+  const toolVariantContextMenuRef = useRef<HTMLDivElement | null>(null);
   const activeBrushFamily = brushSelection.activeKind;
   const activeZoneKind = brushSelection.zoneKind;
   const activeZoneOptionKey = brushSelection.zoneOptionKey;
@@ -380,7 +601,12 @@ export function ScenarioMapFinalWorkbench() {
     () => getScenarioMapZoneValueClassLabel(activeZoneKind),
     [activeZoneKind],
   );
-  const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
+  const activeToolSpec = useMemo(
+    () => SCENARIO_MAP_FINAL_TOOL_SPECS.find((spec) => spec.tool === activeTool),
+    [activeTool],
+  );
+  const activeMapFinalToolSpec =
+    activeToolSpec ?? SCENARIO_MAP_FINAL_TOOL_SPECS[0] ?? getPlayableToolSpec('road');
   const zoneMaxValueClass = useMemo(
     () => getScenarioEditorMapZoneMaxValue(activeZoneKind),
     [activeZoneKind],
@@ -399,6 +625,78 @@ export function ScenarioMapFinalWorkbench() {
     () => (showBaseClassOverlay ? getScenarioMapFinalBaseClassOverlayStyle : undefined),
     [showBaseClassOverlay],
   );
+  const mapFinalRuntimeTheme = useMemo<CSSProperties>(() => {
+    const theme = getAllThemes()[0];
+    return theme === undefined ? {} : (getThemeVars(theme) as CSSProperties);
+  }, []);
+  const activeParkBrushModeLabel = useMemo(
+    () =>
+      SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.find((choice) => choice.id === parkBrushMode)
+        ?.label ?? 'Auto',
+    [parkBrushMode],
+  );
+  const activeHouseBrushModeLabel = useMemo(
+    () =>
+      SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.find((choice) => choice.tileId === houseBrushTileId)
+        ?.label ?? 'Auto',
+    [houseBrushTileId],
+  );
+  const isParkBrushContextMenuOpen =
+    toolVariantContextMenu.open &&
+    toolVariantContextMenu.tool === 'park' &&
+    activeBrushFamily === 'tools' &&
+    activeTool === 'park';
+  const isHouseBrushContextMenuOpen =
+    toolVariantContextMenu.open &&
+    toolVariantContextMenu.tool === 'house' &&
+    activeBrushFamily === 'tools' &&
+    activeTool === 'house';
+  const isToolVariantContextMenuOpen = isParkBrushContextMenuOpen || isHouseBrushContextMenuOpen;
+  function closeToolVariantContextMenu(): void {
+    setToolVariantContextMenu((current) =>
+      current.open
+        ? {
+            ...current,
+            open: false,
+            tool: null,
+          }
+        : current,
+    );
+  }
+
+  useEffect(() => {
+    if (!isToolVariantContextMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent): void {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        closeToolVariantContextMenu();
+        return;
+      }
+      if (toolVariantContextMenuRef.current?.contains(target)) {
+        return;
+      }
+      closeToolVariantContextMenu();
+    }
+
+    function handleEscape(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      closeToolVariantContextMenu();
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', closeToolVariantContextMenu);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', closeToolVariantContextMenu);
+    };
+  }, [isToolVariantContextMenuOpen]);
 
   const zoneOptions = useMemo<readonly ScenarioMapFinalZoneOption[]>(() => {
     const freshTileId = getMapFinalZoneFreshCenterTileId(activeZoneKind);
@@ -459,10 +757,11 @@ export function ScenarioMapFinalWorkbench() {
 
   return (
     <section
-      className="grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] bg-gray-300 max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
+      className="grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] overflow-hidden bg-gray-300 text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
       aria-label="Scenario map final workbench"
+      style={mapFinalRuntimeTheme}
     >
-      <aside className="grid content-start gap-4 overflow-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
+      <aside className="grid min-h-0 content-start gap-4 overflow-y-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
         <section
           className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
             activeBrushFamily === 'base' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
@@ -484,6 +783,7 @@ export function ScenarioMapFinalWorkbench() {
                 }`}
                 key={brush.id}
                 onClick={() => {
+                  closeToolVariantContextMenu();
                   dispatchBrushSelection({
                     type: 'select-base-brush',
                     brushId: brush.id,
@@ -543,6 +843,7 @@ export function ScenarioMapFinalWorkbench() {
                 }`}
                 key={zone}
                 onClick={() => {
+                  closeToolVariantContextMenu();
                   dispatchBrushSelection({
                     type: 'select-zone-kind',
                     zoneKind: zone,
@@ -576,6 +877,7 @@ export function ScenarioMapFinalWorkbench() {
                     }`}
                     key={option.key}
                     onClick={() => {
+                      closeToolVariantContextMenu();
                       dispatchBrushSelection({
                         type: 'select-zone-option',
                         optionKey: option.key,
@@ -622,9 +924,12 @@ export function ScenarioMapFinalWorkbench() {
           >
             {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
               const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
-              const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
-                highlighted: active,
-              });
+              const iconLookup =
+                spec.toolState === null
+                  ? undefined
+                  : resolveSimUiToolIconAssetLookup(spec.toolState, {
+                      highlighted: active,
+                    });
               const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
               const iconUrl =
                 iconBasename === undefined
@@ -639,18 +944,60 @@ export function ScenarioMapFinalWorkbench() {
                   }`}
                   key={spec.tool}
                   onClick={() => {
+                    closeToolVariantContextMenu();
                     dispatchBrushSelection({
                       type: 'select-tool',
                       tool: spec.tool,
                     });
                   }}
+                  onContextMenu={(event) => {
+                    if (spec.tool !== 'park' && spec.tool !== 'house') {
+                      return;
+                    }
+                    event.preventDefault();
+                    const menuSize =
+                      spec.tool === 'park'
+                        ? {
+                            width: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX,
+                            height: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX,
+                          }
+                        : {
+                            width: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX,
+                            height: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX,
+                          };
+                    const position = resolveScenarioMapFinalContextMenuPosition(
+                      {
+                        x: event.clientX,
+                        y: event.clientY,
+                      },
+                      menuSize,
+                      {
+                        width: window.innerWidth,
+                        height: window.innerHeight,
+                      },
+                    );
+                    dispatchBrushSelection({
+                      type: 'select-tool',
+                      tool: spec.tool,
+                    });
+                    setToolVariantContextMenu({
+                      open: true,
+                      tool: spec.tool,
+                      x: position.x,
+                      y: position.y,
+                    });
+                  }}
                   role="listitem"
-                  title={`${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`}
+                  title={
+                    spec.tool === 'park'
+                      ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                      : spec.tool === 'house'
+                        ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                        : `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`
+                  }
                   type="button"
                 >
-                  {iconUrl === undefined ? (
-                    <span className="block h-full w-full rounded-[0.3rem] border border-slate-500 bg-slate-200" />
-                  ) : (
+                  {iconUrl !== undefined ? (
                     <img
                       alt=""
                       aria-hidden="true"
@@ -658,10 +1005,114 @@ export function ScenarioMapFinalWorkbench() {
                       draggable={false}
                       src={iconUrl}
                     />
+                  ) : zoneAtlasSource !== undefined ? (
+                    <MapFinalSingleTileSprite
+                      atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                      atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                      tileId={spec.previewTileId}
+                    />
+                  ) : (
+                    <span className="text-[0.8rem] font-semibold text-slate-600">
+                      {spec.previewTileId}
+                    </span>
                   )}
                 </button>
               );
             })}
+          </div>
+          <small className="text-sm text-slate-600">
+            Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}. Right
+            click Park/House to change.
+          </small>
+          {isToolVariantContextMenuOpen ? (
+            <div
+              className="fixed z-50"
+              ref={toolVariantContextMenuRef}
+              style={{
+                left: `${toolVariantContextMenu.x}px`,
+                top: `${toolVariantContextMenu.y}px`,
+              }}
+            >
+              <ClassicyMenuPanel className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1">
+                {isParkBrushContextMenuOpen
+                  ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
+                      <ClassicyMenuItemButton
+                        key={choice.id}
+                        onClick={() => {
+                          setParkBrushMode(choice.id);
+                          closeToolVariantContextMenu();
+                        }}
+                        type="button"
+                        title={
+                          choice.tileId === null
+                            ? 'Auto: choose any park variant'
+                            : `Place ${choice.label} only (tile ${choice.tileId})`
+                        }
+                      >
+                        {choice.id === parkBrushMode ? '● ' : ''}
+                        {choice.label}
+                      </ClassicyMenuItemButton>
+                    ))
+                  : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
+                      <ClassicyMenuItemButton
+                        key={choice.tileId === null ? 'auto' : choice.tileId}
+                        onClick={() => {
+                          setHouseBrushTileId(choice.tileId);
+                          closeToolVariantContextMenu();
+                        }}
+                        type="button"
+                        title={
+                          choice.tileId === null
+                            ? 'Auto: choose any house variant'
+                            : `Place ${choice.label} only (tile ${choice.tileId})`
+                        }
+                      >
+                        {choice.tileId === houseBrushTileId ? '● ' : ''}
+                        {choice.label}
+                      </ClassicyMenuItemButton>
+                    ))}
+              </ClassicyMenuPanel>
+            </div>
+          ) : null}
+
+          <div className="grid gap-[0.45rem] rounded-lg border border-slate-400 bg-slate-100 p-[0.45rem]">
+            <div className="grid gap-[0.3rem]">
+              <label className="grid gap-[0.2rem]">
+                <span className="text-sm font-semibold text-slate-700">
+                  Derive simulation ticks
+                </span>
+                <input
+                  className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
+                  min={1}
+                  onChange={(event) => {
+                    const next = Number(event.currentTarget.value);
+                    if (Number.isFinite(next)) {
+                      setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
+                    }
+                  }}
+                  step={1}
+                  type="number"
+                  value={deriveSimulationTicks}
+                />
+              </label>
+            </div>
+            <button
+              className="cursor-pointer rounded border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.55rem] py-[0.4rem] font-semibold text-inherit"
+              onClick={() => {
+                closeToolVariantContextMenu();
+                dispatch({
+                  type: 'derive-map-simulation',
+                  ticks: deriveSimulationTicks,
+                });
+              }}
+              type="button"
+            >
+              Derive simulation
+            </button>
+            <small className="text-sm text-slate-600">
+              Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without
+              zone growth/disasters.
+            </small>
           </div>
         </section>
       </aside>
@@ -670,13 +1121,23 @@ export function ScenarioMapFinalWorkbench() {
         <MapCanvas
           dragPlacementEnabled={
             activeBrushFamily === 'base' ||
-            (activeBrushFamily === 'tools' && activeToolSpec.size === 1)
+            (activeBrushFamily === 'tools' && activeMapFinalToolSpec.size === 1)
           }
-          hoverPreview={activeBrushFamily === 'base' ? activeSmartBaseHoverPreview : undefined}
+          hoverPreview={
+            activeBrushFamily === 'base'
+              ? activeSmartBaseHoverPreview
+              : activeBrushFamily === 'tools' && !isScenarioMapFinalPlayableToolId(activeTool)
+                ? {
+                    size: activeMapFinalToolSpec.size,
+                    offset: activeMapFinalToolSpec.offset,
+                    pendingColor: activeMapFinalToolSpec.pendingColor,
+                  }
+                : undefined
+          }
           hoverTool={
             activeBrushFamily === 'zones'
               ? activeZoneKind
-              : activeBrushFamily === 'tools'
+              : activeBrushFamily === 'tools' && isScenarioMapFinalPlayableToolId(activeTool)
                 ? activeTool
                 : undefined
           }
@@ -692,14 +1153,15 @@ export function ScenarioMapFinalWorkbench() {
                     height: bundle.map.height,
                   },
                 );
-                for (const point of forestPoints) {
+                const lastPointIndex = forestPoints.length - 1;
+                for (const [pointIndex, point] of forestPoints.entries()) {
                   dispatch({
                     type: 'paint-map-base-tile',
                     x: point.x,
                     y: point.y,
                     baseTileId: activeSmartBaseBrush.tileId,
                     preserveFlags: false,
-                    terrainRecomputeMode: 'global',
+                    terrainRecomputeMode: pointIndex === lastPointIndex ? 'global' : 'off',
                   });
                 }
                 return;
@@ -717,12 +1179,56 @@ export function ScenarioMapFinalWorkbench() {
             }
 
             if (activeBrushFamily === 'tools') {
-              dispatch({
-                type: 'apply-map-tool',
-                tool: activeTool,
-                x,
-                y,
-              });
+              if (activeTool === 'park') {
+                const currentTileWord = readScenarioEditorMapTileWord(bundle, { x, y });
+                if (currentTileWord !== 0) {
+                  return;
+                }
+                const parkTileWord = resolveScenarioMapFinalParkTileWord(parkBrushMode, { x, y });
+                dispatch({
+                  type: 'paint-map-tile',
+                  x,
+                  y,
+                  tileWord: parkTileWord,
+                  terrainRecomputeMode: 'global',
+                });
+                return;
+              }
+
+              if (activeTool === 'house') {
+                const houseTileWord = resolveScenarioMapFinalHouseTileWord(houseBrushTileId, {
+                  x,
+                  y,
+                });
+                dispatch({
+                  type: 'paint-map-tile',
+                  x,
+                  y,
+                  tileWord: houseTileWord,
+                  terrainRecomputeMode: 'global',
+                });
+                return;
+              }
+
+              const specialZoneKind = toScenarioMapFinalSpecialZoneKind(activeTool);
+              if (specialZoneKind !== null) {
+                dispatch({
+                  type: 'apply-map-special-zone',
+                  x,
+                  y,
+                  zone: specialZoneKind,
+                });
+                return;
+              }
+
+              if (isScenarioMapFinalPlayableToolId(activeTool)) {
+                dispatch({
+                  type: 'apply-map-tool',
+                  tool: activeTool,
+                  x,
+                  y,
+                });
+              }
               return;
             }
 
@@ -779,6 +1285,29 @@ function getScenarioMapFinalForestBrushPoints(
     points.push({ x, y });
   }
   return points;
+}
+
+/**
+ * Clamp one context-menu anchor to remain fully visible in the viewport.
+ * Not from Micropolis C: editor-only browser layout helper for fixed-position menus.
+ */
+function resolveScenarioMapFinalContextMenuPosition(
+  anchor: { x: number; y: number },
+  menuSize: { width: number; height: number },
+  viewportSize: { width: number; height: number },
+): { x: number; y: number } {
+  const maxX = Math.max(
+    SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
+    viewportSize.width - menuSize.width - SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
+  );
+  const maxY = Math.max(
+    SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
+    viewportSize.height - menuSize.height - SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
+  );
+  return {
+    x: Math.min(Math.max(anchor.x, SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX), maxX),
+    y: Math.min(Math.max(anchor.y, SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX), maxY),
+  };
 }
 
 /**

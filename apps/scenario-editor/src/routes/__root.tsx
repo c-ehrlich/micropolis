@@ -27,10 +27,14 @@ function RootRouteLayout() {
  */
 function EditorShell() {
   const { activeView } = useScenarioEditorState();
+  const shellClassName =
+    activeView === 'map-final'
+      ? "grid h-screen grid-rows-[auto_auto_1fr] overflow-hidden bg-slate-100 font-['Segoe_UI','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[#1f2328] leading-[1.4]"
+      : "grid min-h-screen grid-rows-[auto_auto_1fr] bg-slate-100 font-['Segoe_UI','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[#1f2328] leading-[1.4]";
   const mainClassName = activeView === 'map-final' ? 'min-h-0 overflow-hidden p-0' : 'p-4';
 
   return (
-    <div className="grid min-h-screen grid-rows-[auto_auto_1fr] bg-slate-100 font-['Segoe_UI','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[#1f2328] leading-[1.4]">
+    <div className={shellClassName}>
       <header className="border-b border-slate-300 bg-white px-4 py-3 font-semibold">
         Scenario Editor
       </header>

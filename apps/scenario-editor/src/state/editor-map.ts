@@ -7,27 +7,48 @@ import {
 } from '@city/scenario-core';
 import {
   applyToolAction,
+  coalSmoke,
   comPlop,
+  countFreeZoneHouses,
+  createBridgeHandler,
   createClassicMapStore,
+  createRailHandler,
+  createRoadHandler,
   createSimContext,
   createSimState,
   createToolContext,
   createZoneSystem,
+  czPop,
   indPlop,
+  izPop,
+  makeTraf,
+  type MapScanContext,
+  mapScanSlice,
   MicropolisRng,
   resPlop,
+  rzPop,
+  setSmoke,
   smoothRiver,
   smoothTrees,
   smoothWater,
   Tile,
+  TileFlag,
   TileMask,
+  zonePlop,
 } from '@city/sim-core';
+
+import {
+  doPowerScan,
+  pushPowerStack,
+  setZPowerAt,
+} from '../../../../packages/sim-core/src/systems/power.ts';
 
 const SCENARIO_EDITOR_TILE_WORD_MASK = 0xffff;
 const SCENARIO_EDITOR_TOOL_FUNDS = 1_000_000_000;
 const SCENARIO_EDITOR_TOOL_RNG_SEED = 0x00c17e77;
 const SCENARIO_EDITOR_ZONE_PLACEMENT_RNG_SEED = 0x00c1de55;
 const SCENARIO_EDITOR_TERRAIN_SMOOTH_RNG_SEED = 0x001ce5ee;
+const SCENARIO_EDITOR_DERIVE_SIM_RNG_SEED = 0x00517a9e;
 const SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS = {
   simStep: 0,
   order: 0,
@@ -35,6 +56,26 @@ const SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS = {
   seq: 0,
 } as const;
 const SCENARIO_EDITOR_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 4;
+const SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_DEFAULT = 16;
+const SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_MAX = 512;
+const SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_LIGHT = 96;
+const SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_HEAVY = 224;
+const { ANIMBIT, BURNBIT, CONDBIT } = TileFlag;
+
+/**
+ * Editor-only special-zone identifiers for explicit scenario snapshot authoring.
+ * Mirrors hospital/church `ZonePlop` placements in `ref/micropolis/src/sim/s_zone.c`.
+ */
+export type ScenarioEditorMapSpecialZoneKind = 'hospital' | 'church';
+
+/**
+ * Options for one "derive simulation" pass from authored map state.
+ * Mirrors selected deterministic subsystems from `ref/micropolis/src/sim/s_sim.c`
+ * without enabling full city growth/disaster runtime.
+ */
+export interface ScenarioEditorMapDeriveSimulationOptions {
+  readonly ticks?: number;
+}
 
 /**
  * Tool names exposed by the scenario map editor.
@@ -657,6 +698,323 @@ export function applyScenarioEditorMapZoneLevelAtPoint(
   }
 
   return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
+ * Place one hospital/church 3x3 special zone at a target center tile.
+ * Mirrors `ZonePlop(HOSPITAL - 4)` / `ZonePlop(CHURCH - 4)` in
+ * `ref/micropolis/src/sim/s_zone.c`, preserving C center-tile flag semantics.
+ */
+export function applyScenarioEditorMapSpecialZoneAtPoint(
+  bundle: ScenarioBundleV1,
+  point: ScenarioEditorMapPoint,
+  zone: ScenarioEditorMapSpecialZoneKind,
+): ScenarioBundleV1 {
+  const index = getScenarioEditorMapIndex(point);
+  if (index === null) {
+    return bundle;
+  }
+
+  const tileWordsMap = asTileWordsMap(bundle);
+  const store = createClassicMapStore();
+  const initialMapLayer = store.snapshot('map');
+  if (!(initialMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  initialMapLayer.set(tileWordsMap.tileWords);
+
+  store.beginTick();
+  const state = createSimState();
+  const context = createSimContext({
+    store,
+    rng: new MicropolisRng(SCENARIO_EDITOR_ZONE_PLACEMENT_RNG_SEED),
+  });
+  const zoneSystem = createZoneSystem(state, context);
+  const base = zone === 'hospital' ? Tile.HOSPITAL - 4 : Tile.CHURCH - 4;
+  zonePlop(zoneSystem, point.x, point.y, base);
+
+  const tickResult = store.commitTick();
+  if (tickResult.patches.length === 0) {
+    return bundle;
+  }
+
+  const nextMapLayer = store.snapshot('map');
+  if (!(nextMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
+ * Run a constrained simulation-derive pass over the authored map.
+ * Mirrors selected update paths from `ref/micropolis/src/sim/s_sim.c`:
+ * - power propagation (`DoPowerScan` / `SetZPower`)
+ * - traffic-memory driven road visuals (`DoRoad`)
+ * - bridge open/close animation frames (`DoBridge`)
+ * - industrial/plant smoke and airport radar animation updates (`DoIndustrial`/`DoSPZone`)
+ *
+ * Parity note: this intentionally skips full zone growth/decline and disasters so
+ * authored lot composition remains unchanged.
+ */
+export function deriveScenarioEditorMapSimulation(
+  bundle: ScenarioBundleV1,
+  options: ScenarioEditorMapDeriveSimulationOptions = {},
+): ScenarioBundleV1 {
+  const ticks = normalizeScenarioEditorDeriveSimulationTickCount(options.ticks);
+  if (ticks <= 0) {
+    return bundle;
+  }
+
+  const tileWordsMap = asTileWordsMap(bundle);
+  const store = createClassicMapStore();
+  const initialMapLayer = store.snapshot('map');
+  if (!(initialMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  initialMapLayer.set(tileWordsMap.tileWords);
+
+  store.beginTick();
+  const map = store.getLayer('map');
+  if (!(map instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  map.set(tileWordsMap.tileWords);
+
+  const trfDensity = store.getLayer('trfDensity');
+  if (!(trfDensity instanceof Uint8Array)) {
+    throw new Error('expected uint8 traffic density layer');
+  }
+  seedScenarioEditorTrafficDensityFromRoadTiles(map, trfDensity);
+
+  const state = createSimState();
+  const context = createSimContext({
+    store,
+    rng: new MicropolisRng(SCENARIO_EDITOR_DERIVE_SIM_RNG_SEED),
+  });
+  const zoneSystem = createZoneSystem(state, context);
+  const bridgeHandler = createBridgeHandler(state, context);
+  const roadHandler = createRoadHandler(state, context, {
+    doBridge: bridgeHandler,
+  });
+  const railHandler = createRailHandler(state, context);
+
+  for (let tick = 0; tick < ticks; tick += 1) {
+    runScenarioEditorDerivedTrafficStep(state, context);
+    seedScenarioEditorPowerScanState(state, map);
+    doPowerScan(state, context);
+    state.NewPower = 1;
+
+    mapScanSlice(
+      state,
+      context,
+      0,
+      SCENARIO_BUNDLE_V1_MAP_WIDTH,
+      {
+        onRoad: roadHandler,
+        onRail: railHandler,
+        onZone: (scan) => {
+          applyScenarioEditorDerivedZoneVisuals(zoneSystem, scan);
+        },
+      },
+      {
+        newPower: true,
+      },
+    );
+  }
+
+  const tickResult = store.commitTick();
+  if (tickResult.patches.length === 0) {
+    return bundle;
+  }
+
+  const nextMapLayer = store.snapshot('map');
+  if (!(nextMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
+ * Clamp derive-pass tick count to a deterministic editor-safe range.
+ * Not from Micropolis C: editor-only control for bounded derive runtime cost.
+ */
+function normalizeScenarioEditorDeriveSimulationTickCount(ticks: number | undefined): number {
+  if (ticks === undefined || !Number.isFinite(ticks)) {
+    return SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_DEFAULT;
+  }
+  return clamp(Math.trunc(ticks), 1, SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_MAX);
+}
+
+/**
+ * Seed the power scan stack and plant counts from current map content.
+ * Mirrors the per-zone `pushPowerStack` behavior used in `DoSPZone` in
+ * `ref/micropolis/src/sim/s_zone.c`, without triggering full zone updates.
+ */
+function seedScenarioEditorPowerScanState(
+  state: ReturnType<typeof createSimState>,
+  map: Uint16Array,
+): void {
+  state.PowerStackNum = 0;
+  state.CoalPop = 0;
+  state.NuclearPop = 0;
+
+  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
+    const xOffset = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT;
+    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
+      const index = xOffset + y;
+      const tileWord = map[index];
+      if (tileWord === undefined) {
+        continue;
+      }
+      const tileId = tileWord & TileMask.LOMASK;
+      if (tileId === Tile.POWERPLANT) {
+        state.CoalPop += 1;
+        pushPowerStack(state, x, y);
+        continue;
+      }
+      if (tileId === Tile.NUCLEAR) {
+        state.NuclearPop += 1;
+        pushPowerStack(state, x, y);
+      }
+    }
+  }
+}
+
+/**
+ * Initialize traffic-memory cells from authored road tile density classes.
+ * Mirrors road visual classes from `DoRoad` in `ref/micropolis/src/sim/s_sim.c`:
+ * base (`ROADBASE`), light (`LTRFBASE`), heavy (`HTRFBASE`).
+ */
+function seedScenarioEditorTrafficDensityFromRoadTiles(
+  map: Uint16Array,
+  trfDensity: Uint8Array,
+): void {
+  trfDensity.fill(0);
+  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
+    const xOffset = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT;
+    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
+      const tileWord = map[xOffset + y];
+      if (tileWord === undefined) {
+        continue;
+      }
+      const tileId = tileWord & TileMask.LOMASK;
+      if (tileId < Tile.ROADBASE || tileId >= Tile.POWERBASE) {
+        continue;
+      }
+      const trfIndex = (x >> 1) * (SCENARIO_BUNDLE_V1_MAP_HEIGHT >> 1) + (y >> 1);
+      const currentDensity = trfDensity[trfIndex];
+      if (currentDensity === undefined) {
+        continue;
+      }
+      let nextDensity = currentDensity;
+      if (tileId >= Tile.HTRFBASE) {
+        nextDensity = Math.max(nextDensity, SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_HEAVY);
+      } else if (tileId >= Tile.LTRFBASE) {
+        nextDensity = Math.max(nextDensity, SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_LIGHT);
+      }
+      if (nextDensity !== currentDensity) {
+        trfDensity[trfIndex] = nextDensity;
+      }
+    }
+  }
+}
+
+/**
+ * Generate one traffic-memory step from existing R/C/I zone centers only.
+ * Mirrors `DoResidential`/`DoCommercial`/`DoIndustrial` traffic gates in
+ * `ref/micropolis/src/sim/s_zone.c`, excluding any growth/decline branches.
+ */
+function runScenarioEditorDerivedTrafficStep(
+  state: ReturnType<typeof createSimState>,
+  context: ReturnType<typeof createSimContext>,
+): void {
+  const map = context.store.getLayer('map');
+  if (!(map instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+
+  for (let x = 0; x < SCENARIO_BUNDLE_V1_MAP_WIDTH; x += 1) {
+    const xOffset = x * SCENARIO_BUNDLE_V1_MAP_HEIGHT;
+    for (let y = 0; y < SCENARIO_BUNDLE_V1_MAP_HEIGHT; y += 1) {
+      const index = xOffset + y;
+      const tileWord = map[index];
+      if (tileWord === undefined || (tileWord & TileFlag.ZONEBIT) === 0) {
+        continue;
+      }
+      const tileId = tileWord & TileMask.LOMASK;
+
+      if (tileId < Tile.HOSPITAL) {
+        const population = tileId === Tile.FREEZ ? countFreeZoneHouses(map, x, y) : rzPop(tileId);
+        if (population > context.rng.rand(35)) {
+          makeTraf(state, context, x, y, 0);
+        }
+        continue;
+      }
+      if (tileId >= Tile.COMBASE && tileId < Tile.INDBASE) {
+        const population = czPop(tileId);
+        if (population > context.rng.rand(5)) {
+          makeTraf(state, context, x, y, 1);
+        }
+        continue;
+      }
+      if (tileId >= Tile.INDBASE && tileId < Tile.PORTBASE) {
+        const population = izPop(tileId);
+        if (population > context.rng.rand(5)) {
+          makeTraf(state, context, x, y, 2);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Apply non-growth zone-derived visuals for one scanned zone center.
+ * Mirrors the non-plop parts of `DoIndustrial`/`DoSPZone` in
+ * `ref/micropolis/src/sim/s_zone.c`: zone power bit, industrial smoke,
+ * coal smoke, and airport radar animation state.
+ */
+function applyScenarioEditorDerivedZoneVisuals(
+  zoneSystem: ReturnType<typeof createZoneSystem>,
+  scan: MapScanContext,
+): void {
+  const powered = setZPowerAt(scan.store, zoneSystem.power, scan.x, scan.y, scan.index, scan.tile);
+
+  if (scan.tileId >= Tile.IZB && scan.tileId < Tile.PORTBASE) {
+    setSmoke(zoneSystem, scan.x, scan.y, scan.tileId, powered);
+  }
+
+  if (scan.tileId === Tile.POWERPLANT && powered) {
+    coalSmoke(zoneSystem, scan.x, scan.y);
+  }
+
+  if (scan.tileId !== Tile.AIRPORT) {
+    return;
+  }
+  const radarX = scan.x + 1;
+  const radarY = scan.y - 1;
+  if (
+    radarX < 0 ||
+    radarX >= SCENARIO_BUNDLE_V1_MAP_WIDTH ||
+    radarY < 0 ||
+    radarY >= SCENARIO_BUNDLE_V1_MAP_HEIGHT
+  ) {
+    return;
+  }
+  const radarIndex = radarX * SCENARIO_BUNDLE_V1_MAP_HEIGHT + radarY;
+  const radarTileWord = scan.map[radarIndex];
+  if (radarTileWord === undefined) {
+    return;
+  }
+
+  if (powered) {
+    const radarTileId = radarTileWord & TileMask.LOMASK;
+    if (radarTileId === Tile.RADAR) {
+      scan.store.write('map', radarIndex, Tile.RADAR | ANIMBIT | CONDBIT | BURNBIT);
+    }
+    return;
+  }
+  scan.store.write('map', radarIndex, Tile.RADAR | CONDBIT | BURNBIT);
 }
 
 /**
