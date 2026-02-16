@@ -9,7 +9,7 @@ type MapCanvasDrawProc = (
   tileRenderer: MapCanvasTileRenderer,
 ) => void;
 
-type MapCanvasLayer = 'map' | 'pending-tool' | 'realtime-overlay' | 'tool-cursor';
+type MapCanvasLayer = 'map' | 'tile-overlay' | 'pending-tool' | 'realtime-overlay' | 'tool-cursor';
 
 export interface MapCanvasTileRenderer {
   baseTileAtlasCanonicalIdentityKey: CanonicalImageIdentityKey;
@@ -115,12 +115,14 @@ export function getMapCanvasLayerZIndex(layer: MapCanvasLayer): number {
   switch (layer) {
     case 'map':
       return 0;
-    case 'pending-tool':
+    case 'tile-overlay':
       return 1;
-    case 'realtime-overlay':
+    case 'pending-tool':
       return 2;
-    case 'tool-cursor':
+    case 'realtime-overlay':
       return 3;
+    case 'tool-cursor':
+      return 4;
     default:
       return assertNever(layer);
   }

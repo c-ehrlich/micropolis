@@ -1,4 +1,4 @@
-import { Tile } from '@city/sim-core';
+import { Tile, TileMask } from '@city/sim-core';
 import { createFileRoute } from '@tanstack/react-router';
 import {
   type ChangeEvent,
@@ -14,7 +14,12 @@ import {
   PLAYABLE_TOOL_SPECS,
   type PlayableToolName,
 } from '../../../web/src/game/runtime/protocol.ts';
-import { MapCanvas } from '../../../web/src/presentation/map/map-canvas.tsx';
+import {
+  MapCanvas,
+  type MapCanvasHoverPreviewSpec,
+  type MapCanvasTileOverlayResolver,
+  type MapCanvasTileOverlayStyle,
+} from '../../../web/src/presentation/map/map-canvas.tsx';
 import {
   getTileAtlasSourceByCanonicalIdentityKey,
   lookupTileSpriteRectByTileId,
@@ -140,7 +145,6 @@ function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): str
 }
 const SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 6;
 
-type ScenarioMapFinalBaseBrushMode = 'smart' | 'exact';
 type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base';
 type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
 
@@ -148,6 +152,7 @@ interface ScenarioMapFinalSmartBaseBrush {
   readonly id: ScenarioMapFinalSmartBaseBrushId;
   readonly label: string;
   readonly tileId: number;
+  readonly pendingColor: string;
   readonly tooltip: string;
 }
 
@@ -156,33 +161,44 @@ const SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES: readonly ScenarioMapFinalSmartBaseB
     id: 'dirt',
     label: 'Dirt',
     tileId: Tile.DIRT,
+    pendingColor: '#9a6700',
     tooltip: 'Dirt terrain brush',
   },
   {
     id: 'water',
     label: 'Water',
     tileId: Tile.RIVER,
+    pendingColor: '#1f6feb',
     tooltip: 'Water brush (auto smoothing derives shore variants)',
   },
   {
     id: 'channel',
     label: 'Channel',
     tileId: Tile.CHANNEL,
+    pendingColor: '#218bff',
     tooltip: 'Channel brush (kept during water smoothing)',
   },
   {
     id: 'forest',
     label: 'Forest',
     tileId: Tile.WOODS,
-    tooltip: 'Forest brush (auto smoothing derives tree-edge variants)',
+    pendingColor: '#2da44e',
+    tooltip: 'Forest brush (stamps a 2x2 cluster; auto smoothing derives tree-edge variants)',
   },
 ] as const;
 const SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH: ScenarioMapFinalSmartBaseBrush = {
   id: 'dirt',
   label: 'Dirt',
   tileId: Tile.DIRT,
+  pendingColor: '#9a6700',
   tooltip: 'Dirt terrain brush',
 };
+const SCENARIO_EDITOR_BASE_TILE_HOVER_PREVIEW: MapCanvasHoverPreviewSpec = {
+  size: 1,
+  offset: 0,
+  pendingColor: '#6e7781',
+};
+const SCENARIO_MAP_FINAL_TREE_TILE_MAX_FOR_SMOOTHING = 39;
 
 type ScenarioMapFinalZoneOption =
   | {
@@ -260,6 +276,61 @@ function getMapFinalZoneSwatchTileIds(centerTileId: number): readonly number[] {
     centerTileId + 3,
     centerTileId + 4,
   ];
+}
+
+/**
+ * Resolve cursor preview footprint for one map-final smart base brush.
+ * Mirrors the `toolSize`/`toolOffset` footprint box semantics from
+ * `ref/micropolis/src/sim/w_editor.c` (`DrawCursor`), but for editor-only base brushes.
+ */
+function getScenarioMapFinalBaseHoverPreviewSpec(
+  brush: ScenarioMapFinalSmartBaseBrush,
+): MapCanvasHoverPreviewSpec {
+  if (brush.id === 'forest') {
+    return {
+      size: 2,
+      offset: 0,
+      pendingColor: brush.pendingColor,
+    };
+  }
+  return {
+    size: 1,
+    offset: 0,
+    pendingColor: brush.pendingColor,
+  };
+}
+
+/**
+ * Resolve base-class visualization styling for one map tile.
+ * Not from Micropolis C: editor-only readability overlay that helps distinguish
+ * authored terrain classes (channel/water/forest) while preserving original art.
+ */
+function getScenarioMapFinalBaseClassOverlayStyle(
+  tileWord: number,
+): MapCanvasTileOverlayStyle | null {
+  const tileId = tileWord & TileMask.LOMASK;
+  if (tileId === Tile.CHANNEL) {
+    return {
+      fillColor: 'rgba(208, 74, 188, 0.32)',
+      strokeColor: 'rgba(232, 121, 249, 0.95)',
+      label: 'C',
+      labelColor: '#4a044e',
+    };
+  }
+  if (tileId === Tile.RIVER || (tileId >= Tile.FIRSTRIVEDGE && tileId <= Tile.LASTRIVEDGE)) {
+    return {
+      fillColor: 'rgba(30, 100, 228, 0.2)',
+    };
+  }
+  if (
+    (tileId >= Tile.TREEBASE && tileId <= SCENARIO_MAP_FINAL_TREE_TILE_MAX_FOR_SMOOTHING) ||
+    (tileId >= Tile.WOODS && tileId <= Tile.WOODS5)
+  ) {
+    return {
+      fillColor: 'rgba(46, 160, 67, 0.2)',
+    };
+  }
+  return null;
 }
 
 export const Route = createFileRoute('/')({
@@ -462,12 +533,9 @@ function ScenarioMapFinalWorkbench() {
     useState<ScenarioMapFinalActiveBrushFamily>('zones');
   const [activeZoneKind, setActiveZoneKind] = useState<ScenarioEditorMapZoneKind>('res');
   const [activeZoneOptionKey, setActiveZoneOptionKey] = useState<string>('fresh');
-  const [baseBrushMode, setBaseBrushMode] = useState<ScenarioMapFinalBaseBrushMode>('smart');
-  const [baseAutoSmoothEnabled, setBaseAutoSmoothEnabled] = useState(true);
   const [activeSmartBaseBrushId, setActiveSmartBaseBrushId] =
     useState<ScenarioMapFinalSmartBaseBrushId>('dirt');
-  const [activeExactBaseTileId, setActiveExactBaseTileId] = useState<number>(Tile.DIRT);
-  const [exactBasePreserveFlags, setExactBasePreserveFlags] = useState(false);
+  const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(false);
   const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
   const zoneAtlasCanonicalIdentityKey = useMemo(
     () => resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic'),
@@ -491,9 +559,13 @@ function ScenarioMapFinalWorkbench() {
       SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH,
     [activeSmartBaseBrushId],
   );
-  const activeExactBaseTileName = useMemo(
-    () => findScenarioEditorMapNamedBaseTileById(activeExactBaseTileId)?.name ?? '',
-    [activeExactBaseTileId],
+  const activeSmartBaseHoverPreview = useMemo(
+    () => getScenarioMapFinalBaseHoverPreviewSpec(activeSmartBaseBrush),
+    [activeSmartBaseBrush],
+  );
+  const mapFinalBaseTileOverlayResolver = useMemo<MapCanvasTileOverlayResolver | undefined>(
+    () => (showBaseClassOverlay ? getScenarioMapFinalBaseClassOverlayStyle : undefined),
+    [showBaseClassOverlay],
   );
 
   const zoneOptions = useMemo<readonly ScenarioMapFinalZoneOption[]>(() => {
@@ -562,117 +634,54 @@ function ScenarioMapFinalWorkbench() {
           }`}
         >
           <h2>Base</h2>
-          <div className="editor-map-final-brush-mode-toggle" role="tablist" aria-label="Base mode">
-            <button
-              aria-selected={baseBrushMode === 'smart'}
-              className={baseBrushMode === 'smart' ? 'is-active' : undefined}
-              onClick={() => {
-                setBaseBrushMode('smart');
-                setActiveBrushFamily('base');
-              }}
-              role="tab"
-              type="button"
-            >
-              Smart
-            </button>
-            <button
-              aria-selected={baseBrushMode === 'exact'}
-              className={baseBrushMode === 'exact' ? 'is-active' : undefined}
-              onClick={() => {
-                setBaseBrushMode('exact');
-                setActiveBrushFamily('base');
-              }}
-              role="tab"
-              type="button"
-            >
-              Exact
-            </button>
+          <div
+            className="editor-map-final-base-option-grid"
+            role="list"
+            aria-label="Smart base brushes"
+          >
+            {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
+              <button
+                aria-pressed={activeSmartBaseBrushId === brush.id}
+                className={activeSmartBaseBrushId === brush.id ? 'is-active' : undefined}
+                key={brush.id}
+                onClick={() => {
+                  setActiveSmartBaseBrushId(brush.id);
+                  if (brush.id === 'channel') {
+                    setShowBaseClassOverlay(true);
+                  }
+                  setActiveBrushFamily('base');
+                }}
+                role="listitem"
+                title={brush.tooltip}
+                type="button"
+              >
+                {zoneAtlasSource === undefined ? (
+                  <span className="editor-map-final-zone-option-fallback">{brush.tileId}</span>
+                ) : (
+                  <MapFinalSingleTileSprite
+                    atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                    atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                    tileId={brush.tileId}
+                  />
+                )}
+                <span>{brush.label}</span>
+              </button>
+            ))}
           </div>
 
-          <label className="editor-map-final-auto-toggle">
+          <label className="editor-map-final-checkbox-row">
             <input
-              checked={baseAutoSmoothEnabled}
+              checked={showBaseClassOverlay}
               onChange={(event) => {
-                setBaseAutoSmoothEnabled(event.currentTarget.checked);
+                setShowBaseClassOverlay(event.currentTarget.checked);
               }}
               type="checkbox"
             />
-            <span>Auto smooth terrain after base edits</span>
+            <span>Show base tile classes</span>
           </label>
 
-          {baseBrushMode === 'smart' ? (
-            <div
-              className="editor-map-final-base-option-grid"
-              role="list"
-              aria-label="Smart base brushes"
-            >
-              {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
-                <button
-                  aria-pressed={activeSmartBaseBrushId === brush.id}
-                  className={activeSmartBaseBrushId === brush.id ? 'is-active' : undefined}
-                  key={brush.id}
-                  onClick={() => {
-                    setActiveSmartBaseBrushId(brush.id);
-                    setActiveBrushFamily('base');
-                  }}
-                  role="listitem"
-                  title={brush.tooltip}
-                  type="button"
-                >
-                  {zoneAtlasSource === undefined ? (
-                    <span className="editor-map-final-zone-option-fallback">{brush.tileId}</span>
-                  ) : (
-                    <MapFinalSingleTileSprite
-                      atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                      atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                      tileId={brush.tileId}
-                    />
-                  )}
-                  <span>{brush.label}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <>
-              <label className="editor-field">
-                <span>Exact Base Tile</span>
-                <select
-                  onChange={(event) => {
-                    const nextTileId = normalizeScenarioEditorBaseTileId(
-                      Number(event.currentTarget.value),
-                    );
-                    setActiveExactBaseTileId(nextTileId);
-                    setActiveBrushFamily('base');
-                  }}
-                  value={activeExactBaseTileId}
-                >
-                  {activeExactBaseTileName === '' ? (
-                    <option value={activeExactBaseTileId}>Custom ({activeExactBaseTileId})</option>
-                  ) : null}
-                  {TILE_WORD_NAME_OPTIONS.map((entry) => (
-                    <option key={entry.name} value={entry.tileId}>
-                      {entry.tileId} ({entry.name} / {entry.label})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="editor-map-final-auto-toggle">
-                <input
-                  checked={exactBasePreserveFlags}
-                  onChange={(event) => {
-                    setExactBasePreserveFlags(event.currentTarget.checked);
-                  }}
-                  type="checkbox"
-                />
-                <span>Preserve tile status flags</span>
-              </label>
-            </>
-          )}
-
           <small className="editor-help">
-            {baseBrushMode === 'smart'
-              ? `Active smart brush: ${activeSmartBaseBrush.label}`
-              : `Active exact tile: ${activeExactBaseTileId} (${activeExactBaseTileName || 'custom'})`}
+            Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
           </small>
         </section>
 
@@ -759,19 +768,42 @@ function ScenarioMapFinalWorkbench() {
       <div className="editor-map-final-canvas-shell">
         <MapCanvas
           dragPlacementEnabled={activeBrushFamily === 'base'}
+          hoverPreview={activeBrushFamily === 'base' ? activeSmartBaseHoverPreview : undefined}
           hoverTool={activeBrushFamily === 'zones' ? activeZoneKind : undefined}
           mapState={runtimeMapState}
+          tileOverlayResolver={mapFinalBaseTileOverlayResolver}
           onTileClick={(x, y) => {
             if (activeBrushFamily === 'base') {
-              const baseTileId =
-                baseBrushMode === 'smart' ? activeSmartBaseBrush.tileId : activeExactBaseTileId;
+              if (activeSmartBaseBrush.id === 'forest') {
+                const forestPoints = getScenarioMapFinalForestBrushPoints(
+                  { x, y },
+                  {
+                    width: bundle.map.width,
+                    height: bundle.map.height,
+                  },
+                );
+                for (const [index, point] of forestPoints.entries()) {
+                  const isLastPoint = index === forestPoints.length - 1;
+                  dispatch({
+                    type: 'paint-map-base-tile',
+                    x: point.x,
+                    y: point.y,
+                    baseTileId: activeSmartBaseBrush.tileId,
+                    preserveFlags: false,
+                    terrainRecomputeMode: isLastPoint ? 'local' : 'off',
+                    terrainRecomputeRadius: SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS,
+                  });
+                }
+                return;
+              }
+
               dispatch({
                 type: 'paint-map-base-tile',
                 x,
                 y,
-                baseTileId,
-                preserveFlags: baseBrushMode === 'exact' ? exactBasePreserveFlags : false,
-                terrainRecomputeMode: baseAutoSmoothEnabled ? 'local' : 'off',
+                baseTileId: activeSmartBaseBrush.tileId,
+                preserveFlags: false,
+                terrainRecomputeMode: 'local',
                 terrainRecomputeRadius: SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS,
               });
               return;
@@ -802,6 +834,33 @@ function ScenarioMapFinalWorkbench() {
       </div>
     </section>
   );
+}
+
+/**
+ * Resolve a bounded forest-stamp footprint around one click.
+ * Not from Micropolis C: editor-only UX helper that writes a small tree cluster so
+ * `SmoothTrees` in `ref/micropolis/src/sim/s_gen.c` keeps visible forest output.
+ */
+function getScenarioMapFinalForestBrushPoints(
+  center: { x: number; y: number },
+  options: { width: number; height: number },
+): readonly { x: number; y: number }[] {
+  const points: { x: number; y: number }[] = [];
+  const offsets = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+  ] as const;
+  for (const offset of offsets) {
+    const x = center.x + offset.x;
+    const y = center.y + offset.y;
+    if (x < 0 || x >= options.width || y < 0 || y >= options.height) {
+      continue;
+    }
+    points.push({ x, y });
+  }
+  return points;
 }
 
 /**
@@ -1195,6 +1254,9 @@ function ScenarioMapEditorCard() {
       <div className="editor-map-canvas-shell">
         <MapCanvas
           dragPlacementEnabled={dragPlacementEnabled}
+          hoverPreview={
+            brushMode === 'base-tile' ? SCENARIO_EDITOR_BASE_TILE_HOVER_PREVIEW : undefined
+          }
           hoverTool={
             brushMode === 'tool'
               ? activeTool

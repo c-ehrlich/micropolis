@@ -63,6 +63,38 @@ interface MapCanvasToolPlacementDragState {
 }
 
 /**
+ * Optional cursor-footprint preview descriptor supplied by embedding editors.
+ * Not from Micropolis C: browser-only override that lets non-tool brushes
+ * (for example scenario base-tile painting) reuse the same hover preview path.
+ */
+export interface MapCanvasHoverPreviewSpec {
+  readonly size: number;
+  readonly offset: number;
+  readonly pendingColor: string;
+}
+
+/**
+ * Per-tile overlay styling used by editor visualization layers.
+ * Not from Micropolis C: browser-only annotation styling drawn above map tiles.
+ */
+export interface MapCanvasTileOverlayStyle {
+  readonly fillColor?: string;
+  readonly label?: string;
+  readonly labelColor?: string;
+  readonly strokeColor?: string;
+}
+
+/**
+ * Tile-overlay resolver used for optional editor visualization layers.
+ * Not from Micropolis C: browser-only callback for conditional per-tile annotations.
+ */
+export type MapCanvasTileOverlayResolver = (
+  tileWord: number,
+  tileX: number,
+  tileY: number,
+) => MapCanvasTileOverlayStyle | null;
+
+/**
  * Canvas renderer for authoritative Authoritative Runtime map snapshots and tile patches.
  * Mirrors full-map redraw vs incremental redraw ownership from
  * `ref/micropolis/src/sim/w_map.c` and tile-word lookup intent from
@@ -78,6 +110,8 @@ export function MapCanvas({
   pendingTools = [],
   realtimeObjects = [],
   hoverTool,
+  hoverPreview,
+  tileOverlayResolver,
   showHoverToolPreview = true,
   onTileClick,
   dragPlacementEnabled = false,
@@ -88,6 +122,8 @@ export function MapCanvas({
   pendingTools?: readonly PendingToolCommandVisual[];
   realtimeObjects?: readonly RuntimeRealtimeObject[];
   hoverTool?: PlayableToolName;
+  hoverPreview?: MapCanvasHoverPreviewSpec;
+  tileOverlayResolver?: MapCanvasTileOverlayResolver;
   showHoverToolPreview?: boolean;
   onTileClick?: (x: number, y: number) => void;
   dragPlacementEnabled?: boolean;
@@ -96,6 +132,7 @@ export function MapCanvas({
   cameraControlsContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tileOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const mapCanvasRootRef = useRef<HTMLDivElement>(null);
   const tileAtlasImagesByCanonicalIdentityKeyRef = useRef<
     ReadonlyMap<CanonicalImageIdentityKey, HTMLImageElement>
@@ -280,8 +317,17 @@ export function MapCanvas({
   const viewportHeightPx = cameraMetrics.viewportHeightPx;
   const maxCameraOffsetX = cameraMetrics.maxCameraOffsetX;
   const maxCameraOffsetY = cameraMetrics.maxCameraOffsetY;
+  const hoverPreviewSpec = useMemo(() => {
+    if (hoverPreview !== undefined) {
+      return hoverPreview;
+    }
+    if (hoverTool === undefined) {
+      return null;
+    }
+    return getPlayableToolSpec(hoverTool);
+  }, [hoverPreview, hoverTool]);
   const isToolCursorPreviewEnabled =
-    showHoverToolPreview && hoverTool !== undefined && onTileClick !== undefined;
+    showHoverToolPreview && hoverPreviewSpec !== null && onTileClick !== undefined;
   const clampedCameraOffsetPx = clampMapCanvasCameraOffset(
     cameraOffsetPx,
     maxCameraOffsetX,
@@ -298,15 +344,11 @@ export function MapCanvas({
       }),
     [mapState.height, mapState.width, realtimeObjects, tileSize, tilesetName],
   );
-  const hoverToolSpec = useMemo(
-    () => (hoverTool === undefined ? null : getPlayableToolSpec(hoverTool)),
-    [hoverTool],
-  );
   const hoveredToolFootprint = useMemo(() => {
     if (
       !isToolCursorPreviewEnabled ||
       hoveredToolTile === null ||
-      hoverToolSpec === null ||
+      hoverPreviewSpec === null ||
       !isTileInBounds(hoveredToolTile.x, hoveredToolTile.y, mapState)
     ) {
       return null;
@@ -315,11 +357,39 @@ export function MapCanvas({
     return projectMapCanvasToolFootprintRect({
       tileX: hoveredToolTile.x,
       tileY: hoveredToolTile.y,
-      size: hoverToolSpec.size,
-      offset: hoverToolSpec.offset,
+      size: hoverPreviewSpec.size,
+      offset: hoverPreviewSpec.offset,
       tileSize,
     });
-  }, [hoverToolSpec, hoveredToolTile, isToolCursorPreviewEnabled, mapState, tileSize]);
+  }, [hoverPreviewSpec, hoveredToolTile, isToolCursorPreviewEnabled, mapState, tileSize]);
+
+  useEffect(() => {
+    const overlayCanvas = tileOverlayCanvasRef.current;
+    if (overlayCanvas === null || !mapState.hasSnapshot) {
+      return;
+    }
+
+    const width = mapState.width * tileSize;
+    const height = mapState.height * tileSize;
+    if (overlayCanvas.width !== width) {
+      overlayCanvas.width = width;
+    }
+    if (overlayCanvas.height !== height) {
+      overlayCanvas.height = height;
+    }
+
+    const context = overlayCanvas.getContext('2d');
+    if (context === null) {
+      return;
+    }
+
+    drawMapCanvasTileOverlayLayer({
+      context,
+      mapState,
+      tileSize,
+      tileOverlayResolver,
+    });
+  }, [mapState, tileOverlayResolver, tileSize]);
 
   const applyToolPlacementDragSample = useCallback(
     (tile: { x: number; y: number }): void => {
@@ -718,12 +788,20 @@ export function MapCanvas({
               zIndex: getMapCanvasLayerZIndex('map'),
             }}
           />
-          {hoveredToolFootprint === null || hoverToolSpec === null ? null : (
+          <canvas
+            ref={tileOverlayCanvasRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 top-0 block [image-rendering:pixelated]"
+            style={{
+              zIndex: getMapCanvasLayerZIndex('tile-overlay'),
+            }}
+          />
+          {hoveredToolFootprint === null || hoverPreviewSpec === null ? null : (
             <div
               className="pointer-events-none absolute box-border"
               style={{
-                background: `${hoverToolSpec.pendingColor}26`,
-                border: `2px dashed ${hoverToolSpec.pendingColor}`,
+                background: `${hoverPreviewSpec.pendingColor}26`,
+                border: `2px dashed ${hoverPreviewSpec.pendingColor}`,
                 height: hoveredToolFootprint.side,
                 left: hoveredToolFootprint.left,
                 top: hoveredToolFootprint.top,
@@ -826,6 +904,82 @@ export function MapCanvas({
       </div>
     </div>
   );
+}
+
+/**
+ * Draw optional per-tile visualization overlays above the base map canvas.
+ * Not from Micropolis C: editor-only browser overlay pass for map-authoring UX.
+ */
+function drawMapCanvasTileOverlayLayer(options: {
+  context: CanvasRenderingContext2D;
+  mapState: RuntimeMapState;
+  tileSize: number;
+  tileOverlayResolver: MapCanvasTileOverlayResolver | undefined;
+}): void {
+  const { context, mapState, tileSize, tileOverlayResolver } = options;
+  const overlayCanvas = context.canvas;
+  context.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  if (tileOverlayResolver === undefined) {
+    return;
+  }
+
+  context.imageSmoothingEnabled = false;
+  const width = mapState.width;
+  const height = mapState.height;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const tileWord = mapState.tiles[index] ?? 0;
+      const overlayStyle = tileOverlayResolver(tileWord, x, y);
+      if (overlayStyle === null) {
+        continue;
+      }
+      drawMapCanvasTileOverlayCell({
+        context,
+        tileX: x,
+        tileY: y,
+        tileSize,
+        overlayStyle,
+      });
+    }
+  }
+}
+
+/**
+ * Draw one tile-aligned overlay cell on the map overlay canvas.
+ * Not from Micropolis C: browser-only annotation rendering for editor overlays.
+ */
+function drawMapCanvasTileOverlayCell(options: {
+  context: CanvasRenderingContext2D;
+  tileX: number;
+  tileY: number;
+  tileSize: number;
+  overlayStyle: MapCanvasTileOverlayStyle;
+}): void {
+  const { context, tileX, tileY, tileSize, overlayStyle } = options;
+  const left = tileX * tileSize;
+  const top = tileY * tileSize;
+  if (overlayStyle.fillColor !== undefined) {
+    context.fillStyle = overlayStyle.fillColor;
+    context.fillRect(left, top, tileSize, tileSize);
+  }
+  if (overlayStyle.strokeColor !== undefined) {
+    context.strokeStyle = overlayStyle.strokeColor;
+    context.lineWidth = Math.max(1, Math.floor(tileSize / 8));
+    context.strokeRect(
+      left + context.lineWidth / 2,
+      top + context.lineWidth / 2,
+      tileSize - context.lineWidth,
+      tileSize - context.lineWidth,
+    );
+  }
+  if (overlayStyle.label !== undefined && tileSize >= 10) {
+    context.fillStyle = overlayStyle.labelColor ?? '#111827';
+    context.font = `${Math.max(8, Math.floor(tileSize * 0.7))}px monospace`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(overlayStyle.label, left + tileSize / 2, top + tileSize / 2);
+  }
 }
 
 /**

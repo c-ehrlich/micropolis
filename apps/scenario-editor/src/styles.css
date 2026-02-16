@@ -127,44 +127,6 @@ body,
   background: rgba(255, 255, 255, 0.35);
 }
 
-.editor-map-final-brush-mode-toggle {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border: 1px solid #8c959f;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.editor-map-final-brush-mode-toggle button {
-  border: none;
-  border-right: 1px solid #8c959f;
-  background: #f6f8fa;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-  padding: 0.45rem 0.4rem;
-}
-
-.editor-map-final-brush-mode-toggle button:last-child {
-  border-right: none;
-}
-
-.editor-map-final-brush-mode-toggle button.is-active {
-  background: #a8d7f9;
-}
-
-.editor-map-final-auto-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #57606a;
-}
-
-.editor-map-final-auto-toggle input {
-  margin: 0;
-}
-
 .editor-map-final-base-option-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -194,6 +156,17 @@ body,
 .editor-map-final-base-option-grid button span {
   font-size: 0.84rem;
   color: #57606a;
+}
+
+.editor-map-final-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #57606a;
+}
+
+.editor-map-final-checkbox-row input {
+  margin: 0;
 }
 
 .editor-map-final-single-tile-sprite {
