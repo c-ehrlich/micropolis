@@ -92,6 +92,19 @@ import {
   useScenarioEditorDispatch,
   useScenarioEditorState,
 } from '../state/editor-state.tsx';
+import {
+  EditorCard,
+  EditorError,
+  EditorField,
+  EditorFieldInline,
+  EditorForm,
+  EditorHelp,
+  EditorIssuesPanel,
+  EditorPreviewPanel,
+  EditorPrimaryButton,
+  EditorSecondaryButton,
+  EditorStatsGrid,
+} from './-editor-ui.tsx';
 
 const BASE_TILE_PRESETS = [
   { label: 'DIRT', source: 'DIRT=0', tileId: Tile.DIRT },
@@ -131,88 +144,6 @@ const SCENARIO_MAP_FINAL_ZONE_TOOL_BY_KIND: Readonly<
   com: 'com',
   ind: 'ind',
 };
-
-const EDITOR_CARD_CLASSNAME =
-  'max-w-[52rem] rounded-md border border-slate-300 bg-white p-4 [&>h1]:mb-3 [&>h1]:mt-0 [&>p]:mb-4 [&>p]:mt-0';
-const EDITOR_MAP_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
-const EDITOR_OBJECTIVE_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
-const EDITOR_SCRIPT_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[68rem]`;
-const EDITOR_BEHAVIOR_CARD_CLASSNAME = `${EDITOR_CARD_CLASSNAME} max-w-[64rem]`;
-const EDITOR_FORM_CLASSNAME = 'mb-4 grid gap-[0.9rem]';
-const EDITOR_FIELD_CLASSNAME =
-  'grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]';
-const EDITOR_FIELD_INLINE_CLASSNAME =
-  'grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3 [&_label]:grid [&_label]:gap-[0.3rem]';
-const EDITOR_HELP_TEXT_CLASSNAME = 'text-sm text-slate-600';
-const EDITOR_ERROR_TEXT_CLASSNAME = 'text-sm text-red-700';
-const EDITOR_STATS_GRID_CLASSNAME =
-  'm-0 grid grid-cols-[12rem_1fr] gap-x-4 gap-y-2 [&_dt]:text-slate-600';
-const EDITOR_ISSUES_PANEL_CLASSNAME =
-  'mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_ul]:m-0 [&_ul]:pl-5';
-const EDITOR_PREVIEW_PANEL_CLASSNAME =
-  'mt-4 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem] [&_textarea]:font-mono [&_textarea]:text-xs [&_textarea]:leading-[1.4]';
-const EDITOR_BUTTON_CLASSNAME =
-  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65';
-const EDITOR_BUTTON_ACTIVE_CLASSNAME = 'border-blue-600 bg-sky-100';
-const EDITOR_EXPORT_ACTIONS_CLASSNAME = 'mb-4 grid justify-items-start gap-2';
-const EDITOR_OPEN_BUTTON_CLASSNAME =
-  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-3 py-[0.45rem]';
-const EDITOR_EXPORT_BUTTON_CLASSNAME =
-  'cursor-pointer rounded border border-blue-600 bg-sky-100 px-3 py-[0.45rem] text-[#0c2d6b]';
-const SCENARIO_MAP_FINAL_WORKBENCH_CLASSNAME =
-  'grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] bg-gray-300 max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]';
-const SCENARIO_MAP_FINAL_SIDEBAR_CLASSNAME =
-  'grid content-start gap-4 overflow-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0';
-const SCENARIO_MAP_FINAL_PANEL_CLASSNAME =
-  'grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem]';
-const SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME = 'border-[#0969da] bg-[rgba(221,244,255,0.5)]';
-const SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME = 'm-0 text-[1.4rem] font-semibold';
-const SCENARIO_MAP_FINAL_BASE_OPTION_GRID_CLASSNAME = 'grid grid-cols-2 gap-[0.45rem]';
-const SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_CLASSNAME =
-  'grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit';
-const SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_ACTIVE_CLASSNAME =
-  'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]';
-const SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME = 'text-[0.8rem] font-semibold text-slate-600';
-const SCENARIO_MAP_FINAL_CHECKBOX_ROW_CLASSNAME = 'flex items-center gap-[0.45rem] text-slate-600';
-const SCENARIO_MAP_FINAL_ZONE_TABS_CLASSNAME =
-  'grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500';
-const SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_CLASSNAME =
-  'cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0';
-const SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_ACTIVE_CLASSNAME = 'bg-sky-200';
-const SCENARIO_MAP_FINAL_ZONE_OPTION_ROWS_CLASSNAME = 'grid gap-[0.45rem]';
-const SCENARIO_MAP_FINAL_ZONE_OPTION_ROW_CLASSNAME = 'grid gap-[0.45rem]';
-const SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_CLASSNAME =
-  'flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit';
-const SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_ACTIVE_CLASSNAME =
-  'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]';
-const SCENARIO_MAP_FINAL_PLACEHOLDER_CLASSNAME =
-  'flex min-h-[7.5rem] items-center justify-center rounded-[10px] border-2 border-dashed border-[#7d8590] bg-white/35 p-4 text-center text-slate-600';
-const SCENARIO_MAP_FINAL_CANVAS_SHELL_CLASSNAME = 'min-h-0 bg-[#0b1020]';
-const SCENARIO_MAP_CONTROLS_CLASSNAME = 'mb-4 grid gap-3';
-const SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME = 'grid gap-[0.6rem]';
-const SCENARIO_MAP_TOOL_GRID_CLASSNAME =
-  'grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-[0.45rem]';
-const SCENARIO_MAP_TOOL_BUTTON_CLASSNAME =
-  'cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.55rem] py-[0.35rem] text-left';
-const SCENARIO_MAP_PRESET_ROW_CLASSNAME = 'flex flex-wrap gap-2';
-const SCENARIO_MAP_FILL_BUTTON_CLASSNAME = `${EDITOR_BUTTON_CLASSNAME} justify-self-start`;
-const SCENARIO_MAP_CANVAS_SHELL_CLASSNAME =
-  'mb-4 h-[min(75vh,46rem)] w-[min(100%,72rem)] overflow-hidden rounded-md border border-slate-300 bg-[#0b1020]';
-const SCENARIO_OBJECTIVE_NODE_CLASSNAME =
-  'my-3 rounded-md border border-slate-300 p-3 [&>legend]:px-[0.4rem] [&>legend]:text-slate-600';
-const SCENARIO_OBJECTIVE_METRIC_GRID_CLASSNAME =
-  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3';
-const SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME = 'grid gap-3';
-const SCENARIO_OBJECTIVE_CHILD_ROW_CLASSNAME = 'grid gap-2';
-const SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME = `${EDITOR_BUTTON_CLASSNAME} justify-self-start`;
-const SCENARIO_SCRIPT_EVENTS_CLASSNAME = 'grid gap-[0.85rem]';
-const SCENARIO_SCRIPT_EVENT_CLASSNAME =
-  'm-0 rounded-md border border-slate-300 p-[0.8rem] [&>legend]:px-[0.4rem] [&>legend]:text-slate-600';
-const SCENARIO_SCRIPT_EVENT_GRID_CLASSNAME =
-  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3';
-const SCENARIO_SCRIPT_ACTIONS_CLASSNAME = 'mt-[0.8rem] grid gap-2 [&>h3]:m-0 [&>h3]:text-[0.95rem]';
-const SCENARIO_SCRIPT_ACTION_ROW_CLASSNAME =
-  'grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] items-end gap-x-3 gap-y-2';
 
 /**
  * Resolve UI label text for per-zone value classes.
@@ -469,14 +400,14 @@ function ScenarioMetadataEditorCard() {
     issues.startFunds !== undefined;
 
   return (
-    <section className={EDITOR_CARD_CLASSNAME} aria-label="Scenario metadata editor">
+    <EditorCard aria-label="Scenario metadata editor" className="max-w-[52rem]">
       <h1>Scenario Metadata</h1>
       <p>
         Edit canonical bundle metadata fields for key identity, player-facing labels, and scenario
         start parameters.
       </p>
-      <form className={EDITOR_FORM_CLASSNAME} onSubmit={preventFormSubmit}>
-        <label className={EDITOR_FIELD_CLASSNAME}>
+      <EditorForm onSubmit={preventFormSubmit}>
+        <EditorField>
           <span>Scenario Key</span>
           <input
             aria-invalid={issues.key !== undefined}
@@ -486,15 +417,11 @@ function ScenarioMetadataEditorCard() {
             type="text"
             value={bundle.key}
           />
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
-            Must use `builtin/*` or `user/*` namespace.
-          </small>
-          {issues.key !== undefined ? (
-            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.key}</small>
-          ) : null}
-        </label>
+          <EditorHelp>Must use `builtin/*` or `user/*` namespace.</EditorHelp>
+          {issues.key !== undefined ? <EditorError>{issues.key}</EditorError> : null}
+        </EditorField>
 
-        <label className={EDITOR_FIELD_CLASSNAME}>
+        <EditorField>
           <span>Name</span>
           <input
             aria-invalid={issues.name !== undefined}
@@ -504,12 +431,10 @@ function ScenarioMetadataEditorCard() {
             type="text"
             value={bundle.name}
           />
-          {issues.name !== undefined ? (
-            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.name}</small>
-          ) : null}
-        </label>
+          {issues.name !== undefined ? <EditorError>{issues.name}</EditorError> : null}
+        </EditorField>
 
-        <label className={EDITOR_FIELD_CLASSNAME}>
+        <EditorField>
           <span>Description</span>
           <textarea
             aria-invalid={issues.description !== undefined}
@@ -523,11 +448,11 @@ function ScenarioMetadataEditorCard() {
             value={bundle.description}
           />
           {issues.description !== undefined ? (
-            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.description}</small>
+            <EditorError>{issues.description}</EditorError>
           ) : null}
-        </label>
+        </EditorField>
 
-        <label className={EDITOR_FIELD_CLASSNAME}>
+        <EditorField>
           <span>Tags</span>
           <textarea
             aria-invalid={issues.tags !== undefined}
@@ -541,14 +466,12 @@ function ScenarioMetadataEditorCard() {
             rows={3}
             value={bundle.tags.join(', ')}
           />
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>Comma or newline separated.</small>
-          {issues.tags !== undefined ? (
-            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.tags}</small>
-          ) : null}
-        </label>
+          <EditorHelp>Comma or newline separated.</EditorHelp>
+          {issues.tags !== undefined ? <EditorError>{issues.tags}</EditorError> : null}
+        </EditorField>
 
-        <div className={`${EDITOR_FIELD_CLASSNAME} ${EDITOR_FIELD_INLINE_CLASSNAME}`}>
-          <label>
+        <EditorFieldInline>
+          <EditorField>
             <span>Start Year</span>
             <input
               aria-invalid={issues.startYear !== undefined}
@@ -568,12 +491,10 @@ function ScenarioMetadataEditorCard() {
               type="number"
               value={bundle.start.startYear}
             />
-            {issues.startYear !== undefined ? (
-              <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.startYear}</small>
-            ) : null}
-          </label>
+            {issues.startYear !== undefined ? <EditorError>{issues.startYear}</EditorError> : null}
+          </EditorField>
 
-          <label>
+          <EditorField>
             <span>Start Funds</span>
             <input
               aria-invalid={issues.startFunds !== undefined}
@@ -595,19 +516,19 @@ function ScenarioMetadataEditorCard() {
               value={bundle.start.startFunds}
             />
             {issues.startFunds !== undefined ? (
-              <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{issues.startFunds}</small>
+              <EditorError>{issues.startFunds}</EditorError>
             ) : null}
-          </label>
-        </div>
-      </form>
+          </EditorField>
+        </EditorFieldInline>
+      </EditorForm>
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Validation</dt>
         <dd>{hasIssues ? 'invalid metadata' : 'metadata valid'}</dd>
-      </dl>
-    </section>
+      </EditorStatsGrid>
+    </EditorCard>
   );
 }
 
@@ -717,27 +638,27 @@ function ScenarioMapFinalWorkbench() {
 
   return (
     <section
-      className={SCENARIO_MAP_FINAL_WORKBENCH_CLASSNAME}
+      className="grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] bg-gray-300 max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
       aria-label="Scenario map final workbench"
     >
-      <aside className={SCENARIO_MAP_FINAL_SIDEBAR_CLASSNAME}>
+      <aside className="grid content-start gap-4 overflow-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
         <section
-          className={`${SCENARIO_MAP_FINAL_PANEL_CLASSNAME} ${
-            activeBrushFamily === 'base' ? SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME : ''
+          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+            activeBrushFamily === 'base' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
           }`}
         >
-          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Base</h2>
+          <h2 className="m-0 text-[1.4rem] font-semibold">Base</h2>
           <div
-            className={SCENARIO_MAP_FINAL_BASE_OPTION_GRID_CLASSNAME}
+            className="grid grid-cols-2 gap-[0.45rem]"
             role="list"
             aria-label="Smart base brushes"
           >
             {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
               <button
                 aria-pressed={activeSmartBaseBrushId === brush.id}
-                className={`${SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_CLASSNAME} ${
+                className={`grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit ${
                   activeSmartBaseBrushId === brush.id
-                    ? SCENARIO_MAP_FINAL_BASE_OPTION_BUTTON_ACTIVE_CLASSNAME
+                    ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                     : ''
                 }`}
                 key={brush.id}
@@ -750,9 +671,7 @@ function ScenarioMapFinalWorkbench() {
                 type="button"
               >
                 {zoneAtlasSource === undefined ? (
-                  <span className={SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME}>
-                    {brush.tileId}
-                  </span>
+                  <span className="text-[0.8rem] font-semibold text-slate-600">{brush.tileId}</span>
                 ) : (
                   <MapFinalSingleTileSprite
                     atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
@@ -765,7 +684,7 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <label className={SCENARIO_MAP_FINAL_CHECKBOX_ROW_CLASSNAME}>
+          <label className="flex items-center gap-[0.45rem] text-slate-600">
             <input
               className="m-0"
               checked={showBaseClassOverlay}
@@ -777,27 +696,27 @@ function ScenarioMapFinalWorkbench() {
             <span>Show base tile classes</span>
           </label>
 
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+          <small className="text-sm text-slate-600">
             Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
           </small>
         </section>
 
         <section
-          className={`${SCENARIO_MAP_FINAL_PANEL_CLASSNAME} ${
-            activeBrushFamily === 'zones' ? SCENARIO_MAP_FINAL_ACTIVE_PANEL_CLASSNAME : ''
+          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+            activeBrushFamily === 'zones' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
           }`}
         >
-          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Zones</h2>
+          <h2 className="m-0 text-[1.4rem] font-semibold">Zones</h2>
           <div
             aria-label="Zone family selector"
-            className={SCENARIO_MAP_FINAL_ZONE_TABS_CLASSNAME}
+            className="grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500"
             role="tablist"
           >
             {(['res', 'com', 'ind'] as const).map((zone) => (
               <button
                 aria-selected={zone === activeZoneKind}
-                className={`${SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_CLASSNAME} ${
-                  zone === activeZoneKind ? SCENARIO_MAP_FINAL_ZONE_TAB_BUTTON_ACTIVE_CLASSNAME : ''
+                className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0 ${
+                  zone === activeZoneKind ? 'bg-sky-200' : ''
                 }`}
                 key={zone}
                 onClick={() => {
@@ -813,10 +732,10 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <div className={SCENARIO_MAP_FINAL_ZONE_OPTION_ROWS_CLASSNAME}>
+          <div className="grid gap-[0.45rem]">
             {zoneOptionRows.map((rowOptions, rowIndex) => (
               <div
-                className={SCENARIO_MAP_FINAL_ZONE_OPTION_ROW_CLASSNAME}
+                className="grid gap-[0.45rem]"
                 key={`row:${rowIndex}`}
                 style={
                   {
@@ -826,9 +745,9 @@ function ScenarioMapFinalWorkbench() {
               >
                 {rowOptions.map((option) => (
                   <button
-                    className={`${SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_CLASSNAME} ${
+                    className={`flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
                       option.key === activeZoneOptionKey
-                        ? SCENARIO_MAP_FINAL_ZONE_OPTION_BUTTON_ACTIVE_CLASSNAME
+                        ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                         : ''
                     }`}
                     key={option.key}
@@ -841,7 +760,7 @@ function ScenarioMapFinalWorkbench() {
                     type="button"
                   >
                     {zoneAtlasSource === undefined ? (
-                      <span className={SCENARIO_MAP_FINAL_OPTION_FALLBACK_CLASSNAME}>
+                      <span className="text-[0.8rem] font-semibold text-slate-600">
                         {option.tileId}
                       </span>
                     ) : (
@@ -857,20 +776,22 @@ function ScenarioMapFinalWorkbench() {
             ))}
           </div>
 
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+          <small className="text-sm text-slate-600">
             {activeZoneOption.kind === 'fresh'
               ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
               : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
           </small>
         </section>
 
-        <section className={SCENARIO_MAP_FINAL_PANEL_CLASSNAME}>
-          <h2 className={SCENARIO_MAP_FINAL_PANEL_TITLE_CLASSNAME}>Tools</h2>
-          <div className={SCENARIO_MAP_FINAL_PLACEHOLDER_CLASSNAME}>TODO: tool picker</div>
+        <section className="grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem]">
+          <h2 className="m-0 text-[1.4rem] font-semibold">Tools</h2>
+          <div className="flex min-h-[7.5rem] items-center justify-center rounded-[10px] border-2 border-dashed border-[#7d8590] bg-white/35 p-4 text-center text-slate-600">
+            TODO: tool picker
+          </div>
         </section>
       </aside>
 
-      <div className={SCENARIO_MAP_FINAL_CANVAS_SHELL_CLASSNAME}>
+      <div className="min-h-0 bg-[#0b1020]">
         <MapCanvas
           dragPlacementEnabled={activeBrushFamily === 'base'}
           hoverPreview={activeBrushFamily === 'base' ? activeSmartBaseHoverPreview : undefined}
@@ -1087,7 +1008,7 @@ function ScenarioMapEditorCard() {
   const fillDisabled = brushMode === 'tool' || brushMode === 'zone-level';
 
   return (
-    <section className={EDITOR_MAP_CARD_CLASSNAME} aria-label="Scenario map editor">
+    <EditorCard aria-label="Scenario map editor" className="max-w-[64rem]">
       <h1>Scenario Map</h1>
       <p>
         Reuses the runtime map canvas (sprite art, zoom/pan, and tool footprints) while allowing
@@ -1095,8 +1016,8 @@ function ScenarioMapEditorCard() {
         painting (dirt/water/forest/etc.). Terrain smoothing recomputes after each map edit.
       </p>
 
-      <div className={SCENARIO_MAP_CONTROLS_CLASSNAME}>
-        <label className={EDITOR_FIELD_CLASSNAME}>
+      <div className="mb-4 grid gap-3">
+        <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
           <span>Brush Mode</span>
           <select
             onChange={(event) => {
@@ -1115,8 +1036,8 @@ function ScenarioMapEditorCard() {
         </label>
 
         {brushMode === 'tool' ? (
-          <div className={SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME}>
-            <label className={EDITOR_FIELD_CLASSNAME}>
+          <div className="grid gap-[0.6rem]">
+            <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
               <span>Active Tool</span>
               <select
                 onChange={(event) => {
@@ -1133,22 +1054,22 @@ function ScenarioMapEditorCard() {
                   </option>
                 ))}
               </select>
-              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+              <small className="text-sm text-slate-600">
                 Tool footprint {activeToolSpec.size}x{activeToolSpec.size}, base cost $
                 {activeToolSpec.baseCost}.
               </small>
             </label>
 
             <div
-              className={SCENARIO_MAP_TOOL_GRID_CLASSNAME}
+              className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-[0.45rem]"
               role="list"
               aria-label="Micropolis map tools"
             >
               {PLAYABLE_TOOL_SPECS.map((spec) => (
                 <button
                   aria-pressed={activeTool === spec.tool}
-                  className={`${SCENARIO_MAP_TOOL_BUTTON_CLASSNAME} ${
-                    activeTool === spec.tool ? EDITOR_BUTTON_ACTIVE_CLASSNAME : ''
+                  className={`cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.55rem] py-[0.35rem] text-left ${
+                    activeTool === spec.tool ? 'border-blue-600 bg-sky-100' : ''
                   }`}
                   key={spec.tool}
                   onClick={() => {
@@ -1165,9 +1086,9 @@ function ScenarioMapEditorCard() {
         ) : null}
 
         {brushMode === 'zone-level' ? (
-          <div className={SCENARIO_MAP_TOOL_CONTROLS_CLASSNAME}>
-            <div className={EDITOR_FIELD_INLINE_CLASSNAME}>
-              <label className={EDITOR_FIELD_CLASSNAME}>
+          <div className="grid gap-[0.6rem]">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3 [&_label]:grid [&_label]:gap-[0.3rem]">
+              <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
                 <span>Zone Type</span>
                 <select
                   onChange={(event) => {
@@ -1191,7 +1112,7 @@ function ScenarioMapEditorCard() {
                 </select>
               </label>
 
-              <label className={EDITOR_FIELD_CLASSNAME}>
+              <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
                 <span>Density Level</span>
                 <input
                   max={activeZoneMaxLevel}
@@ -1209,7 +1130,7 @@ function ScenarioMapEditorCard() {
                 />
               </label>
 
-              <label className={EDITOR_FIELD_CLASSNAME}>
+              <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
                 <span>{activeZoneValueClassLabel}</span>
                 <input
                   max={activeZoneMaxValue}
@@ -1227,7 +1148,7 @@ function ScenarioMapEditorCard() {
                 />
               </label>
             </div>
-            <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+            <small className="text-sm text-slate-600">
               {`Places direct zone variants using ResPlop/ComPlop/IndPlop formulas (1-based level, value 0..${activeZoneMaxValue} for ${activeZoneKind.toUpperCase()}).`}
             </small>
           </div>
@@ -1235,7 +1156,7 @@ function ScenarioMapEditorCard() {
 
         {brushMode === 'base-tile' ? (
           <>
-            <label className={EDITOR_FIELD_CLASSNAME}>
+            <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
               <span>Named Base Tile</span>
               <select
                 onChange={(event) => {
@@ -1258,12 +1179,12 @@ function ScenarioMapEditorCard() {
                   </option>
                 ))}
               </select>
-              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+              <small className="text-sm text-slate-600">
                 Full tile-name list from classic `sim.h` tile-id constants.
               </small>
             </label>
 
-            <label className={EDITOR_FIELD_CLASSNAME}>
+            <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
               <span>Base Tile ID</span>
               <input
                 max={1023}
@@ -1276,15 +1197,15 @@ function ScenarioMapEditorCard() {
                 type="number"
                 value={activeBaseTileId}
               />
-              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+              <small className="text-sm text-slate-600">
                 Writes low tile-id bits (`LOMASK=1023`).
               </small>
             </label>
 
-            <div className={SCENARIO_MAP_PRESET_ROW_CLASSNAME}>
+            <div className="flex flex-wrap gap-2">
               {BASE_TILE_PRESETS.map((preset) => (
                 <button
-                  className={EDITOR_BUTTON_CLASSNAME}
+                  className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65"
                   key={preset.label}
                   onClick={() => {
                     setActiveBaseTileId(preset.tileId);
@@ -1296,7 +1217,7 @@ function ScenarioMapEditorCard() {
               ))}
             </div>
 
-            <label className={EDITOR_FIELD_CLASSNAME}>
+            <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
               <span>Preserve Existing Flags</span>
               <input
                 className="justify-self-start"
@@ -1306,7 +1227,7 @@ function ScenarioMapEditorCard() {
                 }}
                 type="checkbox"
               />
-              <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+              <small className="text-sm text-slate-600">
                 Keep tile status bits (zone/power/bulldoze flags) while replacing base tile id.
               </small>
             </label>
@@ -1314,7 +1235,7 @@ function ScenarioMapEditorCard() {
         ) : null}
 
         {brushMode === 'tile-word' ? (
-          <label className={EDITOR_FIELD_CLASSNAME}>
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>Active Tile Word</span>
             <select
               onChange={(event) => {
@@ -1330,22 +1251,22 @@ function ScenarioMapEditorCard() {
                 </option>
               ))}
             </select>
-            <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+            <small className="text-sm text-slate-600">
               Stored as unsigned 16-bit map words; this picker uses named base tile words.
             </small>
           </label>
         ) : null}
 
-        <label className={EDITOR_FIELD_CLASSNAME}>
+        <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
           <span>Map Navigation</span>
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+          <small className="text-sm text-slate-600">
             Left click paints/places. Mouse wheel pans. `Ctrl`/`Cmd` + wheel zooms. Middle-button
             drag also pans.
           </small>
         </label>
 
         <button
-          className={SCENARIO_MAP_FILL_BUTTON_CLASSNAME}
+          className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
           disabled={fillDisabled}
           onClick={() => {
             if (brushMode === 'base-tile') {
@@ -1366,7 +1287,7 @@ function ScenarioMapEditorCard() {
         </button>
       </div>
 
-      <div className={SCENARIO_MAP_CANVAS_SHELL_CLASSNAME}>
+      <div className="mb-4 h-[min(75vh,46rem)] w-[min(100%,72rem)] overflow-hidden rounded-md border border-slate-300 bg-[#0b1020]">
         <MapCanvas
           dragPlacementEnabled={dragPlacementEnabled}
           hoverPreview={
@@ -1420,7 +1341,7 @@ function ScenarioMapEditorCard() {
         />
       </div>
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Map Size</dt>
         <dd>
           {runtimeMapState.width} x {runtimeMapState.height}
@@ -1441,8 +1362,8 @@ function ScenarioMapEditorCard() {
         </dd>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
-      </dl>
-    </section>
+      </EditorStatsGrid>
+    </EditorCard>
   );
 }
 
@@ -1465,14 +1386,14 @@ function ScenarioObjectiveEditorCard() {
   );
 
   return (
-    <section className={EDITOR_OBJECTIVE_CARD_CLASSNAME} aria-label="Scenario objective editor">
+    <EditorCard aria-label="Scenario objective editor" className="max-w-[64rem]">
       <h1>Scenario Objective</h1>
       <p>
         Author objective predicates using the Stage 4 DSL. Metric comparisons track classic
         `DoScenarioScore` fields, while `all`/`any`/`not` allow composed checks.
       </p>
 
-      <label className={EDITOR_FIELD_CLASSNAME}>
+      <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
         <span>Objective Enabled</span>
         <input
           className="justify-self-start"
@@ -1482,7 +1403,7 @@ function ScenarioObjectiveEditorCard() {
           }}
           type="checkbox"
         />
-        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+        <small className="text-sm text-slate-600">
           Objective predicate drafts are included in strict export when objective authoring is
           enabled.
         </small>
@@ -1497,10 +1418,10 @@ function ScenarioObjectiveEditorCard() {
           predicate={objective.predicate}
         />
       ) : (
-        <p className={EDITOR_HELP_TEXT_CLASSNAME}>Objective checks are disabled for this draft.</p>
+        <p className="text-sm text-slate-600">Objective checks are disabled for this draft.</p>
       )}
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Objective Enabled</dt>
@@ -1517,10 +1438,10 @@ function ScenarioObjectiveEditorCard() {
                   validationIssues.length === 1 ? '' : 's'
                 })`}
         </dd>
-      </dl>
+      </EditorStatsGrid>
 
       {objective.enabled && validationIssues.length > 0 ? (
-        <section aria-label="Objective semantic issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
+        <EditorIssuesPanel aria-label="Objective semantic issues">
           <h2>Objective Semantic Issues</h2>
           <ul>
             {validationIssues.map((issue, index) => (
@@ -1529,14 +1450,14 @@ function ScenarioObjectiveEditorCard() {
               </li>
             ))}
           </ul>
-        </section>
+        </EditorIssuesPanel>
       ) : null}
 
-      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Objective predicate preview">
+      <EditorPreviewPanel aria-label="Objective predicate preview">
         <h2>Objective Predicate JSON</h2>
         <textarea readOnly rows={10} value={objectiveJson} />
-      </section>
-    </section>
+      </EditorPreviewPanel>
+    </EditorCard>
   );
 }
 
@@ -1553,9 +1474,9 @@ function ScenarioObjectivePredicateEditor(options: {
   const nodeLabel = `Predicate depth ${depth}`;
 
   return (
-    <fieldset className={SCENARIO_OBJECTIVE_NODE_CLASSNAME}>
+    <fieldset className="my-3 rounded-md border border-slate-300 p-3 [&>legend]:px-[0.4rem] [&>legend]:text-slate-600">
       <legend>{nodeLabel}</legend>
-      <label className={EDITOR_FIELD_CLASSNAME}>
+      <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
         <span>Kind</span>
         <select
           onChange={(event) => {
@@ -1577,8 +1498,8 @@ function ScenarioObjectivePredicateEditor(options: {
       </label>
 
       {predicate.kind === 'metric' ? (
-        <div className={SCENARIO_OBJECTIVE_METRIC_GRID_CLASSNAME}>
-          <label className={EDITOR_FIELD_CLASSNAME}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>Metric</span>
             <select
               onChange={(event) => {
@@ -1598,7 +1519,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </select>
           </label>
 
-          <label className={EDITOR_FIELD_CLASSNAME}>
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>Operator</span>
             <select
               onChange={(event) => {
@@ -1618,7 +1539,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </select>
           </label>
 
-          <label className={EDITOR_FIELD_CLASSNAME}>
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>Value</span>
             <input
               onChange={(event) => {
@@ -1635,9 +1556,9 @@ function ScenarioObjectivePredicateEditor(options: {
       ) : null}
 
       {predicate.kind === 'all' || predicate.kind === 'any' ? (
-        <div className={SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME}>
+        <div className="grid gap-3">
           {predicate.predicates.map((childPredicate, index) => (
-            <div className={SCENARIO_OBJECTIVE_CHILD_ROW_CLASSNAME} key={index}>
+            <div className="grid gap-2" key={index}>
               <ScenarioObjectivePredicateEditor
                 depth={depth + 1}
                 onChange={(child) => {
@@ -1646,7 +1567,7 @@ function ScenarioObjectivePredicateEditor(options: {
                 predicate={childPredicate}
               />
               <button
-                className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
+                className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
                 onClick={() => {
                   onChange(removeScenarioObjectiveChildPredicate(predicate, index));
                 }}
@@ -1657,7 +1578,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </div>
           ))}
           <button
-            className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
+            className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
             onClick={() => {
               onChange(appendScenarioObjectiveChildPredicate(predicate));
             }}
@@ -1669,7 +1590,7 @@ function ScenarioObjectivePredicateEditor(options: {
       ) : null}
 
       {predicate.kind === 'not' ? (
-        <div className={SCENARIO_OBJECTIVE_CHILDREN_CLASSNAME}>
+        <div className="grid gap-3">
           <ScenarioObjectivePredicateEditor
             depth={depth + 1}
             onChange={(child) => {
@@ -1703,14 +1624,14 @@ function ScenarioScriptEditorCard() {
   };
 
   return (
-    <section className={EDITOR_SCRIPT_CARD_CLASSNAME} aria-label="Scenario script editor">
+    <EditorCard aria-label="Scenario script editor" className="max-w-[68rem]">
       <h1>Scenario Scripts</h1>
       <p>
         Author declarative event scripts with one-shot (`atTick`) and interval (`everyTicks`)
         triggers plus runtime action unions for disasters/messages.
       </p>
 
-      <label className={EDITOR_FIELD_CLASSNAME}>
+      <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
         <span>Scripts Enabled</span>
         <input
           className="justify-self-start"
@@ -1720,13 +1641,13 @@ function ScenarioScriptEditorCard() {
           }}
           type="checkbox"
         />
-        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+        <small className="text-sm text-slate-600">
           Script event/action drafts are included in strict export when script authoring is enabled.
         </small>
       </label>
 
       {script.enabled ? (
-        <div className={SCENARIO_SCRIPT_EVENTS_CLASSNAME}>
+        <div className="grid gap-[0.85rem]">
           {script.events.map((event, eventIndex) => (
             <ScenarioScriptEventEditor
               event={event}
@@ -1743,7 +1664,7 @@ function ScenarioScriptEditorCard() {
             />
           ))}
           <button
-            className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
+            className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
             onClick={() => {
               replaceEvents(appendScenarioEditorScriptEvent(script.events));
             }}
@@ -1753,12 +1674,12 @@ function ScenarioScriptEditorCard() {
           </button>
         </div>
       ) : (
-        <p className={EDITOR_HELP_TEXT_CLASSNAME}>
+        <p className="text-sm text-slate-600">
           Scripted event actions are disabled for this draft.
         </p>
       )}
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Scripts Enabled</dt>
@@ -1775,10 +1696,10 @@ function ScenarioScriptEditorCard() {
                   validationIssues.length === 1 ? '' : 's'
                 })`}
         </dd>
-      </dl>
+      </EditorStatsGrid>
 
       {script.enabled && validationIssues.length > 0 ? (
-        <section aria-label="Script semantic issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
+        <EditorIssuesPanel aria-label="Script semantic issues">
           <h2>Script Semantic Issues</h2>
           <ul>
             {validationIssues.map((issue, index) => (
@@ -1787,14 +1708,14 @@ function ScenarioScriptEditorCard() {
               </li>
             ))}
           </ul>
-        </section>
+        </EditorIssuesPanel>
       ) : null}
 
-      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Script event preview">
+      <EditorPreviewPanel aria-label="Script event preview">
         <h2>Script Event JSON</h2>
         <textarea readOnly rows={12} value={scriptJson} />
-      </section>
-    </section>
+      </EditorPreviewPanel>
+    </EditorCard>
   );
 }
 
@@ -1812,10 +1733,10 @@ function ScenarioScriptEventEditor(options: {
   const triggerKind = getScenarioEditorScriptTriggerKind(event.trigger);
 
   return (
-    <fieldset className={SCENARIO_SCRIPT_EVENT_CLASSNAME}>
+    <fieldset className="m-0 rounded-md border border-slate-300 p-[0.8rem] [&>legend]:px-[0.4rem] [&>legend]:text-slate-600">
       <legend>{`Event ${index + 1}`}</legend>
-      <div className={SCENARIO_SCRIPT_EVENT_GRID_CLASSNAME}>
-        <label className={EDITOR_FIELD_CLASSNAME}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
+        <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
           <span>Trigger</span>
           <select
             onChange={(changeEvent) => {
@@ -1838,7 +1759,7 @@ function ScenarioScriptEventEditor(options: {
         </label>
 
         {triggerKind === 'atTick' ? (
-          <label className={EDITOR_FIELD_CLASSNAME}>
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>atTick</span>
             <input
               min={0}
@@ -1858,7 +1779,7 @@ function ScenarioScriptEventEditor(options: {
             />
           </label>
         ) : (
-          <label className={EDITOR_FIELD_CLASSNAME}>
+          <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
             <span>everyTicks</span>
             <input
               min={1}
@@ -1880,11 +1801,14 @@ function ScenarioScriptEventEditor(options: {
         )}
       </div>
 
-      <div className={SCENARIO_SCRIPT_ACTIONS_CLASSNAME}>
+      <div className="mt-[0.8rem] grid gap-2 [&>h3]:m-0 [&>h3]:text-[0.95rem]">
         <h3>Actions</h3>
         {event.actions.map((action, actionIndex) => (
-          <div className={SCENARIO_SCRIPT_ACTION_ROW_CLASSNAME} key={`${index}:${actionIndex}`}>
-            <label className={EDITOR_FIELD_CLASSNAME}>
+          <div
+            className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] items-end gap-x-3 gap-y-2"
+            key={`${index}:${actionIndex}`}
+          >
+            <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
               <span>Action</span>
               <select
                 onChange={(changeEvent) => {
@@ -1910,7 +1834,7 @@ function ScenarioScriptEventEditor(options: {
             </label>
 
             {action.kind === 'send-message' ? (
-              <label className={EDITOR_FIELD_CLASSNAME}>
+              <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
                 <span>messageId</span>
                 <input
                   onChange={(changeEvent) => {
@@ -1932,7 +1856,7 @@ function ScenarioScriptEventEditor(options: {
             ) : null}
 
             <button
-              className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
+              className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
               onClick={() => {
                 onChange(removeScenarioEditorScriptAction(event, actionIndex));
               }}
@@ -1943,7 +1867,7 @@ function ScenarioScriptEventEditor(options: {
           </div>
         ))}
         <button
-          className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME}
+          className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
           onClick={() => {
             onChange(appendScenarioEditorScriptAction(event));
           }}
@@ -1953,7 +1877,11 @@ function ScenarioScriptEventEditor(options: {
         </button>
       </div>
 
-      <button className={SCENARIO_EDITOR_ACTION_BUTTON_CLASSNAME} onClick={onRemove} type="button">
+      <button
+        className="cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65 justify-self-start"
+        onClick={onRemove}
+        type="button"
+      >
         Remove Event
       </button>
     </fieldset>
@@ -1984,17 +1912,14 @@ function ScenarioBehaviorProfileEditorCard() {
   );
 
   return (
-    <section
-      className={EDITOR_BEHAVIOR_CARD_CLASSNAME}
-      aria-label="Scenario behavior profile editor"
-    >
+    <EditorCard aria-label="Scenario behavior profile editor" className="max-w-[64rem]">
       <h1>Scenario Behavior Profile</h1>
       <p>
         Assign one closed runtime behavior profile key. This preserves deterministic parity by
         allowing only registered profile variants.
       </p>
 
-      <label className={EDITOR_FIELD_CLASSNAME}>
+      <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
         <span>Behavior Profile Assignment Enabled</span>
         <input
           className="justify-self-start"
@@ -2004,14 +1929,14 @@ function ScenarioBehaviorProfileEditorCard() {
           }}
           type="checkbox"
         />
-        <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+        <small className="text-sm text-slate-600">
           This Stage 4.3 draft editor captures profile assignment only; export integration lands in
           Stage 4.5.
         </small>
       </label>
 
       {behavior.enabled ? (
-        <label className={EDITOR_FIELD_CLASSNAME}>
+        <label className="grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]">
           <span>Behavior Profile Key</span>
           <select
             aria-invalid={validationIssue !== undefined}
@@ -2034,20 +1959,20 @@ function ScenarioBehaviorProfileEditorCard() {
               </option>
             ))}
           </select>
-          <small className={EDITOR_HELP_TEXT_CLASSNAME}>
+          <small className="text-sm text-slate-600">
             Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
           </small>
           {validationIssue !== undefined ? (
-            <small className={EDITOR_ERROR_TEXT_CLASSNAME}>{validationIssue}</small>
+            <small className="text-sm text-red-700">{validationIssue}</small>
           ) : null}
         </label>
       ) : (
-        <p className={EDITOR_HELP_TEXT_CLASSNAME}>
+        <p className="text-sm text-slate-600">
           Behavior profile override is disabled for this draft.
         </p>
       )}
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Assignment Enabled</dt>
@@ -2056,13 +1981,13 @@ function ScenarioBehaviorProfileEditorCard() {
         <dd>{behavior.enabled ? behavior.profileKey : 'none'}</dd>
         <dt>Validation</dt>
         <dd>{validationIssue === undefined ? 'valid' : 'invalid'}</dd>
-      </dl>
+      </EditorStatsGrid>
 
-      <section className={EDITOR_PREVIEW_PANEL_CLASSNAME} aria-label="Behavior profile preview">
+      <EditorPreviewPanel aria-label="Behavior profile preview">
         <h2>Behavior Assignment JSON</h2>
         <textarea readOnly rows={6} value={behaviorJson} />
-      </section>
-    </section>
+      </EditorPreviewPanel>
+    </EditorCard>
   );
 }
 
@@ -2152,7 +2077,7 @@ function ScenarioExportCard() {
   const openIssues = lastOpenResult?.ok === false ? lastOpenResult.issues : [];
 
   return (
-    <section className={EDITOR_CARD_CLASSNAME} aria-label="Scenario strict export panel">
+    <EditorCard aria-label="Scenario strict export panel" className="max-w-[52rem]">
       <h1>Export Scenario Bundle</h1>
       <p>
         Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
@@ -2160,7 +2085,7 @@ function ScenarioExportCard() {
         authored Stage 4 objective/script payloads when enabled.
       </p>
 
-      <div className={EDITOR_EXPORT_ACTIONS_CLASSNAME}>
+      <div className="mb-4 grid justify-items-start gap-2">
         <input
           accept="application/json,.json"
           className="hidden"
@@ -2168,16 +2093,16 @@ function ScenarioExportCard() {
           ref={openFileInputRef}
           type="file"
         />
-        <button className={EDITOR_OPEN_BUTTON_CLASSNAME} onClick={handleOpenBundle} type="button">
+        <EditorSecondaryButton onClick={handleOpenBundle} type="button">
           Open Bundle JSON
-        </button>
-        <button className={EDITOR_EXPORT_BUTTON_CLASSNAME} onClick={handleExport} type="button">
+        </EditorSecondaryButton>
+        <EditorPrimaryButton onClick={handleExport} type="button">
           Export Bundle JSON
-        </button>
-        <small className={EDITOR_HELP_TEXT_CLASSNAME}>Export file name: {exportFileName}</small>
+        </EditorPrimaryButton>
+        <small className="text-sm text-slate-600">Export file name: {exportFileName}</small>
       </div>
 
-      <dl className={EDITOR_STATS_GRID_CLASSNAME}>
+      <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Last Open Attempt</dt>
@@ -2196,10 +2121,10 @@ function ScenarioExportCard() {
               ? 'success'
               : `blocked (${issues.length} issue${issues.length === 1 ? '' : 's'})`}
         </dd>
-      </dl>
+      </EditorStatsGrid>
 
       {lastResult?.ok === false ? (
-        <section aria-label="Strict export issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
+        <EditorIssuesPanel aria-label="Strict export issues">
           <h2>Export Blocked</h2>
           <ul>
             {lastResult.issues.map((issue, index) => (
@@ -2208,11 +2133,11 @@ function ScenarioExportCard() {
               </li>
             ))}
           </ul>
-        </section>
+        </EditorIssuesPanel>
       ) : null}
 
       {lastOpenResult?.ok === false ? (
-        <section aria-label="Bundle open issues" className={EDITOR_ISSUES_PANEL_CLASSNAME}>
+        <EditorIssuesPanel aria-label="Bundle open issues">
           <h2>Open Blocked</h2>
           <ul>
             {openIssues.map((issue, index) => (
@@ -2221,16 +2146,16 @@ function ScenarioExportCard() {
               </li>
             ))}
           </ul>
-        </section>
+        </EditorIssuesPanel>
       ) : null}
 
       {lastResult?.ok ? (
-        <section aria-label="Export json preview" className={EDITOR_PREVIEW_PANEL_CLASSNAME}>
+        <EditorPreviewPanel aria-label="Export json preview">
           <h2>Last Export JSON</h2>
           <textarea readOnly rows={12} value={lastResult.jsonText} />
-        </section>
+        </EditorPreviewPanel>
       ) : null}
-    </section>
+    </EditorCard>
   );
 }
 
