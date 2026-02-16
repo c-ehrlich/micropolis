@@ -7,15 +7,25 @@ import {
 } from '@city/scenario-core';
 import {
   applyToolAction,
+  comPlop,
   createClassicMapStore,
+  createSimContext,
+  createSimState,
   createToolContext,
+  createZoneSystem,
+  indPlop,
   MicropolisRng,
+  resPlop,
+  smoothTrees,
+  smoothWater,
+  Tile,
   TileMask,
 } from '@city/sim-core';
 
 const SCENARIO_EDITOR_TILE_WORD_MASK = 0xffff;
 const SCENARIO_EDITOR_TOOL_FUNDS = 1_000_000_000;
 const SCENARIO_EDITOR_TOOL_RNG_SEED = 0x00c17e77;
+const SCENARIO_EDITOR_ZONE_PLACEMENT_RNG_SEED = 0x00c1de55;
 const SCENARIO_EDITOR_MAP_TOOL_ACTION_DEFAULTS = {
   simStep: 0,
   order: 0,
@@ -54,6 +64,43 @@ export const SCENARIO_EDITOR_MAP_TOOLS = [
  * exposed by the current playable runtime tool palette.
  */
 export type ScenarioEditorMapTool = (typeof SCENARIO_EDITOR_MAP_TOOLS)[number];
+
+/**
+ * Scenario editor zone-growth domains for direct R/C/I level authoring.
+ * Mirrors zone family handlers in `DoResidential` / `DoCommercial` / `DoIndustrial`
+ * from `ref/micropolis/src/sim/s_zone.c`.
+ */
+export const SCENARIO_EDITOR_MAP_ZONE_KINDS = ['res', 'com', 'ind'] as const;
+
+/**
+ * Scenario editor zone family identifier for density-level plop actions.
+ * Mirrors the three classic zone families in `ref/micropolis/src/sim/s_zone.c`.
+ */
+export type ScenarioEditorMapZoneKind = (typeof SCENARIO_EDITOR_MAP_ZONE_KINDS)[number];
+
+/**
+ * Density/wealth controls for direct zone-level placement.
+ * Mirrors `ResPlop` / `ComPlop` / `IndPlop` formulas in
+ * `ref/micropolis/src/sim/s_zone.c` where `den` is zone level and `value`
+ * is land-value class (0..3 from `GetCRVal`).
+ */
+export interface ScenarioEditorMapZoneLevelOptions {
+  readonly level: number;
+  readonly value: number;
+  readonly zone: ScenarioEditorMapZoneKind;
+}
+
+/**
+ * Named base-tile entry sourced from classic tile constants.
+ * Mirrors the "Character Mapping" table in `ref/micropolis/src/sim/headers/sim.h`
+ * and exposes every named low-10-bit tile id for editor selection.
+ * Parity difference: labels are curated UI-friendly names rather than raw C constants.
+ */
+export interface ScenarioEditorMapNamedBaseTile {
+  readonly label: string;
+  readonly name: string;
+  readonly tileId: number;
+}
 
 /**
  * Base-tile write options for map painting.
@@ -208,6 +255,68 @@ export function normalizeScenarioEditorBaseTileId(baseTileId: number): number {
 }
 
 /**
+ * Return all named base tiles available in classic Micropolis constants.
+ * Mirrors `#define` tile-id labels in `ref/micropolis/src/sim/headers/sim.h`.
+ */
+export function getScenarioEditorMapNamedBaseTiles(): readonly ScenarioEditorMapNamedBaseTile[] {
+  return SCENARIO_EDITOR_MAP_NAMED_BASE_TILES;
+}
+
+/**
+ * Resolve one named base tile entry by constant name.
+ * Mirrors direct tile label lookup from Micropolis `sim.h` constants.
+ */
+export function findScenarioEditorMapNamedBaseTileByName(
+  name: string,
+): ScenarioEditorMapNamedBaseTile | undefined {
+  return SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_NAME.get(name);
+}
+
+/**
+ * Resolve one named base tile entry by low-10-bit tile id.
+ * Mirrors tile-id to named constant mapping from Micropolis `sim.h`.
+ */
+export function findScenarioEditorMapNamedBaseTileById(
+  baseTileId: number,
+): ScenarioEditorMapNamedBaseTile | undefined {
+  return SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.get(
+    normalizeScenarioEditorBaseTileId(baseTileId),
+  );
+}
+
+/**
+ * Normalize zone-value class to C `GetCRVal` domain (0..3).
+ * Mirrors `GetCRVal` return range in `ref/micropolis/src/sim/s_zone.c`.
+ */
+export function normalizeScenarioEditorMapZoneValue(value: number): number {
+  return clamp(Math.trunc(value), 0, 3);
+}
+
+/**
+ * Resolve max density level for one zone family.
+ * Mirrors `ResPlop`/`ComPlop`/`IndPlop` density domains in
+ * `ref/micropolis/src/sim/s_zone.c` (`den` ranges: res/ind 0..3, com 0..4).
+ */
+export function getScenarioEditorMapZoneMaxLevel(zone: ScenarioEditorMapZoneKind): number {
+  if (zone === 'com') {
+    return 5;
+  }
+  return 4;
+}
+
+/**
+ * Normalize editor zone level input to the valid C density domain.
+ * Mirrors `den` bounds used by `ResPlop` / `ComPlop` / `IndPlop` formulas in
+ * `ref/micropolis/src/sim/s_zone.c`.
+ */
+export function normalizeScenarioEditorMapZoneLevel(
+  zone: ScenarioEditorMapZoneKind,
+  level: number,
+): number {
+  return clamp(Math.trunc(level), 1, getScenarioEditorMapZoneMaxLevel(zone));
+}
+
+/**
  * Write one base tile id while optionally preserving status flags.
  * Mirrors C tile word layout in `ref/micropolis/src/sim/headers/sim.h` where
  * low bits are tile id and high bits are status flags (`ALLBITS` mask).
@@ -267,6 +376,35 @@ export function fillScenarioEditorMapBaseTileId(
 }
 
 /**
+ * Recompute terrain-edge tiles after editor map mutation.
+ * Mirrors terrain post-processing routines from `ref/micropolis/src/sim/s_gen.c`
+ * by applying `SmoothTrees` then `SmoothWater` to the whole map.
+ * Parity note: this editor helper is deterministic and does not run map generation.
+ */
+export function recomputeScenarioEditorMapTerrain(bundle: ScenarioBundleV1): ScenarioBundleV1 {
+  const tileWordsMap = asTileWordsMap(bundle);
+  const map = Uint16Array.from(tileWordsMap.tileWords);
+
+  smoothTrees(map);
+  smoothTrees(map);
+  smoothWater(map);
+
+  let changed = false;
+  for (let index = 0; index < map.length; index += 1) {
+    if (map[index] !== tileWordsMap.tileWords[index]) {
+      changed = true;
+      break;
+    }
+  }
+
+  if (!changed && bundle.map.kind === 'tile-words') {
+    return bundle;
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(map));
+}
+
+/**
  * Apply one Micropolis tool at a map coordinate and persist resulting tile words.
  * Mirrors `DoTool`/`do_tool` behavior from `ref/micropolis/src/sim/w_tool.c`
  * via sim-core C-parity tool tables and placement rules.
@@ -320,11 +458,75 @@ export function applyScenarioEditorMapToolAtPoint(
 }
 
 /**
+ * Place one R/C/I zone at a chosen density/value level.
+ * Mirrors `ResPlop` / `ComPlop` / `IndPlop` + `ZonePlop` in
+ * `ref/micropolis/src/sim/s_zone.c` for explicit scenario authoring of zone state.
+ */
+export function applyScenarioEditorMapZoneLevelAtPoint(
+  bundle: ScenarioBundleV1,
+  point: ScenarioEditorMapPoint,
+  options: ScenarioEditorMapZoneLevelOptions,
+): ScenarioBundleV1 {
+  const index = getScenarioEditorMapIndex(point);
+  if (index === null) {
+    return bundle;
+  }
+
+  const tileWordsMap = asTileWordsMap(bundle);
+  const store = createClassicMapStore();
+  const initialMapLayer = store.snapshot('map');
+  if (!(initialMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+  initialMapLayer.set(tileWordsMap.tileWords);
+
+  const zone = options.zone;
+  const level = normalizeScenarioEditorMapZoneLevel(zone, options.level);
+  const value = normalizeScenarioEditorMapZoneValue(options.value);
+
+  store.beginTick();
+  const state = createSimState();
+  const context = createSimContext({
+    store,
+    rng: new MicropolisRng(SCENARIO_EDITOR_ZONE_PLACEMENT_RNG_SEED),
+  });
+  const zoneSystem = createZoneSystem(state, context);
+
+  if (zone === 'res') {
+    resPlop(zoneSystem, point.x, point.y, level - 1, value);
+  } else if (zone === 'com') {
+    comPlop(zoneSystem, point.x, point.y, level - 1, value);
+  } else {
+    indPlop(zoneSystem, point.x, point.y, level - 1, value);
+  }
+
+  const tickResult = store.commitTick();
+  if (tickResult.patches.length === 0) {
+    return bundle;
+  }
+
+  const nextMapLayer = store.snapshot('map');
+  if (!(nextMapLayer instanceof Uint16Array)) {
+    throw new Error('expected uint16 map layer');
+  }
+
+  return toScenarioEditorTileWordsBundle(bundle, Array.from(nextMapLayer));
+}
+
+/**
  * Runtime guard for map tool ids selected from form controls.
  * Mirrors closed tool dispatch set for `do_tool` in `w_tool.c`.
  */
 export function isScenarioEditorMapTool(value: string): value is ScenarioEditorMapTool {
   return SCENARIO_EDITOR_MAP_TOOL_SET.has(value as ScenarioEditorMapTool);
+}
+
+/**
+ * Runtime guard for zone-family ids selected from form controls.
+ * Mirrors closed residential/commercial/industrial domains in `s_zone.c`.
+ */
+export function isScenarioEditorMapZoneKind(value: string): value is ScenarioEditorMapZoneKind {
+  return SCENARIO_EDITOR_MAP_ZONE_KIND_SET.has(value as ScenarioEditorMapZoneKind);
 }
 
 /**
@@ -339,6 +541,143 @@ function asTileWordsMap(bundle: ScenarioBundleV1): ScenarioMapTileWordsV1 {
 }
 
 const SCENARIO_EDITOR_MAP_TOOL_SET = new Set<ScenarioEditorMapTool>(SCENARIO_EDITOR_MAP_TOOLS);
+const SCENARIO_EDITOR_MAP_ZONE_KIND_SET = new Set<ScenarioEditorMapZoneKind>(
+  SCENARIO_EDITOR_MAP_ZONE_KINDS,
+);
+const SCENARIO_EDITOR_MAP_NAMED_BASE_TILES: readonly ScenarioEditorMapNamedBaseTile[] = [
+  { name: 'DIRT', label: 'Dirt', tileId: Tile.DIRT },
+  { name: 'RIVER', label: 'River', tileId: Tile.RIVER },
+  { name: 'REDGE', label: 'River Edge', tileId: Tile.REDGE },
+  { name: 'CHANNEL', label: 'Channel', tileId: Tile.CHANNEL },
+  { name: 'FIRSTRIVEDGE', label: 'First River Edge', tileId: Tile.FIRSTRIVEDGE },
+  { name: 'LASTRIVEDGE', label: 'Last River Edge', tileId: Tile.LASTRIVEDGE },
+  { name: 'TREEBASE', label: 'Tree Base', tileId: Tile.TREEBASE },
+  { name: 'LASTTREE', label: 'Last Tree', tileId: Tile.LASTTREE },
+  { name: 'WOODS', label: 'Forest', tileId: Tile.WOODS },
+  { name: 'WOODS2', label: 'Forest Variant 2', tileId: Tile.WOODS2 },
+  { name: 'WOODS3', label: 'Forest Variant 3', tileId: Tile.WOODS3 },
+  { name: 'WOODS4', label: 'Forest Variant 4', tileId: Tile.WOODS4 },
+  { name: 'WOODS5', label: 'Forest Variant 5', tileId: Tile.WOODS5 },
+  { name: 'RUBBLE', label: 'Rubble', tileId: Tile.RUBBLE },
+  { name: 'LASTRUBBLE', label: 'Last Rubble', tileId: Tile.LASTRUBBLE },
+  { name: 'FLOOD', label: 'Flood', tileId: Tile.FLOOD },
+  { name: 'LASTFLOOD', label: 'Last Flood', tileId: Tile.LASTFLOOD },
+  { name: 'RADTILE', label: 'Radiation Tile', tileId: Tile.RADTILE },
+  { name: 'FIRE', label: 'Fire', tileId: Tile.FIRE },
+  { name: 'FIREBASE', label: 'Fire Base', tileId: Tile.FIREBASE },
+  { name: 'LASTFIRE', label: 'Last Fire', tileId: Tile.LASTFIRE },
+  { name: 'ROADBASE', label: 'Road Base', tileId: Tile.ROADBASE },
+  { name: 'HBRIDGE', label: 'Horizontal Bridge', tileId: Tile.HBRIDGE },
+  { name: 'VBRIDGE', label: 'Vertical Bridge', tileId: Tile.VBRIDGE },
+  { name: 'ROADS', label: 'Road', tileId: Tile.ROADS },
+  { name: 'INTERSECTION', label: 'Intersection', tileId: Tile.INTERSECTION },
+  { name: 'HROADPOWER', label: 'Horizontal Road Power', tileId: Tile.HROADPOWER },
+  { name: 'VROADPOWER', label: 'Vertical Road Power', tileId: Tile.VROADPOWER },
+  { name: 'BRWH', label: 'Bridge Horizontal Open', tileId: Tile.BRWH },
+  { name: 'LTRFBASE', label: 'Light Traffic Base', tileId: Tile.LTRFBASE },
+  { name: 'BRWV', label: 'Bridge Vertical Open', tileId: Tile.BRWV },
+  { name: 'HTRFBASE', label: 'Heavy Traffic Base', tileId: Tile.HTRFBASE },
+  { name: 'LASTROAD', label: 'Last Road', tileId: Tile.LASTROAD },
+  { name: 'POWERBASE', label: 'Power Base', tileId: Tile.POWERBASE },
+  { name: 'HPOWER', label: 'Horizontal Power', tileId: Tile.HPOWER },
+  { name: 'VPOWER', label: 'Vertical Power', tileId: Tile.VPOWER },
+  { name: 'LHPOWER', label: 'Left Horizontal Power', tileId: Tile.LHPOWER },
+  { name: 'LVPOWER', label: 'Left Vertical Power', tileId: Tile.LVPOWER },
+  { name: 'RAILHPOWERV', label: 'Rail Horizontal Power Vertical', tileId: Tile.RAILHPOWERV },
+  { name: 'RAILVPOWERH', label: 'Rail Vertical Power Horizontal', tileId: Tile.RAILVPOWERH },
+  { name: 'LASTPOWER', label: 'Last Power', tileId: Tile.LASTPOWER },
+  { name: 'RAILBASE', label: 'Rail Base', tileId: Tile.RAILBASE },
+  { name: 'HRAIL', label: 'Horizontal Rail', tileId: Tile.HRAIL },
+  { name: 'VRAIL', label: 'Vertical Rail', tileId: Tile.VRAIL },
+  { name: 'LHRAIL', label: 'Left Horizontal Rail', tileId: Tile.LHRAIL },
+  { name: 'LVRAIL', label: 'Left Vertical Rail', tileId: Tile.LVRAIL },
+  { name: 'HRAILROAD', label: 'Horizontal Rail Road', tileId: Tile.HRAILROAD },
+  { name: 'VRAILROAD', label: 'Vertical Rail Road', tileId: Tile.VRAILROAD },
+  { name: 'LASTRAIL', label: 'Last Rail', tileId: Tile.LASTRAIL },
+  { name: 'ROADVPOWERH', label: 'Road Vertical Power Horizontal', tileId: Tile.ROADVPOWERH },
+  { name: 'RESBASE', label: 'Residential Base', tileId: Tile.RESBASE },
+  { name: 'FREEZ', label: 'Free Zone', tileId: Tile.FREEZ },
+  { name: 'HOUSE', label: 'House', tileId: Tile.HOUSE },
+  { name: 'LHTHR', label: 'Low House Threshold', tileId: Tile.LHTHR },
+  { name: 'HHTHR', label: 'High House Threshold', tileId: Tile.HHTHR },
+  { name: 'RZB', label: 'Residential Zone Base', tileId: Tile.RZB },
+  { name: 'HOSPITAL', label: 'Hospital', tileId: Tile.HOSPITAL },
+  { name: 'CHURCH', label: 'Church', tileId: Tile.CHURCH },
+  { name: 'COMBASE', label: 'Commercial Base', tileId: Tile.COMBASE },
+  { name: 'COMCLR', label: 'Commercial Clear', tileId: Tile.COMCLR },
+  { name: 'CZB', label: 'Commercial Zone Base', tileId: Tile.CZB },
+  { name: 'INDBASE', label: 'Industrial Base', tileId: Tile.INDBASE },
+  { name: 'INDCLR', label: 'Industrial Clear', tileId: Tile.INDCLR },
+  { name: 'LASTIND', label: 'Last Industrial', tileId: Tile.LASTIND },
+  { name: 'IND1', label: 'Industrial Variant 1', tileId: Tile.IND1 },
+  { name: 'IZB', label: 'Industrial Zone Base', tileId: Tile.IZB },
+  { name: 'IND2', label: 'Industrial Variant 2', tileId: Tile.IND2 },
+  { name: 'IND3', label: 'Industrial Variant 3', tileId: Tile.IND3 },
+  { name: 'IND4', label: 'Industrial Variant 4', tileId: Tile.IND4 },
+  { name: 'IND5', label: 'Industrial Variant 5', tileId: Tile.IND5 },
+  { name: 'IND6', label: 'Industrial Variant 6', tileId: Tile.IND6 },
+  { name: 'IND7', label: 'Industrial Variant 7', tileId: Tile.IND7 },
+  { name: 'IND8', label: 'Industrial Variant 8', tileId: Tile.IND8 },
+  { name: 'IND9', label: 'Industrial Variant 9', tileId: Tile.IND9 },
+  { name: 'PORTBASE', label: 'Port Base', tileId: Tile.PORTBASE },
+  { name: 'PORT', label: 'Port', tileId: Tile.PORT },
+  { name: 'LASTPORT', label: 'Last Port', tileId: Tile.LASTPORT },
+  { name: 'AIRPORTBASE', label: 'Airport Base', tileId: Tile.AIRPORTBASE },
+  { name: 'RADAR', label: 'Radar', tileId: Tile.RADAR },
+  { name: 'AIRPORT', label: 'Airport', tileId: Tile.AIRPORT },
+  { name: 'COALBASE', label: 'Coal Base', tileId: Tile.COALBASE },
+  { name: 'POWERPLANT', label: 'Power Plant', tileId: Tile.POWERPLANT },
+  { name: 'LASTPOWERPLANT', label: 'Last Power Plant', tileId: Tile.LASTPOWERPLANT },
+  { name: 'FIRESTBASE', label: 'Fire Station Base', tileId: Tile.FIRESTBASE },
+  { name: 'FIRESTATION', label: 'Fire Station', tileId: Tile.FIRESTATION },
+  { name: 'POLICESTBASE', label: 'Police Station Base', tileId: Tile.POLICESTBASE },
+  { name: 'POLICESTATION', label: 'Police Station', tileId: Tile.POLICESTATION },
+  { name: 'STADIUMBASE', label: 'Stadium Base', tileId: Tile.STADIUMBASE },
+  { name: 'STADIUM', label: 'Stadium', tileId: Tile.STADIUM },
+  { name: 'FULLSTADIUM', label: 'Full Stadium', tileId: Tile.FULLSTADIUM },
+  { name: 'NUCLEARBASE', label: 'Nuclear Base', tileId: Tile.NUCLEARBASE },
+  { name: 'NUCLEAR', label: 'Nuclear', tileId: Tile.NUCLEAR },
+  { name: 'LASTZONE', label: 'Last Zone', tileId: Tile.LASTZONE },
+  { name: 'LIGHTNINGBOLT', label: 'Lightning Bolt', tileId: Tile.LIGHTNINGBOLT },
+  { name: 'HBRDG0', label: 'Horizontal Bridge Variant 0', tileId: Tile.HBRDG0 },
+  { name: 'HBRDG1', label: 'Horizontal Bridge Variant 1', tileId: Tile.HBRDG1 },
+  { name: 'HBRDG2', label: 'Horizontal Bridge Variant 2', tileId: Tile.HBRDG2 },
+  { name: 'HBRDG3', label: 'Horizontal Bridge Variant 3', tileId: Tile.HBRDG3 },
+  { name: 'RADAR0', label: 'Radar Variant 0', tileId: Tile.RADAR0 },
+  { name: 'RADAR1', label: 'Radar Variant 1', tileId: Tile.RADAR1 },
+  { name: 'RADAR2', label: 'Radar Variant 2', tileId: Tile.RADAR2 },
+  { name: 'RADAR3', label: 'Radar Variant 3', tileId: Tile.RADAR3 },
+  { name: 'RADAR4', label: 'Radar Variant 4', tileId: Tile.RADAR4 },
+  { name: 'RADAR5', label: 'Radar Variant 5', tileId: Tile.RADAR5 },
+  { name: 'RADAR6', label: 'Radar Variant 6', tileId: Tile.RADAR6 },
+  { name: 'RADAR7', label: 'Radar Variant 7', tileId: Tile.RADAR7 },
+  { name: 'FOUNTAIN', label: 'Fountain', tileId: Tile.FOUNTAIN },
+  { name: 'TELEBASE', label: 'Tele Base', tileId: Tile.TELEBASE },
+  { name: 'TELELAST', label: 'Tele Last', tileId: Tile.TELELAST },
+  { name: 'SMOKEBASE', label: 'Smoke Base', tileId: Tile.SMOKEBASE },
+  { name: 'TINYEXP', label: 'Tiny Explosion', tileId: Tile.TINYEXP },
+  { name: 'SOMETINYEXP', label: 'Some Tiny Explosion', tileId: Tile.SOMETINYEXP },
+  { name: 'LASTTINYEXP', label: 'Last Tiny Explosion', tileId: Tile.LASTTINYEXP },
+  { name: 'COALSMOKE1', label: 'Coal Smoke 1', tileId: Tile.COALSMOKE1 },
+  { name: 'COALSMOKE2', label: 'Coal Smoke 2', tileId: Tile.COALSMOKE2 },
+  { name: 'COALSMOKE3', label: 'Coal Smoke 3', tileId: Tile.COALSMOKE3 },
+  { name: 'COALSMOKE4', label: 'Coal Smoke 4', tileId: Tile.COALSMOKE4 },
+  { name: 'FOOTBALLGAME1', label: 'Football Game 1', tileId: Tile.FOOTBALLGAME1 },
+  { name: 'FOOTBALLGAME2', label: 'Football Game 2', tileId: Tile.FOOTBALLGAME2 },
+  { name: 'VBRDG0', label: 'Vertical Bridge Variant 0', tileId: Tile.VBRDG0 },
+  { name: 'VBRDG1', label: 'Vertical Bridge Variant 1', tileId: Tile.VBRDG1 },
+  { name: 'VBRDG2', label: 'Vertical Bridge Variant 2', tileId: Tile.VBRDG2 },
+  { name: 'VBRDG3', label: 'Vertical Bridge Variant 3', tileId: Tile.VBRDG3 },
+];
+const SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_NAME = new Map<string, ScenarioEditorMapNamedBaseTile>(
+  SCENARIO_EDITOR_MAP_NAMED_BASE_TILES.map((entry) => [entry.name, entry]),
+);
+const SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID = new Map<number, ScenarioEditorMapNamedBaseTile>();
+for (const entry of SCENARIO_EDITOR_MAP_NAMED_BASE_TILES) {
+  if (!SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.has(entry.tileId)) {
+    SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.set(entry.tileId, entry);
+  }
+}
 
 /**
  * Convert one tile word to a next tile word with replaced low tile-id bits.
@@ -377,4 +716,18 @@ function toScenarioEditorTileWordsBundle(
       tileWords: [...tileWords],
     },
   };
+}
+
+/**
+ * Integer clamp helper for editor numeric inputs.
+ * Not from Micropolis C: small utility to keep UI values in valid authored ranges.
+ */
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
 }

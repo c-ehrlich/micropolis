@@ -281,7 +281,7 @@ describe('scenario editor state foundation', () => {
       type: 'paint-map-base-tile',
       x: 1,
       y: 2,
-      baseTileId: Tile.RIVER,
+      baseTileId: Tile.DIRT,
       preserveFlags: true,
     });
 
@@ -292,7 +292,50 @@ describe('scenario editor state foundation', () => {
 
     // Magic number source: `ZONEBIT=0x0400` and low tile id bits from
     // `ref/micropolis/src/sim/headers/sim.h`.
-    expect(next.bundle.map.tileWords[1 * 100 + 2]).toBe(Tile.RIVER | 0x0400);
+    expect(next.bundle.map.tileWords[1 * 100 + 2]).toBe(Tile.DIRT | 0x0400);
+  });
+
+  test('recomputes terrain after each map change', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'paint-map-base-tile',
+      x: 8,
+      y: 9,
+      baseTileId: Tile.RIVER,
+      preserveFlags: false,
+    });
+
+    expect(next.bundle.map.kind).toBe('tile-words');
+    if (next.bundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    // Magic number source: `SmoothWater()` pass 1 in `ref/micropolis/src/sim/s_gen.c`
+    // converts water adjacent to non-water into `REDGE`.
+    expect(next.bundle.map.tileWords[8 * 100 + 9]).toBe(Tile.REDGE);
+  });
+
+  test('applies zone-level placement through reducer actions', () => {
+    const initial = createScenarioEditorInitialState();
+    const next = scenarioEditorReducer(initial, {
+      type: 'apply-map-zone-level',
+      zone: 'com',
+      level: 5,
+      value: 3,
+      x: 20,
+      y: 21,
+    });
+
+    expect(next.bundle.map.kind).toBe('tile-words');
+    if (next.bundle.map.kind !== 'tile-words') {
+      throw new Error('Expected tile-words map payload');
+    }
+
+    const center = next.bundle.map.tileWords[20 * 100 + 21] ?? 0;
+    // Magic number source: `ComPlop` formula in `ref/micropolis/src/sim/s_zone.c`:
+    // `base = (value * 5 + den) * 9 + CZB - 4`, center tile is `base + 4`.
+    expect(center & TileMask.LOMASK).toBe((3 * 5 + (5 - 1)) * 9 + Tile.CZB);
+    expect((center & 0x0400) !== 0).toBe(true);
   });
 
   test('reports validation issues for invalid metadata fields', () => {

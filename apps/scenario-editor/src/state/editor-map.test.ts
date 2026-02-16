@@ -4,13 +4,22 @@ import { describe, expect, test } from 'vitest';
 
 import {
   applyScenarioEditorMapToolAtPoint,
+  applyScenarioEditorMapZoneLevelAtPoint,
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
+  findScenarioEditorMapNamedBaseTileById,
+  findScenarioEditorMapNamedBaseTileByName,
   getScenarioEditorMapIndex,
+  getScenarioEditorMapNamedBaseTiles,
+  getScenarioEditorMapZoneMaxLevel,
   isScenarioEditorMapTool,
+  isScenarioEditorMapZoneKind,
   normalizeScenarioEditorBaseTileId,
+  normalizeScenarioEditorMapZoneLevel,
+  normalizeScenarioEditorMapZoneValue,
   normalizeScenarioEditorTileWord,
   readScenarioEditorMapTileWord,
+  recomputeScenarioEditorMapTerrain,
   writeScenarioEditorMapBaseTileId,
   writeScenarioEditorMapTileWord,
 } from './editor-map.ts';
@@ -97,6 +106,25 @@ describe('scenario editor map helpers', () => {
     expect(normalizeScenarioEditorBaseTileId(1027)).toBe(3);
   });
 
+  test('exposes full named tile constants for base-tile selection', () => {
+    const namedTiles = getScenarioEditorMapNamedBaseTiles();
+
+    // Magic number source: tile names/ids mirror `#define` constants in
+    // `ref/micropolis/src/sim/headers/sim.h`.
+    expect(namedTiles.some((entry) => entry.name === 'DIRT' && entry.tileId === Tile.DIRT)).toBe(
+      true,
+    );
+    expect(namedTiles.some((entry) => entry.name === 'WOODS' && entry.tileId === Tile.WOODS)).toBe(
+      true,
+    );
+    expect(namedTiles.some((entry) => entry.name === 'TILE_COUNT')).toBe(false);
+    expect(namedTiles.some((entry) => entry.name === 'WOODS' && entry.label === 'Forest')).toBe(
+      true,
+    );
+    expect(findScenarioEditorMapNamedBaseTileByName('RIVER')?.tileId).toBe(Tile.RIVER);
+    expect(findScenarioEditorMapNamedBaseTileById(Tile.REDGE)?.name).toBe('REDGE');
+  });
+
   test('writes base tile id while preserving status flags by default', () => {
     const bundle = createScenarioEditorInitialBundle();
     const withZoneBit = writeScenarioEditorMapTileWord(
@@ -166,8 +194,54 @@ describe('scenario editor map helpers', () => {
     );
   });
 
+  test('normalizes zone level/value controls to classic domains', () => {
+    // Magic number source: `GetCRVal` returns 0..3 and `ResPlop`/`ComPlop`/`IndPlop`
+    // use den ranges 0..3 / 0..4 in `ref/micropolis/src/sim/s_zone.c`.
+    expect(normalizeScenarioEditorMapZoneValue(5)).toBe(3);
+    expect(getScenarioEditorMapZoneMaxLevel('res')).toBe(4);
+    expect(getScenarioEditorMapZoneMaxLevel('com')).toBe(5);
+    expect(normalizeScenarioEditorMapZoneLevel('ind', 0)).toBe(1);
+    expect(normalizeScenarioEditorMapZoneLevel('com', 99)).toBe(5);
+  });
+
+  test('places explicit zone levels via res/com/ind plop formulas', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const nextBundle = applyScenarioEditorMapZoneLevelAtPoint(
+      bundle,
+      { x: 20, y: 30 },
+      {
+        zone: 'res',
+        level: 4,
+        value: 0,
+      },
+    );
+    const center = readScenarioEditorMapTileWord(nextBundle, { x: 20, y: 30 }) ?? 0;
+
+    // Magic number source: `ResPlop` formula in `ref/micropolis/src/sim/s_zone.c`:
+    // `base = (value * 4 + den) * 9 + RZB - 4`, center tile is `base + 4`,
+    // and `ZonePlop` marks center with `ZONEBIT|BULLBIT`.
+    const expectedCenterTileId = (0 * 4 + (4 - 1)) * 9 + Tile.RZB;
+    expect(center & TileMask.LOMASK).toBe(expectedCenterTileId);
+    expect((center & TileFlag.ZONEBIT) !== 0).toBe(true);
+  });
+
+  test('recomputes terrain edges with smooth trees/water passes', () => {
+    const bundle = createScenarioEditorInitialBundle();
+    const withWater = writeScenarioEditorMapTileWord(bundle, { x: 10, y: 10 }, Tile.RIVER);
+    const recomputed = recomputeScenarioEditorMapTerrain(withWater);
+
+    // Magic number source: `SmoothWater()` pass 1 in `ref/micropolis/src/sim/s_gen.c`
+    // converts water adjacent to non-water into `REDGE` (tile id 3).
+    expect(readScenarioEditorMapTileWord(recomputed, { x: 10, y: 10 })).toBe(Tile.REDGE);
+  });
+
   test('rejects unknown tool ids at runtime guard', () => {
     expect(isScenarioEditorMapTool('road')).toBe(true);
     expect(isScenarioEditorMapTool('network')).toBe(false);
+  });
+
+  test('rejects unknown zone ids at runtime guard', () => {
+    expect(isScenarioEditorMapZoneKind('res')).toBe(true);
+    expect(isScenarioEditorMapZoneKind('airport')).toBe(false);
   });
 });

@@ -20,9 +20,12 @@ import {
 } from './editor-behavior.ts';
 import {
   applyScenarioEditorMapToolAtPoint,
+  applyScenarioEditorMapZoneLevelAtPoint,
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
+  recomputeScenarioEditorMapTerrain,
   type ScenarioEditorMapTool,
+  type ScenarioEditorMapZoneKind,
   writeScenarioEditorMapBaseTileId,
   writeScenarioEditorMapTileWord,
 } from './editor-map.ts';
@@ -121,6 +124,14 @@ export type ScenarioEditorAction =
       y: number;
       tool: ScenarioEditorMapTool;
     }
+  | {
+      type: 'apply-map-zone-level';
+      x: number;
+      y: number;
+      zone: ScenarioEditorMapZoneKind;
+      level: number;
+      value: number;
+    }
   | { type: 'fill-map'; tileWord: number }
   | {
       type: 'fill-map-base-tile';
@@ -214,62 +225,35 @@ export function scenarioEditorReducer(
       };
     case 'apply-map-tool': {
       const nextBundle = applyScenarioEditorMapToolAtPoint(state.bundle, action, action.tool);
-      if (nextBundle === state.bundle) {
-        return state;
-      }
-      return {
-        ...state,
-        bundle: nextBundle,
-        isDirty: true,
-      };
+      return applyScenarioEditorMapMutation(state, nextBundle);
+    }
+    case 'apply-map-zone-level': {
+      const nextBundle = applyScenarioEditorMapZoneLevelAtPoint(state.bundle, action, {
+        zone: action.zone,
+        level: action.level,
+        value: action.value,
+      });
+      return applyScenarioEditorMapMutation(state, nextBundle);
     }
     case 'fill-map': {
       const nextBundle = fillScenarioEditorMapTileWord(state.bundle, action.tileWord);
-      if (nextBundle === state.bundle) {
-        return state;
-      }
-      return {
-        ...state,
-        bundle: nextBundle,
-        isDirty: true,
-      };
+      return applyScenarioEditorMapMutation(state, nextBundle);
     }
     case 'fill-map-base-tile': {
       const nextBundle = fillScenarioEditorMapBaseTileId(state.bundle, action.baseTileId, {
         preserveFlags: action.preserveFlags,
       });
-      if (nextBundle === state.bundle) {
-        return state;
-      }
-      return {
-        ...state,
-        bundle: nextBundle,
-        isDirty: true,
-      };
+      return applyScenarioEditorMapMutation(state, nextBundle);
     }
     case 'paint-map-base-tile': {
       const nextBundle = writeScenarioEditorMapBaseTileId(state.bundle, action, action.baseTileId, {
         preserveFlags: action.preserveFlags,
       });
-      if (nextBundle === state.bundle) {
-        return state;
-      }
-      return {
-        ...state,
-        bundle: nextBundle,
-        isDirty: true,
-      };
+      return applyScenarioEditorMapMutation(state, nextBundle);
     }
     case 'paint-map-tile': {
       const nextBundle = writeScenarioEditorMapTileWord(state.bundle, action, action.tileWord);
-      if (nextBundle === state.bundle) {
-        return state;
-      }
-      return {
-        ...state,
-        bundle: nextBundle,
-        isDirty: true,
-      };
+      return applyScenarioEditorMapMutation(state, nextBundle);
     }
     case 'set-behavior-enabled':
       if (state.behavior.enabled === action.enabled) {
@@ -365,6 +349,27 @@ export function scenarioEditorReducer(
     default:
       return state;
   }
+}
+
+/**
+ * Apply one map mutation and run terrain post-processing.
+ * Recompute mirrors `SmoothTrees` + `SmoothWater` usage from
+ * `ref/micropolis/src/sim/s_gen.c`, ensuring editor map edits converge immediately.
+ */
+function applyScenarioEditorMapMutation(
+  state: ScenarioEditorState,
+  mutatedBundle: ScenarioBundleV1,
+): ScenarioEditorState {
+  if (mutatedBundle === state.bundle) {
+    return state;
+  }
+
+  const nextBundle = recomputeScenarioEditorMapTerrain(mutatedBundle);
+  return {
+    ...state,
+    bundle: nextBundle,
+    isDirty: true,
+  };
 }
 
 /**

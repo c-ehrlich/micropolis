@@ -23,10 +23,18 @@ import {
   type ScenarioEditorBundleImportIssue,
 } from '../state/editor-import.ts';
 import {
+  findScenarioEditorMapNamedBaseTileById,
+  findScenarioEditorMapNamedBaseTileByName,
+  getScenarioEditorMapNamedBaseTiles,
   getScenarioEditorMapTileWords,
+  getScenarioEditorMapZoneMaxLevel,
   isScenarioEditorMapTool,
+  isScenarioEditorMapZoneKind,
   normalizeScenarioEditorBaseTileId,
+  normalizeScenarioEditorMapZoneLevel,
+  normalizeScenarioEditorMapZoneValue,
   normalizeScenarioEditorTileWord,
+  type ScenarioEditorMapZoneKind,
 } from '../state/editor-map.ts';
 import { createScenarioEditorRuntimeMapState } from '../state/editor-map-runtime.ts';
 import {
@@ -72,9 +80,11 @@ const BASE_TILE_PRESETS = [
   { label: 'RIVER', source: 'RIVER=2', tileId: Tile.RIVER },
   { label: 'REDGE', source: 'REDGE=3', tileId: Tile.REDGE },
   { label: 'CHANNEL', source: 'CHANNEL=4', tileId: Tile.CHANNEL },
+  { label: 'FOREST', source: 'WOODS=37', tileId: Tile.WOODS },
 ] as const;
+const BASE_TILE_NAME_OPTIONS = getScenarioEditorMapNamedBaseTiles();
 
-const SCENARIO_EDITOR_MAP_BRUSH_MODES = ['tool', 'base-tile', 'tile-word'] as const;
+const SCENARIO_EDITOR_MAP_BRUSH_MODES = ['tool', 'zone-level', 'base-tile', 'tile-word'] as const;
 type ScenarioEditorMapBrushMode = (typeof SCENARIO_EDITOR_MAP_BRUSH_MODES)[number];
 
 type ScenarioEditorOpenResult =
@@ -284,12 +294,23 @@ function ScenarioMapEditorCard() {
   const dispatch = useScenarioEditorDispatch();
   const [brushMode, setBrushMode] = useState<ScenarioEditorMapBrushMode>('tool');
   const [activeTool, setActiveTool] = useState<PlayableToolName>('road');
+  const [activeZoneKind, setActiveZoneKind] = useState<ScenarioEditorMapZoneKind>('res');
+  const [activeZoneLevel, setActiveZoneLevel] = useState<number>(1);
+  const [activeZoneValue, setActiveZoneValue] = useState<number>(0);
   const [activeBaseTileId, setActiveBaseTileId] = useState<number>(Tile.DIRT);
   const [preserveBaseTileFlags, setPreserveBaseTileFlags] = useState(true);
   const [activeTileWord, setActiveTileWord] = useState<number>(0);
+  const activeBaseTileName = useMemo(
+    () => findScenarioEditorMapNamedBaseTileById(activeBaseTileId)?.name ?? '',
+    [activeBaseTileId],
+  );
   const tileWords = useMemo(() => getScenarioEditorMapTileWords(bundle), [bundle]);
   const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
   const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
+  const activeZoneMaxLevel = useMemo(
+    () => getScenarioEditorMapZoneMaxLevel(activeZoneKind),
+    [activeZoneKind],
+  );
   const dragPlacementEnabled =
     brushMode === 'base-tile' ||
     brushMode === 'tile-word' ||
@@ -300,15 +321,18 @@ function ScenarioMapEditorCard() {
       ? 'Fill Map With Base Tile'
       : brushMode === 'tile-word'
         ? 'Fill Map With Tile Word'
-        : 'Fill Disabled in Tool Mode';
-  const fillDisabled = brushMode === 'tool';
+        : brushMode === 'zone-level'
+          ? 'Fill Disabled in Zone Level Mode'
+          : 'Fill Disabled in Tool Mode';
+  const fillDisabled = brushMode === 'tool' || brushMode === 'zone-level';
 
   return (
     <section className="editor-card editor-map-card" aria-label="Scenario map editor">
       <h1>Scenario Map</h1>
       <p>
         Reuses the runtime map canvas (sprite art, zoom/pan, and tool footprints) while allowing
-        direct scenario authoring: full Micropolis tools plus base-tile painting (dirt/water/etc.).
+        direct scenario authoring: full Micropolis tools, zone-level placement, and base-tile
+        painting (dirt/water/forest/etc.). Terrain smoothing recomputes after each map edit.
       </p>
 
       <div className="editor-map-controls">
@@ -324,6 +348,7 @@ function ScenarioMapEditorCard() {
             value={brushMode}
           >
             <option value="tool">Micropolis Tool</option>
+            <option value="zone-level">Zone Level Brush</option>
             <option value="base-tile">Base Tile Brush</option>
             <option value="tile-word">Raw Tile Word Brush</option>
           </select>
@@ -373,8 +398,100 @@ function ScenarioMapEditorCard() {
           </div>
         ) : null}
 
+        {brushMode === 'zone-level' ? (
+          <div className="editor-map-tool-controls">
+            <div className="editor-field-inline">
+              <label className="editor-field">
+                <span>Zone Type</span>
+                <select
+                  onChange={(event) => {
+                    const zone = event.currentTarget.value;
+                    if (!isScenarioEditorMapZoneKind(zone)) {
+                      return;
+                    }
+                    setActiveZoneKind(zone);
+                    setActiveZoneLevel((currentLevel) =>
+                      normalizeScenarioEditorMapZoneLevel(zone, currentLevel),
+                    );
+                  }}
+                  value={activeZoneKind}
+                >
+                  <option value="res">Residential</option>
+                  <option value="com">Commercial</option>
+                  <option value="ind">Industrial</option>
+                </select>
+              </label>
+
+              <label className="editor-field">
+                <span>Density Level</span>
+                <input
+                  max={activeZoneMaxLevel}
+                  min={1}
+                  onChange={(event) => {
+                    setActiveZoneLevel(
+                      normalizeScenarioEditorMapZoneLevel(
+                        activeZoneKind,
+                        Number(event.currentTarget.value),
+                      ),
+                    );
+                  }}
+                  type="number"
+                  value={activeZoneLevel}
+                />
+              </label>
+
+              <label className="editor-field">
+                <span>Land Value Class</span>
+                <input
+                  max={3}
+                  min={0}
+                  onChange={(event) => {
+                    setActiveZoneValue(
+                      normalizeScenarioEditorMapZoneValue(Number(event.currentTarget.value)),
+                    );
+                  }}
+                  type="number"
+                  value={activeZoneValue}
+                />
+              </label>
+            </div>
+            <small className="editor-help">
+              Places direct zone variants using `ResPlop`/`ComPlop`/`IndPlop` formulas (1-based
+              level, value 0..3).
+            </small>
+          </div>
+        ) : null}
+
         {brushMode === 'base-tile' ? (
           <>
+            <label className="editor-field">
+              <span>Named Base Tile</span>
+              <select
+                onChange={(event) => {
+                  const namedTile = findScenarioEditorMapNamedBaseTileByName(
+                    event.currentTarget.value,
+                  );
+                  if (namedTile === undefined) {
+                    return;
+                  }
+                  setActiveBaseTileId(namedTile.tileId);
+                }}
+                value={activeBaseTileName}
+              >
+                {activeBaseTileName === '' ? (
+                  <option value="">Custom ID ({activeBaseTileId})</option>
+                ) : null}
+                {BASE_TILE_NAME_OPTIONS.map((entry) => (
+                  <option key={entry.name} value={entry.name}>
+                    {entry.label} ({entry.name}={entry.tileId})
+                  </option>
+                ))}
+              </select>
+              <small className="editor-help">
+                Full tile-name list from classic `sim.h` tile-id constants.
+              </small>
+            </label>
+
             <label className="editor-field">
               <span>Base Tile ID</span>
               <input
@@ -472,11 +589,28 @@ function ScenarioMapEditorCard() {
       <div className="editor-map-canvas-shell">
         <MapCanvas
           dragPlacementEnabled={dragPlacementEnabled}
-          hoverTool={brushMode === 'tool' ? activeTool : undefined}
+          hoverTool={
+            brushMode === 'tool'
+              ? activeTool
+              : brushMode === 'zone-level'
+                ? activeZoneKind
+                : undefined
+          }
           mapState={runtimeMapState}
           onTileClick={(x, y) => {
             if (brushMode === 'tool') {
               dispatch({ type: 'apply-map-tool', tool: activeTool, x, y });
+              return;
+            }
+            if (brushMode === 'zone-level') {
+              dispatch({
+                type: 'apply-map-zone-level',
+                x,
+                y,
+                zone: activeZoneKind,
+                level: activeZoneLevel,
+                value: activeZoneValue,
+              });
               return;
             }
             if (brushMode === 'base-tile') {
@@ -516,9 +650,11 @@ function ScenarioMapEditorCard() {
         <dd>
           {brushMode === 'tool'
             ? activeTool
-            : brushMode === 'base-tile'
-              ? `base-tile:${activeBaseTileId}`
-              : `tile-word:${activeTileWord}`}
+            : brushMode === 'zone-level'
+              ? `${activeZoneKind}:level-${activeZoneLevel}:value-${activeZoneValue}`
+              : brushMode === 'base-tile'
+                ? `base-tile:${activeBaseTileId}`
+                : `tile-word:${activeTileWord}`}
         </dd>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
