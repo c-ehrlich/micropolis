@@ -1,6 +1,8 @@
 import { Tile, TileMask } from '@city/sim-core';
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useMemo, useReducer, useState } from 'react';
 
+import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
+import { PLAYABLE_TOOL_ICON_URL_BY_BASENAME } from '../../../web/src/features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
 import {
   getPlayableToolSpec,
   PLAYABLE_TOOL_SPECS,
@@ -77,8 +79,91 @@ function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): str
 }
 const SCENARIO_MAP_FINAL_LOCAL_TERRAIN_RECOMPUTE_RADIUS = 6;
 
-type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base';
+type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base' | 'tools';
 type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
+const SCENARIO_MAP_FINAL_EXCLUDED_TOOL_SET = new Set<PlayableToolName>([
+  'res',
+  'com',
+  'ind',
+  'query',
+]);
+const SCENARIO_MAP_FINAL_TOOL_SPECS = PLAYABLE_TOOL_SPECS.filter(
+  (spec) => !SCENARIO_MAP_FINAL_EXCLUDED_TOOL_SET.has(spec.tool),
+);
+
+interface ScenarioMapFinalBrushSelectionState {
+  readonly activeKind: ScenarioMapFinalActiveBrushFamily;
+  readonly baseBrushId: ScenarioMapFinalSmartBaseBrushId;
+  readonly zoneKind: ScenarioEditorMapZoneKind;
+  readonly zoneOptionKey: string;
+  readonly tool: PlayableToolName;
+}
+
+type ScenarioMapFinalBrushSelectionAction =
+  | {
+      readonly type: 'select-base-brush';
+      readonly brushId: ScenarioMapFinalSmartBaseBrushId;
+    }
+  | {
+      readonly type: 'select-zone-kind';
+      readonly zoneKind: ScenarioEditorMapZoneKind;
+    }
+  | {
+      readonly type: 'select-zone-option';
+      readonly optionKey: string;
+    }
+  | {
+      readonly type: 'select-tool';
+      readonly tool: PlayableToolName;
+    };
+
+const SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE: ScenarioMapFinalBrushSelectionState = {
+  activeKind: 'zones',
+  baseBrushId: 'dirt',
+  zoneKind: 'res',
+  zoneOptionKey: 'fresh',
+  tool: 'road',
+};
+
+/**
+ * Reduce map-final sidebar brush selection to one globally active family.
+ * Not from Micropolis C: editor-only UI selection state (active brush + remembered
+ * per-family choices) for React rendering and interaction wiring.
+ */
+function reduceScenarioMapFinalBrushSelection(
+  state: ScenarioMapFinalBrushSelectionState,
+  action: ScenarioMapFinalBrushSelectionAction,
+): ScenarioMapFinalBrushSelectionState {
+  switch (action.type) {
+    case 'select-base-brush':
+      return {
+        ...state,
+        activeKind: 'base',
+        baseBrushId: action.brushId,
+      };
+    case 'select-zone-kind':
+      return {
+        ...state,
+        activeKind: 'zones',
+        zoneKind: action.zoneKind,
+        zoneOptionKey: 'fresh',
+      };
+    case 'select-zone-option':
+      return {
+        ...state,
+        activeKind: 'zones',
+        zoneOptionKey: action.optionKey,
+      };
+    case 'select-tool':
+      return {
+        ...state,
+        activeKind: 'tools',
+        tool: action.tool,
+      };
+    default:
+      return state;
+  }
+}
 
 interface ScenarioMapFinalSmartBaseBrush {
   readonly id: ScenarioMapFinalSmartBaseBrushId;
@@ -273,13 +358,16 @@ function getScenarioMapFinalBaseClassOverlayStyle(
 export function ScenarioMapFinalWorkbench() {
   const { bundle } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
-  const [activeBrushFamily, setActiveBrushFamily] =
-    useState<ScenarioMapFinalActiveBrushFamily>('zones');
-  const [activeZoneKind, setActiveZoneKind] = useState<ScenarioEditorMapZoneKind>('res');
-  const [activeZoneOptionKey, setActiveZoneOptionKey] = useState<string>('fresh');
-  const [activeSmartBaseBrushId, setActiveSmartBaseBrushId] =
-    useState<ScenarioMapFinalSmartBaseBrushId>('dirt');
+  const [brushSelection, dispatchBrushSelection] = useReducer(
+    reduceScenarioMapFinalBrushSelection,
+    SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE,
+  );
   const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(true);
+  const activeBrushFamily = brushSelection.activeKind;
+  const activeZoneKind = brushSelection.zoneKind;
+  const activeZoneOptionKey = brushSelection.zoneOptionKey;
+  const activeTool = brushSelection.tool;
+  const activeSmartBaseBrushId = brushSelection.baseBrushId;
   const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
   const zoneAtlasCanonicalIdentityKey = useMemo(
     () => resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic'),
@@ -293,6 +381,7 @@ export function ScenarioMapFinalWorkbench() {
     () => getScenarioMapZoneValueClassLabel(activeZoneKind),
     [activeZoneKind],
   );
+  const activeToolSpec = useMemo(() => getPlayableToolSpec(activeTool), [activeTool]);
   const zoneMaxValueClass = useMemo(
     () => getScenarioEditorMapZoneMaxValue(activeZoneKind),
     [activeZoneKind],
@@ -388,16 +477,18 @@ export function ScenarioMapFinalWorkbench() {
           >
             {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
               <button
-                aria-pressed={activeSmartBaseBrushId === brush.id}
+                aria-pressed={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
                 className={`grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit ${
-                  activeSmartBaseBrushId === brush.id
+                  activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
                     ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                     : ''
                 }`}
                 key={brush.id}
                 onClick={() => {
-                  setActiveSmartBaseBrushId(brush.id);
-                  setActiveBrushFamily('base');
+                  dispatchBrushSelection({
+                    type: 'select-base-brush',
+                    brushId: brush.id,
+                  });
                 }}
                 role="listitem"
                 title={brush.tooltip}
@@ -447,15 +538,16 @@ export function ScenarioMapFinalWorkbench() {
           >
             {(['res', 'com', 'ind'] as const).map((zone) => (
               <button
-                aria-selected={zone === activeZoneKind}
+                aria-selected={activeBrushFamily === 'zones' && zone === activeZoneKind}
                 className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0 ${
-                  zone === activeZoneKind ? 'bg-sky-200' : ''
+                  activeBrushFamily === 'zones' && zone === activeZoneKind ? 'bg-sky-200' : ''
                 }`}
                 key={zone}
                 onClick={() => {
-                  setActiveZoneKind(zone);
-                  setActiveZoneOptionKey('fresh');
-                  setActiveBrushFamily('zones');
+                  dispatchBrushSelection({
+                    type: 'select-zone-kind',
+                    zoneKind: zone,
+                  });
                 }}
                 role="tab"
                 type="button"
@@ -479,14 +571,16 @@ export function ScenarioMapFinalWorkbench() {
                 {rowOptions.map((option) => (
                   <button
                     className={`flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
-                      option.key === activeZoneOptionKey
+                      activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
                         ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                         : ''
                     }`}
                     key={option.key}
                     onClick={() => {
-                      setActiveZoneOptionKey(option.key);
-                      setActiveBrushFamily('zones');
+                      dispatchBrushSelection({
+                        type: 'select-zone-option',
+                        optionKey: option.key,
+                      });
                     }}
                     aria-label={option.tooltip}
                     title={option.tooltip}
@@ -516,19 +610,77 @@ export function ScenarioMapFinalWorkbench() {
           </small>
         </section>
 
-        <section className="grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem]">
+        <section
+          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+            activeBrushFamily === 'tools' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+          }`}
+        >
           <h2 className="m-0 text-[1.4rem] font-semibold">Tools</h2>
-          <div className="flex min-h-[7.5rem] items-center justify-center rounded-[10px] border-2 border-dashed border-[#7d8590] bg-white/35 p-4 text-center text-slate-600">
-            TODO: tool picker
+          <div
+            className="grid grid-cols-4 gap-[0.45rem]"
+            role="list"
+            aria-label="Micropolis map tools"
+          >
+            {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
+              const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
+              const iconLookup = resolveSimUiToolIconAssetLookup(spec.toolState, {
+                highlighted: active,
+              });
+              const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
+              const iconUrl =
+                iconBasename === undefined
+                  ? undefined
+                  : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
+              return (
+                <button
+                  aria-label={spec.label}
+                  aria-pressed={active}
+                  className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
+                    active ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]' : ''
+                  }`}
+                  key={spec.tool}
+                  onClick={() => {
+                    dispatchBrushSelection({
+                      type: 'select-tool',
+                      tool: spec.tool,
+                    });
+                  }}
+                  role="listitem"
+                  title={`${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`}
+                  type="button"
+                >
+                  {iconUrl === undefined ? (
+                    <span className="block h-full w-full rounded-[0.3rem] border border-slate-500 bg-slate-200" />
+                  ) : (
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      className="block h-full w-full object-contain [image-rendering:pixelated]"
+                      draggable={false}
+                      src={iconUrl}
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </section>
       </aside>
 
       <div className="min-h-0 bg-[#0b1020]">
         <MapCanvas
-          dragPlacementEnabled={activeBrushFamily === 'base'}
+          dragPlacementEnabled={
+            activeBrushFamily === 'base' ||
+            (activeBrushFamily === 'tools' && activeToolSpec.size === 1)
+          }
           hoverPreview={activeBrushFamily === 'base' ? activeSmartBaseHoverPreview : undefined}
-          hoverTool={activeBrushFamily === 'zones' ? activeZoneKind : undefined}
+          hoverTool={
+            activeBrushFamily === 'zones'
+              ? activeZoneKind
+              : activeBrushFamily === 'tools'
+                ? activeTool
+                : undefined
+          }
           mapState={runtimeMapState}
           tileOverlayResolver={mapFinalBaseTileOverlayResolver}
           onTileClick={(x, y) => {
@@ -567,6 +719,17 @@ export function ScenarioMapFinalWorkbench() {
               });
               return;
             }
+
+            if (activeBrushFamily === 'tools') {
+              dispatch({
+                type: 'apply-map-tool',
+                tool: activeTool,
+                x,
+                y,
+              });
+              return;
+            }
+
             if (activeZoneOption.kind === 'fresh') {
               dispatch({
                 type: 'apply-map-tool',
