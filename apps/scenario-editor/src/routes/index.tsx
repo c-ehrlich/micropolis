@@ -625,7 +625,7 @@ function ScenarioMapFinalWorkbench() {
   const [activeZoneOptionKey, setActiveZoneOptionKey] = useState<string>('fresh');
   const [activeSmartBaseBrushId, setActiveSmartBaseBrushId] =
     useState<ScenarioMapFinalSmartBaseBrushId>('dirt');
-  const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(false);
+  const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(true);
   const runtimeMapState = useMemo(() => createScenarioEditorRuntimeMapState(bundle), [bundle]);
   const zoneAtlasCanonicalIdentityKey = useMemo(
     () => resolveRuntimeTilesetBaseAtlasCanonicalIdentityKey('classic'),
@@ -743,9 +743,6 @@ function ScenarioMapFinalWorkbench() {
                 key={brush.id}
                 onClick={() => {
                   setActiveSmartBaseBrushId(brush.id);
-                  if (brush.id === 'channel') {
-                    setShowBaseClassOverlay(true);
-                  }
                   setActiveBrushFamily('base');
                 }}
                 role="listitem"
