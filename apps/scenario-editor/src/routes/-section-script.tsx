@@ -1,4 +1,4 @@
-import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyDisclosure, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -23,7 +23,6 @@ import {
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import {
   EditorButton,
-  EditorCard,
   EditorField,
   EditorFieldInline,
   EditorIssuesPanel,
@@ -52,7 +51,7 @@ export function ScenarioScriptEditorCard() {
   };
 
   return (
-    <EditorCard aria-label="Scenario script editor" className="max-w-[68rem]">
+    <section aria-label="Scenario script editor" className="grid gap-4">
       <h1>Scenario Scripts</h1>
       <p>
         Author declarative event scripts with one-shot (`atTick`) and interval (`everyTicks`)
@@ -146,10 +145,11 @@ export function ScenarioScriptEditorCard() {
       ) : null}
 
       <EditorPreviewPanel aria-label="Script event preview">
-        <h2>Script Event JSON</h2>
-        <ClassicyTextArea readOnly rows={12} value={scriptJson} />
+        <ClassicyDisclosure defaultOpen={false} summary="Script Event JSON">
+          <ClassicyTextArea className="w-full" readOnly rows={12} value={scriptJson} />
+        </ClassicyDisclosure>
       </EditorPreviewPanel>
-    </EditorCard>
+    </section>
   );
 }
 

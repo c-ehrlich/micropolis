@@ -9,6 +9,7 @@ import {
 import {
   classicBuiltinScenarioKeyForLegacyId,
   getClassicBuiltinScenarioRuntimeDefinitionByLegacyId,
+  getClassicScenarioBehaviorProfileByLegacyId,
   type ScenarioEventDefinition,
   type ScenarioObjectivePredicate,
   type ScenarioRuntimeAction,
@@ -72,6 +73,7 @@ export async function loadScenarioEditorStockScenarioBundle(
   });
 
   const runtimeDefinition = getClassicBuiltinScenarioRuntimeDefinitionByLegacyId(scenario.id);
+  const behaviorProfile = getClassicScenarioBehaviorProfileByLegacyId(scenario.id);
   const script =
     runtimeDefinition === undefined
       ? []
@@ -96,6 +98,11 @@ export async function loadScenarioEditorStockScenarioBundle(
       ? {}
       : {
           objective: cloneScenarioRuntimeObjectivePredicate(runtimeDefinition.objective.predicate),
+        }),
+    ...(behaviorProfile?.key === undefined || behaviorProfile.key === 'classic/default'
+      ? {}
+      : {
+          behaviorProfileKey: behaviorProfile.key,
         }),
     ...(script.length === 0 ? {} : { script }),
   };

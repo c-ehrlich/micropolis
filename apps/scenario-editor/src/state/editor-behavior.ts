@@ -1,3 +1,4 @@
+import type { ScenarioBundleV1 } from '@city/scenario-core';
 import {
   DEFAULT_SCENARIO_BEHAVIOR_PROFILE_KEY,
   SCENARIO_BEHAVIOR_PROFILES,
@@ -46,6 +47,31 @@ export function createScenarioEditorInitialBehaviorDraft(): ScenarioEditorBehavi
   return {
     enabled: false,
     profileKey: DEFAULT_SCENARIO_BEHAVIOR_PROFILE_KEY,
+  };
+}
+
+/**
+ * Creates behavior-profile draft state from an imported/exported bundle payload.
+ * Maps optional bundle `behaviorProfileKey` back into editor draft controls;
+ * closed-key validation preserves `DoShipSprite` variant parity from
+ * `ref/micropolis/src/sim/w_sprite.c`.
+ * Difference: explicit `classic/default` is normalized to disabled assignment so
+ * the editor's single SF-horn toggle maps directly to authored output.
+ */
+export function createScenarioEditorBehaviorDraftFromBundle(
+  bundle: ScenarioBundleV1,
+): ScenarioEditorBehaviorDraft {
+  const bundleProfileKey = bundle.behaviorProfileKey;
+  if (bundleProfileKey === undefined) {
+    return createScenarioEditorInitialBehaviorDraft();
+  }
+  if (bundleProfileKey === DEFAULT_SCENARIO_BEHAVIOR_PROFILE_KEY) {
+    return createScenarioEditorInitialBehaviorDraft();
+  }
+
+  return {
+    enabled: true,
+    profileKey: bundleProfileKey,
   };
 }
 

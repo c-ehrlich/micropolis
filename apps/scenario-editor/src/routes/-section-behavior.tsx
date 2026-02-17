@@ -1,19 +1,12 @@
-import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyDisclosure, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
   getScenarioEditorBehaviorValidationIssue,
-  isScenarioEditorBehaviorProfileKey,
   SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
 } from '../state/editor-behavior.ts';
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
-import {
-  EditorCard,
-  EditorError,
-  EditorField,
-  EditorPreviewPanel,
-  EditorStatsGrid,
-} from './-editor-ui.tsx';
+import { EditorError, EditorField, EditorPreviewPanel, EditorStatsGrid } from './-editor-ui.tsx';
 
 /**
  * Behavior-profile assignment card for Stage 4.3 closed-profile authoring.
@@ -26,8 +19,7 @@ export function ScenarioBehaviorProfileEditorCard() {
   const dispatch = useScenarioEditorDispatch();
   const validationIssue = getScenarioEditorBehaviorValidationIssue(behavior);
   const normalizedProfileKey = behavior.profileKey.trim();
-  const hasClosedProfileKey = isScenarioEditorBehaviorProfileKey(normalizedProfileKey);
-  const selectedProfileKey = hasClosedProfileKey ? normalizedProfileKey : behavior.profileKey;
+  const sfShipHonkEnabled = behavior.enabled && normalizedProfileKey === 'classic/sf-ship-honk';
   const behaviorJson = useMemo(
     () =>
       JSON.stringify(
@@ -39,62 +31,41 @@ export function ScenarioBehaviorProfileEditorCard() {
   );
 
   return (
-    <EditorCard aria-label="Scenario behavior profile editor" className="max-w-[64rem]">
+    <section aria-label="Scenario behavior profile editor" className="grid gap-4">
       <h1>Scenario Behavior Profile</h1>
       <p>
-        Assign one closed runtime behavior profile key. This preserves deterministic parity by
-        allowing only registered profile variants.
+        Configure the San Francisco ship-horn behavior override. This preserves deterministic parity
+        by allowing only registered runtime profile variants.
       </p>
 
-      <ClassicyCheckboxField
-        checked={behavior.enabled}
-        detail="This Stage 4.3 draft editor captures profile assignment only; export integration lands in Stage 4.5."
-        label="Behavior Profile Assignment Enabled"
-        onChange={(event) => {
-          dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
-        }}
-      />
-
-      {behavior.enabled ? (
-        <EditorField>
-          <span>Behavior Profile Key</span>
-          <select
-            aria-invalid={validationIssue !== undefined}
-            onChange={(event) => {
-              dispatch({
-                type: 'set-behavior-profile-key',
-                profileKey: event.currentTarget.value,
-              });
-            }}
-            value={selectedProfileKey}
-          >
-            {hasClosedProfileKey ? null : (
-              <option value={selectedProfileKey}>
-                {`Unrecognized key: ${behavior.profileKey || '(empty)'}`}
-              </option>
-            )}
-            {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.map((profileKey) => (
-              <option key={profileKey} value={profileKey}>
-                {getScenarioBehaviorProfileLabel(profileKey)}
-              </option>
-            ))}
-          </select>
-          <small className="text-sm text-slate-600">
-            Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
-          </small>
-          {validationIssue !== undefined ? <EditorError>{validationIssue}</EditorError> : null}
-        </EditorField>
-      ) : (
-        <p className="text-sm text-slate-600">
-          Behavior profile override is disabled for this draft.
-        </p>
-      )}
+      <EditorField>
+        <ClassicyCheckboxField
+          checked={sfShipHonkEnabled}
+          detail="When checked, strict export writes `behaviorProfileKey: classic/sf-ship-honk` to mirror the San Francisco `ScenarioID == 2` ship-honk branch from `DoShipSprite`."
+          label="Use San Francisco Ship Horn Behavior"
+          onChange={(event) => {
+            dispatch({
+              type: 'set-behavior-profile-key',
+              profileKey: event.currentTarget.checked ? 'classic/sf-ship-honk' : 'classic/default',
+            });
+            dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
+          }}
+        />
+        <small className="text-sm text-slate-600">
+          Current key: {behavior.profileKey || '(empty)'}.
+          <br />
+          Closed profile keys only: {SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS.join(', ')}.
+        </small>
+        {validationIssue !== undefined ? <EditorError>{validationIssue}</EditorError> : null}
+      </EditorField>
 
       <EditorStatsGrid>
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Assignment Enabled</dt>
         <dd>{behavior.enabled ? 'yes' : 'no'}</dd>
+        <dt>SF Horn Behavior</dt>
+        <dd>{behavior.enabled && sfShipHonkEnabled ? 'yes' : 'no'}</dd>
         <dt>Profile Key</dt>
         <dd>{behavior.enabled ? behavior.profileKey : 'none'}</dd>
         <dt>Validation</dt>
@@ -102,25 +73,10 @@ export function ScenarioBehaviorProfileEditorCard() {
       </EditorStatsGrid>
 
       <EditorPreviewPanel aria-label="Behavior profile preview">
-        <h2>Behavior Assignment JSON</h2>
-        <ClassicyTextArea readOnly rows={6} value={behaviorJson} />
+        <ClassicyDisclosure defaultOpen={false} summary="Behavior Assignment JSON">
+          <ClassicyTextArea readOnly rows={6} value={behaviorJson} className="w-full" />
+        </ClassicyDisclosure>
       </EditorPreviewPanel>
-    </EditorCard>
+    </section>
   );
-}
-
-/**
- * Render label text for one closed behavior-profile key.
- * Mirrors runtime profile keyspace from `packages/scenario-runtime` registry.
- */
-function getScenarioBehaviorProfileLabel(
-  profileKey: (typeof SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS)[number],
-): string {
-  if (profileKey === 'classic/default') {
-    return 'Classic Default';
-  }
-  if (profileKey === 'classic/sf-ship-honk') {
-    return 'Classic SF Ship Honk';
-  }
-  return profileKey;
 }

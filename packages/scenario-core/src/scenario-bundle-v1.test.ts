@@ -229,10 +229,17 @@ describe('scenarioBundleV1Schema', () => {
           ],
         },
       ],
+      // Magic number source:
+      // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+      //   `ref/micropolis/src/sim/s_fileio.c`.
+      // - `DoShipSprite` special-cases `ScenarioID == 2` in
+      //   `ref/micropolis/src/sim/w_sprite.c`.
+      behaviorProfileKey: 'classic/sf-ship-honk',
     });
 
     expect(parsed.objective?.kind).toBe('all');
     expect(parsed.script?.[0]?.trigger).toEqual({ everyTicks: 24 });
+    expect(parsed.behaviorProfileKey).toBe('classic/sf-ship-honk');
   });
 
   it('rejects malformed objective/script payload shapes', () => {
@@ -285,5 +292,28 @@ describe('scenarioBundleV1Schema', () => {
 
     expect(invalidObjective.success).toBe(false);
     expect(invalidScript.success).toBe(false);
+  });
+
+  it('rejects unknown behavior profile keys', () => {
+    const invalidBehaviorProfile = scenarioBundleV1Schema.safeParse({
+      version: 1,
+      key: 'user/invalid-behavior-profile',
+      name: 'Invalid Behavior Profile',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: SCENARIO_BUNDLE_V1_MAP_WIDTH,
+        height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
+        cityFileBytes: 'AA==',
+      },
+      behaviorProfileKey: 'classic/not-registered',
+    });
+
+    expect(invalidBehaviorProfile.success).toBe(false);
   });
 });

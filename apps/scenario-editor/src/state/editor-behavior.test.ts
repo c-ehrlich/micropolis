@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  createScenarioEditorBehaviorDraftFromBundle,
   createScenarioEditorInitialBehaviorDraft,
   getScenarioEditorBehaviorValidationIssue,
   isScenarioEditorBehaviorProfileKey,
@@ -24,6 +25,81 @@ describe('scenario editor behavior profile drafting', () => {
     const draft = createScenarioEditorInitialBehaviorDraft();
 
     expect(draft).toEqual({
+      enabled: false,
+      profileKey: 'classic/default',
+    });
+  });
+
+  test('hydrates behavior draft from bundle behavior profile keys', () => {
+    const hydrated = createScenarioEditorBehaviorDraftFromBundle({
+      version: 1,
+      key: 'user/behavior-hydrate',
+      name: 'Behavior Hydrate',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: 120,
+        height: 100,
+        cityFileBytes: 'AA==',
+      },
+      // Magic number source:
+      // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+      //   `ref/micropolis/src/sim/s_fileio.c`.
+      // - `DoShipSprite` special-cases `ScenarioID == 2` in
+      //   `ref/micropolis/src/sim/w_sprite.c`.
+      behaviorProfileKey: 'classic/sf-ship-honk',
+    });
+    expect(hydrated).toEqual({
+      enabled: true,
+      profileKey: 'classic/sf-ship-honk',
+    });
+
+    const withoutBundleKey = createScenarioEditorBehaviorDraftFromBundle({
+      version: 1,
+      key: 'user/no-behavior-key',
+      name: 'No Behavior Key',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: 120,
+        height: 100,
+        cityFileBytes: 'AA==',
+      },
+    });
+    expect(withoutBundleKey).toEqual({
+      enabled: false,
+      profileKey: 'classic/default',
+    });
+
+    const withExplicitDefaultKey = createScenarioEditorBehaviorDraftFromBundle({
+      version: 1,
+      key: 'user/default-behavior-key',
+      name: 'Default Behavior Key',
+      description: '',
+      tags: [],
+      start: {
+        startYear: 2000,
+        startFunds: 10000,
+      },
+      map: {
+        kind: 'city-file-bytes',
+        width: 120,
+        height: 100,
+        cityFileBytes: 'AA==',
+      },
+      behaviorProfileKey: 'classic/default',
+    });
+    expect(withExplicitDefaultKey).toEqual({
       enabled: false,
       profileKey: 'classic/default',
     });

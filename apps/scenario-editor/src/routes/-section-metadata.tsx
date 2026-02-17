@@ -1,4 +1,5 @@
-import { ClassicyTextArea } from '@city/classicyui';
+import { ClassicyDisclosure, ClassicyTextArea } from '@city/classicyui';
+import { useMemo } from 'react';
 
 import {
   getScenarioEditorMetadataValidationIssues,
@@ -7,12 +8,12 @@ import {
   useScenarioEditorState,
 } from '../state/editor-state.tsx';
 import {
-  EditorCard,
   EditorError,
   EditorField,
   EditorFieldInline,
   EditorForm,
   EditorHelp,
+  EditorPreviewPanel,
   EditorStatsGrid,
 } from './-editor-ui.tsx';
 import { parseIntegerInput, preventFormSubmit } from './-section-shared.ts';
@@ -24,6 +25,21 @@ import { parseIntegerInput, preventFormSubmit } from './-section-shared.ts';
 export function ScenarioMetadataEditorCard() {
   const { bundle, isDirty } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
+  const metadataJson = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          key: bundle.key,
+          name: bundle.name,
+          description: bundle.description,
+          tags: bundle.tags,
+          start: bundle.start,
+        },
+        null,
+        2,
+      ),
+    [bundle.description, bundle.key, bundle.name, bundle.start, bundle.tags],
+  );
   const issues = getScenarioEditorMetadataValidationIssues(bundle);
   const hasIssues =
     issues.key !== undefined ||
@@ -34,7 +50,7 @@ export function ScenarioMetadataEditorCard() {
     issues.startFunds !== undefined;
 
   return (
-    <EditorCard aria-label="Scenario metadata editor" className="max-w-[52rem]">
+    <section aria-label="Scenario metadata editor" className="grid gap-4">
       <h1>Scenario Metadata</h1>
       <p>
         Edit canonical bundle metadata fields for key identity, player-facing labels, and scenario
@@ -162,6 +178,12 @@ export function ScenarioMetadataEditorCard() {
         <dt>Validation</dt>
         <dd>{hasIssues ? 'invalid metadata' : 'metadata valid'}</dd>
       </EditorStatsGrid>
-    </EditorCard>
+
+      <EditorPreviewPanel aria-label="Metadata JSON preview">
+        <ClassicyDisclosure defaultOpen={false} summary="Metadata JSON">
+          <ClassicyTextArea className="w-full" readOnly rows={10} value={metadataJson} />
+        </ClassicyDisclosure>
+      </EditorPreviewPanel>
+    </section>
   );
 }

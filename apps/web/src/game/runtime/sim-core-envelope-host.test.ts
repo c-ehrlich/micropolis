@@ -80,7 +80,12 @@ const EXPECTED_DID_TOOL_SOUND_SPEC_BY_PLAYABLE_TOOL = {
  * Mirrors Stage 0 bundle map/start contracts; map words follow classic x-major order
  * consumed by `LoadScenario` map IO in `ref/micropolis/src/sim/s_fileio.c`.
  */
-function createUserScenarioBundleFixture(key = 'user/harbor-night'): ScenarioBundleV1 {
+function createUserScenarioBundleFixture(
+  key = 'user/harbor-night',
+  options: {
+    readonly behaviorProfileKey?: ScenarioBundleV1['behaviorProfileKey'];
+  } = {},
+): ScenarioBundleV1 {
   const tileWords = Array.from({ length: SCENARIO_BUNDLE_V1_TILE_COUNT }, () => 0);
   tileWords[0] = 17;
   tileWords[SCENARIO_BUNDLE_V1_MAP_HEIGHT] = 33;
@@ -100,6 +105,9 @@ function createUserScenarioBundleFixture(key = 'user/harbor-night'): ScenarioBun
       height: SCENARIO_BUNDLE_V1_MAP_HEIGHT,
       tileWords,
     },
+    ...(options.behaviorProfileKey === undefined
+      ? {}
+      : { behaviorProfileKey: options.behaviorProfileKey }),
   };
 }
 
@@ -2765,6 +2773,49 @@ describe('SimCoreEnvelopeHost', () => {
     expect(hostInternals.authorityState.simState.ScenarioID).toBe(0);
     expect(hostInternals.cityName).toBe('Harbor Night');
     expect(hostInternals.cityFileName).toBe('harbor-night.cty');
+  });
+
+  it('applies user-scenario behavior profile keys to realtime ship-honk behavior', async () => {
+    const host = new SimCoreEnvelopeHost();
+    const hostInternals = host as unknown as {
+      realtimeContext: {
+        shipHonkBehavior: 'default' | 'legacy-sf-low-speed';
+      };
+    };
+    host.setUserScenarioBundle(
+      createUserScenarioBundleFixture('user/sf-honk-profile', {
+        // Magic number source:
+        // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+        //   `ref/micropolis/src/sim/s_fileio.c`.
+        // - `DoShipSprite` special-cases `ScenarioID == 2` in
+        //   `ref/micropolis/src/sim/w_sprite.c`.
+        behaviorProfileKey: 'classic/sf-ship-honk',
+      }),
+    );
+    const captured = connectAndCapture(host);
+
+    captured.send({
+      kind: 'hello',
+      roomId: 'room-user-scenario-behavior-profile',
+      clientId: 'client-user-scenario-behavior-profile',
+      protocolVersion: 'core-bridge/v1',
+      coreVersion: 'test-core',
+    });
+    captured.send({
+      kind: 'command',
+      roomId: 'room-user-scenario-behavior-profile',
+      clientId: 'client-user-scenario-behavior-profile',
+      commandId: 'cmd-load-user-scenario-behavior-profile',
+      command: {
+        kind: 'scenario',
+        action: 'load-scenario',
+        scenarioKey: 'user/sf-honk-profile',
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(hostInternals.realtimeContext.shipHonkBehavior).toBe('legacy-sf-low-speed');
   });
 
   it('applies C-equivalent pause/play/set-speed transitions in authoritative sim state', () => {

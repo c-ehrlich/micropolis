@@ -74,6 +74,15 @@ describe('scenario editor strict export', () => {
   test('integrates authored objective/script drafts into strict export output', () => {
     const bundle = createScenarioEditorInitialBundle();
     const result = buildScenarioEditorStrictExport(bundle, {
+      behavior: {
+        enabled: true,
+        // Magic number source:
+        // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+        //   `ref/micropolis/src/sim/s_fileio.c`.
+        // - `DoShipSprite` special-cases `ScenarioID == 2` in
+        //   `ref/micropolis/src/sim/w_sprite.c`.
+        profileKey: 'classic/sf-ship-honk',
+      },
       objective: {
         enabled: true,
         predicate: {
@@ -123,6 +132,7 @@ describe('scenario editor strict export', () => {
         actions: [{ kind: 'make-flood' }, { kind: 'send-message', messageId: -200 }],
       },
     ]);
+    expect(result.canonicalBundle.behaviorProfileKey).toBe('classic/sf-ship-honk');
   });
 
   test('fails export when authored objective/script drafts violate semantic rules', () => {
@@ -156,6 +166,26 @@ describe('scenario editor strict export', () => {
       path: 'script.events',
       message: 'script must include at least one event',
     });
+  });
+
+  test('removes behavior profile key when behavior authoring is disabled', () => {
+    const bundle = {
+      ...createScenarioEditorInitialBundle(),
+      behaviorProfileKey: 'classic/sf-ship-honk' as const,
+    };
+    const result = buildScenarioEditorStrictExport(bundle, {
+      behavior: {
+        enabled: false,
+        profileKey: 'classic/sf-ship-honk',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error('Expected strict export to succeed with behavior disabled');
+    }
+
+    expect(result.canonicalBundle.behaviorProfileKey).toBeUndefined();
   });
 });
 

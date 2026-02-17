@@ -74,6 +74,7 @@ describe('scenario editor stock scenarios', () => {
       op: 'gte',
       value: 4,
     });
+    expect(bundle.behaviorProfileKey).toBe('classic/sf-ship-honk');
     expect(bundle.script).toEqual([
       {
         trigger: { atTick: 1 },
@@ -105,5 +106,6 @@ describe('scenario editor stock scenarios', () => {
     });
 
     expect(bundle.script).toBeUndefined();
+    expect(bundle.behaviorProfileKey).toBeUndefined();
   });
 });

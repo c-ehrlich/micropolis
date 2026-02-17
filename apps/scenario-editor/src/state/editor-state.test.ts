@@ -186,6 +186,12 @@ describe('scenario editor state foundation', () => {
             actions: [{ kind: 'make-flood' }],
           },
         ],
+        // Magic number source:
+        // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+        //   `ref/micropolis/src/sim/s_fileio.c`.
+        // - `DoShipSprite` special-cases `ScenarioID == 2` in
+        //   `ref/micropolis/src/sim/w_sprite.c`.
+        behaviorProfileKey: 'classic/sf-ship-honk',
       },
     });
 
@@ -204,6 +210,10 @@ describe('scenario editor state foundation', () => {
         actions: [{ kind: 'make-flood' }],
       },
     ]);
+    expect(replaced.behavior).toEqual({
+      enabled: true,
+      profileKey: 'classic/sf-ship-honk',
+    });
   });
 
   test('updates metadata fields through reducer patch actions', () => {

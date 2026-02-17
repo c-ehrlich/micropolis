@@ -1,4 +1,4 @@
-import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyDisclosure, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -16,7 +16,6 @@ import {
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import {
   EditorButton,
-  EditorCard,
   EditorField,
   EditorFieldInline,
   EditorIssuesPanel,
@@ -44,7 +43,7 @@ export function ScenarioObjectiveEditorCard() {
   );
 
   return (
-    <EditorCard aria-label="Scenario objective editor" className="max-w-[64rem]">
+    <section aria-label="Scenario objective editor" className="grid gap-4">
       <h1>Scenario Objective</h1>
       <p>
         Author objective predicates using the Stage 4 DSL. Metric comparisons track classic
@@ -105,10 +104,11 @@ export function ScenarioObjectiveEditorCard() {
       ) : null}
 
       <EditorPreviewPanel aria-label="Objective predicate preview">
-        <h2>Objective Predicate JSON</h2>
-        <ClassicyTextArea readOnly rows={10} value={objectiveJson} />
+        <ClassicyDisclosure defaultOpen={false} summary="Objective Predicate JSON">
+          <ClassicyTextArea className="w-full" readOnly rows={10} value={objectiveJson} />
+        </ClassicyDisclosure>
       </EditorPreviewPanel>
-    </EditorCard>
+    </section>
   );
 }
 

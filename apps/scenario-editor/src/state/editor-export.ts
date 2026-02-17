@@ -5,6 +5,11 @@ import {
 } from '@city/scenario-core';
 
 import {
+  getScenarioEditorBehaviorValidationIssue,
+  isScenarioEditorBehaviorProfileKey,
+  type ScenarioEditorBehaviorDraft,
+} from './editor-behavior.ts';
+import {
   getScenarioEditorObjectiveValidationIssues,
   type ScenarioEditorObjectiveDraft,
 } from './editor-objective.ts';
@@ -45,11 +50,15 @@ export type ScenarioEditorStrictExportResult =
 
 /**
  * Optional Stage 4 authoring drafts compiled into strict-export bundle payloads.
- * Mapping note: objective predicates and script trigger/action rows map to
- * `DoScenarioScore`/`ScenarioDisaster` domains from
- * `ref/micropolis/src/sim/s_msg.c` and `ref/micropolis/src/sim/s_disast.c`.
+ * Mapping note:
+ * - objective predicates and script trigger/action rows map to
+ *   `DoScenarioScore`/`ScenarioDisaster` domains from
+ *   `ref/micropolis/src/sim/s_msg.c` and `ref/micropolis/src/sim/s_disast.c`.
+ * - behavior profile assignment maps to `ScenarioID` branches in `DoShipSprite`
+ *   from `ref/micropolis/src/sim/w_sprite.c`.
  */
 export interface ScenarioEditorStrictExportDraftInputs {
+  readonly behavior?: ScenarioEditorBehaviorDraft;
   readonly objective?: ScenarioEditorObjectiveDraft;
   readonly script?: ScenarioEditorScriptDraft;
 }
@@ -204,6 +213,17 @@ function lintScenarioEditorDraftInputs(
     }
   }
 
+  if (draftInputs.behavior !== undefined) {
+    const behaviorIssue = getScenarioEditorBehaviorValidationIssue(draftInputs.behavior);
+    if (behaviorIssue !== undefined) {
+      issues.push({
+        source: 'lint',
+        path: 'behavior.profileKey',
+        message: behaviorIssue,
+      });
+    }
+  }
+
   if (draftInputs.script !== undefined) {
     const scriptIssues = getScenarioEditorScriptValidationIssues(draftInputs.script);
     for (const issue of scriptIssues) {
@@ -219,8 +239,8 @@ function lintScenarioEditorDraftInputs(
 }
 
 /**
- * Applies optional Stage 4 objective/script drafts to a bundle before strict export.
- * Mapping note: objective/script payloads are persisted as authored JSON contract
+ * Applies optional Stage 4 behavior/objective/script drafts to a bundle before strict export.
+ * Mapping note: behavior/objective/script payloads are persisted as authored JSON contract
  * data while map serialization still mirrors `saveFile` behavior from
  * `ref/micropolis/src/sim/s_fileio.c`.
  */
@@ -229,6 +249,19 @@ function applyScenarioEditorDraftsToBundle(
   draftInputs: ScenarioEditorStrictExportDraftInputs,
 ): ScenarioBundleV1 {
   let nextBundle = bundle;
+
+  if (draftInputs.behavior !== undefined) {
+    const { behaviorProfileKey: _ignoredBehaviorProfileKey, ...bundleWithoutBehaviorProfileKey } =
+      nextBundle;
+    const normalizedProfileKey = draftInputs.behavior.profileKey.trim();
+    nextBundle =
+      draftInputs.behavior.enabled && isScenarioEditorBehaviorProfileKey(normalizedProfileKey)
+        ? {
+            ...bundleWithoutBehaviorProfileKey,
+            behaviorProfileKey: normalizedProfileKey,
+          }
+        : bundleWithoutBehaviorProfileKey;
+  }
 
   if (draftInputs.objective !== undefined) {
     const { objective: _ignoredObjective, ...bundleWithoutObjective } = nextBundle;

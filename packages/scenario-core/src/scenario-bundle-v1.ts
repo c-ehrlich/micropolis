@@ -9,6 +9,7 @@ const SCENARIO_OBJECTIVE_METRIC_KEYS = [
   'crime-average',
 ] as const;
 const SCENARIO_OBJECTIVE_COMPARISONS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
+const SCENARIO_BEHAVIOR_PROFILE_KEYS = ['classic/default', 'classic/sf-ship-honk'] as const;
 
 /**
  * Objective metric key domain persisted in Stage 4 authored bundle objectives.
@@ -102,6 +103,13 @@ export interface ScenarioScriptEventV1 {
   readonly trigger: ScenarioScriptTriggerV1;
   readonly actions: readonly ScenarioScriptActionV1[];
 }
+
+/**
+ * Closed behavior-profile key domain persisted in Stage 4 authored bundles.
+ * Mirrors `ScenarioID` behavior branching in `DoShipSprite` from
+ * `ref/micropolis/src/sim/w_sprite.c`, represented as declarative profile keys.
+ */
+export type ScenarioBehaviorProfileKeyV1 = (typeof SCENARIO_BEHAVIOR_PROFILE_KEYS)[number];
 
 /**
  * Canonical scenario bundle version for Stage 0 contracts.
@@ -314,6 +322,13 @@ export const scenarioScriptEventV1Schema = z
 export const scenarioScriptV1Schema = z.array(scenarioScriptEventV1Schema).min(1);
 
 /**
+ * Stage 4 behavior-profile key schema for authored bundle payloads.
+ * Mirrors the closed behavior variants from `DoShipSprite` in
+ * `ref/micropolis/src/sim/w_sprite.c` (`default` and San-Francisco-specific ship honk).
+ */
+export const scenarioBehaviorProfileKeyV1Schema = z.enum(SCENARIO_BEHAVIOR_PROFILE_KEYS);
+
+/**
  * Canonical Stage 0 scenario bundle contract for JSON interchange.
  * This is a modern contract wrapper around C-parity map/start fields and is not
  * a 1:1 source struct from the Micropolis codebase.
@@ -339,6 +354,7 @@ export const scenarioBundleV1Schema = z
     map: scenarioMapV1Schema,
     objective: scenarioObjectivePredicateV1Schema.optional(),
     script: scenarioScriptV1Schema.optional(),
+    behaviorProfileKey: scenarioBehaviorProfileKeyV1Schema.optional(),
   })
   .strict();
 

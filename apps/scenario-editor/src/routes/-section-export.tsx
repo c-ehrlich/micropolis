@@ -48,7 +48,7 @@ export interface ScenarioFileMenuContentProps {
  * file-picker UX are editor-only browser workflow glue.
  */
 export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuContentProps) {
-  const { bundle, isDirty, objective, script } = useScenarioEditorState();
+  const { behavior, bundle, isDirty, objective, script } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const [lastOpenResult, setLastOpenResult] = useState<ScenarioEditorOpenResult | null>(null);
@@ -60,7 +60,7 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
   const exportFileName = getScenarioEditorExportFileName(bundle.key);
 
   const handleExport = () => {
-    const result = buildScenarioEditorStrictExport(bundle, { objective, script });
+    const result = buildScenarioEditorStrictExport(bundle, { behavior, objective, script });
     setLastResult(result);
 
     if (!result.ok) {
@@ -176,7 +176,7 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
         <p>
           Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
           export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes`
-          plus authored Stage 4 objective/script payloads when enabled.
+          plus authored Stage 4 objective/script/behavior payloads when enabled.
         </p>
       ) : null}
 

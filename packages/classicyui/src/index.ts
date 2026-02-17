@@ -11,6 +11,7 @@ export {
   ClassicyDialogPanel,
   type ClassicyDialogPanelProps,
 } from './classicy-dialog.tsx';
+export { ClassicyDisclosure, type ClassicyDisclosureProps } from './classicy-disclosure.tsx';
 export {
   ClassicyInput,
   type ClassicyInputProps,

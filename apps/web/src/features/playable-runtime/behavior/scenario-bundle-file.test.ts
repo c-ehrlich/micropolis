@@ -17,6 +17,12 @@ describe('parseExternalScenarioBundleFromFileText', () => {
           startYear: 1910,
           startFunds: 15000,
         },
+        // Magic number source:
+        // - Scenario id `2` is San Francisco in `LoadScenario(short s)` in
+        //   `ref/micropolis/src/sim/s_fileio.c`.
+        // - `DoShipSprite` special-cases `ScenarioID == 2` in
+        //   `ref/micropolis/src/sim/w_sprite.c`.
+        behaviorProfileKey: 'classic/sf-ship-honk',
         map: {
           kind: 'city-file-bytes',
           width: 120,
@@ -29,6 +35,7 @@ describe('parseExternalScenarioBundleFromFileText', () => {
     expect(loaded.fileName).toBe('custom-harbor.json');
     expect(loaded.bundle.key).toBe('user/custom-harbor');
     expect(loaded.bundle.name).toBe('Custom Harbor');
+    expect(loaded.bundle.behaviorProfileKey).toBe('classic/sf-ship-honk');
   });
 
   it('rejects malformed JSON text', () => {

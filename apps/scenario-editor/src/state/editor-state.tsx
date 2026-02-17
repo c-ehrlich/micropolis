@@ -15,6 +15,7 @@ import {
 } from 'react';
 
 import {
+  createScenarioEditorBehaviorDraftFromBundle,
   createScenarioEditorInitialBehaviorDraft,
   type ScenarioEditorBehaviorDraft,
 } from './editor-behavior.ts';
@@ -437,7 +438,7 @@ export function scenarioEditorReducer(
       return {
         ...state,
         bundle: action.bundle,
-        behavior: createScenarioEditorInitialBehaviorDraft(),
+        behavior: createScenarioEditorBehaviorDraftFromBundle(action.bundle),
         objective: createScenarioEditorObjectiveDraftFromBundle(action.bundle),
         script: createScenarioEditorScriptDraftFromBundle(action.bundle),
         isDirty: false,

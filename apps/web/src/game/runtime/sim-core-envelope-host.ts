@@ -59,6 +59,7 @@ import {
   runSimLoop,
   runUiUpdate,
   sendMessages,
+  setSimScenarioRuntimeInputs,
   setValves,
   type SimMapFlag,
   type SimPhaseSystems,
@@ -1486,6 +1487,7 @@ export class SimCoreEnvelopeHost implements CoreHost {
       this.applyGameLevelFunds(command.gameLevel);
     }
 
+    this.applyUserScenarioBehaviorProfile(userScenarioBundle);
     this.cityFileName = cityFileNameForUserScenarioKey(loadResult.scenarioKey);
     this.cityName = loadResult.scenarioName;
     this.syncHostStateAfterLoadLikeCommand();
@@ -1497,6 +1499,26 @@ export class SimCoreEnvelopeHost implements CoreHost {
     }
 
     this.emitScenarioSuccessSettlement(roomId, clientId, commandId, commandTick);
+  }
+
+  /**
+   * Applies one explicit user-scenario behavior profile override, when authored.
+   * Mirrors C `DoShipSprite` scenario behavior branching in
+   * `ref/micropolis/src/sim/w_sprite.c`, but routes through declarative
+   * `SimScenarioRuntimeInputs.behaviorProfileKey` for `user/*` bundles.
+   */
+  private applyUserScenarioBehaviorProfile(bundle: ScenarioBundleV1): void {
+    if (bundle.behaviorProfileKey === undefined) {
+      return;
+    }
+
+    setSimScenarioRuntimeInputs(this.authorityState.simState, {
+      runtimeDefinition: {
+        key: `${bundle.key}/behavior-profile`,
+        events: [],
+      },
+      behaviorProfileKey: bundle.behaviorProfileKey,
+    });
   }
 
   /**
