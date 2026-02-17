@@ -1,11 +1,14 @@
 import {
+  ClassicyCheckboxField,
+  ClassicyInput,
   ClassicyMenuItemButton,
-  ClassicyMenuPanel,
+  ClassicyPopoverMenu,
+  ClassicyToggleGroup,
   getAllThemes,
   getThemeVars,
 } from '@city/classicyui';
 import { Tile, TileFlag, TileMask } from '@city/sim-core';
-import { type CSSProperties, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { type CSSProperties, useMemo, useReducer, useState } from 'react';
 
 import { resolveSimUiToolIconAssetLookup } from '../../../../packages/sim-assets/src/sim-ui.ts';
 import { PLAYABLE_TOOL_ICON_URL_BY_BASENAME } from '../../../web/src/features/playable-runtime/presentation/runtime-panel/runtime-panel-constants.ts';
@@ -413,11 +416,6 @@ const SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH: ScenarioMapFinalSmartBaseBrus
   tooltip: 'Dirt terrain brush',
 };
 const SCENARIO_MAP_FINAL_TREE_TILE_MAX_FOR_SMOOTHING = 39;
-const SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX = 8;
-const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX = 176;
-const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX = 210;
-const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX = 196;
-const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX = 360;
 const SCENARIO_MAP_FINAL_EXACT_TILE_HOVER_PREVIEW: MapCanvasHoverPreviewSpec = {
   size: 1,
   offset: 0,
@@ -659,17 +657,12 @@ export function ScenarioMapFinalWorkbench(options: {
     SCENARIO_MAP_FINAL_DERIVE_SIM_TICK_COUNT_DEFAULT,
   );
   const [toolVariantContextMenu, setToolVariantContextMenu] = useState<{
-    readonly open: boolean;
+    readonly anchorPoint: { x: number; y: number } | null;
     readonly tool: 'park' | 'house' | null;
-    readonly x: number;
-    readonly y: number;
   }>({
-    open: false,
+    anchorPoint: null,
     tool: null,
-    x: 0,
-    y: 0,
   });
-  const toolVariantContextMenuRef = useRef<HTMLDivElement | null>(null);
   const activeBrushFamily = brushSelection.activeKind;
   const activeZoneKind = brushSelection.zoneKind;
   const activeZoneOptionKey = brushSelection.zoneOptionKey;
@@ -751,61 +744,27 @@ export function ScenarioMapFinalWorkbench(options: {
     [houseBrushTileId],
   );
   const isParkBrushContextMenuOpen =
-    toolVariantContextMenu.open &&
+    toolVariantContextMenu.anchorPoint !== null &&
     toolVariantContextMenu.tool === 'park' &&
     activeBrushFamily === 'tools' &&
     activeTool === 'park';
   const isHouseBrushContextMenuOpen =
-    toolVariantContextMenu.open &&
+    toolVariantContextMenu.anchorPoint !== null &&
     toolVariantContextMenu.tool === 'house' &&
     activeBrushFamily === 'tools' &&
     activeTool === 'house';
   const isToolVariantContextMenuOpen = isParkBrushContextMenuOpen || isHouseBrushContextMenuOpen;
   function closeToolVariantContextMenu(): void {
     setToolVariantContextMenu((current) =>
-      current.open
+      current.anchorPoint !== null
         ? {
             ...current,
-            open: false,
+            anchorPoint: null,
             tool: null,
           }
         : current,
     );
   }
-
-  useEffect(() => {
-    if (!isToolVariantContextMenuOpen) {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent): void {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        closeToolVariantContextMenu();
-        return;
-      }
-      if (toolVariantContextMenuRef.current?.contains(target)) {
-        return;
-      }
-      closeToolVariantContextMenu();
-    }
-
-    function handleEscape(event: KeyboardEvent): void {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      closeToolVariantContextMenu();
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    window.addEventListener('resize', closeToolVariantContextMenu);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('resize', closeToolVariantContextMenu);
-    };
-  }, [isToolVariantContextMenuOpen]);
 
   const zoneOptions = useMemo<readonly ScenarioMapFinalZoneOption[]>(() => {
     const freshTileId = getMapFinalZoneFreshCenterTileId(activeZoneKind);
@@ -873,69 +832,39 @@ export function ScenarioMapFinalWorkbench(options: {
       <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
         <section className="grid gap-[0.45rem]">
           <section className="grid gap-[0.35rem] rounded-[8px] border border-slate-400 bg-slate-100 p-[0.45rem]">
-            <label className="flex items-center gap-[0.45rem] text-slate-700">
-              <input
-                checked={mapEditor.autoSmoothingEnabled}
-                className="m-0"
-                onChange={(event) => {
-                  dispatch({
-                    type: 'set-map-auto-smoothing-enabled',
-                    enabled: event.currentTarget.checked,
-                  });
-                }}
-                type="checkbox"
-              />
-              <span>Enable auto smoothing</span>
-            </label>
-            <label className="flex items-center gap-[0.45rem] text-slate-700">
-              <input
-                checked={mapEditor.showBaseTileClassesEnabled}
-                className="m-0"
-                onChange={(event) => {
-                  dispatch({
-                    type: 'set-map-show-base-tile-classes-enabled',
-                    enabled: event.currentTarget.checked,
-                  });
-                }}
-                type="checkbox"
-              />
-              <span>Show base tile classes</span>
-            </label>
+            <ClassicyCheckboxField
+              checked={mapEditor.autoSmoothingEnabled}
+              label="Enable auto smoothing"
+              onChange={(event) => {
+                dispatch({
+                  type: 'set-map-auto-smoothing-enabled',
+                  enabled: event.currentTarget.checked,
+                });
+              }}
+            />
+            <ClassicyCheckboxField
+              checked={mapEditor.showBaseTileClassesEnabled}
+              label="Show base tile classes"
+              onChange={(event) => {
+                dispatch({
+                  type: 'set-map-show-base-tile-classes-enabled',
+                  enabled: event.currentTarget.checked,
+                });
+              }}
+            />
           </section>
-          <div
-            aria-label="Map final sidebar mode"
-            className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-slate-500"
-            role="tablist"
-          >
-            <button
-              aria-selected={isCreatorSidebarMode}
-              className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.55rem] py-[0.35rem] font-semibold ${
-                isCreatorSidebarMode ? 'bg-sky-200' : ''
-              }`}
-              onClick={() => {
-                closeToolVariantContextMenu();
-                setSidebarMode('creator');
-              }}
-              role="tab"
-              type="button"
-            >
-              Creator
-            </button>
-            <button
-              aria-selected={!isCreatorSidebarMode}
-              className={`cursor-pointer bg-slate-100 px-[0.55rem] py-[0.35rem] font-semibold ${
-                !isCreatorSidebarMode ? 'bg-sky-200' : ''
-              }`}
-              onClick={() => {
-                closeToolVariantContextMenu();
-                setSidebarMode('all-tiles');
-              }}
-              role="tab"
-              type="button"
-            >
-              Advanced
-            </button>
-          </div>
+          <ClassicyToggleGroup<ScenarioMapFinalSidebarMode>
+            ariaLabel="Map final sidebar mode"
+            options={[
+              { value: 'creator', label: 'Creator' },
+              { value: 'all-tiles', label: 'Advanced' },
+            ]}
+            onValueChange={(value) => {
+              closeToolVariantContextMenu();
+              setSidebarMode(value);
+            }}
+            value={sidebarMode}
+          />
         </section>
         {isCreatorSidebarMode ? (
           <div className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1">
@@ -999,32 +928,22 @@ export function ScenarioMapFinalWorkbench(options: {
               }`}
             >
               <h2 className="m-0 text-[1.4rem] font-semibold">Zones</h2>
-              <div
-                aria-label="Zone family selector"
-                className="grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500"
-                role="tablist"
-              >
-                {(['res', 'com', 'ind'] as const).map((zone) => (
-                  <button
-                    aria-selected={activeBrushFamily === 'zones' && zone === activeZoneKind}
-                    className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0 ${
-                      activeBrushFamily === 'zones' && zone === activeZoneKind ? 'bg-sky-200' : ''
-                    }`}
-                    key={zone}
-                    onClick={() => {
-                      closeToolVariantContextMenu();
-                      dispatchBrushSelection({
-                        type: 'select-zone-kind',
-                        zoneKind: zone,
-                      });
-                    }}
-                    role="tab"
-                    type="button"
-                  >
-                    {zone.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+              <ClassicyToggleGroup<ScenarioEditorMapZoneKind>
+                ariaLabel="Zone family selector"
+                options={[
+                  { value: 'res', label: 'RES' },
+                  { value: 'com', label: 'COM' },
+                  { value: 'ind', label: 'IND' },
+                ]}
+                onValueChange={(zone) => {
+                  closeToolVariantContextMenu();
+                  dispatchBrushSelection({
+                    type: 'select-zone-kind',
+                    zoneKind: zone,
+                  });
+                }}
+                value={activeZoneKind}
+              />
 
               <div className="grid gap-[0.45rem]">
                 {zoneOptionRows.map((rowOptions, rowIndex) => (
@@ -1124,36 +1043,16 @@ export function ScenarioMapFinalWorkbench(options: {
                           return;
                         }
                         event.preventDefault();
-                        const menuSize =
-                          spec.tool === 'park'
-                            ? {
-                                width: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX,
-                                height: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX,
-                              }
-                            : {
-                                width: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX,
-                                height: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX,
-                              };
-                        const position = resolveScenarioMapFinalContextMenuPosition(
-                          {
-                            x: event.clientX,
-                            y: event.clientY,
-                          },
-                          menuSize,
-                          {
-                            width: window.innerWidth,
-                            height: window.innerHeight,
-                          },
-                        );
                         dispatchBrushSelection({
                           type: 'select-tool',
                           tool: spec.tool,
                         });
                         setToolVariantContextMenu({
-                          open: true,
+                          anchorPoint: {
+                            x: event.clientX,
+                            y: event.clientY,
+                          },
                           tool: spec.tool,
-                          x: position.x,
-                          y: position.y,
                         });
                       }}
                       role="listitem"
@@ -1193,56 +1092,52 @@ export function ScenarioMapFinalWorkbench(options: {
                 Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}.
                 Right click Park/House to change.
               </small>
-              {isToolVariantContextMenuOpen ? (
-                <div
-                  className="fixed z-50"
-                  ref={toolVariantContextMenuRef}
-                  style={{
-                    left: `${toolVariantContextMenu.x}px`,
-                    top: `${toolVariantContextMenu.y}px`,
-                  }}
-                >
-                  <ClassicyMenuPanel className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1">
-                    {isParkBrushContextMenuOpen
-                      ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
-                          <ClassicyMenuItemButton
-                            key={choice.id}
-                            onClick={() => {
-                              setParkBrushMode(choice.id);
-                              closeToolVariantContextMenu();
-                            }}
-                            type="button"
-                            title={
-                              choice.tileId === null
-                                ? 'Auto: choose any park variant'
-                                : `Place ${choice.label} only (tile ${choice.tileId})`
-                            }
-                          >
-                            {choice.id === parkBrushMode ? '● ' : ''}
-                            {choice.label}
-                          </ClassicyMenuItemButton>
-                        ))
-                      : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
-                          <ClassicyMenuItemButton
-                            key={choice.tileId === null ? 'auto' : choice.tileId}
-                            onClick={() => {
-                              setHouseBrushTileId(choice.tileId);
-                              closeToolVariantContextMenu();
-                            }}
-                            type="button"
-                            title={
-                              choice.tileId === null
-                                ? 'Auto: choose any house variant'
-                                : `Place ${choice.label} only (tile ${choice.tileId})`
-                            }
-                          >
-                            {choice.tileId === houseBrushTileId ? '● ' : ''}
-                            {choice.label}
-                          </ClassicyMenuItemButton>
-                        ))}
-                  </ClassicyMenuPanel>
-                </div>
-              ) : null}
+              <ClassicyPopoverMenu
+                anchorPoint={toolVariantContextMenu.anchorPoint ?? undefined}
+                className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1"
+                offsetPx={2}
+                onRequestClose={closeToolVariantContextMenu}
+                open={isToolVariantContextMenuOpen}
+                placement="bottom-start"
+              >
+                {isParkBrushContextMenuOpen
+                  ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
+                      <ClassicyMenuItemButton
+                        key={choice.id}
+                        onClick={() => {
+                          setParkBrushMode(choice.id);
+                          closeToolVariantContextMenu();
+                        }}
+                        type="button"
+                        title={
+                          choice.tileId === null
+                            ? 'Auto: choose any park variant'
+                            : `Place ${choice.label} only (tile ${choice.tileId})`
+                        }
+                      >
+                        {choice.id === parkBrushMode ? '● ' : ''}
+                        {choice.label}
+                      </ClassicyMenuItemButton>
+                    ))
+                  : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
+                      <ClassicyMenuItemButton
+                        key={choice.tileId === null ? 'auto' : choice.tileId}
+                        onClick={() => {
+                          setHouseBrushTileId(choice.tileId);
+                          closeToolVariantContextMenu();
+                        }}
+                        type="button"
+                        title={
+                          choice.tileId === null
+                            ? 'Auto: choose any house variant'
+                            : `Place ${choice.label} only (tile ${choice.tileId})`
+                        }
+                      >
+                        {choice.tileId === houseBrushTileId ? '● ' : ''}
+                        {choice.label}
+                      </ClassicyMenuItemButton>
+                    ))}
+              </ClassicyPopoverMenu>
 
               <div className="grid gap-[0.45rem] rounded-lg border border-slate-400 bg-slate-100 p-[0.45rem]">
                 <div className="grid gap-[0.3rem]">
@@ -1250,8 +1145,7 @@ export function ScenarioMapFinalWorkbench(options: {
                     <span className="text-sm font-semibold text-slate-700">
                       Derive simulation ticks
                     </span>
-                    <input
-                      className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
+                    <ClassicyInput
                       min={1}
                       onChange={(event) => {
                         const next = Number(event.currentTarget.value);
@@ -1289,8 +1183,7 @@ export function ScenarioMapFinalWorkbench(options: {
           <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-[0.65rem] rounded-[10px] border border-slate-400 bg-slate-100 p-[0.45rem]">
             <label className="grid gap-[0.2rem]">
               <span className="text-sm font-semibold text-slate-700">Find tile</span>
-              <input
-                className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
+              <ClassicyInput
                 onChange={(event) => {
                   setExactTileSearchQuery(event.currentTarget.value);
                 }}
@@ -1300,17 +1193,13 @@ export function ScenarioMapFinalWorkbench(options: {
                 value={exactTileSearchQuery}
               />
             </label>
-            <label className="flex items-center gap-[0.45rem] text-slate-700">
-              <input
-                checked={exactTileNamedOnly}
-                className="m-0"
-                onChange={(event) => {
-                  setExactTileNamedOnly(event.currentTarget.checked);
-                }}
-                type="checkbox"
-              />
-              <span>Named tiles only</span>
-            </label>
+            <ClassicyCheckboxField
+              checked={exactTileNamedOnly}
+              label="Named tiles only"
+              onChange={(event) => {
+                setExactTileNamedOnly(event.currentTarget.checked);
+              }}
+            />
             <div className="min-h-0 overflow-y-auto rounded-[8px] border border-slate-400 bg-gray-200 p-[0.35rem]">
               {exactTileBrushEntries.length === 0 ? (
                 <p className="m-0 px-[0.35rem] py-[0.5rem] text-sm text-slate-600">
@@ -1569,29 +1458,6 @@ function getScenarioMapFinalForestBrushPoints(
     points.push({ x, y });
   }
   return points;
-}
-
-/**
- * Clamp one context-menu anchor to remain fully visible in the viewport.
- * Not from Micropolis C: editor-only browser layout helper for fixed-position menus.
- */
-function resolveScenarioMapFinalContextMenuPosition(
-  anchor: { x: number; y: number },
-  menuSize: { width: number; height: number },
-  viewportSize: { width: number; height: number },
-): { x: number; y: number } {
-  const maxX = Math.max(
-    SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
-    viewportSize.width - menuSize.width - SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
-  );
-  const maxY = Math.max(
-    SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
-    viewportSize.height - menuSize.height - SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX,
-  );
-  return {
-    x: Math.min(Math.max(anchor.x, SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX), maxX),
-    y: Math.min(Math.max(anchor.y, SCENARIO_MAP_FINAL_CONTEXT_MENU_VIEWPORT_MARGIN_PX), maxY),
-  };
 }
 
 /**

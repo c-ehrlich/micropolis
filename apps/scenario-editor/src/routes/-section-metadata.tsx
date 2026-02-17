@@ -1,3 +1,5 @@
+import { ClassicyTextArea } from '@city/classicyui';
+
 import {
   getScenarioEditorMetadataValidationIssues,
   parseScenarioEditorTagsInput,
@@ -68,7 +70,7 @@ export function ScenarioMetadataEditorCard() {
 
         <EditorField>
           <span>Description</span>
-          <textarea
+          <ClassicyTextArea
             aria-invalid={issues.description !== undefined}
             onChange={(event) => {
               dispatch({
@@ -86,7 +88,7 @@ export function ScenarioMetadataEditorCard() {
 
         <EditorField>
           <span>Tags</span>
-          <textarea
+          <ClassicyTextArea
             aria-invalid={issues.tags !== undefined}
             onChange={(event) => {
               dispatch({

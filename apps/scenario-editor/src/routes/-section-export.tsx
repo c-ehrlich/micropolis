@@ -1,3 +1,4 @@
+import { ClassicyTextArea } from '@city/classicyui';
 import { type ChangeEvent, useRef, useState } from 'react';
 
 import {
@@ -278,7 +279,7 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
       {lastResult?.ok ? (
         <EditorPreviewPanel aria-label="Export json preview" className={compact ? 'mt-0' : ''}>
           <h2>Last Export JSON</h2>
-          <textarea readOnly rows={compact ? 8 : 12} value={lastResult.jsonText} />
+          <ClassicyTextArea readOnly rows={compact ? 8 : 12} value={lastResult.jsonText} />
         </EditorPreviewPanel>
       ) : null}
     </div>

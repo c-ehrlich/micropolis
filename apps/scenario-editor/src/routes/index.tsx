@@ -1,3 +1,4 @@
+import { ClassicyIconButton } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -76,16 +77,16 @@ function ScenarioEditorHomeRoute() {
         >
           <header className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
             <h2 className="m-0 text-[1.7rem] font-semibold">{getSidebarTitle(activeView)}</h2>
-            <button
-              aria-label="Close sidebar"
-              className="grid h-8 w-8 cursor-pointer place-items-center rounded border border-slate-500 bg-slate-100 px-0 py-0 text-[1rem] leading-none"
+            <ClassicyIconButton
+              ariaLabel="Close sidebar"
+              className="h-8 w-8"
+              icon="✕"
               onClick={() => {
                 dispatch({ type: 'set-active-view', view: 'none' });
               }}
+              srLabel="Close sidebar"
               type="button"
-            >
-              X
-            </button>
+            />
           </header>
 
           <div className="min-h-0 overflow-y-auto p-3 [&>section]:max-w-none [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0 [&>section>h1]:hidden [&>section>p]:hidden">

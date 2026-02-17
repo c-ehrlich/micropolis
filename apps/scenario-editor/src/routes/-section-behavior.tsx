@@ -1,3 +1,4 @@
+import { ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -109,7 +110,7 @@ export function ScenarioBehaviorProfileEditorCard() {
 
       <EditorPreviewPanel aria-label="Behavior profile preview">
         <h2>Behavior Assignment JSON</h2>
-        <textarea readOnly rows={6} value={behaviorJson} />
+        <ClassicyTextArea readOnly rows={6} value={behaviorJson} />
       </EditorPreviewPanel>
     </EditorCard>
   );

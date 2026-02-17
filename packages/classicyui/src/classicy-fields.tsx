@@ -1,5 +1,10 @@
 import { clsx } from 'clsx';
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 
 const CLASSICY_INPUT_CHROME =
   '[font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-white)] [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)]';
@@ -41,4 +46,16 @@ export interface ClassicyRangeProps extends Omit<InputHTMLAttributes<HTMLInputEl
  */
 export function ClassicyRange({ className, ...rangeProps }: ClassicyRangeProps) {
   return <input {...rangeProps} className={clsx('w-full', className)} type="range" />;
+}
+
+export interface ClassicyTextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {}
+
+/**
+ * Textarea primitive styled to match Classicy runtime form controls.
+ * Mirrors multiline text-entry framing used in Tcl dialogs under
+ * `ref/micropolis/res/*.tcl`.
+ * Parity note: browser textarea behavior is preserved; this wrapper only applies styling.
+ */
+export function ClassicyTextArea({ className, ...textAreaProps }: ClassicyTextAreaProps) {
+  return <textarea {...textAreaProps} className={clsx(CLASSICY_INPUT_CHROME, className)} />;
 }

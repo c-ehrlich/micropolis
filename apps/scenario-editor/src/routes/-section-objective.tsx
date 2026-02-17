@@ -1,3 +1,4 @@
+import { ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -112,7 +113,7 @@ export function ScenarioObjectiveEditorCard() {
 
       <EditorPreviewPanel aria-label="Objective predicate preview">
         <h2>Objective Predicate JSON</h2>
-        <textarea readOnly rows={10} value={objectiveJson} />
+        <ClassicyTextArea readOnly rows={10} value={objectiveJson} />
       </EditorPreviewPanel>
     </EditorCard>
   );

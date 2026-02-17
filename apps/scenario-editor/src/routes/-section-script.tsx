@@ -1,3 +1,4 @@
+import { ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -138,7 +139,7 @@ export function ScenarioScriptEditorCard() {
 
       <EditorPreviewPanel aria-label="Script event preview">
         <h2>Script Event JSON</h2>
-        <textarea readOnly rows={12} value={scriptJson} />
+        <ClassicyTextArea readOnly rows={12} value={scriptJson} />
       </EditorPreviewPanel>
     </EditorCard>
   );
