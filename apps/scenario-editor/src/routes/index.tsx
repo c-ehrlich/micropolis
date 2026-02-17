@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   type ScenarioEditorWorkbenchView,
@@ -25,20 +26,54 @@ function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const sidebarOpen = activeView !== 'none';
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const [sidebarWidthPx, setSidebarWidthPx] = useState(0);
+
+  useEffect(() => {
+    if (!sidebarOpen) {
+      return;
+    }
+
+    const sidebarElement = sidebarRef.current;
+    if (sidebarElement === null) {
+      return;
+    }
+
+    const updateSidebarWidth = (): void => {
+      setSidebarWidthPx(Math.max(0, Math.round(sidebarElement.getBoundingClientRect().width)));
+    };
+
+    updateSidebarWidth();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSidebarWidth);
+      return () => {
+        window.removeEventListener('resize', updateSidebarWidth);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateSidebarWidth();
+    });
+    observer.observe(sidebarElement);
+    return () => {
+      observer.disconnect();
+    };
+  }, [sidebarOpen, activeView]);
 
   return (
     <section
       aria-label="Scenario editor workspace"
-      className={`grid h-full min-h-0 overflow-hidden ${
-        sidebarOpen ? 'grid-cols-[minmax(0,1fr)_clamp(20rem,32vw,34rem)]' : 'grid-cols-1'
-      }`}
+      className="relative h-full min-h-0 overflow-hidden"
     >
       <div className="min-h-0 overflow-hidden">
-        <ScenarioMapFinalWorkbench />
+        <ScenarioMapFinalWorkbench rightSidebarOverlayWidthPx={sidebarOpen ? sidebarWidthPx : 0} />
       </div>
 
       {sidebarOpen ? (
-        <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-l border-slate-400 bg-white">
+        <aside
+          className="absolute right-0 top-0 z-20 grid h-full min-h-0 w-[clamp(20rem,32vw,34rem)] grid-rows-[auto_minmax(0,1fr)] border-l border-slate-400 bg-white"
+          ref={sidebarRef}
+        >
           <header className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
             <h2 className="m-0 text-[1.7rem] font-semibold">{getSidebarTitle(activeView)}</h2>
             <button

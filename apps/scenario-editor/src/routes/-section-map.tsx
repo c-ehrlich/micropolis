@@ -636,8 +636,13 @@ function getScenarioMapFinalBaseClassOverlayStyle(
  * Full-screen map workbench shell for the final map-authoring workflow.
  * Reuses the runtime `MapCanvas` surface from `apps/web` while presenting an
  * editor-specific sidebar layout (not a direct Micropolis C UI port).
+ * Difference: accepts optional right-sidebar overlay width so map panning can
+ * reveal right-edge tiles even when external inspector chrome occludes the viewport.
  */
-export function ScenarioMapFinalWorkbench() {
+export function ScenarioMapFinalWorkbench(options: {
+  readonly rightSidebarOverlayWidthPx?: number;
+}) {
+  const { rightSidebarOverlayWidthPx = 0 } = options;
   const { bundle, mapEditor } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const [brushSelection, dispatchBrushSelection] = useReducer(
@@ -1368,6 +1373,7 @@ export function ScenarioMapFinalWorkbench() {
 
       <div className="min-h-0 bg-[#0b1020]">
         <MapCanvas
+          cameraPanExtraMaxOffsetXPx={rightSidebarOverlayWidthPx}
           dragPlacementEnabled={
             sidebarMode === 'all-tiles' ||
             activeBrushFamily === 'base' ||

@@ -104,6 +104,8 @@ export type MapCanvasTileOverlayResolver = (
  * Difference: browser-only pan/zoom controls can render either in-map (default)
  * or in an external UI container supplied by the route. Runtime tileset
  * selection is TypeScript-only and leaves authoritative tile ids unchanged.
+ * Additional parity difference: `cameraPanExtraMaxOffsetXPx` extends rightward
+ * pan range for overlay chrome that occludes the map without resizing it.
  */
 export function MapCanvas({
   mapState,
@@ -117,6 +119,7 @@ export function MapCanvas({
   dragPlacementEnabled = false,
   tileSize = 4,
   tilesetName = 'classic',
+  cameraPanExtraMaxOffsetXPx = 0,
 }: {
   mapState: RuntimeMapState;
   pendingTools?: readonly PendingToolCommandVisual[];
@@ -129,6 +132,7 @@ export function MapCanvas({
   dragPlacementEnabled?: boolean;
   tileSize?: number;
   tilesetName?: RuntimeTilesetName;
+  cameraPanExtraMaxOffsetXPx?: number;
   cameraControlsContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -315,7 +319,7 @@ export function MapCanvas({
   const heightPx = cameraMetrics.mapHeightPx;
   const viewportWidthPx = cameraMetrics.viewportWidthPx;
   const viewportHeightPx = cameraMetrics.viewportHeightPx;
-  const maxCameraOffsetX = cameraMetrics.maxCameraOffsetX;
+  const maxCameraOffsetX = cameraMetrics.maxCameraOffsetX + Math.max(0, cameraPanExtraMaxOffsetXPx);
   const maxCameraOffsetY = cameraMetrics.maxCameraOffsetY;
   const hoverPreviewSpec = useMemo(() => {
     if (hoverPreview !== undefined) {
@@ -507,7 +511,7 @@ export function MapCanvas({
         setCameraOffsetPx((currentOffset) => {
           const clampedCurrentOffset = clampMapCanvasCameraOffset(
             currentOffset,
-            currentMetrics.maxCameraOffsetX,
+            currentMetrics.maxCameraOffsetX + Math.max(0, cameraPanExtraMaxOffsetXPx),
             currentMetrics.maxCameraOffsetY,
           );
           const zoomedOffset = zoomMapCanvasCameraOffsetAtAnchor({
@@ -518,7 +522,7 @@ export function MapCanvas({
           });
           return clampMapCanvasCameraOffset(
             zoomedOffset,
-            nextMetrics.maxCameraOffsetX,
+            nextMetrics.maxCameraOffsetX + Math.max(0, cameraPanExtraMaxOffsetXPx),
             nextMetrics.maxCameraOffsetY,
           );
         });
@@ -530,6 +534,7 @@ export function MapCanvas({
       mapState.height,
       mapState.width,
       tileSize,
+      cameraPanExtraMaxOffsetXPx,
       viewportBounds.viewportMaxHeightPx,
       viewportBounds.viewportMaxWidthPx,
     ],
