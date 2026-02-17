@@ -1,7 +1,6 @@
 import {
   ClassicyButton,
   ClassicyCheckboxField,
-  ClassicyInput,
   ClassicyMenuItemButton,
   ClassicyMessageSurface,
   ClassicyPanelChrome,
@@ -42,6 +41,7 @@ import {
 } from '../state/editor-map.ts';
 import { createScenarioEditorRuntimeMapStateWithOptions } from '../state/editor-map-runtime.ts';
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
+import { EditorField } from './-editor-ui.tsx';
 
 const BASE_TILE_NAME_OPTIONS = getScenarioEditorMapNamedBaseTiles();
 
@@ -1157,11 +1157,11 @@ export function ScenarioMapFinalWorkbench(options: {
 
               <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
                 <div className="grid gap-[0.3rem]">
-                  <label className="grid gap-[0.2rem]">
+                  <EditorField className="gap-[0.2rem]">
                     <span className="text-sm font-semibold text-[var(--color-system-08)]">
                       Derive simulation ticks
                     </span>
-                    <ClassicyInput
+                    <input
                       min={1}
                       onChange={(event) => {
                         const next = Number(event.currentTarget.value);
@@ -1173,7 +1173,7 @@ export function ScenarioMapFinalWorkbench(options: {
                       type="number"
                       value={deriveSimulationTicks}
                     />
-                  </label>
+                  </EditorField>
                 </div>
                 <ClassicyButton
                   className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
@@ -1197,9 +1197,9 @@ export function ScenarioMapFinalWorkbench(options: {
           </div>
         ) : (
           <ClassicyMessageSurface className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-[0.65rem] p-2">
-            <label className="grid gap-[0.2rem]">
+            <EditorField className="gap-[0.2rem]">
               <span className="text-sm font-semibold text-[var(--color-system-08)]">Find tile</span>
-              <ClassicyInput
+              <input
                 onChange={(event) => {
                   setExactTileSearchQuery(event.currentTarget.value);
                 }}
@@ -1208,7 +1208,7 @@ export function ScenarioMapFinalWorkbench(options: {
                 type="text"
                 value={exactTileSearchQuery}
               />
-            </label>
+            </EditorField>
             <ClassicyCheckboxField
               checked={exactTileNamedOnly}
               label="Named tiles only"
@@ -1267,9 +1267,6 @@ export function ScenarioMapFinalWorkbench(options: {
                 </div>
               )}
             </ClassicyMessageSurface>
-            <small className="text-sm text-[var(--color-system-07)]">
-              Exact tile brush: placing tile {exactTileBrushTileId}.
-            </small>
           </ClassicyMessageSurface>
         )}
       </ClassicyPanelChrome>

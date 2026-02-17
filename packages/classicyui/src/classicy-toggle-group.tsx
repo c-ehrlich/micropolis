@@ -1,6 +1,10 @@
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
+import { ClassicyButton } from './classicy-button.tsx';
+
+const CLASSICY_TOGGLE_GROUP_ACTIVE_CLASS = '!text-[var(--color-white)] !bg-[var(--color-theme-04)]';
+
 export interface ClassicyToggleGroupOption<Value extends string = string> {
   readonly disabled?: boolean;
   readonly label: ReactNode;
@@ -37,33 +41,24 @@ export function ClassicyToggleGroup<Value extends string>({
   return (
     <div
       aria-label={ariaLabel}
-      className={clsx(
-        'inline-grid min-w-0 overflow-hidden rounded-[0.95rem] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-03)_92%,transparent)]',
-        '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]',
-        className,
-      )}
+      className={clsx('inline-flex min-w-0 items-stretch', className)}
       role="radiogroup"
-      style={{ gridTemplateColumns: `repeat(${Math.max(1, options.length)}, minmax(0, 1fr))` }}
     >
       {options.map((option, index) => {
         const active = option.value === selectedValue;
+        const isOnlyOption = options.length === 1;
         return (
-          <button
+          <ClassicyButton
+            active={active}
+            activeClassName={CLASSICY_TOGGLE_GROUP_ACTIVE_CLASS}
             aria-checked={active}
             className={clsx(
-              'relative cursor-pointer border-0 bg-transparent px-[0.9rem] py-[0.48rem] font-semibold leading-none [font-family:var(--header-font),serif] [font-size:calc(var(--header-font-size)*0.86)] text-[var(--color-black)] disabled:cursor-not-allowed disabled:text-[var(--color-system-07)]',
-              'focus-visible:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-theme-07)]',
-              index < options.length - 1
-                ? 'after:pointer-events-none after:absolute after:bottom-[0.3rem] after:right-0 after:top-[0.3rem] after:w-[var(--window-border-size)] after:bg-[color-mix(in_srgb,var(--color-black)_28%,transparent)]'
-                : null,
-              active
-                ? clsx(
-                    'z-10 [background:color-mix(in_srgb,var(--color-white)_82%,var(--color-system-01))]',
-                    '[box-shadow:inset_0_0_0_2px_var(--color-theme-07)]',
-                    index === 0 ? 'rounded-l-[0.85rem]' : null,
-                    index === options.length - 1 ? 'rounded-r-[0.85rem]' : null,
-                  )
-                : null,
+              '!m-0 !min-h-0 min-w-0 flex-1 !px-[0.8rem] !py-[0.45rem] [font-family:var(--header-font),serif] [font-size:calc(var(--header-font-size)*0.86)]',
+              !isOnlyOption && index > 0 ? '-ml-[var(--window-border-size)]' : null,
+              !isOnlyOption && index === 0 ? '!rounded-r-none' : null,
+              !isOnlyOption && index > 0 && index < options.length - 1 ? '!rounded-none' : null,
+              !isOnlyOption && index === options.length - 1 ? '!rounded-l-none' : null,
+              active ? 'relative z-10' : null,
               optionClassName,
             )}
             disabled={option.disabled}
@@ -127,7 +122,7 @@ export function ClassicyToggleGroup<Value extends string>({
             type="button"
           >
             {option.label}
-          </button>
+          </ClassicyButton>
         );
       })}
     </div>
