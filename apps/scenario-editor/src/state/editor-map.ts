@@ -339,18 +339,6 @@ export function findScenarioEditorMapNamedBaseTileByName(
 }
 
 /**
- * Resolve one named base tile entry by low-10-bit tile id.
- * Mirrors tile-id to named constant mapping from Micropolis `sim.h`.
- */
-export function findScenarioEditorMapNamedBaseTileById(
-  baseTileId: number,
-): ScenarioEditorMapNamedBaseTile | undefined {
-  return SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.get(
-    normalizeScenarioEditorBaseTileId(baseTileId),
-  );
-}
-
-/**
  * Resolve max value class for one zone family.
  * Mirrors `DoIndustrial` in `ref/micropolis/src/sim/s_zone.c` which calls
  * `DoIndIn`/`DoIndOut` with `Rand16() & 1` (industrial value domain 0..1), while
@@ -1124,14 +1112,6 @@ export function isScenarioEditorMapTool(value: string): value is ScenarioEditorM
 }
 
 /**
- * Runtime guard for zone-family ids selected from form controls.
- * Mirrors closed residential/commercial/industrial domains in `s_zone.c`.
- */
-export function isScenarioEditorMapZoneKind(value: string): value is ScenarioEditorMapZoneKind {
-  return SCENARIO_EDITOR_MAP_ZONE_KIND_SET.has(value as ScenarioEditorMapZoneKind);
-}
-
-/**
  * Ensure editor map operations always work over tile-word payloads.
  * Reuses Stage 0 map transcoding parity from `ref/micropolis/src/sim/s_fileio.c`
  * (`_load_short` map-word decode order); parity difference: result is JSON-friendly data.
@@ -1143,9 +1123,6 @@ function asTileWordsMap(bundle: ScenarioBundleV1): ScenarioMapTileWordsV1 {
 }
 
 const SCENARIO_EDITOR_MAP_TOOL_SET = new Set<ScenarioEditorMapTool>(SCENARIO_EDITOR_MAP_TOOLS);
-const SCENARIO_EDITOR_MAP_ZONE_KIND_SET = new Set<ScenarioEditorMapZoneKind>(
-  SCENARIO_EDITOR_MAP_ZONE_KINDS,
-);
 const SCENARIO_EDITOR_MAP_NAMED_BASE_TILES: readonly ScenarioEditorMapNamedBaseTile[] = [
   { name: 'DIRT', label: 'Dirt', tileId: Tile.DIRT },
   { name: 'RIVER', label: 'River', tileId: Tile.RIVER },
@@ -1274,12 +1251,6 @@ const SCENARIO_EDITOR_MAP_NAMED_BASE_TILES: readonly ScenarioEditorMapNamedBaseT
 const SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_NAME = new Map<string, ScenarioEditorMapNamedBaseTile>(
   SCENARIO_EDITOR_MAP_NAMED_BASE_TILES.map((entry) => [entry.name, entry]),
 );
-const SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID = new Map<number, ScenarioEditorMapNamedBaseTile>();
-for (const entry of SCENARIO_EDITOR_MAP_NAMED_BASE_TILES) {
-  if (!SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.has(entry.tileId)) {
-    SCENARIO_EDITOR_MAP_NAMED_BASE_TILE_BY_ID.set(entry.tileId, entry);
-  }
-}
 
 /**
  * Convert one tile word to a next tile word with replaced low tile-id bits.

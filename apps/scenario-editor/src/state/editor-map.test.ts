@@ -7,14 +7,12 @@ import {
   applyScenarioEditorMapZoneLevelAtPoint,
   fillScenarioEditorMapBaseTileId,
   fillScenarioEditorMapTileWord,
-  findScenarioEditorMapNamedBaseTileById,
   findScenarioEditorMapNamedBaseTileByName,
   getScenarioEditorMapIndex,
   getScenarioEditorMapNamedBaseTiles,
   getScenarioEditorMapZoneMaxLevel,
   getScenarioEditorMapZoneMaxValue,
   isScenarioEditorMapTool,
-  isScenarioEditorMapZoneKind,
   normalizeScenarioEditorBaseTileId,
   normalizeScenarioEditorMapZoneLevel,
   normalizeScenarioEditorMapZoneValue,
@@ -123,7 +121,6 @@ describe('scenario editor map helpers', () => {
       true,
     );
     expect(findScenarioEditorMapNamedBaseTileByName('RIVER')?.tileId).toBe(Tile.RIVER);
-    expect(findScenarioEditorMapNamedBaseTileById(Tile.REDGE)?.name).toBe('REDGE');
   });
 
   test('writes base tile id while preserving status flags by default', () => {
@@ -299,10 +296,5 @@ describe('scenario editor map helpers', () => {
   test('rejects unknown tool ids at runtime guard', () => {
     expect(isScenarioEditorMapTool('road')).toBe(true);
     expect(isScenarioEditorMapTool('network')).toBe(false);
-  });
-
-  test('rejects unknown zone ids at runtime guard', () => {
-    expect(isScenarioEditorMapZoneKind('res')).toBe(true);
-    expect(isScenarioEditorMapZoneKind('airport')).toBe(false);
   });
 });
