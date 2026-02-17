@@ -54,7 +54,6 @@ import {
  */
 export const SCENARIO_EDITOR_MVP_VIEWS = [
   'metadata',
-  'map',
   'map-final',
   'objective',
   'script',

@@ -37,9 +37,9 @@ describe('scenario editor state foundation', () => {
 
   test('transitions active view through reducer actions', () => {
     const initial = createScenarioEditorInitialState();
-    const next = scenarioEditorReducer(initial, { type: 'set-active-view', view: 'map' });
+    const next = scenarioEditorReducer(initial, { type: 'set-active-view', view: 'map-final' });
 
-    expect(next.activeView).toBe('map');
+    expect(next.activeView).toBe('map-final');
     expect(next.bundle).toBe(initial.bundle);
     expect(next.isDirty).toBe(false);
   });
@@ -69,7 +69,6 @@ describe('scenario editor state foundation', () => {
   test('exposes current editor views including the map final workbench', () => {
     expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual([
       'metadata',
-      'map',
       'map-final',
       'objective',
       'script',

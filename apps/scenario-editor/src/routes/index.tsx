@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useScenarioEditorState } from '../state/editor-state.tsx';
 import { ScenarioBehaviorProfileEditorCard } from './-section-behavior.tsx';
 import { ScenarioExportCard } from './-section-export.tsx';
-import { ScenarioMapEditorCard, ScenarioMapFinalWorkbench } from './-section-map.tsx';
+import { ScenarioMapFinalWorkbench } from './-section-map.tsx';
 import { ScenarioMetadataEditorCard } from './-section-metadata.tsx';
 import { ScenarioObjectiveEditorCard } from './-section-objective.tsx';
 import { ScenarioScriptEditorCard } from './-section-script.tsx';
@@ -25,9 +25,6 @@ function ScenarioEditorHomeRoute() {
 
   if (activeView === 'metadata') {
     return <ScenarioMetadataEditorCard />;
-  }
-  if (activeView === 'map') {
-    return <ScenarioMapEditorCard />;
   }
   if (activeView === 'map-final') {
     return <ScenarioMapFinalWorkbench />;

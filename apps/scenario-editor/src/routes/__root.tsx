@@ -97,9 +97,6 @@ function getScenarioEditorWorkbenchViewLabel(view: ScenarioEditorWorkbenchView):
   if (view === 'metadata') {
     return 'Metadata';
   }
-  if (view === 'map') {
-    return 'Map';
-  }
   if (view === 'map-final') {
     return 'Map (final)';
   }
