@@ -99,7 +99,7 @@ function EditorTopBar() {
         <ClassicyButton
           active={fileMenuOpen}
           activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
-          className={`!m-0 min-w-[6.5rem] px-4 py-1.5 text-left ${fileMenuOpen ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
+          className={`!m-0 min-w-[6.5rem] px-4 py-1.5 ${fileMenuOpen ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
           onClick={() => {
             setFileMenuOpen((current) => !current);
           }}
