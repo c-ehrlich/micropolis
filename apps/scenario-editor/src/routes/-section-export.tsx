@@ -36,13 +36,17 @@ type ScenarioEditorOpenResult =
 
 const STOCK_SCENARIO_OPTIONS = getScenarioEditorStockScenarioOptions();
 
+export interface ScenarioFileMenuContentProps {
+  readonly compact?: boolean;
+}
+
 /**
- * Strict JSON export + open/import card for Stage 3.4/3.5.
+ * File-workflow controls for scenario open/import/export actions.
  * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
  * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
  * file-picker UX are editor-only browser workflow glue.
  */
-export function ScenarioExportCard() {
+export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuContentProps) {
   const { bundle, isDirty, objective, script } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -114,7 +118,6 @@ export function ScenarioExportCard() {
     }
 
     dispatch({ type: 'replace-bundle', bundle: importResult.bundle });
-    dispatch({ type: 'set-active-view', view: 'metadata' });
     setLastOpenResult({
       ok: true,
       sourceLabel: selectedFile.name,
@@ -141,7 +144,6 @@ export function ScenarioExportCard() {
     try {
       const stockBundle = await loadScenarioEditorStockScenarioBundle(selectedScenario.id);
       dispatch({ type: 'replace-bundle', bundle: stockBundle });
-      dispatch({ type: 'set-active-view', view: 'metadata' });
       setLastOpenResult({
         ok: true,
         sourceLabel: `${selectedScenario.name} (${selectedScenario.fileName})`,
@@ -168,15 +170,20 @@ export function ScenarioExportCard() {
   const openIssues = lastOpenResult?.ok === false ? lastOpenResult.issues : [];
 
   return (
-    <EditorCard aria-label="Scenario strict export panel" className="max-w-[52rem]">
-      <h1>Export Scenario Bundle</h1>
-      <p>
-        Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
-        export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes` plus
-        authored Stage 4 objective/script payloads when enabled.
-      </p>
+    <div className={compact ? 'grid gap-3' : ''}>
+      {!compact ? (
+        <p>
+          Open an existing bundle JSON for iterative edits, then run strict schema/lint checks and
+          export canonical `ScenarioBundleV1` JSON with map payload compiled to `city-file-bytes`
+          plus authored Stage 4 objective/script payloads when enabled.
+        </p>
+      ) : null}
 
-      <div className="mb-4 grid justify-items-start gap-2">
+      <div
+        className={
+          compact ? 'grid justify-items-start gap-2' : 'mb-4 grid justify-items-start gap-2'
+        }
+      >
         <input
           accept="application/json,.json"
           className="hidden"
@@ -217,7 +224,11 @@ export function ScenarioExportCard() {
         <small className="text-sm text-slate-600">Export file name: {exportFileName}</small>
       </div>
 
-      <EditorStatsGrid>
+      <EditorStatsGrid
+        className={
+          compact ? 'grid-cols-[max-content_1fr] gap-x-2 text-sm [&_dt]:text-slate-500' : ''
+        }
+      >
         <dt>Dirty State</dt>
         <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Last Open Attempt</dt>
@@ -239,7 +250,7 @@ export function ScenarioExportCard() {
       </EditorStatsGrid>
 
       {lastResult?.ok === false ? (
-        <EditorIssuesPanel aria-label="Strict export issues">
+        <EditorIssuesPanel aria-label="Strict export issues" className={compact ? 'mt-0' : ''}>
           <h2>Export Blocked</h2>
           <ul>
             {lastResult.issues.map((issue, index) => (
@@ -252,7 +263,7 @@ export function ScenarioExportCard() {
       ) : null}
 
       {lastOpenResult?.ok === false ? (
-        <EditorIssuesPanel aria-label="Bundle open issues">
+        <EditorIssuesPanel aria-label="Bundle open issues" className={compact ? 'mt-0' : ''}>
           <h2>Open Blocked</h2>
           <ul>
             {openIssues.map((issue, index) => (
@@ -265,11 +276,26 @@ export function ScenarioExportCard() {
       ) : null}
 
       {lastResult?.ok ? (
-        <EditorPreviewPanel aria-label="Export json preview">
+        <EditorPreviewPanel aria-label="Export json preview" className={compact ? 'mt-0' : ''}>
           <h2>Last Export JSON</h2>
-          <textarea readOnly rows={12} value={lastResult.jsonText} />
+          <textarea readOnly rows={compact ? 8 : 12} value={lastResult.jsonText} />
         </EditorPreviewPanel>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Strict JSON export + open/import card for Stage 3.4/3.5.
+ * Reuses Stage 0 schema/map canonicalization checks derived from Micropolis map
+ * persistence in `ref/micropolis/src/sim/s_fileio.c`; open/import diagnostics and
+ * file-picker UX are editor-only browser workflow glue.
+ */
+export function ScenarioExportCard() {
+  return (
+    <EditorCard aria-label="Scenario strict export panel" className="max-w-[52rem]">
+      <h1>Export Scenario Bundle</h1>
+      <ScenarioFileMenuContent />
     </EditorCard>
   );
 }

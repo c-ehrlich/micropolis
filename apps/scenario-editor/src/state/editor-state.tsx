@@ -49,25 +49,18 @@ import {
 } from './editor-script.ts';
 
 /**
- * Editor workbench sections for Stage 4 objective/script/behavior authoring navigation state.
+ * Editor sidebar sections for Stage 4 objective/script/behavior authoring navigation state.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export const SCENARIO_EDITOR_MVP_VIEWS = [
-  'metadata',
-  'map-final',
-  'objective',
-  'script',
-  'behavior',
-  'export',
-] as const;
+export const SCENARIO_EDITOR_MVP_VIEWS = ['metadata', 'objective', 'script', 'behavior'] as const;
 
 /**
- * Editor workbench sections for Stage 4 objective/script authoring navigation state.
+ * Editor workbench section selector state.
  * Stage-parity note: predicate/event authoring and behavior-profile assignment are exposed in
  * Stage 4.1/4.2/4.3, while AI/image import remains deferred to Stage 5.
  * Not from Micropolis C: this is editor-only UI flow state and has no direct C runtime equivalent.
  */
-export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number];
+export type ScenarioEditorWorkbenchView = (typeof SCENARIO_EDITOR_MVP_VIEWS)[number] | 'none';
 
 /**
  * Authoring draft state used by the scenario editor shell.
@@ -242,7 +235,7 @@ export function createScenarioEditorInitialBundle(): ScenarioBundleV1 {
  */
 export function createScenarioEditorInitialState(): ScenarioEditorState {
   return {
-    activeView: 'metadata',
+    activeView: 'none',
     behavior: createScenarioEditorInitialBehaviorDraft(),
     bundle: createScenarioEditorInitialBundle(),
     mapEditor: {

@@ -1,8 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { useScenarioEditorState } from '../state/editor-state.tsx';
+import {
+  type ScenarioEditorWorkbenchView,
+  useScenarioEditorDispatch,
+  useScenarioEditorState,
+} from '../state/editor-state.tsx';
 import { ScenarioBehaviorProfileEditorCard } from './-section-behavior.tsx';
-import { ScenarioExportCard } from './-section-export.tsx';
 import { ScenarioMapFinalWorkbench } from './-section-map.tsx';
 import { ScenarioMetadataEditorCard } from './-section-metadata.tsx';
 import { ScenarioObjectiveEditorCard } from './-section-objective.tsx';
@@ -13,31 +16,78 @@ export const Route = createFileRoute('/')({
 });
 
 /**
- * Stage 4 workbench route with metadata/map editing plus objective and script authoring.
- * Parity note: objective metric leaves map to `DoScenarioScore` checks in
- * `ref/micropolis/src/sim/s_msg.c`, while logical composition forms are declarative
- * runtime extensions from `packages/scenario-runtime`; script events map to
- * `ScenarioDisaster` trigger/action domains in `ref/micropolis/src/sim/s_disast.c`; behavior
- * profile assignment maps closed `DoShipSprite` variants from `ref/micropolis/src/sim/w_sprite.c`.
+ * Map-first Scenario Editor route with optional right sidebar inspectors.
+ * Parity note: map authoring uses `MapCanvas` and C-derived tool logic from
+ * `w_tool.c`/`w_sim.c`, while metadata/objective/script/behavior inspectors are
+ * editor-only side panels.
  */
 function ScenarioEditorHomeRoute() {
   const { activeView } = useScenarioEditorState();
+  const dispatch = useScenarioEditorDispatch();
+  const sidebarOpen = activeView !== 'none';
 
-  if (activeView === 'metadata') {
+  return (
+    <section
+      aria-label="Scenario editor workspace"
+      className={`grid h-full min-h-0 overflow-hidden ${
+        sidebarOpen ? 'grid-cols-[minmax(0,1fr)_clamp(20rem,32vw,34rem)]' : 'grid-cols-1'
+      }`}
+    >
+      <div className="min-h-0 overflow-hidden">
+        <ScenarioMapFinalWorkbench />
+      </div>
+
+      {sidebarOpen ? (
+        <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-l border-slate-400 bg-white">
+          <header className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
+            <h2 className="m-0 text-[1.7rem] font-semibold">{getSidebarTitle(activeView)}</h2>
+            <button
+              aria-label="Close sidebar"
+              className="grid h-8 w-8 cursor-pointer place-items-center rounded border border-slate-500 bg-slate-100 px-0 py-0 text-[1rem] leading-none"
+              onClick={() => {
+                dispatch({ type: 'set-active-view', view: 'none' });
+              }}
+              type="button"
+            >
+              X
+            </button>
+          </header>
+
+          <div className="min-h-0 overflow-y-auto p-3 [&>section]:max-w-none [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0 [&>section>h1]:hidden [&>section>p]:hidden">
+            <ScenarioRightSidebarPanel view={activeView} />
+          </div>
+        </aside>
+      ) : null}
+    </section>
+  );
+}
+
+function ScenarioRightSidebarPanel(options: {
+  readonly view: Exclude<ScenarioEditorWorkbenchView, 'none'>;
+}) {
+  const { view } = options;
+
+  if (view === 'metadata') {
     return <ScenarioMetadataEditorCard />;
   }
-  if (activeView === 'map-final') {
-    return <ScenarioMapFinalWorkbench />;
-  }
-  if (activeView === 'objective') {
+  if (view === 'objective') {
     return <ScenarioObjectiveEditorCard />;
   }
-  if (activeView === 'script') {
+  if (view === 'script') {
     return <ScenarioScriptEditorCard />;
   }
-  if (activeView === 'behavior') {
-    return <ScenarioBehaviorProfileEditorCard />;
-  }
+  return <ScenarioBehaviorProfileEditorCard />;
+}
 
-  return <ScenarioExportCard />;
+function getSidebarTitle(view: Exclude<ScenarioEditorWorkbenchView, 'none'>): string {
+  if (view === 'metadata') {
+    return 'Metadata';
+  }
+  if (view === 'objective') {
+    return 'Objectives';
+  }
+  if (view === 'script') {
+    return 'Scripts';
+  }
+  return 'Behavior';
 }

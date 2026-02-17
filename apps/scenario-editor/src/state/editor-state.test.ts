@@ -37,9 +37,9 @@ describe('scenario editor state foundation', () => {
 
   test('transitions active view through reducer actions', () => {
     const initial = createScenarioEditorInitialState();
-    const next = scenarioEditorReducer(initial, { type: 'set-active-view', view: 'map-final' });
+    const next = scenarioEditorReducer(initial, { type: 'set-active-view', view: 'objective' });
 
-    expect(next.activeView).toBe('map-final');
+    expect(next.activeView).toBe('objective');
     expect(next.bundle).toBe(initial.bundle);
     expect(next.isDirty).toBe(false);
   });
@@ -66,19 +66,14 @@ describe('scenario editor state foundation', () => {
     expect(toggledBaseClasses.isDirty).toBe(false);
   });
 
-  test('exposes current editor views including the map final workbench', () => {
-    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual([
-      'metadata',
-      'map-final',
-      'objective',
-      'script',
-      'behavior',
-      'export',
-    ]);
+  test('exposes current editor sidebar views', () => {
+    expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual(['metadata', 'objective', 'script', 'behavior']);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('script')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('scripts')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('objective')).toBe(true);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('behavior')).toBe(true);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('map-final')).toBe(false);
+    expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('export')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('ai-import')).toBe(false);
     expect((SCENARIO_EDITOR_MVP_VIEWS as readonly string[]).includes('image-import')).toBe(false);
