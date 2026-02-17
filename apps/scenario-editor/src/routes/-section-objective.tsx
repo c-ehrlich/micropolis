@@ -16,11 +16,11 @@ import {
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import {
   EditorButton,
+  EditorError,
   EditorField,
   EditorFieldInline,
   EditorIssuesPanel,
   EditorPreviewPanel,
-  EditorStatsGrid,
 } from './-editor-ui.tsx';
 import { parseIntegerInput } from './-section-shared.ts';
 
@@ -31,11 +31,29 @@ import { parseIntegerInput } from './-section-shared.ts';
  * declarative extensions supported by `packages/scenario-runtime`.
  */
 export function ScenarioObjectiveEditorCard() {
-  const { objective, isDirty } = useScenarioEditorState();
+  const { objective } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const validationIssues = useMemo(
     () => getScenarioEditorObjectiveValidationIssues(objective),
     [objective],
+  );
+  const validationIssueMessagesByPath = useMemo(
+    () => indexValidationIssueMessagesByPath(validationIssues),
+    [validationIssues],
+  );
+  const attributableValidationPaths = useMemo(
+    () =>
+      objective.enabled
+        ? collectObjectiveRenderableValidationPaths(objective.predicate, 'objective.predicate')
+        : new Set<string>(),
+    [objective.enabled, objective.predicate],
+  );
+  const unattributedValidationIssues = useMemo(
+    () =>
+      objective.enabled
+        ? validationIssues.filter((issue) => !attributableValidationPaths.has(issue.path))
+        : [],
+    [attributableValidationPaths, objective.enabled, validationIssues],
   );
   const objectiveJson = useMemo(
     () => JSON.stringify(objective.enabled ? objective.predicate : null, null, 2),
@@ -45,10 +63,6 @@ export function ScenarioObjectiveEditorCard() {
   return (
     <section aria-label="Scenario objective editor" className="grid gap-4">
       <h1>Scenario Objective</h1>
-      <p>
-        Author objective predicates using the Stage 4 DSL. Metric comparisons track classic
-        `DoScenarioScore` fields, while `all`/`any`/`not` allow composed checks.
-      </p>
 
       <ClassicyCheckboxField
         checked={objective.enabled}
@@ -62,39 +76,22 @@ export function ScenarioObjectiveEditorCard() {
       {objective.enabled ? (
         <ScenarioObjectivePredicateEditor
           depth={0}
+          issueMessagesByPath={validationIssueMessagesByPath}
           onChange={(predicate) => {
             dispatch({ type: 'replace-objective-predicate', predicate });
           }}
+          path="objective.predicate"
           predicate={objective.predicate}
         />
       ) : (
         <p className="text-sm text-slate-600">Objective checks are disabled for this draft.</p>
       )}
 
-      <EditorStatsGrid>
-        <dt>Dirty State</dt>
-        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
-        <dt>Objective Enabled</dt>
-        <dd>{objective.enabled ? 'yes' : 'no'}</dd>
-        <dt>Root Predicate</dt>
-        <dd>{objective.enabled ? objective.predicate.kind : 'none'}</dd>
-        <dt>Validation</dt>
-        <dd>
-          {!objective.enabled
-            ? 'disabled'
-            : validationIssues.length === 0
-              ? 'valid'
-              : `invalid (${validationIssues.length} issue${
-                  validationIssues.length === 1 ? '' : 's'
-                })`}
-        </dd>
-      </EditorStatsGrid>
-
-      {objective.enabled && validationIssues.length > 0 ? (
+      {objective.enabled && unattributedValidationIssues.length > 0 ? (
         <EditorIssuesPanel aria-label="Objective semantic issues">
-          <h2>Objective Semantic Issues</h2>
+          <h2>Other Objective Issues</h2>
           <ul>
-            {validationIssues.map((issue, index) => (
+            {unattributedValidationIssues.map((issue, index) => (
               <li key={`${issue.path}:${issue.message}:${index}`}>
                 <code>{issue.path}</code>: {issue.message}
               </li>
@@ -118,18 +115,24 @@ export function ScenarioObjectiveEditorCard() {
  */
 function ScenarioObjectivePredicateEditor(options: {
   depth: number;
+  issueMessagesByPath: ReadonlyMap<string, readonly string[]>;
   onChange: (predicate: ScenarioEditorObjectivePredicate) => void;
+  path: string;
   predicate: ScenarioEditorObjectivePredicate;
 }) {
-  const { depth, onChange, predicate } = options;
+  const { depth, issueMessagesByPath, onChange, path, predicate } = options;
   const nodeLabel = `Predicate depth ${depth}`;
+  const nodeIssue = getFirstValidationIssueMessage(issueMessagesByPath, path);
+  const kindIssue = getFirstValidationIssueMessage(issueMessagesByPath, `${path}.kind`);
 
   return (
     <fieldset className="my-3 rounded-md border border-slate-300 p-3 [&>legend]:px-[0.4rem] [&>legend]:text-slate-600">
       <legend>{nodeLabel}</legend>
+      {nodeIssue !== undefined ? <EditorError>{nodeIssue}</EditorError> : null}
       <EditorField>
         <span>Kind</span>
         <select
+          aria-invalid={kindIssue !== undefined}
           onChange={(event) => {
             onChange(
               coerceScenarioObjectivePredicateKind(
@@ -146,6 +149,7 @@ function ScenarioObjectivePredicateEditor(options: {
             </option>
           ))}
         </select>
+        {kindIssue !== undefined ? <EditorError>{kindIssue}</EditorError> : null}
       </EditorField>
 
       {predicate.kind === 'metric' ? (
@@ -153,6 +157,9 @@ function ScenarioObjectivePredicateEditor(options: {
           <EditorField>
             <span>Metric</span>
             <select
+              aria-invalid={
+                getFirstValidationIssueMessage(issueMessagesByPath, `${path}.metric`) !== undefined
+              }
               onChange={(event) => {
                 onChange({
                   ...predicate,
@@ -168,11 +175,19 @@ function ScenarioObjectivePredicateEditor(options: {
                 </option>
               ))}
             </select>
+            {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.metric`) !== undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.metric`)}
+              </EditorError>
+            ) : null}
           </EditorField>
 
           <EditorField>
             <span>Operator</span>
             <select
+              aria-invalid={
+                getFirstValidationIssueMessage(issueMessagesByPath, `${path}.op`) !== undefined
+              }
               onChange={(event) => {
                 onChange({
                   ...predicate,
@@ -188,11 +203,19 @@ function ScenarioObjectivePredicateEditor(options: {
                 </option>
               ))}
             </select>
+            {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.op`) !== undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.op`)}
+              </EditorError>
+            ) : null}
           </EditorField>
 
           <EditorField>
             <span>Value</span>
             <input
+              aria-invalid={
+                getFirstValidationIssueMessage(issueMessagesByPath, `${path}.value`) !== undefined
+              }
               onChange={(event) => {
                 onChange({
                   ...predicate,
@@ -202,6 +225,11 @@ function ScenarioObjectivePredicateEditor(options: {
               type="number"
               value={predicate.value}
             />
+            {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.value`) !== undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.value`)}
+              </EditorError>
+            ) : null}
           </EditorField>
         </EditorFieldInline>
       ) : null}
@@ -212,9 +240,11 @@ function ScenarioObjectivePredicateEditor(options: {
             <div className="grid gap-2" key={index}>
               <ScenarioObjectivePredicateEditor
                 depth={depth + 1}
+                issueMessagesByPath={issueMessagesByPath}
                 onChange={(child) => {
                   onChange(replaceScenarioObjectiveChildPredicate(predicate, index, child));
                 }}
+                path={`${path}.predicates.${index}`}
                 predicate={childPredicate}
               />
               <EditorButton
@@ -237,16 +267,30 @@ function ScenarioObjectivePredicateEditor(options: {
           >
             Add Child Predicate
           </EditorButton>
+          {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.predicates`) !==
+          undefined ? (
+            <EditorError>
+              {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.predicates`)}
+            </EditorError>
+          ) : null}
         </div>
       ) : null}
 
       {predicate.kind === 'not' ? (
         <div className="grid gap-3">
+          {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.predicate`) !==
+          undefined ? (
+            <EditorError>
+              {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.predicate`)}
+            </EditorError>
+          ) : null}
           <ScenarioObjectivePredicateEditor
             depth={depth + 1}
+            issueMessagesByPath={issueMessagesByPath}
             onChange={(child) => {
               onChange(replaceScenarioObjectiveNotChildPredicate(predicate, child));
             }}
+            path={`${path}.predicate`}
             predicate={predicate.predicate}
           />
         </div>
@@ -254,6 +298,67 @@ function ScenarioObjectivePredicateEditor(options: {
     </fieldset>
   );
 }
+
+const indexValidationIssueMessagesByPath = (
+  issues: readonly { path: string; message: string }[],
+): ReadonlyMap<string, readonly string[]> => {
+  const issueMessagesByPath = new Map<string, string[]>();
+  for (const issue of issues) {
+    const existingMessages = issueMessagesByPath.get(issue.path);
+    if (existingMessages === undefined) {
+      issueMessagesByPath.set(issue.path, [issue.message]);
+      continue;
+    }
+    existingMessages.push(issue.message);
+  }
+  return issueMessagesByPath;
+};
+
+const getFirstValidationIssueMessage = (
+  issueMessagesByPath: ReadonlyMap<string, readonly string[]>,
+  path: string,
+): string | undefined => issueMessagesByPath.get(path)?.[0];
+
+const collectObjectiveRenderableValidationPaths = (
+  predicate: ScenarioEditorObjectivePredicate,
+  path: string,
+): Set<string> => {
+  const renderablePaths = new Set<string>([path, `${path}.kind`]);
+
+  if (predicate.kind === 'metric') {
+    renderablePaths.add(`${path}.metric`);
+    renderablePaths.add(`${path}.op`);
+    renderablePaths.add(`${path}.value`);
+    return renderablePaths;
+  }
+
+  if (predicate.kind === 'all' || predicate.kind === 'any') {
+    renderablePaths.add(`${path}.predicates`);
+    for (let childIndex = 0; childIndex < predicate.predicates.length; childIndex += 1) {
+      const childPredicate = predicate.predicates[childIndex];
+      if (childPredicate === undefined) {
+        continue;
+      }
+
+      for (const childPath of collectObjectiveRenderableValidationPaths(
+        childPredicate,
+        `${path}.predicates.${childIndex}`,
+      )) {
+        renderablePaths.add(childPath);
+      }
+    }
+    return renderablePaths;
+  }
+
+  renderablePaths.add(`${path}.predicate`);
+  for (const childPath of collectObjectiveRenderableValidationPaths(
+    predicate.predicate,
+    `${path}.predicate`,
+  )) {
+    renderablePaths.add(childPath);
+  }
+  return renderablePaths;
+};
 
 /**
  * Render label text for one objective predicate kind.

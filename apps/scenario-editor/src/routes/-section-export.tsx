@@ -230,8 +230,6 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
           compact ? 'grid-cols-[max-content_1fr] gap-x-2 text-sm [&_dt]:text-slate-500' : ''
         }
       >
-        <dt>Dirty State</dt>
-        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
         <dt>Last Open Attempt</dt>
         <dd>
           {lastOpenResult === null

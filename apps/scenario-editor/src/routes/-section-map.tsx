@@ -1,7 +1,11 @@
 import {
+  ClassicyButton,
   ClassicyCheckboxField,
   ClassicyInput,
   ClassicyMenuItemButton,
+  ClassicyMessageSurface,
+  ClassicyPanelChrome,
+  ClassicyPanelTitle,
   ClassicyPopoverMenu,
   ClassicyToggleGroup,
   getAllThemes,
@@ -231,6 +235,13 @@ const SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE: ScenarioMapFinalBrushSel
   zoneOptionKey: 'fresh',
   tool: 'road',
 };
+
+const CLASSICY_MAP_SIDEBAR_BUTTON_CLASS =
+  '!m-0 !min-h-0 border-2 !border-[var(--color-window-border)] !bg-[var(--color-system-02)] p-[0.2rem] text-[var(--color-black)]';
+const CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS =
+  '!border-[var(--color-theme-07)] !bg-[var(--color-theme-03)] [box-shadow:inset_0_0_0_1px_var(--color-theme-08)]';
+const CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS =
+  '!border-[var(--color-theme-07)] [background:color-mix(in_srgb,var(--color-theme-03)_52%,var(--color-system-03))]';
 
 /**
  * Reduce map-final sidebar brush selection to one globally active family.
@@ -825,13 +836,16 @@ export function ScenarioMapFinalWorkbench(options: {
 
   return (
     <section
-      className="grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] overflow-hidden bg-gray-300 text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
+      className="grid h-full min-h-0 grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)] overflow-hidden [background:color-mix(in_srgb,var(--color-system-03)_92%,var(--color-system-05))] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]"
       aria-label="Scenario map final workbench"
       style={mapFinalRuntimeTheme}
     >
-      <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
-        <section className="grid gap-[0.45rem]">
-          <section className="grid gap-[0.35rem] rounded-[8px] border border-slate-400 bg-slate-100 p-[0.45rem]">
+      <ClassicyPanelChrome
+        aria-label="Scenario map authoring controls"
+        className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden px-3 py-3 max-[980px]:max-h-[48vh]"
+      >
+        <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
+          <div className="grid gap-[0.35rem]">
             <ClassicyCheckboxField
               checked={mapEditor.autoSmoothingEnabled}
               label="Enable auto smoothing"
@@ -852,7 +866,7 @@ export function ScenarioMapFinalWorkbench(options: {
                 });
               }}
             />
-          </section>
+          </div>
           <ClassicyToggleGroup<ScenarioMapFinalSidebarMode>
             ariaLabel="Map final sidebar mode"
             options={[
@@ -865,30 +879,30 @@ export function ScenarioMapFinalWorkbench(options: {
             }}
             value={sidebarMode}
           />
-        </section>
+        </ClassicyMessageSurface>
         {isCreatorSidebarMode ? (
-          <div className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1">
-            <section
-              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-                activeBrushFamily === 'base' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+          <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
+            <ClassicyMessageSurface
+              className={`grid gap-[0.65rem] p-2 ${
+                activeBrushFamily === 'base' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
               }`}
             >
-              <h2 className="m-0 text-[1.4rem] font-semibold">Base</h2>
+              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                Base
+              </ClassicyPanelTitle>
               <div
                 className="grid grid-cols-2 gap-[0.45rem]"
                 role="list"
                 aria-label="Smart base brushes"
               >
                 {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
-                  <button
+                  <ClassicyButton
+                    active={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
+                    activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
                     aria-pressed={
                       activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
                     }
-                    className={`grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit ${
-                      activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
-                        ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
-                        : ''
-                    }`}
+                    className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid justify-items-start gap-[0.3rem] rounded-lg px-[0.4rem] py-[0.35rem]`}
                     key={brush.id}
                     onClick={() => {
                       closeToolVariantContextMenu();
@@ -902,7 +916,7 @@ export function ScenarioMapFinalWorkbench(options: {
                     type="button"
                   >
                     {zoneAtlasSource === undefined ? (
-                      <span className="text-[0.8rem] font-semibold text-slate-600">
+                      <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
                         {brush.tileId}
                       </span>
                     ) : (
@@ -913,21 +927,23 @@ export function ScenarioMapFinalWorkbench(options: {
                       />
                     )}
                     <span>{brush.label}</span>
-                  </button>
+                  </ClassicyButton>
                 ))}
               </div>
 
-              <small className="text-sm text-slate-600">
+              <small className="text-sm text-[var(--color-system-07)]">
                 Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
               </small>
-            </section>
+            </ClassicyMessageSurface>
 
-            <section
-              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-                activeBrushFamily === 'zones' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+            <ClassicyMessageSurface
+              className={`grid gap-[0.65rem] p-2 ${
+                activeBrushFamily === 'zones' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
               }`}
             >
-              <h2 className="m-0 text-[1.4rem] font-semibold">Zones</h2>
+              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                Zones
+              </ClassicyPanelTitle>
               <ClassicyToggleGroup<ScenarioEditorMapZoneKind>
                 ariaLabel="Zone family selector"
                 options={[
@@ -957,12 +973,10 @@ export function ScenarioMapFinalWorkbench(options: {
                     }
                   >
                     {rowOptions.map((option) => (
-                      <button
-                        className={`flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
-                          activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
-                            ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
-                            : ''
-                        }`}
+                      <ClassicyButton
+                        active={activeBrushFamily === 'zones' && option.key === activeZoneOptionKey}
+                        activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
+                        className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} flex min-h-[3.4rem] items-center justify-center rounded-lg`}
                         key={option.key}
                         onClick={() => {
                           closeToolVariantContextMenu();
@@ -976,7 +990,7 @@ export function ScenarioMapFinalWorkbench(options: {
                         type="button"
                       >
                         {zoneAtlasSource === undefined ? (
-                          <span className="text-[0.8rem] font-semibold text-slate-600">
+                          <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
                             {option.tileId}
                           </span>
                         ) : (
@@ -986,25 +1000,27 @@ export function ScenarioMapFinalWorkbench(options: {
                             tileIds={option.swatchTileIds}
                           />
                         )}
-                      </button>
+                      </ClassicyButton>
                     ))}
                   </div>
                 ))}
               </div>
 
-              <small className="text-sm text-slate-600">
+              <small className="text-sm text-[var(--color-system-07)]">
                 {activeZoneOption.kind === 'fresh'
                   ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
                   : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
               </small>
-            </section>
+            </ClassicyMessageSurface>
 
-            <section
-              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-                activeBrushFamily === 'tools' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+            <ClassicyMessageSurface
+              className={`grid gap-[0.65rem] p-2 ${
+                activeBrushFamily === 'tools' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
               }`}
             >
-              <h2 className="m-0 text-[1.4rem] font-semibold">Tools</h2>
+              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                Tools
+              </ClassicyPanelTitle>
               <div
                 className="grid grid-cols-4 gap-[0.45rem]"
                 role="list"
@@ -1024,12 +1040,12 @@ export function ScenarioMapFinalWorkbench(options: {
                       ? undefined
                       : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
                   return (
-                    <button
+                    <ClassicyButton
+                      active={active}
+                      activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
                       aria-label={spec.label}
                       aria-pressed={active}
-                      className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
-                        active ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]' : ''
-                      }`}
+                      className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid h-[3.8rem] w-full place-items-center rounded-lg`}
                       key={spec.tool}
                       onClick={() => {
                         closeToolVariantContextMenu();
@@ -1080,15 +1096,15 @@ export function ScenarioMapFinalWorkbench(options: {
                           tileId={spec.previewTileId}
                         />
                       ) : (
-                        <span className="text-[0.8rem] font-semibold text-slate-600">
+                        <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
                           {spec.previewTileId}
                         </span>
                       )}
-                    </button>
+                    </ClassicyButton>
                   );
                 })}
               </div>
-              <small className="text-sm text-slate-600">
+              <small className="text-sm text-[var(--color-system-07)]">
                 Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}.
                 Right click Park/House to change.
               </small>
@@ -1139,10 +1155,10 @@ export function ScenarioMapFinalWorkbench(options: {
                     ))}
               </ClassicyPopoverMenu>
 
-              <div className="grid gap-[0.45rem] rounded-lg border border-slate-400 bg-slate-100 p-[0.45rem]">
+              <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
                 <div className="grid gap-[0.3rem]">
                   <label className="grid gap-[0.2rem]">
-                    <span className="text-sm font-semibold text-slate-700">
+                    <span className="text-sm font-semibold text-[var(--color-system-08)]">
                       Derive simulation ticks
                     </span>
                     <ClassicyInput
@@ -1159,8 +1175,8 @@ export function ScenarioMapFinalWorkbench(options: {
                     />
                   </label>
                 </div>
-                <button
-                  className="cursor-pointer rounded border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.55rem] py-[0.4rem] font-semibold text-inherit"
+                <ClassicyButton
+                  className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
                   onClick={() => {
                     closeToolVariantContextMenu();
                     dispatch({
@@ -1171,18 +1187,18 @@ export function ScenarioMapFinalWorkbench(options: {
                   type="button"
                 >
                   Derive simulation
-                </button>
-                <small className="text-sm text-slate-600">
+                </ClassicyButton>
+                <small className="text-sm text-[var(--color-system-07)]">
                   Recomputes derived states (power, traffic/road classes, bridges, smoke/radar)
                   without zone growth/disasters.
                 </small>
-              </div>
-            </section>
+              </ClassicyMessageSurface>
+            </ClassicyMessageSurface>
           </div>
         ) : (
-          <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-[0.65rem] rounded-[10px] border border-slate-400 bg-slate-100 p-[0.45rem]">
+          <ClassicyMessageSurface className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-[0.65rem] p-2">
             <label className="grid gap-[0.2rem]">
-              <span className="text-sm font-semibold text-slate-700">Find tile</span>
+              <span className="text-sm font-semibold text-[var(--color-system-08)]">Find tile</span>
               <ClassicyInput
                 onChange={(event) => {
                   setExactTileSearchQuery(event.currentTarget.value);
@@ -1200,9 +1216,9 @@ export function ScenarioMapFinalWorkbench(options: {
                 setExactTileNamedOnly(event.currentTarget.checked);
               }}
             />
-            <div className="min-h-0 overflow-y-auto rounded-[8px] border border-slate-400 bg-gray-200 p-[0.35rem]">
+            <ClassicyMessageSurface className="min-h-0 overflow-y-auto p-[0.35rem]">
               {exactTileBrushEntries.length === 0 ? (
-                <p className="m-0 px-[0.35rem] py-[0.5rem] text-sm text-slate-600">
+                <p className="m-0 px-[0.35rem] py-[0.5rem] text-sm text-[var(--color-system-07)]">
                   No tiles match that filter.
                 </p>
               ) : (
@@ -1215,14 +1231,12 @@ export function ScenarioMapFinalWorkbench(options: {
                     const isActive = entry.tileId === exactTileBrushTileId;
                     const micropolisName = entry.originalNames[0] ?? 'UNNAMED';
                     return (
-                      <button
+                      <ClassicyButton
+                        active={isActive}
+                        activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
                         aria-label={entry.title}
                         aria-pressed={isActive}
-                        className={`grid h-[5.25rem] w-full cursor-pointer justify-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.2rem] py-[0.25rem] text-inherit ${
-                          isActive
-                            ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
-                            : ''
-                        }`}
+                        className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid h-[5.25rem] w-full justify-items-center rounded-lg px-[0.2rem] py-[0.25rem]`}
                         key={entry.tileId}
                         onClick={() => {
                           closeToolVariantContextMenu();
@@ -1233,7 +1247,7 @@ export function ScenarioMapFinalWorkbench(options: {
                         type="button"
                       >
                         {zoneAtlasSource === undefined ? (
-                          <span className="text-[0.8rem] font-semibold text-slate-600">
+                          <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
                             {entry.tileId}
                           </span>
                         ) : (
@@ -1244,21 +1258,21 @@ export function ScenarioMapFinalWorkbench(options: {
                             tileId={entry.tileId}
                           />
                         )}
-                        <span className="max-w-full truncate text-[0.66rem] font-semibold leading-none text-slate-700">
+                        <span className="max-w-full truncate text-[0.66rem] font-semibold leading-none text-[var(--color-system-08)]">
                           {micropolisName}
                         </span>
-                      </button>
+                      </ClassicyButton>
                     );
                   })}
                 </div>
               )}
-            </div>
-            <small className="text-sm text-slate-600">
+            </ClassicyMessageSurface>
+            <small className="text-sm text-[var(--color-system-07)]">
               Exact tile brush: placing tile {exactTileBrushTileId}.
             </small>
-          </section>
+          </ClassicyMessageSurface>
         )}
-      </aside>
+      </ClassicyPanelChrome>
 
       <div className="min-h-0 bg-[#0b1020]">
         <MapCanvas

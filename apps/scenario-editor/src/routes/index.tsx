@@ -66,7 +66,7 @@ function ScenarioEditorHomeRoute() {
       aria-label="Scenario editor workspace"
       className="relative h-full min-h-0 overflow-hidden"
     >
-      <div className="min-h-0 overflow-hidden">
+      <div className="h-full min-h-0 overflow-hidden">
         <ScenarioMapFinalWorkbench rightSidebarOverlayWidthPx={sidebarOpen ? sidebarWidthPx : 0} />
       </div>
 

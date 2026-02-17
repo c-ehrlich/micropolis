@@ -38,7 +38,7 @@ function EditorShell() {
 
   return (
     <div
-      className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-[var(--color-system-02)] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] leading-[1.4]"
+      className="grid h-screen [height:100dvh] grid-rows-[auto_1fr] overflow-hidden bg-[var(--color-system-02)] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] leading-[1.4]"
       style={runtimeTheme}
     >
       <EditorTopBar />

@@ -29,36 +29,100 @@ export function ClassicyToggleGroup<Value extends string>({
   options,
   value,
 }: ClassicyToggleGroupProps<Value>) {
+  const selectedValue = (
+    options.find((option) => option.value === value && !option.disabled) ??
+    options.find((option) => !option.disabled)
+  )?.value;
+
   return (
     <div
       aria-label={ariaLabel}
       className={clsx(
-        'grid overflow-hidden rounded-[10px] border border-slate-500 bg-slate-100',
+        'inline-grid min-w-0 overflow-hidden rounded-[0.95rem] border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] [background:color-mix(in_srgb,var(--color-system-03)_92%,transparent)]',
+        '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)]',
         className,
       )}
-      role="tablist"
+      role="radiogroup"
       style={{ gridTemplateColumns: `repeat(${Math.max(1, options.length)}, minmax(0, 1fr))` }}
     >
       {options.map((option, index) => {
-        const active = option.value === value;
+        const active = option.value === selectedValue;
         return (
           <button
-            aria-selected={active}
+            aria-checked={active}
             className={clsx(
-              'cursor-pointer bg-slate-100 px-[0.55rem] py-[0.35rem] font-semibold text-inherit',
-              index < options.length - 1 ? 'border-r border-slate-500' : null,
-              active ? 'bg-sky-200' : null,
+              'relative cursor-pointer border-0 bg-transparent px-[0.9rem] py-[0.48rem] font-semibold leading-none [font-family:var(--header-font),serif] [font-size:calc(var(--header-font-size)*0.86)] text-[var(--color-black)] disabled:cursor-not-allowed disabled:text-[var(--color-system-07)]',
+              'focus-visible:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-theme-07)]',
+              index < options.length - 1
+                ? 'after:pointer-events-none after:absolute after:bottom-[0.3rem] after:right-0 after:top-[0.3rem] after:w-[var(--window-border-size)] after:bg-[color-mix(in_srgb,var(--color-black)_28%,transparent)]'
+                : null,
+              active
+                ? clsx(
+                    'z-10 [background:color-mix(in_srgb,var(--color-white)_82%,var(--color-system-01))]',
+                    '[box-shadow:inset_0_0_0_2px_var(--color-theme-07)]',
+                    index === 0 ? 'rounded-l-[0.85rem]' : null,
+                    index === options.length - 1 ? 'rounded-r-[0.85rem]' : null,
+                  )
+                : null,
               optionClassName,
             )}
             disabled={option.disabled}
             key={option.value}
             onClick={() => {
-              if (option.disabled || option.value === value) {
+              if (option.disabled || option.value === selectedValue) {
                 return;
               }
               onValueChange(option.value);
             }}
-            role="tab"
+            onKeyDown={(event) => {
+              if (event.key === 'Home' || event.key === 'End') {
+                event.preventDefault();
+                const iterator =
+                  event.key === 'Home'
+                    ? options.entries()
+                    : Array.from(options.entries()).reverse().values();
+                for (const [, candidate] of iterator) {
+                  if (candidate.disabled || candidate.value === selectedValue) {
+                    continue;
+                  }
+                  onValueChange(candidate.value);
+                  break;
+                }
+                return;
+              }
+
+              if (
+                event.key !== 'ArrowRight' &&
+                event.key !== 'ArrowDown' &&
+                event.key !== 'ArrowLeft' &&
+                event.key !== 'ArrowUp'
+              ) {
+                return;
+              }
+
+              event.preventDefault();
+              if (options.length < 2) {
+                return;
+              }
+
+              const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+              let cursor = index;
+              for (let hop = 0; hop < options.length; hop += 1) {
+                cursor = (cursor + direction + options.length) % options.length;
+                const candidate = options[cursor];
+                if (
+                  candidate === undefined ||
+                  candidate.disabled ||
+                  candidate.value === selectedValue
+                ) {
+                  continue;
+                }
+                onValueChange(candidate.value);
+                break;
+              }
+            }}
+            role="radio"
+            tabIndex={active ? 0 : -1}
             title={option.title}
             type="button"
           >

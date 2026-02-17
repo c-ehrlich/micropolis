@@ -14,7 +14,6 @@ import {
   EditorForm,
   EditorHelp,
   EditorPreviewPanel,
-  EditorStatsGrid,
 } from './-editor-ui.tsx';
 import { parseIntegerInput, preventFormSubmit } from './-section-shared.ts';
 
@@ -23,7 +22,7 @@ import { parseIntegerInput, preventFormSubmit } from './-section-shared.ts';
  * Reuses `scenario-core` schema constraints; this has no direct 1:1 C editor equivalent.
  */
 export function ScenarioMetadataEditorCard() {
-  const { bundle, isDirty } = useScenarioEditorState();
+  const { bundle } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const metadataJson = useMemo(
     () =>
@@ -41,14 +40,6 @@ export function ScenarioMetadataEditorCard() {
     [bundle.description, bundle.key, bundle.name, bundle.start, bundle.tags],
   );
   const issues = getScenarioEditorMetadataValidationIssues(bundle);
-  const hasIssues =
-    issues.key !== undefined ||
-    issues.name !== undefined ||
-    issues.description !== undefined ||
-    issues.tags !== undefined ||
-    issues.startYear !== undefined ||
-    issues.startFunds !== undefined;
-
   return (
     <section aria-label="Scenario metadata editor" className="grid gap-4">
       <h1>Scenario Metadata</h1>
@@ -171,13 +162,6 @@ export function ScenarioMetadataEditorCard() {
           </EditorField>
         </EditorFieldInline>
       </EditorForm>
-
-      <EditorStatsGrid>
-        <dt>Dirty State</dt>
-        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
-        <dt>Validation</dt>
-        <dd>{hasIssues ? 'invalid metadata' : 'metadata valid'}</dd>
-      </EditorStatsGrid>
 
       <EditorPreviewPanel aria-label="Metadata JSON preview">
         <ClassicyDisclosure defaultOpen={false} summary="Metadata JSON">

@@ -6,7 +6,7 @@ import {
   SCENARIO_EDITOR_BEHAVIOR_PROFILE_KEYS,
 } from '../state/editor-behavior.ts';
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
-import { EditorError, EditorField, EditorPreviewPanel, EditorStatsGrid } from './-editor-ui.tsx';
+import { EditorError, EditorField, EditorPreviewPanel } from './-editor-ui.tsx';
 
 /**
  * Behavior-profile assignment card for Stage 4.3 closed-profile authoring.
@@ -15,7 +15,7 @@ import { EditorError, EditorField, EditorPreviewPanel, EditorStatsGrid } from '.
  * `packages/scenario-runtime/src/behavior-profiles.ts`.
  */
 export function ScenarioBehaviorProfileEditorCard() {
-  const { behavior, isDirty } = useScenarioEditorState();
+  const { behavior } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const validationIssue = getScenarioEditorBehaviorValidationIssue(behavior);
   const normalizedProfileKey = behavior.profileKey.trim();
@@ -58,19 +58,6 @@ export function ScenarioBehaviorProfileEditorCard() {
         </small>
         {validationIssue !== undefined ? <EditorError>{validationIssue}</EditorError> : null}
       </EditorField>
-
-      <EditorStatsGrid>
-        <dt>Dirty State</dt>
-        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
-        <dt>Assignment Enabled</dt>
-        <dd>{behavior.enabled ? 'yes' : 'no'}</dd>
-        <dt>SF Horn Behavior</dt>
-        <dd>{behavior.enabled && sfShipHonkEnabled ? 'yes' : 'no'}</dd>
-        <dt>Profile Key</dt>
-        <dd>{behavior.enabled ? behavior.profileKey : 'none'}</dd>
-        <dt>Validation</dt>
-        <dd>{validationIssue === undefined ? 'valid' : 'invalid'}</dd>
-      </EditorStatsGrid>
 
       <EditorPreviewPanel aria-label="Behavior profile preview">
         <ClassicyDisclosure defaultOpen={false} summary="Behavior Assignment JSON">

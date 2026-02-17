@@ -23,11 +23,11 @@ import {
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import {
   EditorButton,
+  EditorError,
   EditorField,
   EditorFieldInline,
   EditorIssuesPanel,
   EditorPreviewPanel,
-  EditorStatsGrid,
 } from './-editor-ui.tsx';
 import { parseIntegerInput } from './-section-shared.ts';
 
@@ -38,9 +38,25 @@ import { parseIntegerInput } from './-section-shared.ts';
  * editor-only UI over `scenario-runtime` action unions.
  */
 export function ScenarioScriptEditorCard() {
-  const { script, isDirty } = useScenarioEditorState();
+  const { script } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const validationIssues = useMemo(() => getScenarioEditorScriptValidationIssues(script), [script]);
+  const validationIssueMessagesByPath = useMemo(
+    () => indexValidationIssueMessagesByPath(validationIssues),
+    [validationIssues],
+  );
+  const attributableValidationPaths = useMemo(
+    () =>
+      script.enabled ? collectScriptRenderableValidationPaths(script.events) : new Set<string>(),
+    [script.enabled, script.events],
+  );
+  const unattributedValidationIssues = useMemo(
+    () =>
+      script.enabled
+        ? validationIssues.filter((issue) => !attributableValidationPaths.has(issue.path))
+        : [],
+    [attributableValidationPaths, script.enabled, validationIssues],
+  );
   const scriptJson = useMemo(
     () => JSON.stringify(script.enabled ? script.events : [], null, 2),
     [script.enabled, script.events],
@@ -73,6 +89,7 @@ export function ScenarioScriptEditorCard() {
             <ScenarioScriptEventEditor
               event={event}
               index={eventIndex}
+              issueMessagesByPath={validationIssueMessagesByPath}
               key={eventIndex}
               onChange={(nextEvent) => {
                 replaceEvents(
@@ -82,6 +99,7 @@ export function ScenarioScriptEditorCard() {
               onRemove={() => {
                 replaceEvents(removeScenarioEditorScriptEvent(script.events, eventIndex));
               }}
+              path={`script.events.${eventIndex}`}
             />
           ))}
           <EditorButton
@@ -93,6 +111,12 @@ export function ScenarioScriptEditorCard() {
           >
             Add Script Event
           </EditorButton>
+          {getFirstValidationIssueMessage(validationIssueMessagesByPath, 'script.events') !==
+          undefined ? (
+            <EditorError>
+              {getFirstValidationIssueMessage(validationIssueMessagesByPath, 'script.events')}
+            </EditorError>
+          ) : null}
         </div>
       ) : (
         <div className="grid justify-items-start gap-2">
@@ -114,28 +138,11 @@ export function ScenarioScriptEditorCard() {
         </div>
       )}
 
-      <EditorStatsGrid>
-        <dt>Dirty State</dt>
-        <dd>{isDirty ? 'dirty' : 'clean'}</dd>
-        <dt>Scripts Enabled</dt>
-        <dd>{script.enabled ? 'yes' : 'no'}</dd>
-        <dt>Event Rows</dt>
-        <dd>{script.events.length}</dd>
-        <dt>Validation</dt>
-        <dd>
-          {!script.enabled
-            ? 'disabled'
-            : validationIssues.length === 0
-              ? 'valid'
-              : `invalid (${validationIssues.length} issue${validationIssues.length === 1 ? '' : 's'})`}
-        </dd>
-      </EditorStatsGrid>
-
-      {script.enabled && validationIssues.length > 0 ? (
+      {script.enabled && unattributedValidationIssues.length > 0 ? (
         <EditorIssuesPanel aria-label="Script semantic issues">
-          <h2>Script Semantic Issues</h2>
+          <h2>Other Script Issues</h2>
           <ul>
-            {validationIssues.map((issue, index) => (
+            {unattributedValidationIssues.map((issue, index) => (
               <li key={`${issue.path}:${issue.message}:${index}`}>
                 <code>{issue.path}</code>: {issue.message}
               </li>
@@ -160,19 +167,26 @@ export function ScenarioScriptEditorCard() {
 function ScenarioScriptEventEditor(options: {
   event: ScenarioEditorScriptEvent;
   index: number;
+  issueMessagesByPath: ReadonlyMap<string, readonly string[]>;
   onChange: (event: ScenarioEditorScriptEvent) => void;
   onRemove: () => void;
+  path: string;
 }) {
-  const { event, index, onChange, onRemove } = options;
+  const { event, index, issueMessagesByPath, onChange, onRemove, path } = options;
   const triggerKind = getScenarioEditorScriptTriggerKind(event.trigger);
+  const eventIssue = getFirstValidationIssueMessage(issueMessagesByPath, path);
+  const triggerIssue = getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger`);
+  const actionsIssue = getFirstValidationIssueMessage(issueMessagesByPath, `${path}.actions`);
 
   return (
     <fieldset className="m-0 rounded-md border border-slate-300 p-[0.8rem] [&>legend]:px-[0.4rem] [&>legend]:text-slate-600">
       <legend>{`Event ${index + 1}`}</legend>
+      {eventIssue !== undefined ? <EditorError>{eventIssue}</EditorError> : null}
       <EditorFieldInline className="grid-cols-[repeat(auto-fit,minmax(12rem,1fr))]">
         <EditorField>
           <span>Trigger</span>
           <select
+            aria-invalid={triggerIssue !== undefined}
             onChange={(changeEvent) => {
               onChange(
                 coerceScenarioEditorScriptTriggerKind(
@@ -190,12 +204,17 @@ function ScenarioScriptEventEditor(options: {
               </option>
             ))}
           </select>
+          {triggerIssue !== undefined ? <EditorError>{triggerIssue}</EditorError> : null}
         </EditorField>
 
         {triggerKind === 'atTick' ? (
           <EditorField>
             <span>atTick</span>
             <input
+              aria-invalid={
+                getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger.atTick`) !==
+                undefined
+              }
               min={0}
               onChange={(changeEvent) => {
                 onChange(
@@ -211,11 +230,23 @@ function ScenarioScriptEventEditor(options: {
               type="number"
               value={'atTick' in event.trigger ? event.trigger.atTick : 0}
             />
+            {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger.atTick`) !==
+            undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger.atTick`)}
+              </EditorError>
+            ) : null}
           </EditorField>
         ) : (
           <EditorField>
             <span>everyTicks</span>
             <input
+              aria-invalid={
+                getFirstValidationIssueMessage(
+                  issueMessagesByPath,
+                  `${path}.trigger.everyTicks`,
+                ) !== undefined
+              }
               min={1}
               onChange={(changeEvent) => {
                 onChange(
@@ -231,73 +262,124 @@ function ScenarioScriptEventEditor(options: {
               type="number"
               value={'everyTicks' in event.trigger ? event.trigger.everyTicks : 1}
             />
+            {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger.everyTicks`) !==
+            undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(issueMessagesByPath, `${path}.trigger.everyTicks`)}
+              </EditorError>
+            ) : null}
           </EditorField>
         )}
       </EditorFieldInline>
 
       <div className="mt-[0.8rem] grid gap-2 [&>h3]:m-0 [&>h3]:text-[0.95rem]">
         <h3>Actions</h3>
+        {actionsIssue !== undefined ? <EditorError>{actionsIssue}</EditorError> : null}
         {event.actions.map((action, actionIndex) => (
-          <div
-            className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] items-end gap-x-3 gap-y-2"
-            key={`${index}:${actionIndex}`}
-          >
-            <EditorField>
-              <span>Action</span>
-              <select
-                onChange={(changeEvent) => {
-                  onChange(
-                    replaceScenarioEditorScriptAction(
-                      event,
-                      actionIndex,
-                      coerceScenarioEditorScriptActionKind(
-                        action,
-                        changeEvent.currentTarget.value as ScenarioEditorScriptAction['kind'],
-                      ),
-                    ),
-                  );
-                }}
-                value={action.kind}
-              >
-                {SCENARIO_EDITOR_SCRIPT_ACTION_KINDS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {getScenarioScriptActionKindLabel(kind)}
-                  </option>
-                ))}
-              </select>
-            </EditorField>
-
-            {action.kind === 'send-message' ? (
+          <div className="grid gap-1" key={`${index}:${actionIndex}`}>
+            {getFirstValidationIssueMessage(
+              issueMessagesByPath,
+              `${path}.actions.${actionIndex}`,
+            ) !== undefined ? (
+              <EditorError>
+                {getFirstValidationIssueMessage(
+                  issueMessagesByPath,
+                  `${path}.actions.${actionIndex}`,
+                )}
+              </EditorError>
+            ) : null}
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] items-end gap-x-3 gap-y-2">
               <EditorField>
-                <span>messageId</span>
-                <input
+                <span>Action</span>
+                <select
+                  aria-invalid={
+                    getFirstValidationIssueMessage(
+                      issueMessagesByPath,
+                      `${path}.actions.${actionIndex}.kind`,
+                    ) !== undefined
+                  }
                   onChange={(changeEvent) => {
                     onChange(
                       replaceScenarioEditorScriptAction(
                         event,
                         actionIndex,
-                        replaceScenarioEditorSendMessageId(
+                        coerceScenarioEditorScriptActionKind(
                           action,
-                          parseIntegerInput(changeEvent.currentTarget.value, action.messageId),
+                          changeEvent.currentTarget.value as ScenarioEditorScriptAction['kind'],
                         ),
                       ),
                     );
                   }}
-                  type="number"
-                  value={action.messageId}
-                />
+                  value={action.kind}
+                >
+                  {SCENARIO_EDITOR_SCRIPT_ACTION_KINDS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {getScenarioScriptActionKindLabel(kind)}
+                    </option>
+                  ))}
+                </select>
+                {getFirstValidationIssueMessage(
+                  issueMessagesByPath,
+                  `${path}.actions.${actionIndex}.kind`,
+                ) !== undefined ? (
+                  <EditorError>
+                    {getFirstValidationIssueMessage(
+                      issueMessagesByPath,
+                      `${path}.actions.${actionIndex}.kind`,
+                    )}
+                  </EditorError>
+                ) : null}
               </EditorField>
-            ) : null}
 
-            <EditorButton
-              className="justify-self-start"
-              onClick={() => {
-                onChange(removeScenarioEditorScriptAction(event, actionIndex));
-              }}
-              type="button"
-            >
-              Remove Action
-            </EditorButton>
+              {action.kind === 'send-message' ? (
+                <EditorField>
+                  <span>messageId</span>
+                  <input
+                    aria-invalid={
+                      getFirstValidationIssueMessage(
+                        issueMessagesByPath,
+                        `${path}.actions.${actionIndex}.messageId`,
+                      ) !== undefined
+                    }
+                    onChange={(changeEvent) => {
+                      onChange(
+                        replaceScenarioEditorScriptAction(
+                          event,
+                          actionIndex,
+                          replaceScenarioEditorSendMessageId(
+                            action,
+                            parseIntegerInput(changeEvent.currentTarget.value, action.messageId),
+                          ),
+                        ),
+                      );
+                    }}
+                    type="number"
+                    value={action.messageId}
+                  />
+                  {getFirstValidationIssueMessage(
+                    issueMessagesByPath,
+                    `${path}.actions.${actionIndex}.messageId`,
+                  ) !== undefined ? (
+                    <EditorError>
+                      {getFirstValidationIssueMessage(
+                        issueMessagesByPath,
+                        `${path}.actions.${actionIndex}.messageId`,
+                      )}
+                    </EditorError>
+                  ) : null}
+                </EditorField>
+              ) : null}
+
+              <EditorButton
+                className="justify-self-start"
+                onClick={() => {
+                  onChange(removeScenarioEditorScriptAction(event, actionIndex));
+                }}
+                type="button"
+              >
+                Remove Action
+              </EditorButton>
+            </div>
           </div>
         ))}
         <EditorButton
@@ -358,3 +440,52 @@ function getScenarioScriptActionKindLabel(
   }
   return 'Lose Game';
 }
+
+const indexValidationIssueMessagesByPath = (
+  issues: readonly { path: string; message: string }[],
+): ReadonlyMap<string, readonly string[]> => {
+  const issueMessagesByPath = new Map<string, string[]>();
+  for (const issue of issues) {
+    const existingMessages = issueMessagesByPath.get(issue.path);
+    if (existingMessages === undefined) {
+      issueMessagesByPath.set(issue.path, [issue.message]);
+      continue;
+    }
+    existingMessages.push(issue.message);
+  }
+  return issueMessagesByPath;
+};
+
+const getFirstValidationIssueMessage = (
+  issueMessagesByPath: ReadonlyMap<string, readonly string[]>,
+  path: string,
+): string | undefined => issueMessagesByPath.get(path)?.[0];
+
+const collectScriptRenderableValidationPaths = (
+  events: readonly ScenarioEditorScriptEvent[],
+): Set<string> => {
+  const renderablePaths = new Set<string>(['script.events']);
+
+  for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+    const event = events[eventIndex];
+    if (event === undefined) {
+      continue;
+    }
+
+    const eventPath = `script.events.${eventIndex}`;
+    renderablePaths.add(eventPath);
+    renderablePaths.add(`${eventPath}.trigger`);
+    renderablePaths.add(`${eventPath}.trigger.atTick`);
+    renderablePaths.add(`${eventPath}.trigger.everyTicks`);
+    renderablePaths.add(`${eventPath}.actions`);
+
+    for (let actionIndex = 0; actionIndex < event.actions.length; actionIndex += 1) {
+      const actionPath = `${eventPath}.actions.${actionIndex}`;
+      renderablePaths.add(actionPath);
+      renderablePaths.add(`${actionPath}.kind`);
+      renderablePaths.add(`${actionPath}.messageId`);
+    }
+  }
+
+  return renderablePaths;
+};
