@@ -6,8 +6,8 @@ import {
   transcodeScenarioMapTileWordsV1,
 } from '@city/scenario-core';
 import {
+  ANI_TILE,
   applyToolAction,
-  coalSmoke,
   comPlop,
   countFreeZoneHouses,
   createBridgeHandler,
@@ -19,6 +19,7 @@ import {
   createToolContext,
   createZoneSystem,
   czPop,
+  doSpecialZone,
   indPlop,
   izPop,
   makeTraf,
@@ -60,7 +61,7 @@ const SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_DEFAULT = 16;
 const SCENARIO_EDITOR_DERIVE_SIM_TICK_COUNT_MAX = 512;
 const SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_LIGHT = 96;
 const SCENARIO_EDITOR_DERIVE_TRAFFIC_ROAD_DENSITY_HEAVY = 224;
-const { ANIMBIT, BURNBIT, CONDBIT } = TileFlag;
+const { ANIMBIT } = TileFlag;
 
 /**
  * Editor-only special-zone identifiers for explicit scenario snapshot authoring.
@@ -869,6 +870,8 @@ export function deriveScenarioEditorMapSimulation(
         newPower: true,
       },
     );
+
+    runScenarioEditorDerivedAnimationStep(context.store, map);
   }
 
   const tickResult = store.commitTick();
@@ -1057,43 +1060,59 @@ function applyScenarioEditorDerivedZoneVisuals(
   zoneSystem: ReturnType<typeof createZoneSystem>,
   scan: MapScanContext,
 ): void {
-  const powered = setZPowerAt(scan.store, zoneSystem.power, scan.x, scan.y, scan.index, scan.tile);
+  const powered = (scan.tile & TileFlag.PWRBIT) !== 0;
+
+  if (scan.tileId > Tile.PORTBASE) {
+    runScenarioEditorDerivedSpecialZoneStep(zoneSystem, scan, powered);
+    return;
+  }
 
   if (scan.tileId >= Tile.IZB && scan.tileId < Tile.PORTBASE) {
     setSmoke(zoneSystem, scan.x, scan.y, scan.tileId, powered);
   }
+}
 
-  if (scan.tileId === Tile.POWERPLANT && powered) {
-    coalSmoke(zoneSystem, scan.x, scan.y);
-  }
+/**
+ * Apply one special-zone visual/effect update without enabling disasters.
+ * Mirrors `DoSPZone` branches in `ref/micropolis/src/sim/s_zone.c` for
+ * stadium frames, airport radar, coal smoke, and related map-only updates.
+ * Parity note: `DoMeltdown` is intentionally disabled for editor derive runs.
+ */
+function runScenarioEditorDerivedSpecialZoneStep(
+  zoneSystem: ReturnType<typeof createZoneSystem>,
+  scan: MapScanContext,
+  powered: boolean,
+): void {
+  doSpecialZone(zoneSystem, scan.x, scan.y, scan.tileId, powered, {
+    doMeltdown: () => {},
+    pushPowerStack: () => {},
+  });
+}
 
-  if (scan.tileId !== Tile.AIRPORT) {
-    return;
-  }
-  const radarX = scan.x + 1;
-  const radarY = scan.y - 1;
-  if (
-    radarX < 0 ||
-    radarX >= SCENARIO_BUNDLE_V1_MAP_WIDTH ||
-    radarY < 0 ||
-    radarY >= SCENARIO_BUNDLE_V1_MAP_HEIGHT
-  ) {
-    return;
-  }
-  const radarIndex = radarX * SCENARIO_BUNDLE_V1_MAP_HEIGHT + radarY;
-  const radarTileWord = scan.map[radarIndex];
-  if (radarTileWord === undefined) {
-    return;
-  }
-
-  if (powered) {
-    const radarTileId = radarTileWord & TileMask.LOMASK;
-    if (radarTileId === Tile.RADAR) {
-      scan.store.write('map', radarIndex, Tile.RADAR | ANIMBIT | CONDBIT | BURNBIT);
+/**
+ * Advance all animated map tiles by one frame.
+ * Mirrors `animateTiles` in `ref/micropolis/src/sim/g_ani.c` using the
+ * canonical `aniTile[]` remap table from `ref/micropolis/src/sim/headers/animtab.h`.
+ */
+function runScenarioEditorDerivedAnimationStep(
+  store: ReturnType<typeof createSimContext>['store'],
+  map: Uint16Array,
+): void {
+  for (let index = 0; index < map.length; index += 1) {
+    const tileWord = map[index];
+    if (tileWord === undefined || (tileWord & ANIMBIT) === 0) {
+      continue;
     }
-    return;
+
+    const tileId = tileWord & TileMask.LOMASK;
+    const nextTileId = ANI_TILE[tileId] ?? tileId;
+    if (nextTileId === tileId) {
+      continue;
+    }
+    const nextTileWord = (tileWord & TileMask.ALLBITS) | nextTileId;
+    store.write('map', index, nextTileWord);
+    map[index] = nextTileWord;
   }
-  scan.store.write('map', radarIndex, Tile.RADAR | CONDBIT | BURNBIT);
 }
 
 /**

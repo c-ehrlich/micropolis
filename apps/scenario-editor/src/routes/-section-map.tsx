@@ -87,6 +87,7 @@ function getScenarioMapZoneValueClassLabel(zone: ScenarioEditorMapZoneKind): str
 }
 
 type ScenarioMapFinalActiveBrushFamily = 'zones' | 'base' | 'tools';
+type ScenarioMapFinalSidebarMode = 'creator' | 'all-tiles';
 type ScenarioMapFinalSmartBaseBrushId = 'dirt' | 'water' | 'channel' | 'forest';
 type ScenarioMapFinalToolId = PlayableToolName | 'house' | 'hospital' | 'church';
 const SCENARIO_MAP_FINAL_EXCLUDED_TOOL_SET = new Set<PlayableToolName>([
@@ -208,7 +209,7 @@ const SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES: readonly {
 }[] = [
   { label: 'Auto', tileId: null },
   ...Array.from({ length: 12 }, (_, index) => ({
-    label: `Class ${Math.floor(index / 3)} / Variant ${index % 3}`,
+    label: `Land Value Class ${Math.floor(index / 3)} / Variant ${(index % 3) + 1}`,
     tileId: Tile.HOUSE + index,
   })),
 ] as const;
@@ -347,6 +348,48 @@ function resolveScenarioMapFinalHouseTileWord(
   return resolvedTileId | BLBNCNBIT;
 }
 
+/**
+ * Test whether one tile id is in the residential house variant domain.
+ * Mirrors `HOUSE + Rand(2) + value * 3` in `BuildHouse` from
+ * `ref/micropolis/src/sim/s_zone.c` (12 variants across 4 land-value classes).
+ */
+function isScenarioMapFinalHouseTileId(tileId: number): boolean {
+  return tileId >= Tile.HOUSE && tileId < Tile.HOUSE + 12;
+}
+
+/**
+ * Resolve whether one map cell is a legal manual house paint target.
+ * Mirrors `DoResOut`/`BuildHouse` occupancy ownership in `ref/micropolis/src/sim/s_zone.c`:
+ * houses live inside the 3x3 `FREEZ` lot perimeter (excluding center) or replace an
+ * existing house variant tile.
+ */
+function canScenarioMapFinalPaintHouseAt(
+  bundle: { readonly map: { readonly width: number; readonly height: number } },
+  point: { x: number; y: number },
+  readTileWord: (point: { x: number; y: number }) => number | null,
+): boolean {
+  const tileIdAtPoint = (readTileWord(point) ?? 0) & TileMask.LOMASK;
+  if (isScenarioMapFinalHouseTileId(tileIdAtPoint)) {
+    return true;
+  }
+  if (tileIdAtPoint === Tile.FREEZ) {
+    return false;
+  }
+
+  for (let x = point.x - 1; x <= point.x + 1; x += 1) {
+    for (let y = point.y - 1; y <= point.y + 1; y += 1) {
+      if (x < 0 || y < 0 || x >= bundle.map.width || y >= bundle.map.height) {
+        continue;
+      }
+      const tileId = (readTileWord({ x, y }) ?? 0) & TileMask.LOMASK;
+      if (tileId === Tile.FREEZ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 interface ScenarioMapFinalSmartBaseBrush {
   readonly id: ScenarioMapFinalSmartBaseBrushId;
   readonly label: string;
@@ -403,6 +446,70 @@ const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX = 176;
 const SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX = 210;
 const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX = 196;
 const SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX = 360;
+const SCENARIO_MAP_FINAL_EXACT_TILE_HOVER_PREVIEW: MapCanvasHoverPreviewSpec = {
+  size: 1,
+  offset: 0,
+  pendingColor: '#6e7781',
+};
+
+interface ScenarioMapFinalExactTileBrushEntry {
+  readonly tileId: number;
+  readonly originalNames: readonly string[];
+  readonly readableNames: readonly string[];
+  readonly title: string;
+  readonly searchText: string;
+}
+
+/**
+ * Build one complete exact-tile palette for map-final authoring.
+ * Mirrors the fixed Micropolis tile-id domain from `TILE_COUNT` in
+ * `ref/micropolis/src/sim/headers/sim.h`; parity note: entries include
+ * editor-readable aliases from the curated named-tile table when available.
+ */
+function buildScenarioMapFinalExactTileBrushEntries(): readonly ScenarioMapFinalExactTileBrushEntry[] {
+  const namesByTileId = new Map<number, { names: string[]; labels: string[] }>();
+  for (const namedTile of BASE_TILE_NAME_OPTIONS) {
+    const bucket = namesByTileId.get(namedTile.tileId);
+    if (bucket === undefined) {
+      namesByTileId.set(namedTile.tileId, {
+        names: [namedTile.name],
+        labels: [namedTile.label],
+      });
+      continue;
+    }
+    if (!bucket.names.includes(namedTile.name)) {
+      bucket.names.push(namedTile.name);
+    }
+    if (!bucket.labels.includes(namedTile.label)) {
+      bucket.labels.push(namedTile.label);
+    }
+  }
+
+  const entries: ScenarioMapFinalExactTileBrushEntry[] = [];
+  for (let tileId = 0; tileId < Tile.TILE_COUNT; tileId += 1) {
+    const namedBucket = namesByTileId.get(tileId);
+    const originalNames = namedBucket?.names ?? [];
+    const readableNames = namedBucket?.labels ?? [];
+    const namesText = originalNames.join(' / ');
+    const labelsText = readableNames.join(' / ');
+    const title =
+      namesText.length === 0
+        ? `${tileId} (Unnamed tile)`
+        : labelsText.length === 0
+          ? `${tileId} (${namesText})`
+          : `${tileId} (${namesText} / ${labelsText})`;
+    entries.push({
+      tileId,
+      originalNames,
+      readableNames,
+      title,
+      searchText: `${tileId} ${namesText} ${labelsText}`.toLowerCase(),
+    });
+  }
+  return entries;
+}
+
+const SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES = buildScenarioMapFinalExactTileBrushEntries();
 
 type ScenarioMapFinalZoneOption =
   | {
@@ -565,6 +672,9 @@ export function ScenarioMapFinalWorkbench() {
     reduceScenarioMapFinalBrushSelection,
     SCENARIO_MAP_FINAL_DEFAULT_BRUSH_SELECTION_STATE,
   );
+  const [sidebarMode, setSidebarMode] = useState<ScenarioMapFinalSidebarMode>('creator');
+  const [exactTileSearchQuery, setExactTileSearchQuery] = useState('');
+  const [exactTileBrushTileId, setExactTileBrushTileId] = useState<number>(Tile.DIRT);
   const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(true);
   const [parkBrushMode, setParkBrushMode] = useState<ScenarioMapFinalParkBrushMode>('auto');
   const [houseBrushTileId, setHouseBrushTileId] = useState<number | null>(null);
@@ -588,6 +698,7 @@ export function ScenarioMapFinalWorkbench() {
   const activeZoneOptionKey = brushSelection.zoneOptionKey;
   const activeTool = brushSelection.tool;
   const activeSmartBaseBrushId = brushSelection.baseBrushId;
+  const isCreatorSidebarMode = sidebarMode === 'creator';
   const runtimeMapState = useMemo(
     () =>
       createScenarioEditorRuntimeMapStateWithOptions(bundle, {
@@ -632,6 +743,15 @@ export function ScenarioMapFinalWorkbench() {
     () => (showBaseClassOverlay ? getScenarioMapFinalBaseClassOverlayStyle : undefined),
     [showBaseClassOverlay],
   );
+  const exactTileBrushEntries = useMemo(() => {
+    const query = exactTileSearchQuery.trim().toLowerCase();
+    if (query.length === 0) {
+      return SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES;
+    }
+    return SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES.filter((entry) =>
+      entry.searchText.includes(query),
+    );
+  }, [exactTileSearchQuery]);
   const mapFinalRuntimeTheme = useMemo<CSSProperties>(() => {
     const theme = getAllThemes()[0];
     return theme === undefined ? {} : (getThemeVars(theme) as CSSProperties);
@@ -768,389 +888,516 @@ export function ScenarioMapFinalWorkbench() {
       aria-label="Scenario map final workbench"
       style={mapFinalRuntimeTheme}
     >
-      <aside className="grid min-h-0 content-start gap-4 overflow-y-auto border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
-        <section
-          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-            activeBrushFamily === 'base' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
-          }`}
-        >
-          <h2 className="m-0 text-[1.4rem] font-semibold">Base</h2>
+      <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
+        <section className="grid gap-[0.45rem]">
           <div
-            className="grid grid-cols-2 gap-[0.45rem]"
-            role="list"
-            aria-label="Smart base brushes"
-          >
-            {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
-              <button
-                aria-pressed={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
-                className={`grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit ${
-                  activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
-                    ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
-                    : ''
-                }`}
-                key={brush.id}
-                onClick={() => {
-                  closeToolVariantContextMenu();
-                  dispatchBrushSelection({
-                    type: 'select-base-brush',
-                    brushId: brush.id,
-                  });
-                }}
-                role="listitem"
-                title={brush.tooltip}
-                type="button"
-              >
-                {zoneAtlasSource === undefined ? (
-                  <span className="text-[0.8rem] font-semibold text-slate-600">{brush.tileId}</span>
-                ) : (
-                  <MapFinalSingleTileSprite
-                    atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                    atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                    tileId={brush.tileId}
-                  />
-                )}
-                <span>{brush.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <label className="flex items-center gap-[0.45rem] text-slate-600">
-            <input
-              className="m-0"
-              checked={showBaseClassOverlay}
-              onChange={(event) => {
-                setShowBaseClassOverlay(event.currentTarget.checked);
-              }}
-              type="checkbox"
-            />
-            <span>Show base tile classes</span>
-          </label>
-
-          <small className="text-sm text-slate-600">
-            Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
-          </small>
-        </section>
-
-        <section
-          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-            activeBrushFamily === 'zones' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
-          }`}
-        >
-          <h2 className="m-0 text-[1.4rem] font-semibold">Zones</h2>
-          <div
-            aria-label="Zone family selector"
-            className="grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500"
+            aria-label="Map final sidebar mode"
+            className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-slate-500"
             role="tablist"
           >
-            {(['res', 'com', 'ind'] as const).map((zone) => (
-              <button
-                aria-selected={activeBrushFamily === 'zones' && zone === activeZoneKind}
-                className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0 ${
-                  activeBrushFamily === 'zones' && zone === activeZoneKind ? 'bg-sky-200' : ''
-                }`}
-                key={zone}
-                onClick={() => {
-                  closeToolVariantContextMenu();
-                  dispatchBrushSelection({
-                    type: 'select-zone-kind',
-                    zoneKind: zone,
-                  });
-                }}
-                role="tab"
-                type="button"
-              >
-                {zone.toUpperCase()}
-              </button>
-            ))}
+            <button
+              aria-selected={isCreatorSidebarMode}
+              className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.55rem] py-[0.35rem] font-semibold ${
+                isCreatorSidebarMode ? 'bg-sky-200' : ''
+              }`}
+              onClick={() => {
+                closeToolVariantContextMenu();
+                setSidebarMode('creator');
+              }}
+              role="tab"
+              type="button"
+            >
+              Creator
+            </button>
+            <button
+              aria-selected={!isCreatorSidebarMode}
+              className={`cursor-pointer bg-slate-100 px-[0.55rem] py-[0.35rem] font-semibold ${
+                !isCreatorSidebarMode ? 'bg-sky-200' : ''
+              }`}
+              onClick={() => {
+                closeToolVariantContextMenu();
+                setSidebarMode('all-tiles');
+              }}
+              role="tab"
+              type="button"
+            >
+              All tiles
+            </button>
           </div>
-
-          <div className="grid gap-[0.45rem]">
-            {zoneOptionRows.map((rowOptions, rowIndex) => (
+        </section>
+        {isCreatorSidebarMode ? (
+          <div className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1">
+            <section
+              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+                activeBrushFamily === 'base' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+              }`}
+            >
+              <h2 className="m-0 text-[1.4rem] font-semibold">Base</h2>
               <div
-                className="grid gap-[0.45rem]"
-                key={`row:${rowIndex}`}
-                style={
-                  {
-                    gridTemplateColumns: `repeat(${zoneLevelColumnCount}, minmax(3.6rem, 1fr))`,
-                  } satisfies CSSProperties
-                }
+                className="grid grid-cols-2 gap-[0.45rem]"
+                role="list"
+                aria-label="Smart base brushes"
               >
-                {rowOptions.map((option) => (
+                {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
                   <button
-                    className={`flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
-                      activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
+                    aria-pressed={
+                      activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
+                    }
+                    className={`grid cursor-pointer justify-items-start gap-[0.3rem] rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.4rem] py-[0.35rem] text-inherit ${
+                      activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
                         ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                         : ''
                     }`}
-                    key={option.key}
+                    key={brush.id}
                     onClick={() => {
                       closeToolVariantContextMenu();
                       dispatchBrushSelection({
-                        type: 'select-zone-option',
-                        optionKey: option.key,
+                        type: 'select-base-brush',
+                        brushId: brush.id,
                       });
                     }}
-                    aria-label={option.tooltip}
-                    title={option.tooltip}
+                    role="listitem"
+                    title={brush.tooltip}
                     type="button"
                   >
                     {zoneAtlasSource === undefined ? (
                       <span className="text-[0.8rem] font-semibold text-slate-600">
-                        {option.tileId}
+                        {brush.tileId}
                       </span>
                     ) : (
-                      <MapFinalZoneTileSprite
+                      <MapFinalSingleTileSprite
                         atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
                         atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                        tileIds={option.swatchTileIds}
+                        tileId={brush.tileId}
                       />
                     )}
+                    <span>{brush.label}</span>
                   </button>
                 ))}
               </div>
-            ))}
-          </div>
 
-          <small className="text-sm text-slate-600">
-            {activeZoneOption.kind === 'fresh'
-              ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
-              : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
-          </small>
-        </section>
+              <label className="flex items-center gap-[0.45rem] text-slate-600">
+                <input
+                  className="m-0"
+                  checked={showBaseClassOverlay}
+                  onChange={(event) => {
+                    setShowBaseClassOverlay(event.currentTarget.checked);
+                  }}
+                  type="checkbox"
+                />
+                <span>Show base tile classes</span>
+              </label>
 
-        <section
-          className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
-            activeBrushFamily === 'tools' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
-          }`}
-        >
-          <h2 className="m-0 text-[1.4rem] font-semibold">Tools</h2>
-          <div
-            className="grid grid-cols-4 gap-[0.45rem]"
-            role="list"
-            aria-label="Micropolis map tools"
-          >
-            {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
-              const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
-              const iconLookup =
-                spec.toolState === null
-                  ? undefined
-                  : resolveSimUiToolIconAssetLookup(spec.toolState, {
-                      highlighted: active,
-                    });
-              const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
-              const iconUrl =
-                iconBasename === undefined
-                  ? undefined
-                  : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
-              return (
+              <small className="text-sm text-slate-600">
+                Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
+              </small>
+            </section>
+
+            <section
+              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+                activeBrushFamily === 'zones' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+              }`}
+            >
+              <h2 className="m-0 text-[1.4rem] font-semibold">Zones</h2>
+              <div
+                aria-label="Zone family selector"
+                className="grid grid-cols-3 overflow-hidden rounded-[10px] border border-slate-500"
+                role="tablist"
+              >
+                {(['res', 'com', 'ind'] as const).map((zone) => (
+                  <button
+                    aria-selected={activeBrushFamily === 'zones' && zone === activeZoneKind}
+                    className={`cursor-pointer border-r border-slate-500 bg-slate-100 px-[0.4rem] py-2 font-semibold last:border-r-0 ${
+                      activeBrushFamily === 'zones' && zone === activeZoneKind ? 'bg-sky-200' : ''
+                    }`}
+                    key={zone}
+                    onClick={() => {
+                      closeToolVariantContextMenu();
+                      dispatchBrushSelection({
+                        type: 'select-zone-kind',
+                        zoneKind: zone,
+                      });
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    {zone.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-[0.45rem]">
+                {zoneOptionRows.map((rowOptions, rowIndex) => (
+                  <div
+                    className="grid gap-[0.45rem]"
+                    key={`row:${rowIndex}`}
+                    style={
+                      {
+                        gridTemplateColumns: `repeat(${zoneLevelColumnCount}, minmax(3.6rem, 1fr))`,
+                      } satisfies CSSProperties
+                    }
+                  >
+                    {rowOptions.map((option) => (
+                      <button
+                        className={`flex min-h-[3.4rem] cursor-pointer items-center justify-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
+                          activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
+                            ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
+                            : ''
+                        }`}
+                        key={option.key}
+                        onClick={() => {
+                          closeToolVariantContextMenu();
+                          dispatchBrushSelection({
+                            type: 'select-zone-option',
+                            optionKey: option.key,
+                          });
+                        }}
+                        aria-label={option.tooltip}
+                        title={option.tooltip}
+                        type="button"
+                      >
+                        {zoneAtlasSource === undefined ? (
+                          <span className="text-[0.8rem] font-semibold text-slate-600">
+                            {option.tileId}
+                          </span>
+                        ) : (
+                          <MapFinalZoneTileSprite
+                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                            tileIds={option.swatchTileIds}
+                          />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <small className="text-sm text-slate-600">
+                {activeZoneOption.kind === 'fresh'
+                  ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
+                  : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
+              </small>
+            </section>
+
+            <section
+              className={`grid gap-[0.65rem] rounded-[10px] border border-transparent p-[0.45rem] ${
+                activeBrushFamily === 'tools' ? 'border-[#0969da] bg-[rgba(221,244,255,0.5)]' : ''
+              }`}
+            >
+              <h2 className="m-0 text-[1.4rem] font-semibold">Tools</h2>
+              <div
+                className="grid grid-cols-4 gap-[0.45rem]"
+                role="list"
+                aria-label="Micropolis map tools"
+              >
+                {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
+                  const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
+                  const iconLookup =
+                    spec.toolState === null
+                      ? undefined
+                      : resolveSimUiToolIconAssetLookup(spec.toolState, {
+                          highlighted: active,
+                        });
+                  const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
+                  const iconUrl =
+                    iconBasename === undefined
+                      ? undefined
+                      : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
+                  return (
+                    <button
+                      aria-label={spec.label}
+                      aria-pressed={active}
+                      className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
+                        active ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]' : ''
+                      }`}
+                      key={spec.tool}
+                      onClick={() => {
+                        closeToolVariantContextMenu();
+                        dispatchBrushSelection({
+                          type: 'select-tool',
+                          tool: spec.tool,
+                        });
+                      }}
+                      onContextMenu={(event) => {
+                        if (spec.tool !== 'park' && spec.tool !== 'house') {
+                          return;
+                        }
+                        event.preventDefault();
+                        const menuSize =
+                          spec.tool === 'park'
+                            ? {
+                                width: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX,
+                                height: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX,
+                              }
+                            : {
+                                width: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX,
+                                height: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX,
+                              };
+                        const position = resolveScenarioMapFinalContextMenuPosition(
+                          {
+                            x: event.clientX,
+                            y: event.clientY,
+                          },
+                          menuSize,
+                          {
+                            width: window.innerWidth,
+                            height: window.innerHeight,
+                          },
+                        );
+                        dispatchBrushSelection({
+                          type: 'select-tool',
+                          tool: spec.tool,
+                        });
+                        setToolVariantContextMenu({
+                          open: true,
+                          tool: spec.tool,
+                          x: position.x,
+                          y: position.y,
+                        });
+                      }}
+                      role="listitem"
+                      title={
+                        spec.tool === 'park'
+                          ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                          : spec.tool === 'house'
+                            ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                            : `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`
+                      }
+                      type="button"
+                    >
+                      {iconUrl !== undefined ? (
+                        <img
+                          alt=""
+                          aria-hidden="true"
+                          className="block h-full w-full object-contain [image-rendering:pixelated]"
+                          draggable={false}
+                          src={iconUrl}
+                        />
+                      ) : zoneAtlasSource !== undefined ? (
+                        <MapFinalSingleTileSprite
+                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                          tileId={spec.previewTileId}
+                        />
+                      ) : (
+                        <span className="text-[0.8rem] font-semibold text-slate-600">
+                          {spec.previewTileId}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <small className="text-sm text-slate-600">
+                Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}.
+                Right click Park/House to change.
+              </small>
+              {isToolVariantContextMenuOpen ? (
+                <div
+                  className="fixed z-50"
+                  ref={toolVariantContextMenuRef}
+                  style={{
+                    left: `${toolVariantContextMenu.x}px`,
+                    top: `${toolVariantContextMenu.y}px`,
+                  }}
+                >
+                  <ClassicyMenuPanel className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1">
+                    {isParkBrushContextMenuOpen
+                      ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
+                          <ClassicyMenuItemButton
+                            key={choice.id}
+                            onClick={() => {
+                              setParkBrushMode(choice.id);
+                              closeToolVariantContextMenu();
+                            }}
+                            type="button"
+                            title={
+                              choice.tileId === null
+                                ? 'Auto: choose any park variant'
+                                : `Place ${choice.label} only (tile ${choice.tileId})`
+                            }
+                          >
+                            {choice.id === parkBrushMode ? '● ' : ''}
+                            {choice.label}
+                          </ClassicyMenuItemButton>
+                        ))
+                      : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
+                          <ClassicyMenuItemButton
+                            key={choice.tileId === null ? 'auto' : choice.tileId}
+                            onClick={() => {
+                              setHouseBrushTileId(choice.tileId);
+                              closeToolVariantContextMenu();
+                            }}
+                            type="button"
+                            title={
+                              choice.tileId === null
+                                ? 'Auto: choose any house variant'
+                                : `Place ${choice.label} only (tile ${choice.tileId})`
+                            }
+                          >
+                            {choice.tileId === houseBrushTileId ? '● ' : ''}
+                            {choice.label}
+                          </ClassicyMenuItemButton>
+                        ))}
+                  </ClassicyMenuPanel>
+                </div>
+              ) : null}
+
+              <div className="grid gap-[0.45rem] rounded-lg border border-slate-400 bg-slate-100 p-[0.45rem]">
+                <div className="grid gap-[0.3rem]">
+                  <label className="grid gap-[0.2rem]">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Derive simulation ticks
+                    </span>
+                    <input
+                      className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
+                      min={1}
+                      onChange={(event) => {
+                        const next = Number(event.currentTarget.value);
+                        if (Number.isFinite(next)) {
+                          setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
+                        }
+                      }}
+                      step={1}
+                      type="number"
+                      value={deriveSimulationTicks}
+                    />
+                  </label>
+                </div>
                 <button
-                  aria-label={spec.label}
-                  aria-pressed={active}
-                  className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
-                    active ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]' : ''
-                  }`}
-                  key={spec.tool}
+                  className="cursor-pointer rounded border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.55rem] py-[0.4rem] font-semibold text-inherit"
                   onClick={() => {
                     closeToolVariantContextMenu();
-                    dispatchBrushSelection({
-                      type: 'select-tool',
-                      tool: spec.tool,
+                    dispatch({
+                      type: 'derive-map-simulation',
+                      ticks: deriveSimulationTicks,
                     });
                   }}
-                  onContextMenu={(event) => {
-                    if (spec.tool !== 'park' && spec.tool !== 'house') {
-                      return;
-                    }
-                    event.preventDefault();
-                    const menuSize =
-                      spec.tool === 'park'
-                        ? {
-                            width: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_WIDTH_PX,
-                            height: SCENARIO_MAP_FINAL_PARK_CONTEXT_MENU_HEIGHT_PX,
-                          }
-                        : {
-                            width: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_WIDTH_PX,
-                            height: SCENARIO_MAP_FINAL_HOUSE_CONTEXT_MENU_HEIGHT_PX,
-                          };
-                    const position = resolveScenarioMapFinalContextMenuPosition(
-                      {
-                        x: event.clientX,
-                        y: event.clientY,
-                      },
-                      menuSize,
-                      {
-                        width: window.innerWidth,
-                        height: window.innerHeight,
-                      },
-                    );
-                    dispatchBrushSelection({
-                      type: 'select-tool',
-                      tool: spec.tool,
-                    });
-                    setToolVariantContextMenu({
-                      open: true,
-                      tool: spec.tool,
-                      x: position.x,
-                      y: position.y,
-                    });
-                  }}
-                  role="listitem"
-                  title={
-                    spec.tool === 'park'
-                      ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
-                      : spec.tool === 'house'
-                        ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
-                        : `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`
-                  }
                   type="button"
                 >
-                  {iconUrl !== undefined ? (
-                    <img
-                      alt=""
-                      aria-hidden="true"
-                      className="block h-full w-full object-contain [image-rendering:pixelated]"
-                      draggable={false}
-                      src={iconUrl}
-                    />
-                  ) : zoneAtlasSource !== undefined ? (
-                    <MapFinalSingleTileSprite
-                      atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                      atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                      tileId={spec.previewTileId}
-                    />
-                  ) : (
-                    <span className="text-[0.8rem] font-semibold text-slate-600">
-                      {spec.previewTileId}
-                    </span>
-                  )}
+                  Derive simulation
                 </button>
-              );
-            })}
+                <small className="text-sm text-slate-600">
+                  Recomputes derived states (power, traffic/road classes, bridges, smoke/radar)
+                  without zone growth/disasters.
+                </small>
+              </div>
+            </section>
           </div>
-          <small className="text-sm text-slate-600">
-            Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}. Right
-            click Park/House to change.
-          </small>
-          {isToolVariantContextMenuOpen ? (
-            <div
-              className="fixed z-50"
-              ref={toolVariantContextMenuRef}
-              style={{
-                left: `${toolVariantContextMenu.x}px`,
-                top: `${toolVariantContextMenu.y}px`,
-              }}
-            >
-              <ClassicyMenuPanel className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1">
-                {isParkBrushContextMenuOpen
-                  ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
-                      <ClassicyMenuItemButton
-                        key={choice.id}
+        ) : (
+          <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-[0.65rem] rounded-[10px] border border-slate-400 bg-slate-100 p-[0.45rem]">
+            <label className="grid gap-[0.2rem]">
+              <span className="text-sm font-semibold text-slate-700">Find tile</span>
+              <input
+                className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
+                onChange={(event) => {
+                  setExactTileSearchQuery(event.currentTarget.value);
+                }}
+                placeholder="Filter by id, Micropolis name, or label"
+                spellCheck={false}
+                type="text"
+                value={exactTileSearchQuery}
+              />
+            </label>
+            <div className="min-h-0 overflow-y-auto rounded-[8px] border border-slate-400 bg-gray-200 p-[0.35rem]">
+              {exactTileBrushEntries.length === 0 ? (
+                <p className="m-0 px-[0.35rem] py-[0.5rem] text-sm text-slate-600">
+                  No tiles match that filter.
+                </p>
+              ) : (
+                <div
+                  className="grid grid-cols-4 gap-[0.45rem]"
+                  role="list"
+                  aria-label="Exact tiles"
+                >
+                  {exactTileBrushEntries.map((entry) => {
+                    const isActive = entry.tileId === exactTileBrushTileId;
+                    return (
+                      <button
+                        aria-label={entry.title}
+                        aria-pressed={isActive}
+                        className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
+                          isActive
+                            ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
+                            : ''
+                        }`}
+                        key={entry.tileId}
                         onClick={() => {
-                          setParkBrushMode(choice.id);
                           closeToolVariantContextMenu();
+                          setExactTileBrushTileId(entry.tileId);
                         }}
+                        role="listitem"
+                        title={entry.title}
                         type="button"
-                        title={
-                          choice.tileId === null
-                            ? 'Auto: choose any park variant'
-                            : `Place ${choice.label} only (tile ${choice.tileId})`
-                        }
                       >
-                        {choice.id === parkBrushMode ? '● ' : ''}
-                        {choice.label}
-                      </ClassicyMenuItemButton>
-                    ))
-                  : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
-                      <ClassicyMenuItemButton
-                        key={choice.tileId === null ? 'auto' : choice.tileId}
-                        onClick={() => {
-                          setHouseBrushTileId(choice.tileId);
-                          closeToolVariantContextMenu();
-                        }}
-                        type="button"
-                        title={
-                          choice.tileId === null
-                            ? 'Auto: choose any house variant'
-                            : `Place ${choice.label} only (tile ${choice.tileId})`
-                        }
-                      >
-                        {choice.tileId === houseBrushTileId ? '● ' : ''}
-                        {choice.label}
-                      </ClassicyMenuItemButton>
-                    ))}
-              </ClassicyMenuPanel>
+                        {zoneAtlasSource === undefined ? (
+                          <span className="text-[0.8rem] font-semibold text-slate-600">
+                            {entry.tileId}
+                          </span>
+                        ) : (
+                          <MapFinalSingleTileSprite
+                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                            tileId={entry.tileId}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          ) : null}
-
-          <div className="grid gap-[0.45rem] rounded-lg border border-slate-400 bg-slate-100 p-[0.45rem]">
-            <div className="grid gap-[0.3rem]">
-              <label className="grid gap-[0.2rem]">
-                <span className="text-sm font-semibold text-slate-700">
-                  Derive simulation ticks
-                </span>
-                <input
-                  className="rounded border border-slate-500 px-[0.45rem] py-[0.25rem]"
-                  min={1}
-                  onChange={(event) => {
-                    const next = Number(event.currentTarget.value);
-                    if (Number.isFinite(next)) {
-                      setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
-                    }
-                  }}
-                  step={1}
-                  type="number"
-                  value={deriveSimulationTicks}
-                />
-              </label>
-            </div>
-            <button
-              className="cursor-pointer rounded border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.55rem] py-[0.4rem] font-semibold text-inherit"
-              onClick={() => {
-                closeToolVariantContextMenu();
-                dispatch({
-                  type: 'derive-map-simulation',
-                  ticks: deriveSimulationTicks,
-                });
-              }}
-              type="button"
-            >
-              Derive simulation
-            </button>
             <small className="text-sm text-slate-600">
-              Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without
-              zone growth/disasters.
+              Exact tile brush: placing tile {exactTileBrushTileId}.
             </small>
-          </div>
-        </section>
+          </section>
+        )}
       </aside>
 
       <div className="min-h-0 bg-[#0b1020]">
         <MapCanvas
           dragPlacementEnabled={
+            sidebarMode === 'all-tiles' ||
             activeBrushFamily === 'base' ||
             (activeBrushFamily === 'tools' && activeMapFinalToolSpec.size === 1)
           }
           hoverPreview={
-            activeBrushFamily === 'base'
-              ? activeSmartBaseHoverPreview
-              : activeBrushFamily === 'tools' && !isScenarioMapFinalPlayableToolId(activeTool)
-                ? {
-                    size: activeMapFinalToolSpec.size,
-                    offset: activeMapFinalToolSpec.offset,
-                    pendingColor: activeMapFinalToolSpec.pendingColor,
-                  }
-                : undefined
+            sidebarMode === 'all-tiles'
+              ? SCENARIO_MAP_FINAL_EXACT_TILE_HOVER_PREVIEW
+              : activeBrushFamily === 'base'
+                ? activeSmartBaseHoverPreview
+                : activeBrushFamily === 'tools' && !isScenarioMapFinalPlayableToolId(activeTool)
+                  ? {
+                      size: activeMapFinalToolSpec.size,
+                      offset: activeMapFinalToolSpec.offset,
+                      pendingColor: activeMapFinalToolSpec.pendingColor,
+                    }
+                  : undefined
           }
           hoverTool={
-            activeBrushFamily === 'zones'
-              ? activeZoneKind
-              : activeBrushFamily === 'tools' && isScenarioMapFinalPlayableToolId(activeTool)
-                ? activeTool
-                : undefined
+            sidebarMode === 'all-tiles'
+              ? undefined
+              : activeBrushFamily === 'zones'
+                ? activeZoneKind
+                : activeBrushFamily === 'tools' && isScenarioMapFinalPlayableToolId(activeTool)
+                  ? activeTool
+                  : undefined
           }
           mapState={runtimeMapState}
-          tileOverlayResolver={mapFinalBaseTileOverlayResolver}
+          tileOverlayResolver={isCreatorSidebarMode ? mapFinalBaseTileOverlayResolver : undefined}
           onTileClick={(x, y) => {
+            if (sidebarMode === 'all-tiles') {
+              dispatch({
+                type: 'paint-map-tile',
+                x,
+                y,
+                tileWord: exactTileBrushTileId,
+                terrainRecomputeMode: 'global',
+              });
+              return;
+            }
+
             if (activeBrushFamily === 'base') {
               if (activeSmartBaseBrush.id === 'forest') {
                 const forestPoints = getScenarioMapFinalForestBrushPoints(
@@ -1203,6 +1450,12 @@ export function ScenarioMapFinalWorkbench() {
               }
 
               if (activeTool === 'house') {
+                const canPaintHouse = canScenarioMapFinalPaintHouseAt(bundle, { x, y }, (point) =>
+                  readScenarioEditorMapTileWord(bundle, point),
+                );
+                if (!canPaintHouse) {
+                  return;
+                }
                 const houseTileWord = resolveScenarioMapFinalHouseTileWord(houseBrushTileId, {
                   x,
                   y,
