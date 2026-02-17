@@ -11,6 +11,10 @@ import {
 } from '../state/editor-import.ts';
 import { useScenarioEditorDispatch, useScenarioEditorState } from '../state/editor-state.tsx';
 import {
+  getScenarioEditorStockScenarioOptions,
+  loadScenarioEditorStockScenarioBundle,
+} from '../state/editor-stock-scenarios.ts';
+import {
   EditorCard,
   EditorIssuesPanel,
   EditorPreviewPanel,
@@ -21,14 +25,16 @@ import {
 
 type ScenarioEditorOpenResult =
   | {
-      readonly fileName: string;
+      readonly sourceLabel: string;
       readonly ok: true;
     }
   | {
-      readonly fileName: string;
+      readonly sourceLabel: string;
       readonly issues: readonly ScenarioEditorBundleImportIssue[];
       readonly ok: false;
     };
+
+const STOCK_SCENARIO_OPTIONS = getScenarioEditorStockScenarioOptions();
 
 /**
  * Strict JSON export + open/import card for Stage 3.4/3.5.
@@ -42,6 +48,10 @@ export function ScenarioExportCard() {
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const [lastOpenResult, setLastOpenResult] = useState<ScenarioEditorOpenResult | null>(null);
   const [lastResult, setLastResult] = useState<ScenarioEditorStrictExportResult | null>(null);
+  const [openStockScenarioId, setOpenStockScenarioId] = useState<number>(
+    STOCK_SCENARIO_OPTIONS[0]?.id ?? 1,
+  );
+  const [openingStockScenario, setOpeningStockScenario] = useState(false);
   const exportFileName = getScenarioEditorExportFileName(bundle.key);
 
   const handleExport = () => {
@@ -81,7 +91,7 @@ export function ScenarioExportCard() {
     } catch {
       setLastOpenResult({
         ok: false,
-        fileName: selectedFile.name,
+        sourceLabel: selectedFile.name,
         issues: [
           {
             source: 'io',
@@ -97,7 +107,7 @@ export function ScenarioExportCard() {
     if (!importResult.ok) {
       setLastOpenResult({
         ok: false,
-        fileName: selectedFile.name,
+        sourceLabel: selectedFile.name,
         issues: importResult.issues,
       });
       return;
@@ -107,9 +117,51 @@ export function ScenarioExportCard() {
     dispatch({ type: 'set-active-view', view: 'metadata' });
     setLastOpenResult({
       ok: true,
-      fileName: selectedFile.name,
+      sourceLabel: selectedFile.name,
     });
     setLastResult(null);
+  };
+
+  const handleOpenStockScenario = async () => {
+    if (
+      isDirty &&
+      !window.confirm('Open a stock scenario and discard unsaved editor changes in this draft?')
+    ) {
+      return;
+    }
+
+    const selectedScenario =
+      STOCK_SCENARIO_OPTIONS.find((option) => option.id === openStockScenarioId) ??
+      STOCK_SCENARIO_OPTIONS[0];
+    if (selectedScenario === undefined) {
+      return;
+    }
+
+    setOpeningStockScenario(true);
+    try {
+      const stockBundle = await loadScenarioEditorStockScenarioBundle(selectedScenario.id);
+      dispatch({ type: 'replace-bundle', bundle: stockBundle });
+      dispatch({ type: 'set-active-view', view: 'metadata' });
+      setLastOpenResult({
+        ok: true,
+        sourceLabel: `${selectedScenario.name} (${selectedScenario.fileName})`,
+      });
+      setLastResult(null);
+    } catch {
+      setLastOpenResult({
+        ok: false,
+        sourceLabel: `${selectedScenario.name} (${selectedScenario.fileName})`,
+        issues: [
+          {
+            source: 'io',
+            path: '$',
+            message: 'failed to load selected stock scenario resource',
+          },
+        ],
+      });
+    } finally {
+      setOpeningStockScenario(false);
+    }
   };
 
   const issues = lastResult?.ok === false ? lastResult.issues : [];
@@ -132,6 +184,30 @@ export function ScenarioExportCard() {
           ref={openFileInputRef}
           type="file"
         />
+        <label className="grid gap-[0.3rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem]">
+          <span>Stock Scenario</span>
+          <select
+            onChange={(event) => {
+              setOpenStockScenarioId(Number(event.currentTarget.value));
+            }}
+            value={openStockScenarioId}
+          >
+            {STOCK_SCENARIO_OPTIONS.map((scenario) => (
+              <option key={scenario.id} value={scenario.id}>
+                {scenario.name} ({scenario.fileName})
+              </option>
+            ))}
+          </select>
+        </label>
+        <EditorSecondaryButton
+          disabled={openingStockScenario}
+          onClick={() => {
+            void handleOpenStockScenario();
+          }}
+          type="button"
+        >
+          {openingStockScenario ? 'Opening Stock Scenario…' : 'Open Stock Scenario'}
+        </EditorSecondaryButton>
         <EditorSecondaryButton onClick={handleOpenBundle} type="button">
           Open Bundle JSON
         </EditorSecondaryButton>
@@ -149,7 +225,7 @@ export function ScenarioExportCard() {
           {lastOpenResult === null
             ? 'not attempted'
             : lastOpenResult.ok
-              ? `success (${lastOpenResult.fileName})`
+              ? `success (${lastOpenResult.sourceLabel})`
               : `blocked (${openIssues.length} issue${openIssues.length === 1 ? '' : 's'})`}
         </dd>
         <dt>Last Export Attempt</dt>
