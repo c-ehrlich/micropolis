@@ -1,4 +1,4 @@
-import { ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -46,21 +46,14 @@ export function ScenarioBehaviorProfileEditorCard() {
         allowing only registered profile variants.
       </p>
 
-      <EditorField>
-        <span>Behavior Profile Assignment Enabled</span>
-        <input
-          className="justify-self-start"
-          checked={behavior.enabled}
-          onChange={(event) => {
-            dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
-          }}
-          type="checkbox"
-        />
-        <small className="text-sm text-slate-600">
-          This Stage 4.3 draft editor captures profile assignment only; export integration lands in
-          Stage 4.5.
-        </small>
-      </EditorField>
+      <ClassicyCheckboxField
+        checked={behavior.enabled}
+        detail="This Stage 4.3 draft editor captures profile assignment only; export integration lands in Stage 4.5."
+        label="Behavior Profile Assignment Enabled"
+        onChange={(event) => {
+          dispatch({ type: 'set-behavior-enabled', enabled: event.currentTarget.checked });
+        }}
+      />
 
       {behavior.enabled ? (
         <EditorField>

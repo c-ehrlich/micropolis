@@ -1,6 +1,6 @@
-import { ClassicyButton, ClassicyMenuPanel } from '@city/classicyui';
+import { ClassicyButton, ClassicyMenuPanel, getAllThemes, getThemeVars } from '@city/classicyui';
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   SCENARIO_EDITOR_MVP_VIEWS,
@@ -10,6 +10,8 @@ import {
   useScenarioEditorState,
 } from '../state/editor-state.tsx';
 import { ScenarioFileMenuContent } from './-section-export.tsx';
+
+const CLASSICY_MENU_BUTTON_ACTIVE_CLASS = '!text-[var(--color-white)] !bg-[var(--color-theme-04)]';
 
 export const Route = createRootRoute({
   component: RootRouteLayout,
@@ -29,8 +31,16 @@ function RootRouteLayout() {
  * map-first workspace framing.
  */
 function EditorShell() {
+  const runtimeTheme = useMemo<CSSProperties>(() => {
+    const theme = getAllThemes()[0];
+    return theme === undefined ? {} : (getThemeVars(theme) as CSSProperties);
+  }, []);
+
   return (
-    <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-slate-100 font-['Segoe_UI','Helvetica_Neue',Helvetica,Arial,sans-serif] text-[#1f2328] leading-[1.4]">
+    <div
+      className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-[var(--color-system-02)] text-[var(--color-black)] [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)] leading-[1.4]"
+      style={runtimeTheme}
+    >
       <EditorTopBar />
       <main className="min-h-0 overflow-hidden">
         <Outlet />
@@ -84,11 +94,12 @@ function EditorTopBar() {
   }, [fileMenuOpen]);
 
   return (
-    <header className="flex min-h-[3.2rem] items-center justify-between gap-2 border-b border-slate-400 bg-white px-3 py-2">
+    <header className="flex min-h-[3.2rem] items-center justify-between gap-2 border-b border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-system-02)] px-3 py-2">
       <div className="relative" ref={fileMenuContainerRef}>
         <ClassicyButton
           active={fileMenuOpen}
-          className="!m-0 min-w-[6.5rem] px-4 py-1.5 text-left"
+          activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
+          className={`!m-0 min-w-[6.5rem] px-4 py-1.5 text-left ${fileMenuOpen ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
           onClick={() => {
             setFileMenuOpen((current) => !current);
           }}
@@ -109,6 +120,7 @@ function EditorTopBar() {
           return (
             <ClassicyButton
               active={selected}
+              activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
               className="!m-0 min-w-[8.25rem] px-3 py-1.5"
               key={view}
               onClick={() => {

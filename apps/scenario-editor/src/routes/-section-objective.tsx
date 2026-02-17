@@ -1,4 +1,4 @@
-import { ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -51,21 +51,14 @@ export function ScenarioObjectiveEditorCard() {
         `DoScenarioScore` fields, while `all`/`any`/`not` allow composed checks.
       </p>
 
-      <EditorField>
-        <span>Objective Enabled</span>
-        <input
-          className="justify-self-start"
-          checked={objective.enabled}
-          onChange={(event) => {
-            dispatch({ type: 'set-objective-enabled', enabled: event.currentTarget.checked });
-          }}
-          type="checkbox"
-        />
-        <small className="text-sm text-slate-600">
-          Objective predicate drafts are included in strict export when objective authoring is
-          enabled.
-        </small>
-      </EditorField>
+      <ClassicyCheckboxField
+        checked={objective.enabled}
+        detail="Objective predicate drafts are included in strict export when objective authoring is enabled."
+        label="Objective Enabled"
+        onChange={(event) => {
+          dispatch({ type: 'set-objective-enabled', enabled: event.currentTarget.checked });
+        }}
+      />
 
       {objective.enabled ? (
         <ScenarioObjectivePredicateEditor

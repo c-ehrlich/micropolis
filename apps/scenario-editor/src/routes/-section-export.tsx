@@ -1,4 +1,4 @@
-import { ClassicyTextArea } from '@city/classicyui';
+import { ClassicySelect, ClassicyTextArea } from '@city/classicyui';
 import { type ChangeEvent, useRef, useState } from 'react';
 
 import {
@@ -192,9 +192,9 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
           ref={openFileInputRef}
           type="file"
         />
-        <label className="grid gap-[0.3rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem]">
+        <label className="grid gap-[0.3rem]">
           <span>Stock Scenario</span>
-          <select
+          <ClassicySelect
             onChange={(event) => {
               setOpenStockScenarioId(Number(event.currentTarget.value));
             }}
@@ -205,7 +205,7 @@ export function ScenarioFileMenuContent({ compact = false }: ScenarioFileMenuCon
                 {scenario.name} ({scenario.fileName})
               </option>
             ))}
-          </select>
+          </ClassicySelect>
         </label>
         <EditorSecondaryButton
           disabled={openingStockScenario}

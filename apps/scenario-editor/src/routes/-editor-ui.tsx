@@ -9,7 +9,7 @@ export function EditorCard({ className, ...props }: ComponentPropsWithoutRef<'se
   return (
     <section
       className={clsx(
-        'rounded-md border border-slate-300 bg-white p-4 [&>h1]:mb-3 [&>h1]:mt-0 [&>p]:mb-4 [&>p]:mt-0',
+        'rounded-md border border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-system-02)] p-4 [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07)] [&>h1]:mb-3 [&>h1]:mt-0 [&>p]:mb-4 [&>p]:mt-0',
         className,
       )}
       {...props}
@@ -33,7 +33,7 @@ export function EditorField({ className, ...props }: ComponentPropsWithoutRef<'l
   return (
     <label
       className={clsx(
-        'grid gap-[0.3rem] [&_input:not([type=checkbox])]:rounded [&_input:not([type=checkbox])]:border [&_input:not([type=checkbox])]:border-slate-500 [&_input:not([type=checkbox])]:px-[0.55rem] [&_input:not([type=checkbox])]:py-[0.45rem] [&_select]:rounded [&_select]:border [&_select]:border-slate-500 [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem]',
+        '[&_input:not([type=checkbox]):not([type=radio])]:[font-family:var(--ui-font),sans-serif] [&_input:not([type=checkbox]):not([type=radio])]:[font-size:var(--ui-font-size)] [&_input:not([type=checkbox]):not([type=radio])]:border-solid [&_input:not([type=checkbox]):not([type=radio])]:[border-width:var(--window-border-size)] [&_input:not([type=checkbox]):not([type=radio])]:[border-color:var(--color-window-border)] [&_input:not([type=checkbox]):not([type=radio])]:bg-[var(--color-white)] [&_input:not([type=checkbox]):not([type=radio])]:[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)] [&_input:not([type=checkbox]):not([type=radio])]:px-[0.55rem] [&_input:not([type=checkbox]):not([type=radio])]:py-[0.45rem] [&_select]:[font-family:var(--ui-font),sans-serif] [&_select]:[font-size:var(--ui-font-size)] [&_select]:border-solid [&_select]:[border-width:var(--window-border-size)] [&_select]:[border-color:var(--color-window-border)] [&_select]:bg-[var(--color-white)] [&_select]:[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)] [&_select]:px-[0.55rem] [&_select]:py-[0.45rem] [&_textarea]:resize-y [&_textarea]:[font-family:var(--ui-font),sans-serif] [&_textarea]:[font-size:var(--ui-font-size)] [&_textarea]:border-solid [&_textarea]:[border-width:var(--window-border-size)] [&_textarea]:[border-color:var(--color-window-border)] [&_textarea]:bg-[var(--color-white)] [&_textarea]:[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)] [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem] grid gap-[0.3rem]',
         className,
       )}
       {...props}
@@ -62,7 +62,7 @@ export function EditorFieldInline({ className, ...props }: ComponentPropsWithout
  * Not from Micropolis C: editor-only authoring guidance text.
  */
 export function EditorHelp({ className, ...props }: ComponentPropsWithoutRef<'small'>) {
-  return <small className={clsx('text-sm text-slate-600', className)} {...props} />;
+  return <small className={clsx('text-sm text-[var(--color-system-07)]', className)} {...props} />;
 }
 
 /**
@@ -70,7 +70,7 @@ export function EditorHelp({ className, ...props }: ComponentPropsWithoutRef<'sm
  * Not from Micropolis C: editor-only validation feedback UI.
  */
 export function EditorError({ className, ...props }: ComponentPropsWithoutRef<'small'>) {
-  return <small className={clsx('text-sm text-red-700', className)} {...props} />;
+  return <small className={clsx('text-sm text-[#8f1d1d]', className)} {...props} />;
 }
 
 /**
@@ -81,7 +81,7 @@ export function EditorStatsGrid({ className, ...props }: ComponentPropsWithoutRe
   return (
     <dl
       className={clsx(
-        'm-0 grid grid-cols-[12rem_1fr] gap-x-4 gap-y-2 [&_dt]:text-slate-600',
+        'm-0 grid grid-cols-[12rem_1fr] gap-x-4 gap-y-2 [&_dt]:text-[var(--color-system-07)]',
         className,
       )}
       {...props}
@@ -97,7 +97,7 @@ export function EditorIssuesPanel({ className, ...props }: ComponentPropsWithout
   return (
     <section
       className={clsx(
-        'mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_ul]:m-0 [&_ul]:pl-5',
+        'mt-4 rounded-md border border-[#8f1d1d]/35 bg-[#ffe8e8] p-3 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_ul]:m-0 [&_ul]:pl-5',
         className,
       )}
       {...props}
@@ -113,7 +113,7 @@ export function EditorPreviewPanel({ className, ...props }: ComponentPropsWithou
   return (
     <section
       className={clsx(
-        'mt-4 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base [&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-slate-500 [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem] [&_textarea]:font-mono [&_textarea]:text-xs [&_textarea]:leading-[1.4]',
+        '[&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:[font-family:var(--ui-font),sans-serif] [&_textarea]:[font-size:var(--ui-font-size)] [&_textarea]:border-solid [&_textarea]:[border-width:var(--window-border-size)] [&_textarea]:[border-color:var(--color-window-border)] [&_textarea]:bg-[var(--color-white)] [&_textarea]:[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)] [&_textarea]:px-[0.55rem] [&_textarea]:py-[0.45rem] [&_textarea]:font-mono [&_textarea]:text-xs [&_textarea]:leading-[1.4] mt-4 [&>h2]:mb-2 [&>h2]:mt-0 [&>h2]:text-base',
         className,
       )}
       {...props}
@@ -129,7 +129,7 @@ export function EditorButton({ className, ...props }: ComponentPropsWithoutRef<'
   return (
     <button
       className={clsx(
-        'cursor-pointer rounded border border-slate-500 bg-slate-100 px-[0.6rem] py-[0.35rem] text-inherit disabled:cursor-not-allowed disabled:opacity-65',
+        'classicyButton !m-0 disabled:cursor-not-allowed disabled:opacity-65',
         className,
       )}
       {...props}
@@ -142,15 +142,7 @@ export function EditorButton({ className, ...props }: ComponentPropsWithoutRef<'
  * Not from Micropolis C: editor-only file/open action styling.
  */
 export function EditorSecondaryButton({ className, ...props }: ComponentPropsWithoutRef<'button'>) {
-  return (
-    <button
-      className={clsx(
-        'cursor-pointer rounded border border-slate-500 bg-slate-100 px-3 py-[0.45rem]',
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <button className={clsx('classicyButton !m-0', className)} {...props} />;
 }
 
 /**
@@ -159,12 +151,6 @@ export function EditorSecondaryButton({ className, ...props }: ComponentPropsWit
  */
 export function EditorPrimaryButton({ className, ...props }: ComponentPropsWithoutRef<'button'>) {
   return (
-    <button
-      className={clsx(
-        'cursor-pointer rounded border border-blue-600 bg-sky-100 px-3 py-[0.45rem] text-[#0c2d6b]',
-        className,
-      )}
-      {...props}
-    />
+    <button className={clsx('classicyButton classicyButtonDefault !m-0', className)} {...props} />
   );
 }

@@ -1,4 +1,4 @@
-import { ClassicyTextArea } from '@city/classicyui';
+import { ClassicyCheckboxField, ClassicyTextArea } from '@city/classicyui';
 import { useMemo } from 'react';
 
 import {
@@ -59,20 +59,14 @@ export function ScenarioScriptEditorCard() {
         triggers plus runtime action unions for disasters/messages.
       </p>
 
-      <EditorField>
-        <span>Scripts Enabled</span>
-        <input
-          className="justify-self-start"
-          checked={script.enabled}
-          onChange={(event) => {
-            dispatch({ type: 'set-script-enabled', enabled: event.currentTarget.checked });
-          }}
-          type="checkbox"
-        />
-        <small className="text-sm text-slate-600">
-          Script event/action drafts are included in strict export when script authoring is enabled.
-        </small>
-      </EditorField>
+      <ClassicyCheckboxField
+        checked={script.enabled}
+        detail="Script event/action drafts are included in strict export when script authoring is enabled."
+        label="Scripts Enabled"
+        onChange={(event) => {
+          dispatch({ type: 'set-script-enabled', enabled: event.currentTarget.checked });
+        }}
+      />
 
       {script.enabled ? (
         <div className="grid gap-[0.85rem]">
