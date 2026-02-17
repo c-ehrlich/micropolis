@@ -32,11 +32,17 @@ export function ClassicyIconButton({
       buttonShape={buttonShape}
       buttonSize={buttonSize}
       className={clsx(
-        '!m-0 inline-grid place-items-center p-0 text-[1rem] leading-none',
+        '!m-0 inline-flex items-center justify-center p-0 text-[1rem] leading-none align-middle',
         className,
       )}
     >
-      <span aria-hidden="true" className={clsx('inline-grid place-items-center', iconClassName)}>
+      <span
+        aria-hidden="true"
+        className={clsx(
+          'inline-flex h-full w-full items-center justify-center text-center leading-none',
+          iconClassName,
+        )}
+      >
         {icon}
       </span>
       {srLabel === undefined ? null : <span className="sr-only">{srLabel}</span>}

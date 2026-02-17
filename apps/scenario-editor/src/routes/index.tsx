@@ -1,4 +1,4 @@
-import { ClassicyIconButton } from '@city/classicyui';
+import { ClassicyIconButton, ClassicyPanelChrome, ClassicyPanelTitle } from '@city/classicyui';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -71,12 +71,14 @@ function ScenarioEditorHomeRoute() {
       </div>
 
       {sidebarOpen ? (
-        <aside
-          className="absolute right-0 top-0 z-20 grid h-full min-h-0 w-[clamp(20rem,32vw,34rem)] grid-rows-[auto_minmax(0,1fr)] border-l border-slate-400 bg-white"
+        <ClassicyPanelChrome
+          className="pointer-events-auto absolute right-0 top-0 z-20 grid h-full min-h-0 w-[clamp(20rem,32vw,34rem)] grid-rows-[auto_minmax(0,1fr)] !border-black !bg-[var(--color-system-02)] p-0"
           ref={sidebarRef}
         >
-          <header className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
-            <h2 className="m-0 text-[1.7rem] font-semibold">{getSidebarTitle(activeView)}</h2>
+          <header className="flex items-center justify-between border-b border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-system-03)] px-3 py-2">
+            <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.95)]">
+              {getSidebarTitle(activeView)}
+            </ClassicyPanelTitle>
             <ClassicyIconButton
               ariaLabel="Close sidebar"
               className="h-8 w-8"
@@ -89,10 +91,10 @@ function ScenarioEditorHomeRoute() {
             />
           </header>
 
-          <div className="min-h-0 overflow-y-auto p-3 [&>section]:max-w-none [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0 [&>section>h1]:hidden [&>section>p]:hidden">
+          <div className="min-h-0 overflow-y-auto p-3">
             <ScenarioRightSidebarPanel view={activeView} />
           </div>
-        </aside>
+        </ClassicyPanelChrome>
       ) : null}
     </section>
   );

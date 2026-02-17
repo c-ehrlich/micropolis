@@ -96,9 +96,23 @@ export function ScenarioScriptEditorCard() {
           </EditorButton>
         </div>
       ) : (
-        <p className="text-sm text-slate-600">
-          Scripted event actions are disabled for this draft.
-        </p>
+        <div className="grid justify-items-start gap-2">
+          <p className="m-0 text-sm text-slate-600">
+            Scripted event actions are disabled for this draft.
+          </p>
+          {script.events.length === 0 ? (
+            <EditorButton
+              className="justify-self-start"
+              onClick={() => {
+                dispatch({ type: 'set-script-enabled', enabled: true });
+                replaceEvents(appendScenarioEditorScriptEvent(script.events));
+              }}
+              type="button"
+            >
+              Add Script Event
+            </EditorButton>
+          ) : null}
+        </div>
       )}
 
       <EditorStatsGrid>
