@@ -666,7 +666,7 @@ function getScenarioMapFinalBaseClassOverlayStyle(
  * editor-specific sidebar layout (not a direct Micropolis C UI port).
  */
 export function ScenarioMapFinalWorkbench() {
-  const { bundle } = useScenarioEditorState();
+  const { bundle, mapEditor } = useScenarioEditorState();
   const dispatch = useScenarioEditorDispatch();
   const [brushSelection, dispatchBrushSelection] = useReducer(
     reduceScenarioMapFinalBrushSelection,
@@ -674,8 +674,8 @@ export function ScenarioMapFinalWorkbench() {
   );
   const [sidebarMode, setSidebarMode] = useState<ScenarioMapFinalSidebarMode>('creator');
   const [exactTileSearchQuery, setExactTileSearchQuery] = useState('');
+  const [exactTileNamedOnly, setExactTileNamedOnly] = useState(true);
   const [exactTileBrushTileId, setExactTileBrushTileId] = useState<number>(Tile.DIRT);
-  const [showBaseClassOverlay, setShowBaseClassOverlay] = useState(true);
   const [parkBrushMode, setParkBrushMode] = useState<ScenarioMapFinalParkBrushMode>('auto');
   const [houseBrushTileId, setHouseBrushTileId] = useState<number | null>(null);
   const [deriveSimulationTicks, setDeriveSimulationTicks] = useState<number>(
@@ -699,6 +699,7 @@ export function ScenarioMapFinalWorkbench() {
   const activeTool = brushSelection.tool;
   const activeSmartBaseBrushId = brushSelection.baseBrushId;
   const isCreatorSidebarMode = sidebarMode === 'creator';
+  const terrainRecomputeMode = mapEditor.autoSmoothingEnabled ? 'global' : 'off';
   const runtimeMapState = useMemo(
     () =>
       createScenarioEditorRuntimeMapStateWithOptions(bundle, {
@@ -740,18 +741,22 @@ export function ScenarioMapFinalWorkbench() {
     [activeSmartBaseBrush],
   );
   const mapFinalBaseTileOverlayResolver = useMemo<MapCanvasTileOverlayResolver | undefined>(
-    () => (showBaseClassOverlay ? getScenarioMapFinalBaseClassOverlayStyle : undefined),
-    [showBaseClassOverlay],
+    () =>
+      mapEditor.showBaseTileClassesEnabled ? getScenarioMapFinalBaseClassOverlayStyle : undefined,
+    [mapEditor.showBaseTileClassesEnabled],
   );
   const exactTileBrushEntries = useMemo(() => {
     const query = exactTileSearchQuery.trim().toLowerCase();
-    if (query.length === 0) {
-      return SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES;
-    }
-    return SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES.filter((entry) =>
-      entry.searchText.includes(query),
-    );
-  }, [exactTileSearchQuery]);
+    return SCENARIO_MAP_FINAL_EXACT_TILE_BRUSH_ENTRIES.filter((entry) => {
+      if (exactTileNamedOnly && entry.originalNames.length === 0) {
+        return false;
+      }
+      if (query.length === 0) {
+        return true;
+      }
+      return entry.searchText.includes(query);
+    });
+  }, [exactTileNamedOnly, exactTileSearchQuery]);
   const mapFinalRuntimeTheme = useMemo<CSSProperties>(() => {
     const theme = getAllThemes()[0];
     return theme === undefined ? {} : (getThemeVars(theme) as CSSProperties);
@@ -890,6 +895,36 @@ export function ScenarioMapFinalWorkbench() {
     >
       <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 border-r border-[#b6bcc6] bg-gray-200 p-4 max-[980px]:max-h-[48vh] max-[980px]:border-b max-[980px]:border-r-0">
         <section className="grid gap-[0.45rem]">
+          <section className="grid gap-[0.35rem] rounded-[8px] border border-slate-400 bg-slate-100 p-[0.45rem]">
+            <label className="flex items-center gap-[0.45rem] text-slate-700">
+              <input
+                checked={mapEditor.autoSmoothingEnabled}
+                className="m-0"
+                onChange={(event) => {
+                  dispatch({
+                    type: 'set-map-auto-smoothing-enabled',
+                    enabled: event.currentTarget.checked,
+                  });
+                }}
+                type="checkbox"
+              />
+              <span>Enable auto smoothing</span>
+            </label>
+            <label className="flex items-center gap-[0.45rem] text-slate-700">
+              <input
+                checked={mapEditor.showBaseTileClassesEnabled}
+                className="m-0"
+                onChange={(event) => {
+                  dispatch({
+                    type: 'set-map-show-base-tile-classes-enabled',
+                    enabled: event.currentTarget.checked,
+                  });
+                }}
+                type="checkbox"
+              />
+              <span>Show base tile classes</span>
+            </label>
+          </section>
           <div
             aria-label="Map final sidebar mode"
             className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-slate-500"
@@ -921,7 +956,7 @@ export function ScenarioMapFinalWorkbench() {
               role="tab"
               type="button"
             >
-              All tiles
+              Advanced
             </button>
           </div>
         </section>
@@ -975,18 +1010,6 @@ export function ScenarioMapFinalWorkbench() {
                   </button>
                 ))}
               </div>
-
-              <label className="flex items-center gap-[0.45rem] text-slate-600">
-                <input
-                  className="m-0"
-                  checked={showBaseClassOverlay}
-                  onChange={(event) => {
-                    setShowBaseClassOverlay(event.currentTarget.checked);
-                  }}
-                  type="checkbox"
-                />
-                <span>Show base tile classes</span>
-              </label>
 
               <small className="text-sm text-slate-600">
                 Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
@@ -1286,7 +1309,7 @@ export function ScenarioMapFinalWorkbench() {
             </section>
           </div>
         ) : (
-          <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-[0.65rem] rounded-[10px] border border-slate-400 bg-slate-100 p-[0.45rem]">
+          <section className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-[0.65rem] rounded-[10px] border border-slate-400 bg-slate-100 p-[0.45rem]">
             <label className="grid gap-[0.2rem]">
               <span className="text-sm font-semibold text-slate-700">Find tile</span>
               <input
@@ -1299,6 +1322,17 @@ export function ScenarioMapFinalWorkbench() {
                 type="text"
                 value={exactTileSearchQuery}
               />
+            </label>
+            <label className="flex items-center gap-[0.45rem] text-slate-700">
+              <input
+                checked={exactTileNamedOnly}
+                className="m-0"
+                onChange={(event) => {
+                  setExactTileNamedOnly(event.currentTarget.checked);
+                }}
+                type="checkbox"
+              />
+              <span>Named tiles only</span>
             </label>
             <div className="min-h-0 overflow-y-auto rounded-[8px] border border-slate-400 bg-gray-200 p-[0.35rem]">
               {exactTileBrushEntries.length === 0 ? (
@@ -1313,11 +1347,12 @@ export function ScenarioMapFinalWorkbench() {
                 >
                   {exactTileBrushEntries.map((entry) => {
                     const isActive = entry.tileId === exactTileBrushTileId;
+                    const micropolisName = entry.originalNames[0] ?? 'UNNAMED';
                     return (
                       <button
                         aria-label={entry.title}
                         aria-pressed={isActive}
-                        className={`grid h-[3.8rem] w-full cursor-pointer place-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] p-[0.2rem] text-inherit ${
+                        className={`grid h-[5.25rem] w-full cursor-pointer justify-items-center rounded-lg border border-slate-500 bg-linear-to-b from-slate-100 to-[#e8ecef] px-[0.2rem] py-[0.25rem] text-inherit ${
                           isActive
                             ? 'border-blue-600 bg-sky-100 shadow-[inset_0_0_0_1px_#0969da]'
                             : ''
@@ -1339,9 +1374,13 @@ export function ScenarioMapFinalWorkbench() {
                           <MapFinalSingleTileSprite
                             atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
                             atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                            scale={2}
                             tileId={entry.tileId}
                           />
                         )}
+                        <span className="max-w-full truncate text-[0.66rem] font-semibold leading-none text-slate-700">
+                          {micropolisName}
+                        </span>
                       </button>
                     );
                   })}
@@ -1393,7 +1432,7 @@ export function ScenarioMapFinalWorkbench() {
                 x,
                 y,
                 tileWord: exactTileBrushTileId,
-                terrainRecomputeMode: 'global',
+                terrainRecomputeMode,
               });
               return;
             }
@@ -1415,7 +1454,10 @@ export function ScenarioMapFinalWorkbench() {
                     y: point.y,
                     baseTileId: activeSmartBaseBrush.tileId,
                     preserveFlags: false,
-                    terrainRecomputeMode: pointIndex === lastPointIndex ? 'global' : 'off',
+                    terrainRecomputeMode:
+                      mapEditor.autoSmoothingEnabled && pointIndex === lastPointIndex
+                        ? 'global'
+                        : 'off',
                   });
                 }
                 return;
@@ -1427,7 +1469,7 @@ export function ScenarioMapFinalWorkbench() {
                 y,
                 baseTileId: activeSmartBaseBrush.tileId,
                 preserveFlags: false,
-                terrainRecomputeMode: 'global',
+                terrainRecomputeMode,
               });
               return;
             }
@@ -1444,7 +1486,7 @@ export function ScenarioMapFinalWorkbench() {
                   x,
                   y,
                   tileWord: parkTileWord,
-                  terrainRecomputeMode: 'global',
+                  terrainRecomputeMode,
                 });
                 return;
               }
@@ -1465,7 +1507,7 @@ export function ScenarioMapFinalWorkbench() {
                   x,
                   y,
                   tileWord: houseTileWord,
-                  terrainRecomputeMode: 'global',
+                  terrainRecomputeMode,
                 });
                 return;
               }
@@ -1477,6 +1519,7 @@ export function ScenarioMapFinalWorkbench() {
                   x,
                   y,
                   zone: specialZoneKind,
+                  terrainRecomputeMode,
                 });
                 return;
               }
@@ -1487,6 +1530,7 @@ export function ScenarioMapFinalWorkbench() {
                   tool: activeTool,
                   x,
                   y,
+                  terrainRecomputeMode,
                 });
               }
               return;
@@ -1498,6 +1542,7 @@ export function ScenarioMapFinalWorkbench() {
                 tool: SCENARIO_MAP_FINAL_ZONE_TOOL_BY_KIND[activeZoneKind],
                 x,
                 y,
+                terrainRecomputeMode,
               });
               return;
             }
@@ -1508,6 +1553,7 @@ export function ScenarioMapFinalWorkbench() {
               zone: activeZoneKind,
               level: activeZoneOption.densityLevel,
               value: activeZoneOption.landValueClass,
+              terrainRecomputeMode,
             });
           }}
           pendingTools={[]}
@@ -1581,22 +1627,33 @@ function MapFinalSingleTileSprite(options: {
   >;
   readonly atlasSpriteSheetUrl: string;
   readonly tileId: number;
+  readonly scale?: number;
 }) {
-  const { atlasCanonicalIdentityKey, atlasSpriteSheetUrl, tileId } = options;
+  const { atlasCanonicalIdentityKey, atlasSpriteSheetUrl, tileId, scale = 1 } = options;
   const sprite = lookupTileSpriteRectByTileId(tileId, {
     atlasCanonicalIdentityKey,
   });
 
   return (
     <span
-      className="block [image-rendering:pixelated] [image-rendering:crisp-edges]"
+      className="relative block overflow-hidden"
       style={{
-        backgroundImage: `url("${atlasSpriteSheetUrl}")`,
-        backgroundPosition: `${-sprite.sourceX}px ${-sprite.sourceY}px`,
-        width: `${sprite.sourceWidth}px`,
-        height: `${sprite.sourceHeight}px`,
+        width: `${sprite.sourceWidth * scale}px`,
+        height: `${sprite.sourceHeight * scale}px`,
       }}
-    />
+    >
+      <span
+        className="absolute left-0 top-0 block [image-rendering:pixelated] [image-rendering:crisp-edges]"
+        style={{
+          backgroundImage: `url("${atlasSpriteSheetUrl}")`,
+          backgroundPosition: `${-sprite.sourceX}px ${-sprite.sourceY}px`,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${sprite.sourceWidth}px`,
+          height: `${sprite.sourceHeight}px`,
+        }}
+      />
+    </span>
   );
 }
 

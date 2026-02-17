@@ -79,9 +79,22 @@ export interface ScenarioEditorState {
   readonly activeView: ScenarioEditorWorkbenchView;
   readonly behavior: ScenarioEditorBehaviorDraft;
   readonly bundle: ScenarioBundleV1;
+  readonly mapEditor: ScenarioEditorMapEditorDraft;
   readonly objective: ScenarioEditorObjectiveDraft;
   readonly script: ScenarioEditorScriptDraft;
   readonly isDirty: boolean;
+}
+
+/**
+ * Editor-only map-authoring settings that are not serialized into scenario bundles.
+ * Not from Micropolis C: these are UI workflow preferences that control whether map edits
+ * request terrain smoothing passes (`SmoothTrees`/`SmoothWater`/`SmoothRiver` in
+ * `ref/micropolis/src/sim/s_gen.c` and `ref/micropolis/src/sim/terrain/terra.c`), plus
+ * editor-only visualization overlays for terrain class readability.
+ */
+export interface ScenarioEditorMapEditorDraft {
+  readonly autoSmoothingEnabled: boolean;
+  readonly showBaseTileClassesEnabled: boolean;
 }
 
 /**
@@ -130,6 +143,7 @@ export type ScenarioEditorAction =
       x: number;
       y: number;
       tool: ScenarioEditorMapTool;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
     }
   | {
       type: 'apply-map-zone-level';
@@ -138,22 +152,29 @@ export type ScenarioEditorAction =
       zone: ScenarioEditorMapZoneKind;
       level: number;
       value: number;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
     }
   | {
       type: 'apply-map-special-zone';
       x: number;
       y: number;
       zone: ScenarioEditorMapSpecialZoneKind;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
     }
   | {
       type: 'derive-map-simulation';
       ticks: number;
     }
-  | { type: 'fill-map'; tileWord: number }
+  | {
+      type: 'fill-map';
+      tileWord: number;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
+    }
   | {
       type: 'fill-map-base-tile';
       baseTileId: number;
       preserveFlags: boolean;
+      terrainRecomputeMode?: ScenarioEditorMapTerrainRecomputeMode;
     }
   | {
       type: 'paint-map-base-tile';
@@ -178,6 +199,8 @@ export type ScenarioEditorAction =
   | { type: 'replace-script-events'; events: readonly ScenarioEditorScriptEvent[] }
   | { type: 'set-objective-enabled'; enabled: boolean }
   | { type: 'set-script-enabled'; enabled: boolean }
+  | { type: 'set-map-auto-smoothing-enabled'; enabled: boolean }
+  | { type: 'set-map-show-base-tile-classes-enabled'; enabled: boolean }
   | { type: 'update-metadata'; metadata: ScenarioEditorMetadataPatch }
   | { type: 'replace-bundle'; bundle: ScenarioBundleV1 }
   | { type: 'set-active-view'; view: ScenarioEditorWorkbenchView };
@@ -223,6 +246,10 @@ export function createScenarioEditorInitialState(): ScenarioEditorState {
     activeView: 'metadata',
     behavior: createScenarioEditorInitialBehaviorDraft(),
     bundle: createScenarioEditorInitialBundle(),
+    mapEditor: {
+      autoSmoothingEnabled: true,
+      showBaseTileClassesEnabled: true,
+    },
     objective: createScenarioEditorInitialObjectiveDraft(),
     script: createScenarioEditorInitialScriptDraft(),
     isDirty: false,
@@ -251,7 +278,9 @@ export function scenarioEditorReducer(
       };
     case 'apply-map-tool': {
       const nextBundle = applyScenarioEditorMapToolAtPoint(state.bundle, action, action.tool);
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: action.terrainRecomputeMode,
+      });
     }
     case 'apply-map-zone-level': {
       const nextBundle = applyScenarioEditorMapZoneLevelAtPoint(state.bundle, action, {
@@ -259,7 +288,9 @@ export function scenarioEditorReducer(
         level: action.level,
         value: action.value,
       });
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: action.terrainRecomputeMode,
+      });
     }
     case 'apply-map-special-zone': {
       const nextBundle = applyScenarioEditorMapSpecialZoneAtPoint(
@@ -267,7 +298,9 @@ export function scenarioEditorReducer(
         action,
         action.zone,
       );
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: action.terrainRecomputeMode,
+      });
     }
     case 'derive-map-simulation': {
       const nextBundle = deriveScenarioEditorMapSimulation(state.bundle, {
@@ -279,13 +312,17 @@ export function scenarioEditorReducer(
     }
     case 'fill-map': {
       const nextBundle = fillScenarioEditorMapTileWord(state.bundle, action.tileWord);
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: action.terrainRecomputeMode,
+      });
     }
     case 'fill-map-base-tile': {
       const nextBundle = fillScenarioEditorMapBaseTileId(state.bundle, action.baseTileId, {
         preserveFlags: action.preserveFlags,
       });
-      return applyScenarioEditorMapMutation(state, nextBundle);
+      return applyScenarioEditorMapMutation(state, nextBundle, {
+        mode: action.terrainRecomputeMode,
+      });
     }
     case 'paint-map-base-tile': {
       const nextBundle = writeScenarioEditorMapBaseTileId(state.bundle, action, action.baseTileId, {
@@ -375,6 +412,28 @@ export function scenarioEditorReducer(
           enabled: action.enabled,
         },
         isDirty: true,
+      };
+    case 'set-map-auto-smoothing-enabled':
+      if (state.mapEditor.autoSmoothingEnabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        mapEditor: {
+          ...state.mapEditor,
+          autoSmoothingEnabled: action.enabled,
+        },
+      };
+    case 'set-map-show-base-tile-classes-enabled':
+      if (state.mapEditor.showBaseTileClassesEnabled === action.enabled) {
+        return state;
+      }
+      return {
+        ...state,
+        mapEditor: {
+          ...state.mapEditor,
+          showBaseTileClassesEnabled: action.enabled,
+        },
       };
     case 'update-metadata':
       return {

@@ -44,6 +44,28 @@ describe('scenario editor state foundation', () => {
     expect(next.isDirty).toBe(false);
   });
 
+  test('stores auto-smoothing preference as global map-editor state', () => {
+    const initial = createScenarioEditorInitialState();
+    expect(initial.mapEditor.autoSmoothingEnabled).toBe(true);
+    expect(initial.mapEditor.showBaseTileClassesEnabled).toBe(true);
+
+    const toggled = scenarioEditorReducer(initial, {
+      type: 'set-map-auto-smoothing-enabled',
+      enabled: false,
+    });
+    expect(toggled.mapEditor.autoSmoothingEnabled).toBe(false);
+    expect(toggled.mapEditor.showBaseTileClassesEnabled).toBe(true);
+    expect(toggled.isDirty).toBe(false);
+
+    const toggledBaseClasses = scenarioEditorReducer(toggled, {
+      type: 'set-map-show-base-tile-classes-enabled',
+      enabled: false,
+    });
+    expect(toggledBaseClasses.mapEditor.showBaseTileClassesEnabled).toBe(false);
+    expect(toggledBaseClasses.mapEditor.autoSmoothingEnabled).toBe(false);
+    expect(toggledBaseClasses.isDirty).toBe(false);
+  });
+
   test('exposes current editor views including the map final workbench', () => {
     expect(SCENARIO_EDITOR_MVP_VIEWS).toEqual([
       'metadata',
