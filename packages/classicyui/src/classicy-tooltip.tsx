@@ -28,6 +28,9 @@ const CLASSICY_TOOLTIP_CONTENT_STYLE: CSSProperties = {
   padding: '0.375rem 0.5rem',
   zIndex: 50,
 };
+const CLASSICY_TOOLTIP_ROOT_STYLE: CSSProperties = {
+  zIndex: 50,
+};
 const CLASSICY_TOOLTIP_TRIGGER_STYLE: CSSProperties = {
   alignItems: 'center',
   borderRadius: '9999px',
@@ -93,15 +96,20 @@ export function ClassicyTooltip({
         <Tooltip.Portal>
           <Tooltip.Content
             align={align}
-            className={clsx(CLASSICY_TOOLTIP_PANEL_SHADOW, className, contentClassName)}
+            className={clsx(className)}
             side={side}
             sideOffset={sideOffset}
             style={{
-              ...CLASSICY_TOOLTIP_CONTENT_STYLE,
+              ...CLASSICY_TOOLTIP_ROOT_STYLE,
               ...style,
             }}
           >
-            {content}
+            <div
+              className={clsx(CLASSICY_TOOLTIP_PANEL_SHADOW, contentClassName)}
+              style={CLASSICY_TOOLTIP_CONTENT_STYLE}
+            >
+              {content}
+            </div>
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>

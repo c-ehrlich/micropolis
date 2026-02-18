@@ -1007,12 +1007,6 @@ export function ScenarioMapFinalWorkbench(options: {
                   </div>
                 ))}
               </div>
-
-              <small className="text-sm text-[var(--color-system-07)]">
-                {activeZoneOption.kind === 'fresh'
-                  ? `${SCENARIO_MAP_FINAL_ZONE_FAMILY_LABELS[activeZoneKind]} fresh zone`
-                  : `Density Level ${activeZoneOption.densityLevel} / ${zoneValueClassLabel} ${activeZoneOption.landValueClass}`}
-              </small>
             </ClassicyMessageSurface>
 
             <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
@@ -1197,49 +1191,48 @@ export function ScenarioMapFinalWorkbench(options: {
                       </ClassicyMenuItemButton>
                     ))}
               </ClassicyPopoverMenu>
-
-              <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
-                <div className="grid gap-[0.3rem]">
-                  <EditorField className="gap-[0.2rem]">
-                    <div className="inline-flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-[var(--color-system-08)]">
-                        Derive simulation ticks
-                      </span>
-                      <ClassicyTooltip
-                        content="Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without zone growth/disasters."
-                        variant="custom"
-                      >
-                        <ClassicyUIGenericTooltipTrigger aria-label="Derive simulation details" />
-                      </ClassicyTooltip>
-                    </div>
-                    <input
-                      min={1}
-                      onChange={(event) => {
-                        const next = Number(event.currentTarget.value);
-                        if (Number.isFinite(next)) {
-                          setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
-                        }
-                      }}
-                      step={1}
-                      type="number"
-                      value={deriveSimulationTicks}
-                    />
-                  </EditorField>
-                </div>
-                <ClassicyButton
-                  className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
-                  onClick={() => {
-                    closeToolVariantContextMenu();
-                    dispatch({
-                      type: 'derive-map-simulation',
-                      ticks: deriveSimulationTicks,
-                    });
-                  }}
-                  type="button"
-                >
-                  Derive simulation
-                </ClassicyButton>
-              </ClassicyMessageSurface>
+            </ClassicyMessageSurface>
+            <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
+              <div className="grid gap-[0.3rem]">
+                <EditorField className="gap-[0.2rem]">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-[var(--color-system-08)]">
+                      Derive simulation ticks
+                    </span>
+                    <ClassicyTooltip
+                      content="Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without zone growth/disasters."
+                      variant="custom"
+                    >
+                      <ClassicyUIGenericTooltipTrigger aria-label="Derive simulation details" />
+                    </ClassicyTooltip>
+                  </div>
+                  <input
+                    min={1}
+                    onChange={(event) => {
+                      const next = Number(event.currentTarget.value);
+                      if (Number.isFinite(next)) {
+                        setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
+                      }
+                    }}
+                    step={1}
+                    type="number"
+                    value={deriveSimulationTicks}
+                  />
+                </EditorField>
+              </div>
+              <ClassicyButton
+                className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
+                onClick={() => {
+                  closeToolVariantContextMenu();
+                  dispatch({
+                    type: 'derive-map-simulation',
+                    ticks: deriveSimulationTicks,
+                  });
+                }}
+                type="button"
+              >
+                Derive simulation
+              </ClassicyButton>
             </ClassicyMessageSurface>
           </div>
         ) : (
