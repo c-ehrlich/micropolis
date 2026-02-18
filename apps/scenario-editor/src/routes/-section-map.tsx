@@ -1113,7 +1113,7 @@ export function ScenarioMapFinalWorkbench(options: {
                         <img
                           alt=""
                           aria-hidden="true"
-                          className="block h-full w-full object-contain [image-rendering:pixelated]"
+                          className="block h-12 w-12 object-contain [image-rendering:pixelated]"
                           draggable={false}
                           src={iconUrl}
                         />
@@ -1121,11 +1121,12 @@ export function ScenarioMapFinalWorkbench(options: {
                         <MapFinalSingleTileSprite
                           atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
                           atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                          scale={3}
                           tileId={spec.previewTileId}
                         />
                       ) : (
-                        <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
-                          {spec.previewTileId}
+                        <span className="grid h-12 w-12 place-items-center text-[0.8rem] font-semibold text-[var(--color-system-07)]">
+                          <span>{spec.previewTileId}</span>
                         </span>
                       )}
                     </ClassicyButton>
