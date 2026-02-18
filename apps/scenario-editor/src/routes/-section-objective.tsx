@@ -66,7 +66,6 @@ export function ScenarioObjectiveEditorCard() {
 
       <ClassicyCheckboxField
         checked={objective.enabled}
-        detail="Objective predicate drafts are included in strict export when objective authoring is enabled."
         label="Objective Enabled"
         onChange={(event) => {
           dispatch({ type: 'set-objective-enabled', enabled: event.currentTarget.checked });
@@ -83,9 +82,7 @@ export function ScenarioObjectiveEditorCard() {
           path="objective.predicate"
           predicate={objective.predicate}
         />
-      ) : (
-        <p className="text-sm text-slate-600">Objective checks are disabled for this draft.</p>
-      )}
+      ) : null}
 
       {objective.enabled && unattributedValidationIssues.length > 0 ? (
         <EditorIssuesPanel aria-label="Objective semantic issues">
@@ -126,7 +123,7 @@ function ScenarioObjectivePredicateEditor(options: {
   const kindIssue = getFirstValidationIssueMessage(issueMessagesByPath, `${path}.kind`);
 
   return (
-    <fieldset className="my-3 rounded-md border border-slate-300 p-3 [&>legend]:px-[0.4rem] [&>legend]:text-slate-600">
+    <fieldset className="my-3 rounded-none border-solid [border-width:var(--window-border-size)] [border-color:var(--color-window-border)] bg-[var(--color-system-02)] p-3 [box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-03)] [&>legend]:bg-[var(--color-system-02)] [&>legend]:px-[0.4rem] [&>legend]:text-[var(--color-window-border)]">
       <legend>{nodeLabel}</legend>
       {nodeIssue !== undefined ? <EditorError>{nodeIssue}</EditorError> : null}
       <EditorField>

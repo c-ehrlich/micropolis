@@ -187,15 +187,30 @@ const SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES: readonly {
   { id: 'woods5', label: 'Woods 5', tileId: Tile.WOODS5 },
 ] as const;
 
-const SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES: readonly {
-  readonly label: string;
-  readonly tileId: number | null;
-}[] = [
+type ScenarioMapFinalHouseBrushChoice =
+  | {
+      readonly label: 'Auto';
+      readonly tileId: null;
+    }
+  | {
+      readonly label: string;
+      readonly tileId: number;
+      readonly landValue: number;
+      readonly variant: number;
+    };
+
+const SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES: readonly ScenarioMapFinalHouseBrushChoice[] = [
   { label: 'Auto', tileId: null },
-  ...Array.from({ length: 12 }, (_, index) => ({
-    label: `Land Value Class ${Math.floor(index / 3)} / Variant ${(index % 3) + 1}`,
-    tileId: Tile.HOUSE + index,
-  })),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const landValue = Math.floor(index / 3);
+    const variant = (index % 3) + 1;
+    return {
+      label: `Land Value ${landValue} / Variant ${variant}`,
+      tileId: Tile.HOUSE + index,
+      landValue,
+      variant,
+    } satisfies ScenarioMapFinalHouseBrushChoice;
+  }),
 ] as const;
 
 function isScenarioMapFinalPlayableToolId(tool: ScenarioMapFinalToolId): tool is PlayableToolName {
@@ -395,28 +410,28 @@ const SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES: readonly ScenarioMapFinalSmartBaseB
     label: 'Dirt',
     tileId: Tile.DIRT,
     pendingColor: '#9a6700',
-    tooltip: 'Dirt terrain brush',
+    tooltip: 'Dirt',
   },
   {
     id: 'water',
     label: 'Water',
     tileId: Tile.RIVER,
     pendingColor: '#1f6feb',
-    tooltip: 'Water brush (auto smoothing derives shore variants)',
+    tooltip: 'Water',
   },
   {
     id: 'channel',
     label: 'Channel',
     tileId: Tile.CHANNEL,
     pendingColor: '#218bff',
-    tooltip: 'Channel brush (kept during water smoothing)',
+    tooltip: 'Channel',
   },
   {
     id: 'forest',
     label: 'Forest',
     tileId: Tile.WOODS,
     pendingColor: '#2da44e',
-    tooltip: 'Forest brush (stamps a 2x2 cluster; auto smoothing derives tree-edge variants)',
+    tooltip: 'Forest',
   },
 ] as const;
 const SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH: ScenarioMapFinalSmartBaseBrush = {
@@ -424,7 +439,7 @@ const SCENARIO_MAP_FINAL_DEFAULT_SMART_BASE_BRUSH: ScenarioMapFinalSmartBaseBrus
   label: 'Dirt',
   tileId: Tile.DIRT,
   pendingColor: '#9a6700',
-  tooltip: 'Dirt terrain brush',
+  tooltip: 'Dirt',
 };
 const SCENARIO_MAP_FINAL_TREE_TILE_MAX_FOR_SMOOTHING = 39;
 const SCENARIO_MAP_FINAL_EXACT_TILE_HOVER_PREVIEW: MapCanvasHoverPreviewSpec = {
@@ -891,7 +906,7 @@ export function ScenarioMapFinalWorkbench(options: {
                 Base
               </ClassicyPanelTitle>
               <div
-                className="grid grid-cols-2 gap-[0.45rem]"
+                className="grid grid-cols-4 gap-[0.45rem]"
                 role="list"
                 aria-label="Smart base brushes"
               >
@@ -899,10 +914,11 @@ export function ScenarioMapFinalWorkbench(options: {
                   <ClassicyButton
                     active={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
                     activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
+                    aria-label={brush.label}
                     aria-pressed={
                       activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
                     }
-                    className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid justify-items-start gap-[0.3rem] rounded-lg px-[0.4rem] py-[0.35rem]`}
+                    className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid justify-items-center gap-[0.3rem] rounded-lg px-[0.4rem] py-[0.35rem] text-center`}
                     key={brush.id}
                     onClick={() => {
                       closeToolVariantContextMenu();
@@ -915,18 +931,28 @@ export function ScenarioMapFinalWorkbench(options: {
                     title={brush.tooltip}
                     type="button"
                   >
-                    {zoneAtlasSource === undefined ? (
-                      <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
-                        {brush.tileId}
-                      </span>
-                    ) : (
-                      <MapFinalSingleTileSprite
-                        atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                        atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                        tileId={brush.tileId}
-                      />
-                    )}
-                    <span>{brush.label}</span>
+                    <span className="relative block">
+                      {zoneAtlasSource === undefined ? (
+                        <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
+                          {brush.tileId}
+                        </span>
+                      ) : (
+                        <MapFinalSingleTileSprite
+                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                          scale={3}
+                          tileId={brush.tileId}
+                        />
+                      )}
+                      {zoneAtlasSource !== undefined && brush.id === 'channel' ? (
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 flex items-center justify-center text-[1.2rem] font-black leading-none text-[#4a044e] drop-shadow-[0_0_1px_rgba(255,255,255,0.85)]"
+                        >
+                          C
+                        </span>
+                      ) : null}
+                    </span>
                   </ClassicyButton>
                 ))}
               </div>
@@ -1020,6 +1046,7 @@ export function ScenarioMapFinalWorkbench(options: {
               >
                 {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
                   const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
+                  const showToolAs3x3Swatch = spec.tool === 'hospital' || spec.tool === 'police';
                   const iconLookup =
                     spec.toolState === null
                       ? undefined
@@ -1073,7 +1100,13 @@ export function ScenarioMapFinalWorkbench(options: {
                       }
                       type="button"
                     >
-                      {iconUrl !== undefined ? (
+                      {showToolAs3x3Swatch && zoneAtlasSource !== undefined ? (
+                        <MapFinalZoneTileSprite
+                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                          tileIds={getMapFinalZoneSwatchTileIds(spec.previewTileId)}
+                        />
+                      ) : iconUrl !== undefined ? (
                         <img
                           alt=""
                           aria-hidden="true"
@@ -1102,15 +1135,19 @@ export function ScenarioMapFinalWorkbench(options: {
               </small>
               <ClassicyPopoverMenu
                 anchorPoint={toolVariantContextMenu.anchorPoint ?? undefined}
-                className="grid max-h-[min(70vh,20rem)] w-[11rem] gap-0.5 overflow-auto p-1"
+                className={`grid max-h-[min(70vh,20rem)] ${
+                  isHouseBrushContextMenuOpen ? 'w-[13.5rem]' : 'w-[11rem]'
+                } gap-0.5 overflow-auto p-1 [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)]`}
                 offsetPx={2}
                 onRequestClose={closeToolVariantContextMenu}
                 open={isToolVariantContextMenuOpen}
                 placement="bottom-start"
+                style={mapFinalRuntimeTheme}
               >
                 {isParkBrushContextMenuOpen
                   ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
                       <ClassicyMenuItemButton
+                        className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
                         key={choice.id}
                         onClick={() => {
                           setParkBrushMode(choice.id);
@@ -1123,12 +1160,27 @@ export function ScenarioMapFinalWorkbench(options: {
                             : `Place ${choice.label} only (tile ${choice.tileId})`
                         }
                       >
-                        {choice.id === parkBrushMode ? '● ' : ''}
-                        {choice.label}
+                        <span className="inline-block text-center">
+                          {choice.id === parkBrushMode ? '●' : ''}
+                        </span>
+                        {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
+                          <MapFinalSingleTileSprite
+                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                            scale={2}
+                            tileId={choice.tileId}
+                          />
+                        ) : (
+                          <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
+                            {choice.tileId}
+                          </span>
+                        )}
+                        <span>{choice.label}</span>
                       </ClassicyMenuItemButton>
                     ))
                   : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
                       <ClassicyMenuItemButton
+                        className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
                         key={choice.tileId === null ? 'auto' : choice.tileId}
                         onClick={() => {
                           setHouseBrushTileId(choice.tileId);
@@ -1141,8 +1193,29 @@ export function ScenarioMapFinalWorkbench(options: {
                             : `Place ${choice.label} only (tile ${choice.tileId})`
                         }
                       >
-                        {choice.tileId === houseBrushTileId ? '● ' : ''}
-                        {choice.label}
+                        <span className="inline-block text-center">
+                          {choice.tileId === houseBrushTileId ? '●' : ''}
+                        </span>
+                        {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
+                          <MapFinalSingleTileSprite
+                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                            scale={2}
+                            tileId={choice.tileId}
+                          />
+                        ) : (
+                          <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
+                            {choice.tileId}
+                          </span>
+                        )}
+                        {choice.tileId === null ? (
+                          <span>{choice.label}</span>
+                        ) : (
+                          <span className="leading-[1.2]">
+                            <span className="block">Land Value {choice.landValue}</span>
+                            <span className="block">Variant {choice.variant}</span>
+                          </span>
+                        )}
                       </ClassicyMenuItemButton>
                     ))}
               </ClassicyPopoverMenu>

@@ -11,6 +11,7 @@
   },
   "types": "./src/index.ts",
   "dependencies": {
+    "@radix-ui/react-tooltip": "^1.2.8",
     "classicy": "^0.6.31",
     "clsx": "2.1.1"
   },
