@@ -22,6 +22,7 @@ const {
   HRAILROAD,
   LASTRAIL,
   LASTROAD,
+  LASTRIVEDGE,
   LASTRUBBLE,
   LASTTINYEXP,
   PORTBASE,
@@ -62,6 +63,8 @@ export type SpriteType = (typeof SPRITE_TYPE)[keyof typeof SPRITE_TYPE];
 export const SPRITE_SLOT_COUNT = 9;
 
 export const POWER_BLINK_TICKS = 30;
+const MONSTER_HOTSPOT_X_OFFSET_TILES = 5;
+const MONSTER_HOTSPOT_Y_OFFSET_TILES = 1;
 
 /**
  * Layout-related fields initialized per sprite type in `InitSprite`.
@@ -1293,6 +1296,7 @@ function doMonsterSprite(
   const c = getChar(map, sprite.x + sprite.x_hot, sprite.y + sprite.y_hot);
   if (c === -1 || (c === RIVER && sprite.count !== 0 && sprite.control === -1)) {
     sprite.frame = 0;
+    return;
   }
 
   for (const s of context.sprites) {
@@ -1708,18 +1712,10 @@ export function makeMonster(context: RealtimeContext) {
   }
 
   const map = context.store.getLayer('map') as Uint16Array;
-  let done = false;
-  for (let z = 0; z < 300; z += 1) {
-    const x = rand(context, WORLD_X - 20) + 10;
-    const y = rand(context, WORLD_Y - 10) + 5;
-    const value = tileAt(map, x, y);
-    if (value === RIVER || value === RIVER + BULLBIT) {
-      monsterHere(context, x, y);
-      done = true;
-      break;
-    }
-  }
-  if (!done) {
+  const spawn = findLandMonsterSpawn(context, map);
+  if (spawn !== null) {
+    monsterHere(context, spawn.x, spawn.y);
+  } else {
     monsterHere(context, 60, 50);
   }
 }
@@ -1728,6 +1724,74 @@ function monsterHere(context: RealtimeContext, x: number, y: number) {
   makeSprite(context, SPRITE_TYPE.GOD, (x << 4) + 48, y << 4);
   clearMessages(context);
   sendMessage(context, -21, x + 5, y);
+}
+
+/**
+ * Locates one monster spawn anchor that places the sprite hotspot over land.
+ * Related C behavior: `MakeMonster` in `ref/micropolis/src/sim/w_sprite.c`
+ * samples river-biased coordinates and can immediately kill the monster over
+ * water in `DoMonsterSprite`; this TypeScript version intentionally chooses
+ * land-safe anchors instead.
+ */
+function findLandMonsterSpawn(
+  context: RealtimeContext,
+  map: Uint16Array,
+): Readonly<{ x: number; y: number }> | null {
+  for (let z = 0; z < 300; z += 1) {
+    const x = rand(context, WORLD_X - 20) + 10;
+    const y = rand(context, WORLD_Y - 10) + 5;
+    if (isLandMonsterSpawnAnchor(map, x, y)) {
+      return { x, y };
+    }
+  }
+
+  for (let x = 0; x <= WORLD_X - 1 - MONSTER_HOTSPOT_X_OFFSET_TILES; x += 1) {
+    for (let y = 0; y <= WORLD_Y - 1 - MONSTER_HOTSPOT_Y_OFFSET_TILES; y += 1) {
+      if (isLandMonsterSpawnAnchor(map, x, y)) {
+        return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Validates one monster spawn anchor against land tiles at both anchor and
+ * hotspot locations.
+ * Related C behavior: `MonsterHere` in `ref/micropolis/src/sim/w_sprite.c`
+ * places the monster at `(x << 4) + 48, y << 4`, which maps the hotspot to
+ * `(x + 5, y + 1)` using `InitSprite` GOD hotspot offsets.
+ */
+function isLandMonsterSpawnAnchor(map: Uint16Array, x: number, y: number): boolean {
+  if (!testBounds(x, y)) {
+    return false;
+  }
+  const hotspotX = x + MONSTER_HOTSPOT_X_OFFSET_TILES;
+  const hotspotY = y + MONSTER_HOTSPOT_Y_OFFSET_TILES;
+  if (!testBounds(hotspotX, hotspotY)) {
+    return false;
+  }
+
+  const originTile = tileAt(map, x, y);
+  const hotspotTile = tileAt(map, hotspotX, hotspotY);
+  if (originTile === undefined || hotspotTile === undefined) {
+    return false;
+  }
+  return isLandTile(originTile) && isLandTile(hotspotTile);
+}
+
+/**
+ * Land classification for monster spawn anchors.
+ * Related C behavior: `DoMonsterSprite` compares the hotspot tile to `RIVER` in
+ * `ref/micropolis/src/sim/w_sprite.c`; this adapter broadens the guard to all
+ * river/channel tiles so monster spawn stays visibly on land.
+ */
+function isLandTile(value: number): boolean {
+  const tile = value & LOMASK;
+  if (tile === RIVER || tile === CHANNEL) {
+    return false;
+  }
+  return tile < FIRSTRIVEDGE || tile > LASTRIVEDGE;
 }
 
 export function makeTornado(context: RealtimeContext) {

@@ -14,6 +14,7 @@ import {
   explodeSprite,
   getSprite,
   makeExplosionAt,
+  makeMonster,
   makeSprite,
   moveObjects,
   runRealtimeTick,
@@ -28,6 +29,7 @@ const {
   BRWH,
   CHANNEL,
   COMBASE,
+  DIRT,
   FIRE,
   FOUNTAIN,
   LHRAIL,
@@ -674,6 +676,52 @@ describe('Tornado and monster behavior', () => {
     moveObjects(context, map, trfDensity, rateOGMem);
 
     expect(train.frame).toBe(0);
+  });
+
+  it('spawns monsters on land anchors and land hotspots', () => {
+    const { context, store } = createContext(1);
+    const map = store.getLayer('map') as Uint16Array;
+
+    map.fill(RIVER);
+    // `MonsterHere` in `w_sprite.c` spawns GOD at `(x << 4) + 48, y << 4` and
+    // `DoMonsterSprite` reads its kill tile at hotspot offsets `(x + 40, y + 16)`,
+    // which correspond to map tiles `(x + 5, y + 1)`.
+    const anchorX = 20;
+    const anchorY = 20;
+    map[indexFor(anchorX, anchorY)] = DIRT;
+    map[indexFor(anchorX + 5, anchorY + 1)] = DIRT;
+
+    makeMonster(context);
+
+    const monster = getSprite(context, SPRITE_TYPE.GOD);
+    if (monster === null) {
+      throw new Error('Expected GOD sprite after makeMonster');
+    }
+
+    const originTileX = (monster.x - 48) >> 4;
+    const originTileY = monster.y >> 4;
+    const hotspotTileX = (monster.x + monster.x_hot) >> 4;
+    const hotspotTileY = (monster.y + monster.y_hot) >> 4;
+
+    expect(tileId(getMapTile(map, originTileX, originTileY))).not.toBe(RIVER);
+    expect(tileId(getMapTile(map, hotspotTileX, hotspotTileY))).not.toBe(RIVER);
+    expect(monster.frame).toBeGreaterThan(0);
+  });
+
+  it('despawns monsters after river death checks', () => {
+    const { context, store } = createContext(1);
+    const map = store.getLayer('map') as Uint16Array;
+    const trfDensity = store.getLayer('trfDensity') as Uint8Array;
+    const rateOGMem = store.getLayer('rateOGMem') as Int16Array;
+
+    map.fill(RIVER);
+    const monster = makeSprite(context, SPRITE_TYPE.GOD, 400, 300);
+    monster.control = -1;
+    monster.count = 10;
+
+    moveObjects(context, map, trfDensity, rateOGMem);
+    expect(monster.frame).toBe(0);
+    expect(getSprite(context, SPRITE_TYPE.GOD)).toBeNull();
   });
 });
 
