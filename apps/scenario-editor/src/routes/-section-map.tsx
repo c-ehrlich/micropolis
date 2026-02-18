@@ -936,11 +936,7 @@ export function ScenarioMapFinalWorkbench(options: {
               </small>
             </ClassicyMessageSurface>
 
-            <ClassicyMessageSurface
-              className={`grid gap-[0.65rem] p-2 ${
-                activeBrushFamily === 'zones' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
-              }`}
-            >
+            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
               <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
                 Zones
               </ClassicyPanelTitle>
