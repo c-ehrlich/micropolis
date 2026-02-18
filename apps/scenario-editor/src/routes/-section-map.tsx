@@ -844,8 +844,8 @@ export function ScenarioMapFinalWorkbench(options: {
         aria-label="Scenario map authoring controls"
         className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden px-3 py-3 max-[980px]:max-h-[48vh]"
       >
-        <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
-          <div className="grid gap-[0.35rem]">
+        <div className="grid gap-[0.45rem]">
+          <ClassicyMessageSurface className="grid gap-[0.35rem] p-2">
             <ClassicyCheckboxField
               checked={mapEditor.autoSmoothingEnabled}
               label="Enable auto smoothing"
@@ -866,7 +866,7 @@ export function ScenarioMapFinalWorkbench(options: {
                 });
               }}
             />
-          </div>
+          </ClassicyMessageSurface>
           <ClassicyToggleGroup<ScenarioMapFinalSidebarMode>
             ariaLabel="Map final sidebar mode"
             options={[
@@ -879,7 +879,7 @@ export function ScenarioMapFinalWorkbench(options: {
             }}
             value={sidebarMode}
           />
-        </ClassicyMessageSurface>
+        </div>
         {isCreatorSidebarMode ? (
           <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
             <ClassicyMessageSurface
@@ -930,10 +930,6 @@ export function ScenarioMapFinalWorkbench(options: {
                   </ClassicyButton>
                 ))}
               </div>
-
-              <small className="text-sm text-[var(--color-system-07)]">
-                Active smart brush: {activeSmartBaseBrush.label}. Terrain auto-smooths after edits.
-              </small>
             </ClassicyMessageSurface>
 
             <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
