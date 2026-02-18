@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import {
   cloneElement,
   type ComponentPropsWithoutRef,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from 'react';
@@ -11,6 +12,40 @@ import { ClassicyButton, type ClassicyButtonProps } from './classicy-button.tsx'
 
 const CLASSICY_TOOLTIP_PANEL_SHADOW =
   '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07),calc(var(--window-border-size)*2)_calc(var(--window-border-size)*2)_0_0_var(--color-black)]';
+const CLASSICY_TOOLTIP_PANEL_BOX_SHADOW =
+  'inset calc(var(--window-border-size, 1px) * -1) calc(var(--window-border-size, 1px) * -1) 0 0 var(--color-system-05, #9a9a9a), inset calc(var(--window-border-size, 1px) * 1) calc(var(--window-border-size, 1px) * 1) 0 0 var(--color-system-07, #f5f5f5), calc(var(--window-border-size, 1px) * 2) calc(var(--window-border-size, 1px) * 2) 0 0 var(--color-black, #000)';
+const CLASSICY_TOOLTIP_CONTENT_STYLE: CSSProperties = {
+  backgroundColor: 'var(--color-system-02, #d6d6d6)',
+  borderColor: 'var(--color-black, #000)',
+  borderStyle: 'solid',
+  borderWidth: 'var(--window-border-size, 1px)',
+  boxShadow: CLASSICY_TOOLTIP_PANEL_BOX_SHADOW,
+  color: 'var(--color-black, #000)',
+  fontFamily: 'var(--ui-font), sans-serif',
+  fontSize: '11px',
+  lineHeight: 1.3,
+  maxWidth: '22rem',
+  padding: '0.375rem 0.5rem',
+  zIndex: 50,
+};
+const CLASSICY_TOOLTIP_TRIGGER_STYLE: CSSProperties = {
+  alignItems: 'center',
+  borderRadius: '9999px',
+  display: 'inline-flex',
+  flexShrink: 0,
+  fontSize: '0.8rem',
+  fontWeight: 700,
+  height: '1.45rem',
+  justifyContent: 'center',
+  lineHeight: 1,
+  margin: 0,
+  maxHeight: '1.45rem',
+  maxWidth: '1.45rem',
+  minHeight: '1.45rem',
+  minWidth: '1.45rem',
+  padding: 0,
+  width: '1.45rem',
+};
 
 export type ClassicyTooltipVariant = 'native' | 'custom';
 
@@ -33,12 +68,14 @@ export interface ClassicyTooltipProps extends Omit<
 export function ClassicyTooltip({
   align = 'center',
   children,
+  className,
   content,
   contentClassName,
   delayDuration = 150,
   nativeTitle,
   side = 'top',
   sideOffset = 8,
+  style,
   variant = 'native',
 }: ClassicyTooltipProps) {
   const resolvedNativeTitle = nativeTitle ?? (typeof content === 'string' ? content : undefined);
@@ -56,13 +93,13 @@ export function ClassicyTooltip({
         <Tooltip.Portal>
           <Tooltip.Content
             align={align}
-            className={clsx(
-              'z-50 max-w-[22rem] border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)] px-2 py-1.5 text-[11px] leading-snug text-[var(--color-black)]',
-              CLASSICY_TOOLTIP_PANEL_SHADOW,
-              contentClassName,
-            )}
+            className={clsx(CLASSICY_TOOLTIP_PANEL_SHADOW, className, contentClassName)}
             side={side}
             sideOffset={sideOffset}
+            style={{
+              ...CLASSICY_TOOLTIP_CONTENT_STYLE,
+              ...style,
+            }}
           >
             {content}
           </Tooltip.Content>
@@ -84,6 +121,7 @@ export interface ClassicyUIGenericTooltipTriggerProps extends Omit<
 export function ClassicyUIGenericTooltipTrigger({
   'aria-label': ariaLabel = 'Show help',
   className,
+  style,
   type = 'button',
   ...buttonProps
 }: ClassicyUIGenericTooltipTriggerProps) {
@@ -92,10 +130,11 @@ export function ClassicyUIGenericTooltipTrigger({
       {...buttonProps}
       aria-label={ariaLabel}
       buttonShape="square"
-      className={clsx(
-        '!m-0 inline-flex h-[1.45rem] w-[1.45rem] min-h-[1.45rem] min-w-[1.45rem] items-center justify-center !rounded-full p-0 text-[0.8rem] font-bold leading-none',
-        className,
-      )}
+      className={clsx(className)}
+      style={{
+        ...CLASSICY_TOOLTIP_TRIGGER_STYLE,
+        ...style,
+      }}
       type={type}
     >
       ?
