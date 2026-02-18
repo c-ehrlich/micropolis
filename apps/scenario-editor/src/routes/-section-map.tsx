@@ -7,6 +7,8 @@ import {
   ClassicyPanelTitle,
   ClassicyPopoverMenu,
   ClassicyToggleGroup,
+  ClassicyTooltip,
+  ClassicyUIGenericTooltipTrigger,
   getAllThemes,
   getThemeVars,
 } from '@city/classicyui';
@@ -1223,9 +1225,17 @@ export function ScenarioMapFinalWorkbench(options: {
               <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
                 <div className="grid gap-[0.3rem]">
                   <EditorField className="gap-[0.2rem]">
-                    <span className="text-sm font-semibold text-[var(--color-system-08)]">
-                      Derive simulation ticks
-                    </span>
+                    <div className="inline-flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-[var(--color-system-08)]">
+                        Derive simulation ticks
+                      </span>
+                      <ClassicyTooltip
+                        content="Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without zone growth/disasters."
+                        variant="custom"
+                      >
+                        <ClassicyUIGenericTooltipTrigger aria-label="Derive simulation details" />
+                      </ClassicyTooltip>
+                    </div>
                     <input
                       min={1}
                       onChange={(event) => {
@@ -1253,10 +1263,6 @@ export function ScenarioMapFinalWorkbench(options: {
                 >
                   Derive simulation
                 </ClassicyButton>
-                <small className="text-sm text-[var(--color-system-07)]">
-                  Recomputes derived states (power, traffic/road classes, bridges, smoke/radar)
-                  without zone growth/disasters.
-                </small>
               </ClassicyMessageSurface>
             </ClassicyMessageSurface>
           </div>

@@ -246,9 +246,15 @@ function ScenarioObjectivePredicateEditor(options: {
               />
               <EditorButton
                 className="justify-self-start"
+                disabled={predicate.predicates.length <= 1}
                 onClick={() => {
                   onChange(removeScenarioObjectiveChildPredicate(predicate, index));
                 }}
+                title={
+                  predicate.predicates.length <= 1
+                    ? 'At least one child predicate is required.'
+                    : undefined
+                }
                 type="button"
               >
                 Remove Child

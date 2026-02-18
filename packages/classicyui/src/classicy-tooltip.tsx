@@ -14,9 +14,11 @@ const CLASSICY_TOOLTIP_PANEL_SHADOW =
 
 export type ClassicyTooltipVariant = 'native' | 'custom';
 
-export interface ClassicyTooltipProps
-  extends Omit<ComponentPropsWithoutRef<typeof Tooltip.Content>, 'children'> {
-  readonly children: ReactElement;
+export interface ClassicyTooltipProps extends Omit<
+  ComponentPropsWithoutRef<typeof Tooltip.Content>,
+  'children' | 'content'
+> {
+  readonly children: ReactElement<{ title?: string }>;
   readonly content: ReactNode;
   readonly contentClassName?: string;
   readonly delayDuration?: number;
@@ -38,9 +40,9 @@ export function ClassicyTooltip({
   side = 'top',
   sideOffset = 8,
   variant = 'native',
-  ...contentProps
 }: ClassicyTooltipProps) {
-  const resolvedNativeTitle = nativeTitle ?? (typeof content === 'string' ? content : undefined);
+  const resolvedNativeTitle =
+    nativeTitle ?? (typeof content === 'string' ? content : undefined);
 
   if (variant === 'native') {
     return cloneElement(children, {
@@ -54,7 +56,6 @@ export function ClassicyTooltip({
         <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Content
-            {...contentProps}
             align={align}
             className={clsx(
               'z-50 max-w-[22rem] border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)] px-2 py-1.5 text-[11px] leading-snug text-[var(--color-black)]',
@@ -72,8 +73,10 @@ export function ClassicyTooltip({
   );
 }
 
-export interface ClassicyUIGenericTooltipTriggerProps
-  extends Omit<ClassicyButtonProps, 'buttonShape' | 'children'> {}
+export interface ClassicyUIGenericTooltipTriggerProps extends Omit<
+  ClassicyButtonProps,
+  'buttonShape' | 'children'
+> {}
 
 /**
  * Compact shared "?" tooltip trigger for explanatory helper copy.

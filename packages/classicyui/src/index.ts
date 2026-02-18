@@ -63,5 +63,12 @@ export {
   type ClassicyToggleGroupOption,
   type ClassicyToggleGroupProps,
 } from './classicy-toggle-group.tsx';
+export {
+  ClassicyTooltip,
+  type ClassicyTooltipProps,
+  type ClassicyTooltipVariant,
+  ClassicyUIGenericTooltipTrigger,
+  type ClassicyUIGenericTooltipTriggerProps,
+} from './classicy-tooltip.tsx';
 export { ClassicyWindowFrame, type ClassicyWindowFrameProps } from './classicy-window.tsx';
 export { getAllThemes, getThemeVars } from 'classicy';
