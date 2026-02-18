@@ -257,8 +257,6 @@ const CLASSICY_MAP_SIDEBAR_BUTTON_CLASS =
   '!m-0 !min-h-0 border-2 !border-[var(--color-window-border)] !bg-[var(--color-system-02)] p-[0.2rem] text-[var(--color-black)]';
 const CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS =
   '!border-[var(--color-theme-07)] !bg-[var(--color-theme-03)] [box-shadow:inset_0_0_0_1px_var(--color-theme-08)]';
-const CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS =
-  '!border-[var(--color-theme-07)] [background:color-mix(in_srgb,var(--color-theme-03)_52%,var(--color-system-03))]';
 
 /**
  * Reduce map-final sidebar brush selection to one globally active family.
@@ -759,18 +757,6 @@ export function ScenarioMapFinalWorkbench(options: {
     const theme = getAllThemes()[0];
     return theme === undefined ? {} : (getThemeVars(theme) as CSSProperties);
   }, []);
-  const activeParkBrushModeLabel = useMemo(
-    () =>
-      SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.find((choice) => choice.id === parkBrushMode)
-        ?.label ?? 'Auto',
-    [parkBrushMode],
-  );
-  const activeHouseBrushModeLabel = useMemo(
-    () =>
-      SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.find((choice) => choice.tileId === houseBrushTileId)
-        ?.label ?? 'Auto',
-    [houseBrushTileId],
-  );
   const isParkBrushContextMenuOpen =
     toolVariantContextMenu.anchorPoint !== null &&
     toolVariantContextMenu.tool === 'park' &&
@@ -899,11 +885,7 @@ export function ScenarioMapFinalWorkbench(options: {
         </div>
         {isCreatorSidebarMode ? (
           <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
-            <ClassicyMessageSurface
-              className={`grid gap-[0.65rem] p-2 ${
-                activeBrushFamily === 'base' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
-              }`}
-            >
+            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
               <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
                 Base
               </ClassicyPanelTitle>
@@ -1033,11 +1015,7 @@ export function ScenarioMapFinalWorkbench(options: {
               </small>
             </ClassicyMessageSurface>
 
-            <ClassicyMessageSurface
-              className={`grid gap-[0.65rem] p-2 ${
-                activeBrushFamily === 'tools' ? CLASSICY_MAP_SIDEBAR_ACTIVE_SURFACE_CLASS : ''
-              }`}
-            >
+            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
               <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
                 Tools
               </ClassicyPanelTitle>
@@ -1133,10 +1111,6 @@ export function ScenarioMapFinalWorkbench(options: {
                   );
                 })}
               </div>
-              <small className="text-sm text-[var(--color-system-07)]">
-                Park mode: {activeParkBrushModeLabel}. House mode: {activeHouseBrushModeLabel}.
-                Right click Park/House to change.
-              </small>
               <ClassicyPopoverMenu
                 anchorPoint={toolVariantContextMenu.anchorPoint ?? undefined}
                 className={`grid max-h-[min(70vh,20rem)] ${
