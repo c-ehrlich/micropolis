@@ -1048,7 +1048,8 @@ export function ScenarioMapFinalWorkbench(options: {
               >
                 {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
                   const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
-                  const showToolAs3x3Swatch = spec.tool === 'hospital' || spec.tool === 'police';
+                  const showToolAs3x3Swatch =
+                    spec.tool === 'hospital' || spec.tool === 'police' || spec.tool === 'church';
                   const iconLookup =
                     spec.toolState === null
                       ? undefined

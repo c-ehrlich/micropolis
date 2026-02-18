@@ -41,8 +41,7 @@ export function ClassicyTooltip({
   sideOffset = 8,
   variant = 'native',
 }: ClassicyTooltipProps) {
-  const resolvedNativeTitle =
-    nativeTitle ?? (typeof content === 'string' ? content : undefined);
+  const resolvedNativeTitle = nativeTitle ?? (typeof content === 'string' ? content : undefined);
 
   if (variant === 'native') {
     return cloneElement(children, {
