@@ -4,11 +4,10 @@ import {
   cloneElement,
   type ComponentPropsWithoutRef,
   type CSSProperties,
+  type HTMLAttributes,
   type ReactElement,
   type ReactNode,
 } from 'react';
-
-import { ClassicyButton, type ClassicyButtonProps } from './classicy-button.tsx';
 
 const CLASSICY_TOOLTIP_PANEL_SHADOW =
   '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07),calc(var(--window-border-size)*2)_calc(var(--window-border-size)*2)_0_0_var(--color-black)]';
@@ -33,9 +32,15 @@ const CLASSICY_TOOLTIP_ROOT_STYLE: CSSProperties = {
 };
 const CLASSICY_TOOLTIP_TRIGGER_STYLE: CSSProperties = {
   alignItems: 'center',
+  backgroundColor: 'var(--color-system-02, #d6d6d6)',
+  border: 'var(--window-border-size, 1px) solid var(--color-black, #000)',
   borderRadius: '9999px',
+  boxShadow: CLASSICY_TOOLTIP_PANEL_BOX_SHADOW,
+  color: 'var(--color-black, #000)',
+  cursor: 'help',
   display: 'inline-flex',
   flexShrink: 0,
+  fontFamily: 'var(--ui-font), sans-serif',
   fontSize: '0.8rem',
   fontWeight: 700,
   height: '1.45rem',
@@ -47,6 +52,7 @@ const CLASSICY_TOOLTIP_TRIGGER_STYLE: CSSProperties = {
   minHeight: '1.45rem',
   minWidth: '1.45rem',
   padding: 0,
+  userSelect: 'none',
   width: '1.45rem',
 };
 
@@ -117,10 +123,7 @@ export function ClassicyTooltip({
   );
 }
 
-export interface ClassicyUIGenericTooltipTriggerProps extends Omit<
-  ClassicyButtonProps,
-  'buttonShape' | 'children'
-> {}
+export interface ClassicyUIGenericTooltipTriggerProps extends HTMLAttributes<HTMLSpanElement> {}
 
 /**
  * Compact shared "?" tooltip trigger for explanatory helper copy.
@@ -129,23 +132,22 @@ export interface ClassicyUIGenericTooltipTriggerProps extends Omit<
 export function ClassicyUIGenericTooltipTrigger({
   'aria-label': ariaLabel = 'Show help',
   className,
+  role = 'img',
   style,
-  type = 'button',
-  ...buttonProps
+  ...triggerProps
 }: ClassicyUIGenericTooltipTriggerProps) {
   return (
-    <ClassicyButton
-      {...buttonProps}
+    <span
+      {...triggerProps}
       aria-label={ariaLabel}
-      buttonShape="square"
       className={clsx(className)}
+      role={role}
       style={{
         ...CLASSICY_TOOLTIP_TRIGGER_STYLE,
         ...style,
       }}
-      type={type}
     >
       ?
-    </ClassicyButton>
+    </span>
   );
 }

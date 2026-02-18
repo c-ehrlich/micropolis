@@ -884,355 +884,366 @@ export function ScenarioMapFinalWorkbench(options: {
           />
         </div>
         {isCreatorSidebarMode ? (
-          <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
-            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
-              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
-                Base
-              </ClassicyPanelTitle>
-              <div
-                className="grid grid-cols-4 gap-[0.45rem]"
-                role="list"
-                aria-label="Smart base brushes"
-              >
-                {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
-                  <ClassicyButton
-                    active={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
-                    activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
-                    aria-label={brush.label}
-                    aria-pressed={
-                      activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
-                    }
-                    className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid justify-items-center gap-[0.3rem] rounded-lg px-[0.4rem] py-[0.35rem] text-center`}
-                    key={brush.id}
-                    onClick={() => {
-                      closeToolVariantContextMenu();
-                      dispatchBrushSelection({
-                        type: 'select-base-brush',
-                        brushId: brush.id,
-                      });
-                    }}
-                    role="listitem"
-                    title={brush.tooltip}
-                    type="button"
-                  >
-                    <span className="relative block">
-                      {zoneAtlasSource === undefined ? (
-                        <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
-                          {brush.tileId}
-                        </span>
-                      ) : (
-                        <MapFinalSingleTileSprite
-                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                          scale={3}
-                          tileId={brush.tileId}
-                        />
-                      )}
-                      {zoneAtlasSource !== undefined && brush.id === 'channel' ? (
-                        <span
-                          aria-hidden
-                          className="pointer-events-none absolute inset-0 flex items-center justify-center text-[1.2rem] font-black leading-none text-[#4a044e] drop-shadow-[0_0_1px_rgba(255,255,255,0.85)]"
-                        >
-                          C
-                        </span>
-                      ) : null}
-                    </span>
-                  </ClassicyButton>
-                ))}
-              </div>
-            </ClassicyMessageSurface>
-
-            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
-              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
-                Zones
-              </ClassicyPanelTitle>
-              <ClassicyToggleGroup<ScenarioEditorMapZoneKind>
-                ariaLabel="Zone family selector"
-                options={[
-                  { value: 'res', label: 'RES' },
-                  { value: 'com', label: 'COM' },
-                  { value: 'ind', label: 'IND' },
-                ]}
-                onValueChange={(zone) => {
-                  closeToolVariantContextMenu();
-                  dispatchBrushSelection({
-                    type: 'select-zone-kind',
-                    zoneKind: zone,
-                  });
-                }}
-                value={activeZoneKind}
-              />
-
-              <div className="grid gap-[0.45rem]">
-                {zoneOptionRows.map((rowOptions, rowIndex) => (
+          <div className="min-h-0">
+            <ClassicyMessageSurface className="grid h-full min-h-0 overflow-hidden p-2">
+              <div className="grid min-h-0 content-start gap-3 overflow-y-auto">
+                <div className="grid gap-[0.65rem]">
+                  <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                    Base
+                  </ClassicyPanelTitle>
                   <div
-                    className="grid gap-[0.45rem]"
-                    key={`row:${rowIndex}`}
-                    style={
-                      {
-                        gridTemplateColumns: `repeat(${zoneLevelColumnCount}, minmax(3.6rem, 1fr))`,
-                      } satisfies CSSProperties
-                    }
+                    className="grid grid-cols-4 gap-[0.45rem]"
+                    role="list"
+                    aria-label="Smart base brushes"
                   >
-                    {rowOptions.map((option) => (
+                    {SCENARIO_MAP_FINAL_SMART_BASE_BRUSHES.map((brush) => (
                       <ClassicyButton
-                        active={activeBrushFamily === 'zones' && option.key === activeZoneOptionKey}
+                        active={activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id}
                         activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
-                        className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} flex min-h-[3.4rem] items-center justify-center rounded-lg`}
-                        key={option.key}
+                        aria-label={brush.label}
+                        aria-pressed={
+                          activeBrushFamily === 'base' && activeSmartBaseBrushId === brush.id
+                        }
+                        className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid justify-items-center gap-[0.3rem] rounded-lg px-[0.4rem] py-[0.35rem] text-center`}
+                        key={brush.id}
                         onClick={() => {
                           closeToolVariantContextMenu();
                           dispatchBrushSelection({
-                            type: 'select-zone-option',
-                            optionKey: option.key,
+                            type: 'select-base-brush',
+                            brushId: brush.id,
                           });
                         }}
-                        aria-label={option.tooltip}
-                        title={option.tooltip}
+                        role="listitem"
+                        title={brush.tooltip}
                         type="button"
                       >
-                        {zoneAtlasSource === undefined ? (
-                          <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
-                            {option.tileId}
-                          </span>
-                        ) : (
-                          <MapFinalZoneTileSprite
-                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                            tileIds={option.swatchTileIds}
-                          />
-                        )}
+                        <span className="relative block">
+                          {zoneAtlasSource === undefined ? (
+                            <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
+                              {brush.tileId}
+                            </span>
+                          ) : (
+                            <MapFinalSingleTileSprite
+                              atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                              atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                              scale={3}
+                              tileId={brush.tileId}
+                            />
+                          )}
+                          {zoneAtlasSource !== undefined && brush.id === 'channel' ? (
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 flex items-center justify-center text-[1.2rem] font-black leading-none text-[#4a044e] drop-shadow-[0_0_1px_rgba(255,255,255,0.85)]"
+                            >
+                              C
+                            </span>
+                          ) : null}
+                        </span>
                       </ClassicyButton>
                     ))}
                   </div>
-                ))}
-              </div>
-            </ClassicyMessageSurface>
+                </div>
 
-            <ClassicyMessageSurface className="grid gap-[0.65rem] p-2">
-              <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
-                Tools
-              </ClassicyPanelTitle>
-              <div
-                className="grid grid-cols-4 gap-[0.45rem]"
-                role="list"
-                aria-label="Micropolis map tools"
-              >
-                {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
-                  const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
-                  const showToolAs3x3Swatch =
-                    spec.tool === 'hospital' || spec.tool === 'police' || spec.tool === 'church';
-                  const iconLookup =
-                    spec.toolState === null
-                      ? undefined
-                      : resolveSimUiToolIconAssetLookup(spec.toolState, {
-                          highlighted: active,
-                        });
-                  const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
-                  const iconUrl =
-                    iconBasename === undefined
-                      ? undefined
-                      : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
-                  return (
-                    <ClassicyButton
-                      active={active}
-                      activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
-                      aria-label={spec.label}
-                      aria-pressed={active}
-                      className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid h-[3.8rem] w-full place-items-center rounded-lg`}
-                      key={spec.tool}
-                      onClick={() => {
-                        closeToolVariantContextMenu();
-                        dispatchBrushSelection({
-                          type: 'select-tool',
-                          tool: spec.tool,
-                        });
-                      }}
-                      onContextMenu={(event) => {
-                        if (spec.tool !== 'park' && spec.tool !== 'house') {
-                          return;
-                        }
-                        event.preventDefault();
-                        dispatchBrushSelection({
-                          type: 'select-tool',
-                          tool: spec.tool,
-                        });
-                        setToolVariantContextMenu({
-                          anchorPoint: {
-                            x: event.clientX,
-                            y: event.clientY,
-                          },
-                          tool: spec.tool,
-                        });
-                      }}
-                      role="listitem"
-                      title={
-                        spec.tool === 'park'
-                          ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
-                          : spec.tool === 'house'
-                            ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
-                            : `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`
-                      }
-                      type="button"
-                    >
-                      {showToolAs3x3Swatch && zoneAtlasSource !== undefined ? (
-                        <MapFinalZoneTileSprite
-                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                          tileIds={getMapFinalZoneSwatchTileIds(spec.previewTileId)}
-                        />
-                      ) : iconUrl !== undefined ? (
-                        <img
-                          alt=""
-                          aria-hidden="true"
-                          className="block h-12 w-12 object-contain [image-rendering:pixelated]"
-                          draggable={false}
-                          src={iconUrl}
-                        />
-                      ) : zoneAtlasSource !== undefined ? (
-                        <MapFinalSingleTileSprite
-                          atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                          atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                          scale={3}
-                          tileId={spec.previewTileId}
-                        />
-                      ) : (
-                        <span className="grid h-12 w-12 place-items-center text-[0.8rem] font-semibold text-[var(--color-system-07)]">
-                          <span>{spec.previewTileId}</span>
-                        </span>
-                      )}
-                    </ClassicyButton>
-                  );
-                })}
-              </div>
-              <ClassicyPopoverMenu
-                anchorPoint={toolVariantContextMenu.anchorPoint ?? undefined}
-                className={`grid max-h-[min(70vh,20rem)] ${
-                  isHouseBrushContextMenuOpen ? 'w-[13.5rem]' : 'w-[11rem]'
-                } gap-0.5 overflow-auto p-1 [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)]`}
-                offsetPx={2}
-                onRequestClose={closeToolVariantContextMenu}
-                open={isToolVariantContextMenuOpen}
-                placement="bottom-start"
-                style={mapFinalRuntimeTheme}
-              >
-                {isParkBrushContextMenuOpen
-                  ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
-                      <ClassicyMenuItemButton
-                        className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
-                        key={choice.id}
-                        onClick={() => {
-                          setParkBrushMode(choice.id);
-                          closeToolVariantContextMenu();
-                        }}
-                        type="button"
-                        title={
-                          choice.tileId === null
-                            ? 'Auto: choose any park variant'
-                            : `Place ${choice.label} only (tile ${choice.tileId})`
-                        }
-                      >
-                        <span className="inline-block text-center">
-                          {choice.id === parkBrushMode ? '●' : ''}
-                        </span>
-                        {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
-                          <MapFinalSingleTileSprite
-                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                            scale={2}
-                            tileId={choice.tileId}
-                          />
-                        ) : (
-                          <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
-                            {choice.tileId}
-                          </span>
-                        )}
-                        <span>{choice.label}</span>
-                      </ClassicyMenuItemButton>
-                    ))
-                  : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
-                      <ClassicyMenuItemButton
-                        className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
-                        key={choice.tileId === null ? 'auto' : choice.tileId}
-                        onClick={() => {
-                          setHouseBrushTileId(choice.tileId);
-                          closeToolVariantContextMenu();
-                        }}
-                        type="button"
-                        title={
-                          choice.tileId === null
-                            ? 'Auto: choose any house variant'
-                            : `Place ${choice.label} only (tile ${choice.tileId})`
-                        }
-                      >
-                        <span className="inline-block text-center">
-                          {choice.tileId === houseBrushTileId ? '●' : ''}
-                        </span>
-                        {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
-                          <MapFinalSingleTileSprite
-                            atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
-                            atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
-                            scale={2}
-                            tileId={choice.tileId}
-                          />
-                        ) : (
-                          <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
-                            {choice.tileId}
-                          </span>
-                        )}
-                        {choice.tileId === null ? (
-                          <span>{choice.label}</span>
-                        ) : (
-                          <span className="leading-[1.2]">
-                            <span className="block">Land Value {choice.landValue}</span>
-                            <span className="block">Variant {choice.variant}</span>
-                          </span>
-                        )}
-                      </ClassicyMenuItemButton>
-                    ))}
-              </ClassicyPopoverMenu>
-            </ClassicyMessageSurface>
-            <ClassicyMessageSurface className="grid gap-[0.45rem] p-2">
-              <div className="grid gap-[0.3rem]">
-                <EditorField className="gap-[0.2rem]">
-                  <div className="inline-flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-[var(--color-system-08)]">
-                      Derive simulation ticks
-                    </span>
-                    <ClassicyTooltip
-                      content="Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without zone growth/disasters."
-                      variant="custom"
-                    >
-                      <ClassicyUIGenericTooltipTrigger aria-label="Derive simulation details" />
-                    </ClassicyTooltip>
-                  </div>
-                  <input
-                    min={1}
-                    onChange={(event) => {
-                      const next = Number(event.currentTarget.value);
-                      if (Number.isFinite(next)) {
-                        setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
-                      }
+                <div className="grid gap-[0.65rem]">
+                  <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                    Zones
+                  </ClassicyPanelTitle>
+                  <ClassicyToggleGroup<ScenarioEditorMapZoneKind>
+                    ariaLabel="Zone family selector"
+                    options={[
+                      { value: 'res', label: 'RES' },
+                      { value: 'com', label: 'COM' },
+                      { value: 'ind', label: 'IND' },
+                    ]}
+                    onValueChange={(zone) => {
+                      closeToolVariantContextMenu();
+                      dispatchBrushSelection({
+                        type: 'select-zone-kind',
+                        zoneKind: zone,
+                      });
                     }}
-                    step={1}
-                    type="number"
-                    value={deriveSimulationTicks}
+                    value={activeZoneKind}
                   />
-                </EditorField>
+
+                  <div className="grid gap-[0.45rem]">
+                    {zoneOptionRows.map((rowOptions, rowIndex) => (
+                      <div
+                        className="grid gap-[0.45rem]"
+                        key={`row:${rowIndex}`}
+                        style={
+                          {
+                            gridTemplateColumns: `repeat(${zoneLevelColumnCount}, minmax(3.6rem, 1fr))`,
+                          } satisfies CSSProperties
+                        }
+                      >
+                        {rowOptions.map((option) => (
+                          <ClassicyButton
+                            active={
+                              activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
+                            }
+                            activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
+                            className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} flex min-h-[3.4rem] items-center justify-center rounded-lg`}
+                            key={option.key}
+                            onClick={() => {
+                              closeToolVariantContextMenu();
+                              dispatchBrushSelection({
+                                type: 'select-zone-option',
+                                optionKey: option.key,
+                              });
+                            }}
+                            aria-label={option.tooltip}
+                            title={option.tooltip}
+                            type="button"
+                          >
+                            {zoneAtlasSource === undefined ? (
+                              <span className="text-[0.8rem] font-semibold text-[var(--color-system-07)]">
+                                {option.tileId}
+                              </span>
+                            ) : (
+                              <MapFinalZoneTileSprite
+                                atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                                atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                                tileIds={option.swatchTileIds}
+                              />
+                            )}
+                          </ClassicyButton>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-[0.65rem]">
+                  <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                    Tools
+                  </ClassicyPanelTitle>
+                  <div
+                    className="grid grid-cols-4 gap-[0.45rem]"
+                    role="list"
+                    aria-label="Micropolis map tools"
+                  >
+                    {SCENARIO_MAP_FINAL_TOOL_SPECS.map((spec) => {
+                      const active = activeBrushFamily === 'tools' && activeTool === spec.tool;
+                      const showToolAs3x3Swatch =
+                        spec.tool === 'hospital' ||
+                        spec.tool === 'police' ||
+                        spec.tool === 'church';
+                      const iconLookup =
+                        spec.toolState === null
+                          ? undefined
+                          : resolveSimUiToolIconAssetLookup(spec.toolState, {
+                              highlighted: active,
+                            });
+                      const iconBasename = iconLookup?.derivedPngPath?.split('/').pop();
+                      const iconUrl =
+                        iconBasename === undefined
+                          ? undefined
+                          : PLAYABLE_TOOL_ICON_URL_BY_BASENAME.get(iconBasename);
+                      return (
+                        <ClassicyButton
+                          active={active}
+                          activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
+                          aria-label={spec.label}
+                          aria-pressed={active}
+                          className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} grid h-[3.8rem] w-full place-items-center rounded-lg`}
+                          key={spec.tool}
+                          onClick={() => {
+                            closeToolVariantContextMenu();
+                            dispatchBrushSelection({
+                              type: 'select-tool',
+                              tool: spec.tool,
+                            });
+                          }}
+                          onContextMenu={(event) => {
+                            if (spec.tool !== 'park' && spec.tool !== 'house') {
+                              return;
+                            }
+                            event.preventDefault();
+                            dispatchBrushSelection({
+                              type: 'select-tool',
+                              tool: spec.tool,
+                            });
+                            setToolVariantContextMenu({
+                              anchorPoint: {
+                                x: event.clientX,
+                                y: event.clientY,
+                              },
+                              tool: spec.tool,
+                            });
+                          }}
+                          role="listitem"
+                          title={
+                            spec.tool === 'park'
+                              ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                              : spec.tool === 'house'
+                                ? `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost}). Right click for variant menu.`
+                                : `${spec.label} (${spec.size}x${spec.size}, base cost $${spec.baseCost})`
+                          }
+                          type="button"
+                        >
+                          {showToolAs3x3Swatch && zoneAtlasSource !== undefined ? (
+                            <MapFinalZoneTileSprite
+                              atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                              atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                              tileIds={getMapFinalZoneSwatchTileIds(spec.previewTileId)}
+                            />
+                          ) : iconUrl !== undefined ? (
+                            <img
+                              alt=""
+                              aria-hidden="true"
+                              className="block h-12 w-12 object-contain [image-rendering:pixelated]"
+                              draggable={false}
+                              src={iconUrl}
+                            />
+                          ) : zoneAtlasSource !== undefined ? (
+                            <MapFinalSingleTileSprite
+                              atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                              atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                              scale={3}
+                              tileId={spec.previewTileId}
+                            />
+                          ) : (
+                            <span className="grid h-12 w-12 place-items-center text-[0.8rem] font-semibold text-[var(--color-system-07)]">
+                              <span>{spec.previewTileId}</span>
+                            </span>
+                          )}
+                        </ClassicyButton>
+                      );
+                    })}
+                  </div>
+                  <ClassicyPopoverMenu
+                    anchorPoint={toolVariantContextMenu.anchorPoint ?? undefined}
+                    className={`grid max-h-[min(70vh,20rem)] ${
+                      isHouseBrushContextMenuOpen ? 'w-[13.5rem]' : 'w-[11rem]'
+                    } gap-0.5 overflow-auto p-1 [font-family:var(--ui-font),sans-serif] [font-size:var(--ui-font-size)]`}
+                    offsetPx={2}
+                    onRequestClose={closeToolVariantContextMenu}
+                    open={isToolVariantContextMenuOpen}
+                    placement="bottom-start"
+                    style={mapFinalRuntimeTheme}
+                  >
+                    {isParkBrushContextMenuOpen
+                      ? SCENARIO_MAP_FINAL_PARK_BRUSH_MODE_CHOICES.map((choice) => (
+                          <ClassicyMenuItemButton
+                            className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
+                            key={choice.id}
+                            onClick={() => {
+                              setParkBrushMode(choice.id);
+                              closeToolVariantContextMenu();
+                            }}
+                            type="button"
+                            title={
+                              choice.tileId === null
+                                ? 'Auto: choose any park variant'
+                                : `Place ${choice.label} only (tile ${choice.tileId})`
+                            }
+                          >
+                            <span className="inline-block text-center">
+                              {choice.id === parkBrushMode ? '●' : ''}
+                            </span>
+                            {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
+                              <MapFinalSingleTileSprite
+                                atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                                atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                                scale={2}
+                                tileId={choice.tileId}
+                              />
+                            ) : (
+                              <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
+                                {choice.tileId}
+                              </span>
+                            )}
+                            <span>{choice.label}</span>
+                          </ClassicyMenuItemButton>
+                        ))
+                      : SCENARIO_MAP_FINAL_HOUSE_BRUSH_CHOICES.map((choice) => (
+                          <ClassicyMenuItemButton
+                            className="grid grid-cols-[0.85rem_auto_1fr] items-center gap-x-2"
+                            key={choice.tileId === null ? 'auto' : choice.tileId}
+                            onClick={() => {
+                              setHouseBrushTileId(choice.tileId);
+                              closeToolVariantContextMenu();
+                            }}
+                            type="button"
+                            title={
+                              choice.tileId === null
+                                ? 'Auto: choose any house variant'
+                                : `Place ${choice.label} only (tile ${choice.tileId})`
+                            }
+                          >
+                            <span className="inline-block text-center">
+                              {choice.tileId === houseBrushTileId ? '●' : ''}
+                            </span>
+                            {choice.tileId === null ? null : zoneAtlasSource !== undefined ? (
+                              <MapFinalSingleTileSprite
+                                atlasCanonicalIdentityKey={zoneAtlasCanonicalIdentityKey}
+                                atlasSpriteSheetUrl={zoneAtlasSource.spriteSheetUrl}
+                                scale={2}
+                                tileId={choice.tileId}
+                              />
+                            ) : (
+                              <span className="text-[0.75rem] font-semibold text-[var(--color-system-07)]">
+                                {choice.tileId}
+                              </span>
+                            )}
+                            {choice.tileId === null ? (
+                              <span>{choice.label}</span>
+                            ) : (
+                              <span className="leading-[1.2]">
+                                <span className="block">Land Value {choice.landValue}</span>
+                                <span className="block">Variant {choice.variant}</span>
+                              </span>
+                            )}
+                          </ClassicyMenuItemButton>
+                        ))}
+                  </ClassicyPopoverMenu>
+                </div>
+                <div className="grid gap-[0.45rem]">
+                  <div className="grid gap-[0.3rem]">
+                    <EditorField className="gap-[0.2rem]">
+                      <div className="inline-flex items-center gap-1.5">
+                        <ClassicyPanelTitle className="m-0 [font-size:calc(var(--header-font-size)*0.85)]">
+                          Simulation
+                        </ClassicyPanelTitle>
+                        <ClassicyTooltip
+                          content="Recomputes derived states (power, traffic/road classes, bridges, smoke/radar) without zone growth/disasters."
+                          variant="custom"
+                        >
+                          <ClassicyUIGenericTooltipTrigger aria-label="Derive simulation details" />
+                        </ClassicyTooltip>
+                      </div>
+                      <EditorField>
+                        <span>Ticks</span>
+                        <input
+                          min={1}
+                          onChange={(event) => {
+                            const next = Number(event.currentTarget.value);
+                            if (Number.isFinite(next)) {
+                              setDeriveSimulationTicks(Math.max(1, Math.trunc(next)));
+                            }
+                          }}
+                          step={1}
+                          type="number"
+                          value={deriveSimulationTicks}
+                        />
+                      </EditorField>
+                    </EditorField>
+                  </div>
+                  <ClassicyButton
+                    className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
+                    onClick={() => {
+                      closeToolVariantContextMenu();
+                      dispatch({
+                        type: 'derive-map-simulation',
+                        ticks: deriveSimulationTicks,
+                      });
+                    }}
+                    type="button"
+                  >
+                    Derive simulation
+                  </ClassicyButton>
+                </div>
               </div>
-              <ClassicyButton
-                className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} rounded-lg px-[0.55rem] py-[0.4rem] font-semibold`}
-                onClick={() => {
-                  closeToolVariantContextMenu();
-                  dispatch({
-                    type: 'derive-map-simulation',
-                    ticks: deriveSimulationTicks,
-                  });
-                }}
-                type="button"
-              >
-                Derive simulation
-              </ClassicyButton>
             </ClassicyMessageSurface>
           </div>
         ) : (

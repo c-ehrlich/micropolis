@@ -1,5 +1,5 @@
 import { ClassicyCheckboxField, ClassicyDisclosure, ClassicyTextArea } from '@city/classicyui';
-import { useMemo } from 'react';
+import { type ReactNode, useMemo } from 'react';
 
 import {
   appendScenarioObjectiveChildPredicate,
@@ -112,12 +112,13 @@ export function ScenarioObjectiveEditorCard() {
  */
 function ScenarioObjectivePredicateEditor(options: {
   depth: number;
+  footer?: ReactNode;
   issueMessagesByPath: ReadonlyMap<string, readonly string[]>;
   onChange: (predicate: ScenarioEditorObjectivePredicate) => void;
   path: string;
   predicate: ScenarioEditorObjectivePredicate;
 }) {
-  const { depth, issueMessagesByPath, onChange, path, predicate } = options;
+  const { depth, footer, issueMessagesByPath, onChange, path, predicate } = options;
   const nodeLabel = `Predicate depth ${depth}`;
   const nodeIssue = getFirstValidationIssueMessage(issueMessagesByPath, path);
   const kindIssue = getFirstValidationIssueMessage(issueMessagesByPath, `${path}.kind`);
@@ -234,32 +235,33 @@ function ScenarioObjectivePredicateEditor(options: {
       {predicate.kind === 'all' || predicate.kind === 'any' ? (
         <div className="grid gap-3">
           {predicate.predicates.map((childPredicate, index) => (
-            <div className="grid gap-2" key={index}>
-              <ScenarioObjectivePredicateEditor
-                depth={depth + 1}
-                issueMessagesByPath={issueMessagesByPath}
-                onChange={(child) => {
-                  onChange(replaceScenarioObjectiveChildPredicate(predicate, index, child));
-                }}
-                path={`${path}.predicates.${index}`}
-                predicate={childPredicate}
-              />
-              <EditorButton
-                className="justify-self-start"
-                disabled={predicate.predicates.length <= 1}
-                onClick={() => {
-                  onChange(removeScenarioObjectiveChildPredicate(predicate, index));
-                }}
-                title={
-                  predicate.predicates.length <= 1
-                    ? 'At least one child predicate is required.'
-                    : undefined
-                }
-                type="button"
-              >
-                Remove Child
-              </EditorButton>
-            </div>
+            <ScenarioObjectivePredicateEditor
+              depth={depth + 1}
+              footer={
+                <EditorButton
+                  className="justify-self-start"
+                  disabled={predicate.predicates.length <= 1}
+                  onClick={() => {
+                    onChange(removeScenarioObjectiveChildPredicate(predicate, index));
+                  }}
+                  title={
+                    predicate.predicates.length <= 1
+                      ? 'At least one child predicate is required.'
+                      : undefined
+                  }
+                  type="button"
+                >
+                  remove
+                </EditorButton>
+              }
+              issueMessagesByPath={issueMessagesByPath}
+              key={index}
+              onChange={(child) => {
+                onChange(replaceScenarioObjectiveChildPredicate(predicate, index, child));
+              }}
+              path={`${path}.predicates.${index}`}
+              predicate={childPredicate}
+            />
           ))}
           <EditorButton
             className="justify-self-start"
@@ -298,6 +300,7 @@ function ScenarioObjectivePredicateEditor(options: {
           />
         </div>
       ) : null}
+      {footer !== undefined ? <div className="pt-2">{footer}</div> : null}
     </fieldset>
   );
 }
