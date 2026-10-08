@@ -1,6 +1,6 @@
 # Micropolis (TypeScript port with gpt-5.3-codex)
 
-![Micropolis Screenshot](_readme/micropolis-screenshot.png)
+<img width="3248" height="2112" alt="CleanShot 2026-10-08 at 22 30 57@2x" src="https://github.com/user-attachments/assets/dd96782b-7eff-4c01-8761-0b8fc4e1c4d9" />
 
 The SimCity (1989) codebase was open sourced by EA under the name "Micropolis" as part of the OLPC (One Laptop Per Child) project. It's a C codebase, but large parts of it were ported from Assembly.
 
