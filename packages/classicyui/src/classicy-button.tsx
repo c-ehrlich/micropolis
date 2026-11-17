@@ -21,7 +21,9 @@ export interface ClassicyButtonProps extends Omit<
  * Mirrors the clickable command widgets from `ref/micropolis/res/micropolis.tcl`
  * and `ref/micropolis/res/whead.tcl`.
  * Parity note: this is not a 1:1 port of Tcl widget internals; it composes
- * Classicy CSS contract classes into a typed React primitive.
+ * Classicy CSS contract classes into a typed React primitive, applying the same
+ * default (`md`) padding and margin variant classes as Classicy 3's own
+ * `ClassicyButton` (padding is skipped for square buttons, as upstream does).
  */
 export function ClassicyButton({
   active = false,
@@ -39,9 +41,13 @@ export function ClassicyButton({
       {...buttonProps}
       className={clsx(
         'classicyButton',
-        isDefault ? 'classicyButtonDefault' : null,
+        // Classicy 3 marks the default button with a bare `default` class (the
+        // ring is drawn by the Platinum appearance package).
+        isDefault ? 'default' : null,
         buttonShape === 'square' ? 'classicyButtonShapeSquare' : null,
         buttonSize === 'small' ? 'classicyButtonSmall' : null,
+        buttonShape === 'square' ? null : 'classicyButtonPaddingMd',
+        'classicyButtonMarginMd',
         active ? activeClassName : null,
         className,
       )}

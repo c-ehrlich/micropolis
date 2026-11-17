@@ -51,7 +51,7 @@ export function ClassicyDialogPanel({
     <section
       {...panelProps}
       className={clsx(
-        modalWindow ? 'classicyWindow classicyWindowActive classicyWindowModal' : null,
+        modalWindow ? 'classicyWindow classicyWindowModal' : null,
         'border-solid [border-width:var(--window-border-size)] border-black bg-[var(--color-system-02)]',
         CLASSICY_DIALOG_SHADOW,
         className,

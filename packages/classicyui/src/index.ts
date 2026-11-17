@@ -54,6 +54,7 @@ export {
   type ClassicyPopoverPlacement,
   type ClassicyPopoverProps,
 } from './classicy-popover.tsx';
+export { useClassicyPortalContainer } from './classicy-portal-container.ts';
 export { ClassicyRuntimeProvider, type ClassicyRuntimeProviderProps } from './classicy-runtime.tsx';
 export { ClassicyStatRow, type ClassicyStatRowProps } from './classicy-stats.tsx';
 export {
@@ -71,4 +72,4 @@ export {
   type ClassicyUIGenericTooltipTriggerProps,
 } from './classicy-tooltip.tsx';
 export { ClassicyWindowFrame, type ClassicyWindowFrameProps } from './classicy-window.tsx';
-export { getAllThemes, getThemeVars } from 'classicy';
+export { getAllThemes, getThemeVars } from '@classicy/classicy';

@@ -50,7 +50,10 @@ export function ClassicyCheckbox({
       <input
         {...inputProps}
         checked={checked}
-        className={clsx('ClassicyCheckbox', mixed ? 'ClassicyCheckboxMixed' : null, className)}
+        // Classicy 3 renamed `ClassicyCheckbox` to `classicyCheckbox`; the `X` variant
+        // keeps the classic `×` mark (the new default is a check), and the mixed
+        // state is the bare `mixed` modifier (was `ClassicyCheckboxMixed`).
+        className={clsx('classicyCheckbox classicyCheckboxX', mixed ? 'mixed' : null, className)}
         disabled={disabled}
         id={resolvedId}
         onChange={onChange}

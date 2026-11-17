@@ -11,8 +11,9 @@
   },
   "types": "./src/index.ts",
   "dependencies": {
+    "@classicy/appearance-platinum": "^3.4.0",
+    "@classicy/classicy": "^3.4.0",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "classicy": "^0.6.31",
     "clsx": "2.1.1"
   },
   "devDependencies": {

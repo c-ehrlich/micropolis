@@ -99,7 +99,7 @@ function EditorTopBar() {
         <ClassicyButton
           active={fileMenuOpen}
           activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
-          className={`!m-0 min-w-[6.5rem] px-4 py-1.5 ${fileMenuOpen ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
+          className={`!m-0 !min-w-[6.5rem] px-4 py-1.5 ${fileMenuOpen ? CLASSICY_MENU_BUTTON_ACTIVE_CLASS : ''}`}
           onClick={() => {
             setFileMenuOpen((current) => !current);
           }}
@@ -121,7 +121,7 @@ function EditorTopBar() {
             <ClassicyButton
               active={selected}
               activeClassName={CLASSICY_MENU_BUTTON_ACTIVE_CLASS}
-              className="!m-0 min-w-[8.25rem] px-3 py-1.5"
+              className="!m-0 !min-w-[8.25rem] px-3 py-1.5"
               key={view}
               onClick={() => {
                 if (selected) {

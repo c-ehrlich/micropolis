@@ -28,8 +28,8 @@ export interface ClassicyWindowFrameProps extends HTMLAttributes<HTMLElement> {
  * Floating runtime window shell with shared title bar and close control.
  * Mirrors detached budget/evaluation/graph window chrome in `ref/micropolis/res/whead.tcl`.
  * Parity note: this wraps shared frame structure while callers own placement, z-order, and content.
- * The `classicyWindowActive` class is intentionally omitted because upstream CSS
- * pins `z-index` with `!important`, which breaks caller-managed stacking order.
+ * Callers manage z-order; Classicy 3 has no "active window" class (inactive
+ * windows are marked with `*Dimmed` classes instead), so none is applied here.
  */
 export function ClassicyWindowFrame({
   bodyClassName,
@@ -75,7 +75,7 @@ export function ClassicyWindowFrame({
         <div className="flex items-center gap-1">
           {headerRight}
           <ClassicyButton
-            className="!m-0 min-w-5 !px-1.5 [line-height:1.2]"
+            className="!m-0 !min-w-5 !px-1.5 [line-height:1.2]"
             onPointerDown={stopPropagationOnPointerDown}
             onClick={onClose}
             title={closeButtonTitle}

@@ -150,7 +150,5 @@ export function EditorSecondaryButton({ className, ...props }: ComponentPropsWit
  * Not from Micropolis C: editor-only export action styling.
  */
 export function EditorPrimaryButton({ className, ...props }: ComponentPropsWithoutRef<'button'>) {
-  return (
-    <button className={clsx('classicyButton classicyButtonDefault !m-0', className)} {...props} />
-  );
+  return <button className={clsx('classicyButton default !m-0', className)} {...props} />;
 }
