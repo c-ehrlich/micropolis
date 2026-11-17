@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useClassicyPortalContainer } from './classicy-portal-container.ts';
+
 const CLASSICY_TOOLTIP_PANEL_SHADOW =
   '[box-shadow:inset_calc(var(--window-border-size)*-1)_calc(var(--window-border-size)*-1)_0_0_var(--color-system-05),inset_calc(var(--window-border-size)*1)_calc(var(--window-border-size)*1)_0_0_var(--color-system-07),calc(var(--window-border-size)*2)_calc(var(--window-border-size)*2)_0_0_var(--color-black)]';
 const CLASSICY_TOOLTIP_PANEL_BOX_SHADOW =
@@ -87,6 +89,7 @@ export function ClassicyTooltip({
   style,
   variant = 'native',
 }: ClassicyTooltipProps) {
+  const portalContainer = useClassicyPortalContainer();
   const resolvedNativeTitle = nativeTitle ?? (typeof content === 'string' ? content : undefined);
 
   if (variant === 'native') {
@@ -99,7 +102,7 @@ export function ClassicyTooltip({
     <Tooltip.Provider delayDuration={delayDuration}>
       <Tooltip.Root>
         <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-        <Tooltip.Portal>
+        <Tooltip.Portal container={portalContainer}>
           <Tooltip.Content
             align={align}
             className={clsx(className)}

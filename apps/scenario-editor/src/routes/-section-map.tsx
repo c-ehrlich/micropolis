@@ -985,7 +985,7 @@ export function ScenarioMapFinalWorkbench(options: {
                                 activeBrushFamily === 'zones' && option.key === activeZoneOptionKey
                               }
                               activeClassName={CLASSICY_MAP_SIDEBAR_BUTTON_ACTIVE_CLASS}
-                              className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} flex min-h-[3.4rem] items-center justify-center rounded-lg`}
+                              className={`${CLASSICY_MAP_SIDEBAR_BUTTON_CLASS} flex !min-h-[3.4rem] items-center justify-center rounded-lg`}
                               key={option.key}
                               onClick={() => {
                                 closeToolVariantContextMenu();

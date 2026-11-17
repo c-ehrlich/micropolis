@@ -14,6 +14,11 @@ export default defineConfig({
     tailwindcss(),
     react(),
   ],
+  optimizeDeps: {
+    // Classicy loads its fonts, art and sounds via `new URL('assets/…', import.meta.url)`;
+    // pre-bundling relocates the modules and breaks those URLs.
+    exclude: ['@classicy/classicy', '@classicy/appearance-platinum'],
+  },
   test: {
     environment: 'node',
   },

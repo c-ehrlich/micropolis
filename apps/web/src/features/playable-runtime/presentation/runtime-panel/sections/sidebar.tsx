@@ -71,7 +71,7 @@ export function RuntimeSidebarSection(props: RuntimeSidebarSectionProps) {
               }}
               title={`${spec.label} ($${spec.baseCost})`}
               type="button"
-              className={`!m-0 flex h-9 min-h-9 max-h-9 w-9 min-w-9 max-w-9 items-center justify-center border-2 p-0 ${
+              className={`!m-0 flex !h-9 !min-h-9 max-h-9 w-9 min-w-9 max-w-9 items-center justify-center border-2 p-0 ${
                 active
                   ? '!border-[var(--color-theme-07)] !bg-[var(--color-theme-03)]'
                   : '!border-[var(--color-black)] !bg-[var(--color-system-02)]'

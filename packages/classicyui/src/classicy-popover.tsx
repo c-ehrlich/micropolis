@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { ClassicyMenuPanel, type ClassicyMenuPanelProps } from './classicy-menu.tsx';
+import { useClassicyPortalContainer } from './classicy-portal-container.ts';
 
 export type ClassicyPopoverPlacement =
   | 'bottom-start'
@@ -62,6 +63,7 @@ export function ClassicyPopover({
   ...panelProps
 }: ClassicyPopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const portalContainer = useClassicyPortalContainer();
   const [position, setPosition] = useState<ClassicyPopoverPosition>(
     CLASSICY_POPOVER_DEFAULT_POSITION,
   );
@@ -171,7 +173,7 @@ export function ClassicyPopover({
     >
       {children}
     </div>,
-    document.body,
+    portalContainer ?? document.body,
   );
 }
 

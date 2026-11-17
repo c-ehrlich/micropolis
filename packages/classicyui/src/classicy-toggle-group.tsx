@@ -53,7 +53,7 @@ export function ClassicyToggleGroup<Value extends string>({
             activeClassName={CLASSICY_TOGGLE_GROUP_ACTIVE_CLASS}
             aria-checked={active}
             className={clsx(
-              '!m-0 !min-h-0 min-w-0 flex-1 !px-[0.8rem] !py-[0.45rem] [font-family:var(--header-font),serif] [font-size:calc(var(--header-font-size)*0.86)]',
+              '!m-0 !min-h-0 !min-w-0 flex-1 !px-[0.8rem] !py-[0.45rem] [font-family:var(--header-font),serif] [font-size:calc(var(--header-font-size)*0.86)]',
               !isOnlyOption && index > 0 ? '-ml-[var(--window-border-size)]' : null,
               !isOnlyOption && index === 0 ? '!rounded-r-none' : null,
               !isOnlyOption && index > 0 && index < options.length - 1 ? '!rounded-none' : null,

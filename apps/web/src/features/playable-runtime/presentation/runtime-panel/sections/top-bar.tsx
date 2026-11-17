@@ -51,7 +51,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
   } = props;
   const activeToolSpec = getPlayableToolSpec(ui.activeTool);
   const menubarButtonClass =
-    '!m-0 min-w-[calc(var(--window-control-size)*7)] px-2 py-1 text-center';
+    '!m-0 !min-w-[calc(var(--window-control-size)*7)] px-2 py-1 text-center';
   const menubarPanelClass = 'absolute left-0 top-[calc(100%+3px)] z-[12] grid p-1.5';
 
   return (
@@ -114,7 +114,7 @@ export function RuntimeTopBarSection(props: RuntimeTopBarSectionProps) {
           onClick={() => {
             simulationActions.playPauseSimulation();
           }}
-          className="!m-0 min-w-21 font-bold"
+          className="!m-0 !min-w-21 font-bold"
           type="button"
         >
           {session.isSimulationRunning ? 'Pause' : 'Play'}
